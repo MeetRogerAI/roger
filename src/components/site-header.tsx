@@ -33,8 +33,8 @@ const company: NavSet = {
 
 function navFor(path: string): NavSet {
   if (path.startsWith("/companies")) return company;
-  // A page prepared for one company: no navigation, nothing to sell around it
-  if (path.startsWith("/for/")) return { links: [], cta: null };
+  // A page prepared for one company or group: no navigation, nothing to sell around it
+  if (path.startsWith("/for/") || path === "/rlpsignature") return { links: [], cta: null };
   // After paying, the only job left is booking: no button competing with it
   if (path.startsWith("/thanks") || path.startsWith("/admin")) return { ...library, cta: null };
   return library;
@@ -109,19 +109,21 @@ export function SiteHeader() {
               )}
             </span>
           )}
-          <button
-            ref={buttonRef}
-            type="button"
-            className="-mr-2 grid size-11 place-items-center rounded-full text-ink md:hidden"
-            aria-expanded={open}
-            aria-controls="mobile-menu"
-            onClick={() => setOpen(!open)}
-          >
-            <span className="sr-only">{open ? "Close menu" : "Open menu"}</span>
-            <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
-              {open ? <path d="M5 5l10 10M15 5L5 15" /> : <path d="M3 7h14M3 13h14" />}
-            </svg>
-          </button>
+          {nav.links.length > 0 && (
+            <button
+              ref={buttonRef}
+              type="button"
+              className="-mr-2 grid size-11 place-items-center rounded-full text-ink md:hidden"
+              aria-expanded={open}
+              aria-controls="mobile-menu"
+              onClick={() => setOpen(!open)}
+            >
+              <span className="sr-only">{open ? "Close menu" : "Open menu"}</span>
+              <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+                {open ? <path d="M5 5l10 10M15 5L5 15" /> : <path d="M3 7h14M3 13h14" />}
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
