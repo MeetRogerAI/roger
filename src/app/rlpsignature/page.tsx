@@ -27,40 +27,28 @@ const join = `mailto:${siteConfig.contactEmail}?subject=${encodeURIComponent("Jo
 export default function RlpSignaturePage() {
   return (
     <>
-      {/* 1 · Title, one line, and a quiet way in; the video does the rest */}
-      <section aria-labelledby="hero-title" className="bg-ground">
-        <div className="wrap pb-10 pt-14 md:pb-14 md:pt-24">
-          <h1 id="hero-title" className="max-w-[14ch] text-display text-stretch-display">
-            {title}
-          </h1>
-          <p className="mt-6 max-w-[34rem] text-lead">{description}</p>
-          <p className="mt-6">
-            <a className="tlink chev" href={join}>
-              Email us to join
-            </a>
-          </p>
-        </div>
-
-        {/* 2 · The video on a stage: the night band starts behind it and carries into the close */}
-        <div className="relative">
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-night" aria-hidden="true" />
-          <div className="wrap relative">
-            <video
-              controls
-              playsInline
-              preload="metadata"
-              poster="/media/rlp-signature-poster.jpg"
-              aria-label="Roger for RLP Signature, a one-minute video"
-              className="aspect-video w-full rounded-[8px] bg-night shadow-[0_24px_60px_-20px_rgba(12,12,14,0.45)]"
-            >
-              <source src="/media/rlp-signature.mp4" type="video/mp4" />
-              Video not loading? Email <a href={join}>{siteConfig.contactEmail}</a>.
-            </video>
-          </div>
+      {/* 1 · The video first, on a stage: the night band starts behind it and carries into the close */}
+      <section aria-labelledby="video-title" className="relative bg-ground pt-6 md:pt-10">
+        <h1 id="video-title" className="sr-only">
+          {title}
+        </h1>
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-night" aria-hidden="true" />
+        <div className="wrap relative">
+          <video
+            controls
+            playsInline
+            preload="metadata"
+            poster="/media/rlp-signature-poster.jpg"
+            aria-label="Roger for RLP Signature, a one-minute video"
+            className="aspect-video w-full rounded-[8px] bg-night shadow-[0_24px_60px_-20px_rgba(12,12,14,0.45)]"
+          >
+            <source src="/media/rlp-signature.mp4" type="video/mp4" />
+            Video not loading? Email <a href={join}>{siteConfig.contactEmail}</a>.
+          </video>
         </div>
       </section>
 
-      {/* 3 · The ask, right where the video ends */}
+      {/* 2 · The ask, right where the video ends */}
       <section id="final-cta" aria-labelledby="join-title" className="on-night bg-night text-night-ink">
         <div className="wrap grid gap-10 py-20 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:py-28">
           <div>
