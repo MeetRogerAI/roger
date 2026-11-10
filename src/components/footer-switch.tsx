@@ -3,8 +3,8 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-/** A page prepared for one company gets a quiet footer: nothing to sell around it. */
+/** A page prepared for one company or group gets a quiet footer: nothing to sell around it. */
 export function FooterSwitch({ full, minimal }: { full: ReactNode; minimal: ReactNode }) {
   const path = usePathname() || "/";
-  return <>{path.startsWith("/for/") ? minimal : full}</>;
+  return <>{path.startsWith("/for/") || path === "/rlpsignature" ? minimal : full}</>;
 }
