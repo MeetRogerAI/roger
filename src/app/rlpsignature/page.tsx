@@ -53,15 +53,15 @@ export default function RlpSignaturePage() {
         <div className="wrap grid gap-10 py-20 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:py-28">
           <div>
             <h2 id="join-title" className="text-h2">
-              Want in?
+              Don’t be the last one still Googling “what is ChatGPT.”
             </h2>
             <p className="mt-4 max-w-[30rem] text-lead text-night-ink">
-              Email us to join the RLP Signature group. We’ll reply with next steps.
+              The rest of RLP Signature is getting sharp on AI together. Pull up a chair. One email and you’re in.
             </p>
           </div>
           <div>
             <a className="btn btn-l" href={join}>
-              Join the group
+              Count me in
             </a>
             <p className="mt-4 select-all text-small text-night-ink-2">{siteConfig.contactEmail}</p>
           </div>
