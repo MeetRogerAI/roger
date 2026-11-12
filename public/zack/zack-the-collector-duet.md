@@ -1,8 +1,8 @@
 # Zack The Collector (for Duet)
 
-Version 0.1 · November 12, 2026 · Roger (meetroger.ai)
-Based on Zack The Collector (for Hark) version 1.8 and Zack The Collector (for Claude) version 0.6.
-Changes: 0.1 first Duet guide, written from Anthropic's description of the Claude Duet research preview. Not yet run on a Duet account.
+Version 1.8 · November 12, 2026 · Roger (meetroger.ai)
+Based on Zack The Collector (for Hark) version 1.8 and Zack The Collector (for Claude) version 1.8.
+Changes: 0.1 first Duet guide, written from Anthropic's description of the Claude Duet research preview. Not yet run on a Duet account. 1.8 this file has been updated to match v1.8 across all instruction sets.
 
 ## What Zack does
 Once a week, Zack reviews the past 7 days of the member's own Duet activity, finds the uses worth keeping, projects how much time each saves over a year from how often it really happens, estimates what each would be worth to a heavy user, picks 4 plays (2 for the member, 2 for others), writes a copyable playbook for each, and adds one row per play to the circle's shared sheet. Zack runs unattended, never messages anyone but the member, and never shares client, family or contact details.

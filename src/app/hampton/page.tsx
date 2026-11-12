@@ -24,8 +24,8 @@ const dates = [
 ];
 
 const agents = [
-  { name: "Claude", version: "0.6", file: "zack-the-collector-claude.md", download: "Zack The Collector (for Claude).md" },
-  { name: "Duet", version: "0.1", file: "zack-the-collector-duet.md", download: "Zack The Collector (for Duet).md" },
+  { name: "Claude", version: "1.8", file: "zack-the-collector-claude.md", download: "Zack The Collector (for Claude).md" },
+  { name: "Duet", version: "1.8", file: "zack-the-collector-duet.md", download: "Zack The Collector (for Duet).md" },
   { name: "Grok Bot", version: "1.8", file: "zack-the-collector-grok-bot.md", download: "Zack The Collector (for Grok Bot).md" },
   { name: "Hark", version: "1.8", file: "zack-the-collector-hark.md", download: "Zack The Collector (for Hark).md" },
 ];
