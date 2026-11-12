@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Metadata } from "next";
 import { siteConfig } from "@/data/config";
 import { CopyButton } from "./copy-button";
+import { OtherAgentPrompt } from "./other-agent";
 
 const title = "Instructions for Zack The Collector";
 const description = "Run Zack The Collector in your own agent, save the .md output and email it to Roger.";
@@ -25,8 +26,11 @@ const dates = [
 const agents = [
   { name: "Claude", version: "0.6", file: "zack-the-collector-claude.md", download: "Zack The Collector (for Claude).md" },
   { name: "Duet", version: "0.1", file: "zack-the-collector-duet.md", download: "Zack The Collector (for Duet).md" },
+  { name: "Grok Bot", version: "1.8", file: "zack-the-collector-grok-bot.md", download: "Zack The Collector (for Grok Bot).md" },
   { name: "Hark", version: "1.8", file: "zack-the-collector-hark.md", download: "Zack The Collector (for Hark).md" },
 ];
+
+const hark = agents.find((a) => a.name === "Hark")!;
 
 const prompt = "Run Zack the Collector now from the attached file and create a .md output file.";
 
@@ -67,7 +71,7 @@ export default async function HamptonPage() {
       <section aria-label="Steps" className="bg-ground-2">
         <ol className="wrap py-6 md:py-10">
           <Step n={1} title="Download or copy the .md file that works with your agent.">
-            <ul className="mt-6 grid gap-4 md:grid-cols-3">
+            <ul className="mt-6 grid gap-4 sm:grid-cols-2">
               {agents.map((a, i) => (
                 <li key={a.name} className="flex flex-col rounded-[8px] border hairline bg-surface p-6">
                   <p className="text-meta text-ink-2">Zack The Collector for</p>
@@ -87,6 +91,23 @@ export default async function HamptonPage() {
                 </li>
               ))}
             </ul>
+
+            <div className="mt-10 border-t hairline pt-8">
+              <h3 className="text-title">Agent not listed?</h3>
+              <p className="mt-2 max-w-[36rem] text-ink-2">
+                Start from the Hark file. Give it to your agent with this prompt, and it will make a version that
+                works for you.
+              </p>
+              <div className="mt-5">
+                <a className={ghost} href={`/zack/${hark.file}`} download={hark.download}>
+                  Download the Hark file
+                </a>
+              </div>
+              <OtherAgentPrompt />
+              <p className="mt-4 max-w-[36rem] text-small">
+                That test run is your output file. Skip to step 3.
+              </p>
+            </div>
           </Step>
 
           <Step n={2} title="Prompt your agent.">

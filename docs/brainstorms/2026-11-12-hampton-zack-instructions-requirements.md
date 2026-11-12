@@ -49,3 +49,12 @@ We want one link, `meetroger.ai/hampton`, to send to the Hampton group. It expla
 ## Open questions
 
 - None blocking. Planning decides the exact copy polish and how the file text reaches the Copy button.
+
+## Addendum (2026-11-12): Grok Bot and unlisted agents
+
+- **R7. Grok Bot card.** Add a fourth card, "Grok Bot" (v1.8), with the same Download and Copy behavior. The source is `artifacts/Zack/Zack The Collector (for Grok Bot).md`, published next to the other three files. Cards are in alphabetical order: Claude, Duet, Grok Bot, Hark. The grid stays tidy at every width: 2×2 on mid-size screens and four in a row only where they fit.
+- **R8. "Agent not listed?" panel inside Step 1**, below the cards:
+  - Tell visitors to download the Hark file (with a Download button) as the starting point.
+  - Give a "Your agent" text field. What the visitor types fills `[INSERT AGENT]` in the prompt as they type. If the field is empty, the prompt keeps `[INSERT AGENT]` as written.
+  - Show this prompt (wording verbatim) with a Copy button that copies the filled-in text: "I want you to take the Zack The Collector file, and update it so that it works for [INSERT AGENT]. I then want you to create a .md file for my agent I can download and then do a test run and produce a markdown file"
+  - End with the line "That test run is your output file. Skip to Step 3." The ported prompt already does the run, so Step 2 isn't needed on this path.
