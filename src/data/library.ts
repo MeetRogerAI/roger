@@ -15,7 +15,11 @@ export type UseCaseCategory =
   | "health"
   | "learning"
   | "teams"
-  | "homework";
+  | "homework"
+  | "builds"
+  | "research"
+  | "real-estate"
+  | "other";
 
 export type Persona = "solopreneur" | "household" | "caregiving" | "business" | "everyone";
 
@@ -62,6 +66,10 @@ export const categories: { id: UseCaseCategory; label: string; for: "home" | "wo
   { id: "staff", label: "Staff", for: "work" },
   { id: "shop-ops", label: "Shop operations", for: "work" },
   { id: "teams", label: "Teams", for: "work" },
+  { id: "builds", label: "Builds & Dashboards", for: "work" },
+  { id: "research", label: "Research & Monitoring", for: "work" },
+  { id: "real-estate", label: "Real Estate Agents", for: "work" },
+  { id: "other", label: "Other", for: "home" },
 ];
 
 export function categoryLabel(id: UseCaseCategory) {
