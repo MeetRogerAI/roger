@@ -135,8 +135,10 @@ export async function readSheet(): Promise<SheetRead> {
     if (missing.length) throw new Error(`tab “${t.name}” is missing column(s): ${missing.join(", ")}`);
     const col = (r: string[], c: (typeof COLUMNS)[number]) => (r[h.indexOf(c)] ?? "").trim();
 
-    const category = categoryForTab(t.name);
-    if (!category) notes.push(`tab “${t.name}” (${body.length} rows) matches no category, skipped`);
+    // a tab Lomax adds later still reaches the library, under Other, until it gets its own category
+    const mapped = categoryForTab(t.name);
+    const category: UseCaseCategory = mapped ?? "other";
+    if (!mapped) notes.push(`new tab “${t.name}” (${body.length} rows) has no category yet, filed under Other`);
 
     for (const r of body) {
       const url = col(r, "URL");
