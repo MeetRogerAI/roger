@@ -92,22 +92,37 @@ export default async function HamptonPage() {
               ))}
             </ul>
 
-            <div className="mt-10 border-t hairline pt-8">
-              <h3 className="text-title">Agent not listed?</h3>
-              <p className="mt-2 max-w-[36rem] text-ink-2">
-                Start from the Hark file. Give it to your agent with this prompt, and it will make a version that
-                works for you.
-              </p>
-              <div className="mt-5">
-                <a className={ghost} href={`/zack/${hark.file}`} download={hark.download}>
-                  Download the Hark file
-                </a>
+            <details className="group mt-6 rounded-[8px] bg-ground px-5 transition-colors duration-[180ms] open:bg-surface sm:px-6">
+              <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-6 py-4 text-title [&::-webkit-details-marker]:hidden">
+                Agent not listed?
+                <svg
+                  viewBox="0 0 20 20"
+                  className="size-4 shrink-0 text-ink-2 transition-transform duration-200 group-open:rotate-45"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M10 3v14M3 10h14" />
+                </svg>
+              </summary>
+              <div className="pb-6">
+                <p className="max-w-[36rem] text-ink-2">
+                  Start from the Hark file. Give it to your agent with this prompt, and it will make a version that
+                  works for you.
+                </p>
+                <div className="mt-5">
+                  <a className={ghost} href={`/zack/${hark.file}`} download={hark.download}>
+                    Download the Hark file
+                  </a>
+                </div>
+                <OtherAgentPrompt />
+                <p className="mt-4 max-w-[36rem] text-small">
+                  That test run is your output file. Skip to step 3.
+                </p>
               </div>
-              <OtherAgentPrompt />
-              <p className="mt-4 max-w-[36rem] text-small">
-                That test run is your output file. Skip to step 3.
-              </p>
-            </div>
+            </details>
           </Step>
 
           <Step n={2} title="Prompt your agent.">
