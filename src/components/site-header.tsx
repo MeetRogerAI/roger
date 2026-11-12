@@ -34,7 +34,7 @@ const company: NavSet = {
 function navFor(path: string): NavSet {
   if (path.startsWith("/companies")) return company;
   // A page prepared for one company or group: no navigation, nothing to sell around it
-  if (path.startsWith("/for/") || path === "/rlpsignature") return { links: [], cta: null };
+  if (path.startsWith("/for/") || path === "/rlpsignature" || path === "/hampton") return { links: [], cta: null };
   // After paying, the only job left is booking: no button competing with it
   if (path.startsWith("/thanks") || path.startsWith("/admin")) return { ...library, cta: null };
   return library;
