@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin · Today’s replies</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1600px; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1320px; margin: 0 auto; padding: 0 24px; min-height: 60px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; box-sizing: border-box">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger admin</span>
+<span style="margin-left: auto; font-size: 13px; font-weight: 600; color: #5d5d63; border: 1px dashed #c7c7cd; border-radius: 999px; padding: 4px 12px">Sample data · invented handles</span>
+</div>
+<nav aria-label="Admin" style="max-width: 1320px; margin: 0 auto; padding: 0 24px 12px; display: flex; flex-wrap: wrap; gap: 4px; box-sizing: border-box">
+<a href="Admin-overview.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Overview</a>
+<a href="Admin-applications.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Applications</a>
+<a href="Admin-circles.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Circles</a>
+<a href="Admin-overview.dc.html#zack" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Zack runs</a>
+<a href="Admin-prospects.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Prospects</a>
+<a href="Admin-replies.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: #1d1d1f; color: #fbfbfd; text-decoration: none; font-weight: 560">Replies</a>
+<a href="Admin-funnel.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Funnel</a>
+</nav>
+</header>
+
+<main style="max-width: 1320px; margin: 0 auto; padding: 40px 24px 96px; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 32px">
+<div>
+<h1 style="margin: 0; font-size: 32px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 640">Today’s replies</h1>
+<p style="margin: 6px 0 0; color: #5d5d63; font-variant-numeric: tabular-nums">{{sentCount}} of {{total}} sent · target 20 to 30 a day</p>
+</div>
+<div role="img" aria-label="{{sentCount}} of {{total}} sent" style="margin-left: auto; display: flex; gap: 6px">
+<sc-for list="{{progress}}" as="p" hint-placeholder-count="3">
+<span style="display: block; width: 40px; height: 6px; border-radius: 3px; background: {{p.bg}}"></span>
+</sc-for>
+</div>
+</div>
+
+<div role="note" style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; background: #0c0c0e; color: #f5f5f7; border-radius: 8px; padding: 18px 24px">
+<p style="margin: 0; font-weight: 620">You post every reply yourself.</p>
+<p style="margin: 0; color: #a3a3aa">Nothing on this screen posts to X. Drafts are suggestions; a reply counts as sent only when you mark it. No link in a first reply unless you add one.</p>
+</div>
+
+<ol style="margin: 24px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px">
+<sc-for list="{{items}}" as="it" hint-placeholder-count="3">
+<li style="display: flex; flex-wrap: wrap; gap: 0; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; overflow: hidden; border-color: {{it.border}}">
+<div style="flex: 1 1 380px; min-width: 0; padding: 24px; background: #f3f3f5">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Their post · {{it.tab}} · {{it.platform}} · {{it.views}} views</p>
+<p style="margin: 8px 0 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">{{it.handle}} <span style="font-size: 13px; font-weight: 500; color: #5d5d63">score {{it.score}}</span></p>
+<p style="margin: 10px 0 0">{{it.post}}</p>
+<p style="margin: 14px 0 0; font-size: 13px; color: #5d5d63">Library summary, our words. <a href="https://x.com" style="font-weight: 500">Open post on X ↗</a></p>
+</div>
+<div style="flex: 999 1 520px; min-width: 0; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<label for="{{it.id}}" style="font-size: 13px; font-weight: 600; color: #5d5d63">Drafted reply · edit before you copy</label>
+<textarea id="{{it.id}}" rows="4" style="width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; font-size: 16px; line-height: 1.55; box-sizing: border-box; resize: vertical">{{it.draft}}</textarea>
+<div style="display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #5d5d63"><span>Refers to what they did · one observation or question · Zack mentioned at most once</span><span style="font-variant-numeric: tabular-nums">{{it.chars}} / 280</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Copy reply</button>
+<a href="https://x.com" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; color: #1d1d1f; text-decoration: none; font-weight: 550">Open post on X ↗</a>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px dashed #c7c7cd; background: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Add tracked link</button>
+<sc-if value="{{it.unsent}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{it.toggle}}" style="margin-left: auto; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: #1d1d1f; color: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Mark sent</button>
+</sc-if>
+<sc-if value="{{it.sent}}" hint-placeholder-val="{{ false }}">
+<span style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-weight: 600"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="#1d1d1f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5l4 4 8-9"></path></svg>Sent · stage replied</span>
+<button type="button" onClick="{{it.toggle}}" style="min-height: 44px; padding: 0 14px; border: 0; background: transparent; color: #9a5226; font: inherit; font-weight: 500; cursor: pointer">Undo</button>
+</sc-if>
+</div>
+</div>
+</li>
+</sc-for>
+</ol>
+<p style="margin: 24px 0 0; font-size: 13px; color: #5d5d63">Drafts come from the AI Gateway, using the prospect’s own posts. Tracked links look like meetroger.ai/z/k7q2 and open /zack?ref=k7q2.</p>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const base = [
+      { id: 'r1', handle: '@ops_marta', score: 13, tab: 'Chief of Staff', platform: 'Grok Bot', views: '640', post: 'Runs a team of four bots that triage the inbox, chase invoices and prep her Monday plan.', draft: 'Four bots split across inbox, invoices and the Monday plan is a clean division. Do they hand work to each other, or does each one report to you? The handoffs are usually where setups like this break.' },
+      { id: 'r2', handle: '@kdbuilds', score: 11, tab: 'Solo business', platform: 'Claude', views: '2,100', post: 'Scheduled skills that write his weekly client reports from project notes.', draft: 'Weekly client reports from project notes saves real hours and almost nobody posts it. Do you have it read last week’s report first, so it doesn’t repeat itself?' },
+      { id: 'r3', handle: '@jtorres_cpa', score: 8, tab: 'Bookkeeping', platform: 'Grok Bot', views: '410', post: 'Tax-season intake: the assistant collects client documents and flags what’s missing.', draft: 'Flagging what’s missing is the hard half of intake. Does it chase the client too, or just tell you? If you ever want to see which of your routines saves the most, there’s a free agent called Zack that reviews your week.' }
+    ];
+    const sentMap = this.state.sent ?? { r1: true };
+    const items = base.map((b) => {
+      const s = !!sentMap[b.id];
+      return {
+        ...b,
+        chars: b.draft.length,
+        sent: s,
+        unsent: !s,
+        border: s ? '#1d1d1f' : '#e2e2e6',
+        toggle: () => this.setState({ sent: { ...sentMap, [b.id]: !s } })
+      };
+    });
+    const n = items.filter((x) => x.sent).length;
+    return {
+      items: items,
+      sentCount: n,
+      total: items.length,
+      progress: items.map((x, i) => ({ bg: i < n ? '#1d1d1f' : '#e2e2e6' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin · Circles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 2100px; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1320px; margin: 0 auto; padding: 0 24px; min-height: 60px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; box-sizing: border-box">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger admin</span>
+<span style="margin-left: auto; font-size: 13px; font-weight: 600; color: #5d5d63; border: 1px dashed #c7c7cd; border-radius: 999px; padding: 4px 12px">Sample data</span>
+</div>
+<nav aria-label="Admin" style="max-width: 1320px; margin: 0 auto; padding: 0 24px 12px; display: flex; flex-wrap: wrap; gap: 4px; box-sizing: border-box">
+<a href="Admin-overview.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Overview</a>
+<a href="Admin-applications.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Applications</a>
+<a href="Admin-circles.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: #1d1d1f; color: #fbfbfd; text-decoration: none; font-weight: 560">Circles</a>
+<a href="Admin-overview.dc.html#zack" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Zack runs</a>
+<a href="Admin-prospects.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Prospects</a>
+<a href="Admin-replies.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Replies</a>
+<a href="Admin-funnel.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Funnel</a>
+</nav>
+</header>
+
+<main style="max-width: 1320px; margin: 0 auto; padding: 40px 24px 96px; box-sizing: border-box">
+<h1 style="margin: 0; font-size: 32px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 640">Circles</h1>
+<p style="margin: 6px 0 0; color: #5d5d63; font-variant-numeric: tabular-nums">Seats filled 2 of 24 · public seat line shows 22 left · Circles mix agents</p>
+
+<div style="margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px">
+
+<!-- Circle 1: forming -->
+<article style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 28px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px">
+<div><p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Forming</p><h2 style="margin: 4px 0 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Founding Circle 1</h2></div>
+<p style="margin: 0; font-size: 28px; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums">2<span style="color: #5d5d63; font-size: 16px; font-weight: 500"> / 8</span></p>
+</div>
+<ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; background: #1d1d1f; color: #fbfbfd; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; background: #fbfbfd; color: #1d1d1f; display: grid; place-items: center; font-size: 13px; font-weight: 620; flex-shrink: 0">PN</span><span style="line-height: 1.25">Priya Natarajan<span style="display: block; font-size: 13px; color: #c7c7cd">Claude</span></span></li>
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; background: #1d1d1f; color: #fbfbfd; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; background: #fbfbfd; color: #1d1d1f; display: grid; place-items: center; font-size: 13px; font-weight: 620; flex-shrink: 0">BH</span><span style="line-height: 1.25">Ben Hartley<span style="display: block; font-size: 13px; color: #c7c7cd">Hark</span></span></li>
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; border: 1.5px dashed #c7c7cd; color: #5d5d63; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #c7c7cd; box-sizing: border-box"></span>Open seat</li>
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; border: 1.5px dashed #c7c7cd; color: #5d5d63; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #c7c7cd; box-sizing: border-box"></span>Open seat</li>
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; border: 1.5px dashed #c7c7cd; color: #5d5d63; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #c7c7cd; box-sizing: border-box"></span>Open seat</li>
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; border: 1.5px dashed #c7c7cd; color: #5d5d63; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #c7c7cd; box-sizing: border-box"></span>Open seat</li>
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; border: 1.5px dashed #c7c7cd; color: #5d5d63; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #c7c7cd; box-sizing: border-box"></span>Open seat</li>
+<li style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 8px; border: 1.5px dashed #c7c7cd; color: #5d5d63; box-sizing: border-box"><span style="width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #c7c7cd; box-sizing: border-box"></span>Open seat</li>
+</ol>
+<p style="margin: 0; font-size: 13px; color: #5d5d63">Agents so far: 1 Claude · 1 Hark. 3 applications waiting for review: 2 new, 1 reviewing.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding-top: 16px; border-top: 1px solid #e2e2e6; font-size: 16px">
+<label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer"><input type="checkbox" checked="" style="margin: 0; width: 18px; height: 18px; accent-color: #1d1d1f">Show on homepage: “Founding Circle 1: 2 of 8”</label>
+</div>
+</article>
+
+<!-- State example: eighth member seated -->
+<article style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 28px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px">
+<div><p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">State example · eighth seat filled</p><h2 style="margin: 4px 0 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Founding Circle 1</h2></div>
+<p style="margin: 0; font-size: 28px; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums">8<span style="color: #5d5d63; font-size: 16px; font-weight: 500"> / 8</span></p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px" aria-hidden="true">
+<span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span><span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span><span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span><span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span><span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span><span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span><span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span><span style="aspect-ratio: 1 / 1; border-radius: 50%; background: #1d1d1f"></span>
+</div>
+<div style="background: #f3f3f5; border-radius: 8px; padding: 20px">
+<p style="margin: 0; font-weight: 620">Every seat is filled.</p>
+<p style="margin: 4px 0 0; font-size: 13px; color: #5d5d63">Mark it full, set the kickoff date, then send the kickoff email by hand. Billing and the 45-day guarantee both start on that date.</p>
+<div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end">
+<div><label for="kick" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Kickoff date</label><input id="kick" type="date" style="margin-top: 6px; height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit"></div>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: #1d1d1f; color: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Mark full and set kickoff date</button>
+</div>
+</div>
+<p style="margin: 0; font-size: 13px; color: #5d5d63">Then: send the kickoff email · send each member the Stripe link in their currency (5 USD, 3 CAD) · record paid_from.</p>
+</article>
+
+<!-- Create a Circle -->
+<article style="background: #f3f3f5; border-radius: 8px; padding: 28px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Create a Circle</h2>
+<div><label for="c-name" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Name</label><input id="c-name" type="text" value="Founding Circle 2" style="margin-top: 6px; width: 100%; height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; box-sizing: border-box"></div>
+<div><label for="c-seats" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Seats</label><input id="c-seats" type="number" value="8" style="margin-top: 6px; width: 120px; height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; box-sizing: border-box"></div>
+<p style="margin: 0; font-size: 13px; color: #5d5d63">No agent to choose. Any accepted applicant can be seated in any forming Circle.</p>
+<button type="button" style="align-self: flex-start; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: #1d1d1f; color: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Create Circle</button>
+</article>
+</div>
+
+<!-- This week: a running Circle -->
+<section aria-labelledby="tw-h" style="margin-top: 64px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">State example · a running Circle, Monday 6:40 AM Eastern</p>
+<h2 id="tw-h" style="margin: 6px 0 0; font-size: 32px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 640">This week · Founding Circle 1</h2>
+<p style="margin: 6px 0 0; color: #5d5d63">Week of Monday, [DATE]. Cut-off for runs was Sunday 11:59 PM Eastern. Runs are taken in from members’ emails automatically.</p>
+
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+<!-- Runs in -->
+<div style="flex: 999 1 560px; min-width: 0; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; overflow-x: auto">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px 12px">
+<h3 style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Runs in <span style="font-variant-numeric: tabular-nums; color: #5d5d63; font-weight: 500">7 of 8</span></h3>
+<button type="button" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">Add a run</button>
+</div>
+<table style="width: 100%; min-width: 520px; border-collapse: collapse; text-align: left">
+<thead><tr style="border-bottom: 1px solid #1d1d1f; color: #5d5d63; font-size: 13px"><th style="padding: 10px 24px; font-weight: 560">Member</th><th style="padding: 10px 16px; font-weight: 560">Agent</th><th style="padding: 10px 16px; font-weight: 560">Run</th><th style="padding: 10px 24px; font-weight: 560; text-align: right">Missed in a row</th></tr></thead>
+<tbody style="font-variant-numeric: tabular-nums">
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 24px; font-weight: 600">Priya Natarajan</td><td style="padding: 12px 16px">Claude</td><td style="padding: 12px 16px">Received Sun 6:12 PM</td><td style="padding: 12px 24px; text-align: right; color: #5d5d63">0</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 24px; font-weight: 600">Ben Hartley</td><td style="padding: 12px 16px">Hark</td><td style="padding: 12px 16px">Received Sun 7:40 PM</td><td style="padding: 12px 24px; text-align: right; color: #5d5d63">0</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 24px; font-weight: 600">Dana Whitfield</td><td style="padding: 12px 16px">Claude</td><td style="padding: 12px 16px">Received Sun 8:05 PM</td><td style="padding: 12px 24px; text-align: right; color: #5d5d63">0</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 24px; font-weight: 600">Marcus Oyelaran</td><td style="padding: 12px 16px">Grok Bot</td><td style="padding: 12px 16px">Received Sun 9:31 PM</td><td style="padding: 12px 24px; text-align: right; color: #5d5d63">0</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 24px; font-weight: 600">Tom Reyes</td><td style="padding: 12px 16px">Claude</td><td style="padding: 12px 16px">Received Sun 10:02 PM</td><td style="padding: 12px 24px; text-align: right; color: #5d5d63">0</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 24px; font-weight: 600">Ines Carvalho</td><td style="padding: 12px 16px">Grok Bot</td><td style="padding: 12px 16px">Received Sun 11:20 PM</td><td style="padding: 12px 24px; text-align: right; color: #5d5d63">0</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 24px; font-weight: 600">Sam Adeyemi</td><td style="padding: 12px 16px">Duet</td><td style="padding: 12px 16px">Received Sun 11:48 PM</td><td style="padding: 12px 24px; text-align: right; color: #5d5d63">0</td></tr>
+<tr style="background: #f6ece4"><td style="padding: 12px 24px; font-weight: 600">Lena Fischer</td><td style="padding: 12px 16px">Hark</td><td style="padding: 12px 16px; font-weight: 620">Missing</td><td style="padding: 12px 24px; text-align: right; font-weight: 620">2 · one more and the seat is flagged</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- Cora -->
+<div style="flex: 1 1 400px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<div style="background: #0c0c0e; color: #f5f5f7; border-radius: 8px; padding: 24px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #a3a3aa">Cora · ran Monday 1:00 AM</p>
+<p style="margin: 6px 0 0; font-size: 28px; line-height: 1.1; font-weight: 640; letter-spacing: -0.03em">Sort ready · sends at 7:00 AM</p>
+<dl style="margin: 16px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; font-variant-numeric: tabular-nums">
+<div><dd style="margin: 0; font-size: 28px; font-weight: 640; letter-spacing: -0.03em">7</dd><dt style="font-size: 13px; color: #a3a3aa">runs read</dt></div>
+<div><dd style="margin: 0; font-size: 28px; font-weight: 640; letter-spacing: -0.03em">28</dd><dt style="font-size: 13px; color: #a3a3aa">plays read</dt></div>
+<div><dd style="margin: 0; font-size: 28px; font-weight: 640; letter-spacing: -0.03em">19</dd><dt style="font-size: 13px; color: #a3a3aa">after merging</dt></div>
+</dl>
+<ul style="margin: 16px 0 0; padding: 16px 0 0; list-style: none; border-top: 1px solid #2c2c31; display: flex; flex-direction: column; gap: 6px; font-variant-numeric: tabular-nums">
+<li style="display: flex; justify-content: space-between"><span>Install this week</span><span style="font-weight: 620">3 plays</span></li>
+<li style="display: flex; justify-content: space-between"><span>Worth trying</span><span style="font-weight: 620">5 plays</span></li>
+<li style="display: flex; justify-content: space-between"><span>Niche but great</span><span style="font-weight: 620">2 plays</span></li>
+<li style="display: flex; justify-content: space-between"><span>Your top 3 sections</span><span style="font-weight: 620">7 members</span></li>
+</ul>
+</div>
+<div style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 24px">
+<p style="margin: 0; font-weight: 620">Sends itself at 7:00 AM Eastern.</p>
+<p style="margin: 4px 0 0; font-size: 13px; color: #5d5d63">Nothing here needs approving. Each of the 7 members gets the three tiers and only their own top 3. Lena gets one line: no run, no list this week.</p>
+<div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-weight: 550; cursor: pointer">View the sort</button>
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: #9a5226; font: inherit; font-weight: 500; cursor: pointer">Run Cora again</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section style="margin-top: 56px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Rules the board enforces</h2>
+<ul style="margin: 12px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px">
+<li style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px">A member can be seated in any forming Circle, whatever their agent.</li>
+<li style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px">A Circle can never hold more than its seats.</li>
+<li style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px">A warning shows when a company or “keep apart” note matches someone already seated.</li>
+<li style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px">The Monday email never carries another member’s top 3, or a name against a play.</li>
+<li style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px">Monday’s list sends itself. If Cora fails, nothing is sent and you get an alert. Nobody is removed automatically: a member at three misses in a row is flagged.</li>
+</ul>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

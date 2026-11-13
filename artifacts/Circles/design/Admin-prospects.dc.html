@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin · Prospects</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1400px; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1320px; margin: 0 auto; padding: 0 24px; min-height: 60px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; box-sizing: border-box">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger admin</span>
+<span style="margin-left: auto; font-size: 13px; font-weight: 600; color: #5d5d63; border: 1px dashed #c7c7cd; border-radius: 999px; padding: 4px 12px">Sample data · invented handles</span>
+</div>
+<nav aria-label="Admin" style="max-width: 1320px; margin: 0 auto; padding: 0 24px 12px; display: flex; flex-wrap: wrap; gap: 4px; box-sizing: border-box">
+<a href="Admin-overview.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Overview</a>
+<a href="Admin-applications.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Applications</a>
+<a href="Admin-circles.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Circles</a>
+<a href="Admin-overview.dc.html#zack" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Zack runs</a>
+<a href="Admin-prospects.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: #1d1d1f; color: #fbfbfd; text-decoration: none; font-weight: 560">Prospects</a>
+<a href="Admin-replies.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Replies</a>
+<a href="Admin-funnel.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Funnel</a>
+</nav>
+</header>
+
+<main style="max-width: 1320px; margin: 0 auto; padding: 40px 24px 96px; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 32px">
+<div>
+<h1 style="margin: 0; font-size: 32px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 640">Prospects</h1>
+<p style="margin: 6px 0 0; color: #5d5d63; font-variant-numeric: tabular-nums">One row per X handle, scored from sheet_posts · rebuilt hourly after the sheet sync</p>
+</div>
+<div style="margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Rebuild now</button>
+<a href="#weights" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; color: #1d1d1f; text-decoration: none; font-weight: 550">Tune weights</a>
+<a href="Admin-replies.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; background: #1d1d1f; color: #ffffff; text-decoration: none; font-weight: 550">Queue 3 for today</a>
+</div>
+</div>
+
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px">
+<label for="st" style="font-weight: 600; color: #5d5d63">Stage</label><select id="st" style="height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit"><option>new</option><option>queued</option><option>replied</option><option>engaged</option><option>ran_zack</option><option>applied</option><option>member</option><option>skip</option></select>
+<label for="pl" style="font-weight: 600; color: #5d5d63">Agent</label><select id="pl" style="height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit"><option>All</option><option>Claude</option><option>Grok Bot</option><option>Muse</option></select>
+<label for="ms" style="font-weight: 600; color: #5d5d63">Score at least</label><input id="ms" type="number" value="6" style="width: 64px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; box-sizing: border-box">
+<span style="margin-left: auto; color: #5d5d63; font-variant-numeric: tabular-nums">3 selected</span>
+</div>
+
+<ol style="margin: 20px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px">
+
+<li style="display: grid; grid-template-columns: auto 64px minmax(0, 1fr); gap: 16px 20px; align-items: start; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 20px 24px">
+<input type="checkbox" checked="" aria-label="Select @ops_marta" style="margin: 6px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f">
+<div><p style="margin: 0; font-size: 32px; line-height: 1; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums">13</p><p style="margin: 4px 0 0; font-size: 13px; color: #5d5d63">score</p></div>
+<div style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">@ops_marta</p><p style="margin: 0; font-size: 13px; color: #5d5d63">Grok Bot · 4 posts · last 3 days ago · median 640 views · stage new</p></div>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; font-variant-numeric: tabular-nums">
+<span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+3 repeat poster</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+4 work posts</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+3 multi-agent</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+2 last 14 days</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+1 small account</span>
+</div>
+<ul style="margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 16px">
+<li style="display: flex; gap: 10px"><span style="flex: 0 0 96px; font-size: 13px; color: #5d5d63; padding-top: 2px">Chief of Staff</span><span>Runs a team of four bots that triage the inbox, chase invoices and prep her Monday plan.</span></li>
+<li style="display: flex; gap: 10px"><span style="flex: 0 0 96px; font-size: 13px; color: #5d5d63; padding-top: 2px">Customers</span><span>Drafts replies to every support ticket overnight; she approves them over coffee.</span></li>
+<li style="display: flex; gap: 10px"><span style="flex: 0 0 96px; font-size: 13px; color: #5d5d63; padding-top: 2px">+2 more</span><a href="#" style="text-decoration: none; font-weight: 500">Show all posts</a></li>
+</ul>
+</div>
+</li>
+
+<li style="display: grid; grid-template-columns: auto 64px minmax(0, 1fr); gap: 16px 20px; align-items: start; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 20px 24px">
+<input type="checkbox" checked="" aria-label="Select @kdbuilds" style="margin: 6px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f">
+<div><p style="margin: 0; font-size: 32px; line-height: 1; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums">11</p><p style="margin: 4px 0 0; font-size: 13px; color: #5d5d63">score</p></div>
+<div style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">@kdbuilds</p><p style="margin: 0; font-size: 13px; color: #5d5d63">Claude · 3 posts · last 6 days ago · median 2,100 views · stage new</p></div>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px">
+<span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+3 repeat poster</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+3 work posts</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+3 multi-agent</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+2 last 14 days</span>
+</div>
+<ul style="margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 16px">
+<li style="display: flex; gap: 10px"><span style="flex: 0 0 96px; font-size: 13px; color: #5d5d63; padding-top: 2px">Solo business</span><span>Scheduled skills that write his weekly client reports from project notes.</span></li>
+<li style="display: flex; gap: 10px"><span style="flex: 0 0 96px; font-size: 13px; color: #5d5d63; padding-top: 2px">Bookkeeping</span><span>Receipts from email matched to bank lines every Friday.</span></li>
+</ul>
+</div>
+</li>
+
+<li style="display: grid; grid-template-columns: auto 64px minmax(0, 1fr); gap: 16px 20px; align-items: start; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 20px 24px">
+<input type="checkbox" checked="" aria-label="Select @jtorres_cpa" style="margin: 6px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f">
+<div><p style="margin: 0; font-size: 32px; line-height: 1; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums">8</p><p style="margin: 4px 0 0; font-size: 13px; color: #5d5d63">score</p></div>
+<div style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">@jtorres_cpa</p><p style="margin: 0; font-size: 13px; color: #5d5d63">Grok Bot · 2 posts · last 9 days ago · median 410 views · stage new</p></div>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px">
+<span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+3 repeat poster</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+2 work posts</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+2 last 14 days</span><span style="padding: 3px 10px; border-radius: 999px; background: #f3f3f5">+1 small account</span>
+</div>
+<ul style="margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 16px">
+<li style="display: flex; gap: 10px"><span style="flex: 0 0 96px; font-size: 13px; color: #5d5d63; padding-top: 2px">Bookkeeping</span><span>Tax-season intake: the assistant collects client documents and flags what’s missing.</span></li>
+</ul>
+</div>
+</li>
+
+<li style="display: grid; grid-template-columns: auto 64px minmax(0, 1fr); gap: 16px 20px; align-items: start; background: #f3f3f5; border-radius: 8px; padding: 20px 24px">
+<input type="checkbox" aria-label="Select @agentgarage" style="margin: 6px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f">
+<div><p style="margin: 0; font-size: 32px; line-height: 1; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: #5d5d63">4</p><p style="margin: 4px 0 0; font-size: 13px; color: #5d5d63">score</p></div>
+<div style="min-width: 0">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">@agentgarage</p><p style="margin: 0; font-size: 13px; color: #5d5d63">Muse · 5 posts · last 2 days ago · median 88,000 views · stage skip</p></div>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px">
+<span style="padding: 3px 10px; border-radius: 999px; background: #ffffff">+3 repeat poster</span><span style="padding: 3px 10px; border-radius: 999px; background: #ffffff">+1 work posts</span><span style="padding: 3px 10px; border-radius: 999px; background: #ffffff">+2 last 14 days</span><span style="padding: 3px 10px; border-radius: 999px; background: #ffffff">−2 large account</span>
+</div>
+<p style="margin: 10px 0 0; font-size: 13px; color: #5d5d63">Note: an influencer account; skipped by hand.</p>
+</div>
+</li>
+</ol>
+
+<section id="weights" style="margin-top: 48px; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 24px">
+<h2 style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Score weights</h2>
+<p style="margin: 4px 0 0; font-size: 13px; color: #5d5d63">Stored in settings. Personal tabs (Household, Travel, Errands, Kids, Homework, Caregiving, Health) never count as work.</p>
+<div style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; font-size: 16px">
+<label style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f3f3f5; border-radius: 8px; padding: 8px 12px">Repeat poster<input type="number" value="3" style="width: 56px; height: 36px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; text-align: center"></label>
+<label style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f3f3f5; border-radius: 8px; padding: 8px 12px">Per work post (cap 5)<input type="number" value="1" style="width: 56px; height: 36px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; text-align: center"></label>
+<label style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f3f3f5; border-radius: 8px; padding: 8px 12px">Multi-agent post<input type="number" value="3" style="width: 56px; height: 36px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; text-align: center"></label>
+<label style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f3f3f5; border-radius: 8px; padding: 8px 12px">Posted in 14 days<input type="number" value="2" style="width: 56px; height: 36px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; text-align: center"></label>
+<label style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f3f3f5; border-radius: 8px; padding: 8px 12px">Under 1,000 views<input type="number" value="1" style="width: 56px; height: 36px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; text-align: center"></label>
+<label style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f3f3f5; border-radius: 8px; padding: 8px 12px">Over 50,000 views<input type="number" value="-2" style="width: 56px; height: 36px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; text-align: center"></label>
+<label style="display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f3f3f5; border-radius: 8px; padding: 8px 12px">Caution tag only<input type="number" value="-1" style="width: 56px; height: 36px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; text-align: center"></label>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

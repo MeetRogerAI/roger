@@ -51,3 +51,8 @@ design/gen/raw/
 skills-lock.json
 !.env.example
 /.taste-skill/
+
+# local working state, never committed
+/dist/
+/src/generated/
+/.context/

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Apply for a founding Circle</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 2300px; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 17px; line-height: 1.55">
+
+<!-- Header: no button on /apply -->
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 2vw, 24px); height: 60px; display: flex; align-items: center; gap: 24px; box-sizing: border-box">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 8px; color: #1d1d1f; text-decoration: none; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger</a>
+<nav aria-label="Main" style="margin-left: auto; max-width: max(0px, calc((100vw - 760px) * 999)); overflow: hidden"><ul style="display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; white-space: nowrap; font-size: 16px"><li><a href="How-it-works.dc.html" style="color: #5d5d63; text-decoration: none">How it works</a></li><li><a href="Zack.dc.html" style="color: #5d5d63; text-decoration: none">Run Zack</a></li><li><a href="Main.dc.html#proof" style="color: #5d5d63; text-decoration: none">Use cases</a></li><li><a href="FAQ.dc.html" style="color: #5d5d63; text-decoration: none">FAQ</a></li><li><a href="About.dc.html" style="color: #5d5d63; text-decoration: none">About</a></li></ul></nav>
+</div>
+</header>
+
+<main style="max-width: 1180px; margin: 0 auto; padding: clamp(40px, 5vw, 80px) clamp(16px, 2vw, 24px) 120px; box-sizing: border-box">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63; font-variant-numeric: tabular-nums">Founding Circles · {{seatsLeft}} of 24 seats left</p>
+<h1 style="margin: 12px 0 0; font-size: clamp(38px, 5vw, 72px); line-height: 1.02; letter-spacing: -0.042em; font-weight: 650; font-stretch: 104%">Apply for a founding Circle</h1>
+<p style="margin: 20px 0 0; max-width: 40rem; font-size: clamp(19px, 1.6vw, 21px); line-height: 1.45">Two steps. Six questions now, then your Zack report. Peter reads every application himself.</p>
+
+<sc-if value="{{dbDown}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="margin-top: 32px; max-width: 720px; background: #f3f3f5; border-radius: 8px; padding: 24px 28px">
+<p style="margin: 0; font-size: 21px; font-weight: 620">Applications open shortly.</p>
+<p style="margin: 6px 0 0; font-size: 16px">Email <a href="mailto:hello@meetroger.ai" style="font-weight: 500">hello@meetroger.ai</a> and Peter will reply.</p>
+</div>
+</sc-if>
+
+<sc-if value="{{dbUp}}" hint-placeholder-val="{{ true }}">
+<div style="margin-top: 48px; display: flex; flex-wrap: wrap; gap: 48px 72px; align-items: flex-start">
+<div style="flex: 999 1 560px; min-width: 0; max-width: 720px">
+
+<!-- Step indicator -->
+<ol aria-label="Progress" style="margin: 0 0 40px; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px">
+<li aria-current="{{s1Current}}" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px; border-radius: 999px; background: {{s1Bg}}; color: {{s1Color}}; border: 1px solid {{s1Border}}; font-size: 16px; font-weight: 560"><span style="font-variant-numeric: tabular-nums">1</span>Qualify</li>
+<li aria-current="{{s2Current}}" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px; border-radius: 999px; background: {{s2Bg}}; color: {{s2Color}}; border: 1px solid {{s2Border}}; font-size: 16px; font-weight: 560"><span style="font-variant-numeric: tabular-nums">2</span>Your Zack report</li>
+</ol>
+
+<!-- STEP 1 -->
+<sc-if value="{{isStep1}}" hint-placeholder-val="{{ true }}">
+<form novalidate="" style="display: flex; flex-direction: column; gap: 28px">
+<div>
+<h2 style="margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">First, six questions.</h2>
+<p style="margin: 8px 0 0; font-size: 16px; color: #5d5d63">This tells us whether a Circle fits you yet.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px">
+<div><label for="f-name" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Name</label><input id="f-name" type="text" autocomplete="name" required="" style="margin-top: 8px; width: 100%; height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; box-sizing: border-box"></div>
+<div><label for="f-email" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Email</label><input id="f-email" type="email" autocomplete="email" required="" placeholder="you@company.com" style="margin-top: 8px; width: 100%; height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; box-sizing: border-box"></div>
+</div>
+<div>
+<label for="f-agent" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Main agent</label>
+<select id="f-agent" style="margin-top: 8px; width: 100%; max-width: 360px; height: 48px; padding: 0 12px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; color: #1d1d1f; box-sizing: border-box"><option>Claude</option><option>Grok Bot</option><option>Duet</option><option>Hark</option><option>Instinct (Zack coming soon)</option><option>Muse (Zack coming soon)</option><option>Dots (Zack coming soon)</option><option>Viktor (Zack coming soon)</option></select>
+<p style="margin: 6px 0 0; font-size: 13px; color: #5d5d63">Circles mix agents. We ask so we know which Zack to send you.</p>
+</div>
+<div>
+<label for="f-role" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">What you do</label>
+<p id="f-role-hint" style="margin: 2px 0 0; font-size: 13px; color: #5d5d63">Your role and the kind of business, in one line.</p>
+<sc-if value="{{noErrors}}" hint-placeholder-val="{{ true }}"><input id="f-role" type="text" aria-describedby="f-role-hint" placeholder="Founder of a 12-person accounting firm" style="margin-top: 8px; width: 100%; height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; box-sizing: border-box"></sc-if>
+<sc-if value="{{showErrors}}" hint-placeholder-val="{{ false }}"><input id="f-role" type="text" aria-invalid="true" aria-describedby="f-role-err" style="margin-top: 8px; width: 100%; height: 48px; padding: 0 14px; border-radius: 8px; border: 1.5px solid #b3261e; background: #ffffff; font: inherit; font-size: 17px; box-sizing: border-box"><p id="f-role-err" style="margin: 6px 0 0; font-size: 13px; font-weight: 560; color: #b3261e">Tell us what you do, so we can place you well.</p></sc-if>
+</div>
+<fieldset style="border: 0; margin: 0; padding: 0">
+<legend style="padding: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Do you use agents for work every day?</legend>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px">
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="radio" name="daily" style="margin: 0; accent-color: #1d1d1f">Yes</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="radio" name="daily" style="margin: 0; accent-color: #1d1d1f">No</label>
+</div>
+</fieldset>
+<fieldset style="border: 0; margin: 0; padding: 0">
+<legend style="padding: 0; font-size: 13px; font-weight: 600; color: #5d5d63">How many agents, bots or scheduled routines do you run?</legend>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px">
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="radio" name="count" style="margin: 0; accent-color: #1d1d1f">1–2</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="radio" name="count" style="margin: 0; accent-color: #1d1d1f">3–5</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="radio" name="count" style="margin: 0; accent-color: #1d1d1f">6–15</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="radio" name="count" style="margin: 0; accent-color: #1d1d1f">16+</label>
+</div>
+</fieldset>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding-top: 8px">
+<button type="button" onClick="{{goStep2}}" style="min-height: 52px; padding: 0 28px; border-radius: 999px; border: 0; background: #9a5226; color: #ffffff; font: inherit; font-size: 17px; font-weight: 550; cursor: pointer">Continue</button>
+<p style="margin: 0; font-size: 13px; color: #5d5d63">We save this and email you a link to step 2. <a href="https://meetroger.ai/privacy" style="font-weight: 500">How we handle it</a></p>
+</div>
+</form>
+</sc-if>
+
+<!-- NOT YET -->
+<sc-if value="{{isNotYet}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="background: #f3f3f5; border-radius: 8px; padding: clamp(24px, 3vw, 40px)">
+<h2 style="margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">Not yet.</h2>
+<p style="margin: 12px 0 0; max-width: 34rem; font-size: clamp(19px, 1.6vw, 21px); line-height: 1.45">Circles are for people running three or more agents every day. You’re not there yet, and that’s fine.</p>
+<p style="margin: 12px 0 0; max-width: 34rem; font-size: 17px; color: #5d5d63">Run Zack on yourself for free, and apply again when you are. We’ve kept your answers.</p>
+<a href="Zack.dc.html" style="margin-top: 24px; display: inline-flex; align-items: center; min-height: 52px; padding: 0 28px; border-radius: 999px; background: #1d1d1f; color: #ffffff; text-decoration: none; font-size: 17px; font-weight: 550">Run Zack on yourself</a>
+</div>
+</sc-if>
+
+<!-- STEP 2 -->
+<sc-if value="{{isStep2}}" hint-placeholder-val="{{ false }}">
+<form novalidate="" style="display: flex; flex-direction: column; gap: 48px">
+<div role="status" style="display: flex; gap: 12px; align-items: flex-start; background: #f3f3f5; border-radius: 8px; padding: 16px 20px; font-size: 16px">
+<svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="#1d1d1f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px"><path d="M4 10.5l4 4 8-9"></path></svg>
+<span>You qualify. Your answers are saved, and we’ve emailed you a link back to this step. <button type="button" onClick="{{goStep1}}" style="border: 0; background: transparent; padding: 0; color: #9a5226; font: inherit; font-weight: 500; cursor: pointer">Edit step 1</button></span>
+</div>
+
+<fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px">
+<legend style="padding: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640; margin-bottom: 8px">Now your Zack report.</legend>
+<p style="margin: 0; font-size: 16px; color: #5d5d63">It’s the main part of your application. Only Roger’s team reads it. It is never published or shared.</p>
+<sc-if value="{{reportPrefilled}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 18px 22px">
+<div><p style="margin: 0; font-weight: 620">Report added from your Zack run</p><p style="margin: 2px 0 0; font-size: 13px; color: #5d5d63">Pasted today · Claude</p></div>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 16px; cursor: pointer">Review or edit</button>
+</div>
+</sc-if>
+<sc-if value="{{reportEmpty}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 18px 22px">
+<p style="margin: 0; flex: 1 1 280px; font-size: 16px">Haven’t run Zack yet? It takes one prompt in your own account.</p>
+<a href="Zack.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; background: #1d1d1f; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 550">Run Zack now</a>
+</div>
+<div role="note" style="display: flex; gap: 12px; align-items: flex-start; background: #f6ece4; border-radius: 8px; padding: 16px 20px"><p style="margin: 0; font-size: 16px">Check your report for client names or private details before pasting. Only Roger’s team reads it.</p></div>
+<div>
+<label for="f-report" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Paste your Zack report</label>
+<textarea id="f-report" rows="10" maxlength="20000" style="margin-top: 8px; display: block; width: 100%; min-height: 240px; padding: 14px; border-radius: 8px; border: {{reportBorder}}; background: #ffffff; font: inherit; font-size: 16px; box-sizing: border-box; resize: vertical"></textarea>
+<sc-if value="{{showErrors}}" hint-placeholder-val="{{ false }}"><p style="margin: 6px 0 0; font-size: 13px; font-weight: 560; color: #b3261e">A Zack report is required before Peter can review your application.</p></sc-if>
+<div style="margin-top: 8px; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #5d5d63"><span>Plain text, exactly as Zack wrote it.</span><span style="font-variant-numeric: tabular-nums">0 / 20,000</span></div>
+</div>
+</sc-if>
+</fieldset>
+
+<fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 24px">
+<legend style="padding: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640; margin-bottom: 24px">Placing you in a Circle</legend>
+<fieldset style="border: 0; margin: 0; padding: 0">
+<legend style="padding: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Other agents you use <span style="font-weight: 400">· optional</span></legend>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px">
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Claude</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Grok Bot</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Duet</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Hark</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Instinct</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Muse</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Dots</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid #c7c7cd; border-radius: 999px; font-size: 16px; cursor: pointer"><input type="checkbox" style="margin: 0; accent-color: #1d1d1f">Viktor</label>
+</div>
+</fieldset>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px">
+<div><label for="f-company" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Company or website <span style="font-weight: 400">· optional</span></label><input id="f-company" type="text" style="margin-top: 8px; width: 100%; height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; box-sizing: border-box"><p style="margin: 6px 0 0; font-size: 13px; color: #5d5d63">Used to keep direct competitors out of the same Circle.</p></div>
+<div><label for="f-profile" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">LinkedIn or X profile <span style="font-weight: 400">· optional</span></label><input id="f-profile" type="url" placeholder="https://" style="margin-top: 8px; width: 100%; height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; box-sizing: border-box"></div>
+</div>
+<div><label for="f-excl" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Anyone you should not be in a Circle with? <span style="font-weight: 400">· optional</span></label><input id="f-excl" type="text" placeholder="Competitors, colleagues" style="margin-top: 8px; width: 100%; height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; box-sizing: border-box"></div>
+<div><label for="f-tz" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Time zone</label><select id="f-tz" style="margin-top: 8px; width: 100%; max-width: 360px; height: 48px; padding: 0 12px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 17px; color: #1d1d1f; box-sizing: border-box"><option>Eastern (Toronto, New York)</option></select><p style="margin: 6px 0 0; font-size: 13px; color: #5d5d63">Working sessions are Tuesdays and Thursdays at 12:00 PM Eastern.</p></div>
+<p style="margin: 0; font-size: 16px">You’ll be billed in <span style="font-weight: 620">{{curCode}}</span>: {{priceLabel}} a month from the day your Circle starts. Change it in the price panel on this page.</p>
+<label style="display: flex; gap: 12px; align-items: flex-start; font-size: 16px; cursor: pointer"><input type="checkbox" required="" style="margin: 4px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f; flex-shrink: 0">I understand Circles are confidential and that members sign an agreement before joining.</label>
+</fieldset>
+
+<div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px">
+<a href="Apply-thanks.dc.html" style="display: inline-flex; align-items: center; min-height: 52px; padding: 0 28px; border-radius: 999px; background: #9a5226; color: #ffffff; text-decoration: none; font-size: 17px; font-weight: 550">Send my application</a>
+<button type="button" style="min-height: 52px; padding: 0 8px; border: 0; background: transparent; color: #9a5226; font: inherit; font-size: 17px; font-weight: 500; cursor: pointer">Save and finish later</button>
+</div>
+<p style="margin: 16px 0 0; font-size: 13px; color: #5d5d63">Peter reviews an application once the report is in.</p>
+</div>
+</form>
+</sc-if>
+</div>
+
+<!-- Side panel -->
+<aside style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<div style="background: #0c0c0e; color: #f5f5f7; border-radius: 8px; padding: 28px">
+<div role="group" aria-label="Show price in" style="display: inline-flex; padding: 3px; border-radius: 999px; background: #19191c; border: 1px solid #2c2c31">
+<button type="button" aria-pressed="{{usdPressed}}" onClick="{{pickUsd}}" style="min-width: 64px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 0; background: {{usdBg}}; color: {{usdColor}}; font: inherit; font-size: 13px; font-weight: 620; letter-spacing: 0.02em; cursor: pointer">USD</button>
+<button type="button" aria-pressed="{{cadPressed}}" onClick="{{pickCad}}" style="min-width: 64px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 0; background: {{cadBg}}; color: {{cadColor}}; font: inherit; font-size: 13px; font-weight: 620; letter-spacing: 0.02em; cursor: pointer">CAD</button>
+</div>
+<p aria-live="polite" style="margin: 18px 0 0; font-size: 32px; line-height: 1.1; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums">{{priceLabel}} <span style="font-size: 16px; font-weight: 500; letter-spacing: 0; color: #a3a3aa">/ month {{curCode}}</span></p>
+<p style="margin: 10px 0 0; font-size: 16px; color: #a3a3aa">Billing starts the day your Circle starts. Nothing is charged to apply.</p>
+<p style="margin: 16px 0 0; padding-top: 16px; border-top: 1px solid #2c2c31; font-size: 16px"><span style="font-weight: 620">45-day money-back guarantee.</span> <span style="color: #a3a3aa">Tell us within 45 days of kickoff and we refund what you’ve paid.</span></p>
+</div>
+<div style="background: #f3f3f5; border-radius: 8px; padding: 28px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">How vetting works</p>
+<ol style="margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 16px">
+<sc-for list="{{vetSteps}}" as="v" hint-placeholder-count="6">
+<li aria-current="{{v.current}}" style="display: flex; gap: 12px; align-items: baseline"><span style="flex: 0 0 22px; height: 22px; border-radius: 50%; background: {{v.dotBg}}; color: {{v.dotColor}}; border: 1px solid {{v.dotBorder}}; box-sizing: border-box; display: inline-grid; place-items: center; font-size: 12px; font-weight: 620; font-variant-numeric: tabular-nums">{{v.n}}</span><span><span style="font-weight: {{v.weight}}">{{v.title}}.</span> <span style="color: #5d5d63">{{v.text}}</span></span></li>
+</sc-for>
+</ol>
+</div>
+</aside>
+</div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"startStep":{"editor":"enum","options":["1 qualify","not yet","2 report"],"default":"1 qualify","section":"State"},"reportPrefilled":{"editor":"boolean","default":false,"section":"State"},"showErrors":{"editor":"boolean","default":false,"section":"State"},"currency":{"editor":"enum","options":["USD","CAD"],"default":"USD","section":"State"},"dbConfigured":{"editor":"boolean","default":true,"section":"State"},"seatsTaken":{"editor":"range","min":0,"max":24,"step":1,"default":0,"section":"State"},"$preview":{"width":1440,"height":2300}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const start = this.props.startStep ?? '1 qualify';
+    const step = this.state.step ?? (start === '2 report' ? 2 : start === 'not yet' ? 0 : 1);
+    const pre = !!(this.props.reportPrefilled ?? false);
+    const err = !!(this.props.showErrors ?? false);
+    const db = !!(this.props.dbConfigured ?? true);
+    const taken = Math.max(0, Math.min(24, Number(this.props.seatsTaken ?? 0)));
+    const cur = this.state.cur ?? this.props.currency ?? 'USD';
+    const cad = cur === 'CAD';
+    const on2 = step === 2;
+    const steps = [
+      ['Qualify', 'Six short questions.'],
+      ['Run Zack', 'Add your report.'],
+      ['Review', 'Peter replies within 2 business days.'],
+      ['Call', 'A short conversation, not a sales pitch.'],
+      ['Agreement', 'Every member signs before joining.'],
+      ['Kickoff', 'An email when your Circle has eight members.']
+    ];
+    const active = on2 ? 1 : 0;
+    return {
+      isStep1: step === 1,
+      isStep2: on2,
+      isNotYet: step === 0,
+      goStep2: () => this.setState({ step: 2 }),
+      goStep1: () => this.setState({ step: 1 }),
+      s1Current: on2 ? 'false' : 'step',
+      s2Current: on2 ? 'step' : 'false',
+      s1Bg: on2 ? '#ffffff' : '#1d1d1f',
+      s1Color: on2 ? '#1d1d1f' : '#fbfbfd',
+      s1Border: on2 ? '#c7c7cd' : '#1d1d1f',
+      s2Bg: on2 ? '#1d1d1f' : '#ffffff',
+      s2Color: on2 ? '#fbfbfd' : '#5d5d63',
+      s2Border: on2 ? '#1d1d1f' : '#c7c7cd',
+      reportPrefilled: pre && !err,
+      reportEmpty: !pre || err,
+      showErrors: err,
+      noErrors: !err,
+      dbUp: db,
+      dbDown: !db,
+      seatsLeft: 24 - taken,
+      reportBorder: err ? '1.5px solid #b3261e' : '1px solid #c7c7cd',
+      curCode: cad ? 'CAD' : 'USD',
+      priceLabel: cad ? '$280' : '$200',
+      usdPressed: cad ? 'false' : 'true',
+      cadPressed: cad ? 'true' : 'false',
+      usdBg: cad ? 'transparent' : '#f5f5f7',
+      usdColor: cad ? '#a3a3aa' : '#0c0c0e',
+      cadBg: cad ? '#f5f5f7' : 'transparent',
+      cadColor: cad ? '#0c0c0e' : '#a3a3aa',
+      pickUsd: () => this.setState({ cur: 'USD' }),
+      pickCad: () => this.setState({ cur: 'CAD' }),
+      vetSteps: steps.map((s, i) => ({
+        n: i + 1,
+        title: s[0],
+        text: s[1],
+        current: i === active ? 'step' : 'false',
+        weight: i === active ? 640 : 560,
+        dotBg: i === active ? '#1d1d1f' : (i < active ? '#5d5d63' : 'transparent'),
+        dotColor: i <= active ? '#ffffff' : '#5d5d63',
+        dotBorder: i <= active ? 'transparent' : '#c7c7cd'
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zack for Claude · instructions</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 2400px; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 17px; line-height: 1.55">
+
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 2vw, 24px); height: 60px; display: flex; align-items: center; gap: 24px; box-sizing: border-box">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 8px; color: #1d1d1f; text-decoration: none; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger</a>
+<nav aria-label="Main" style="margin-left: auto; max-width: max(0px, calc((100vw - 760px) * 999)); overflow: hidden"><ul style="display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; white-space: nowrap; font-size: 16px"><li><a href="How-it-works.dc.html" style="color: #5d5d63; text-decoration: none">How it works</a></li><li><a href="Zack.dc.html" aria-current="page" style="color: #1d1d1f; text-decoration: none">Run Zack</a></li><li><a href="Main.dc.html#proof" style="color: #5d5d63; text-decoration: none">Use cases</a></li><li><a href="FAQ.dc.html" style="color: #5d5d63; text-decoration: none">FAQ</a></li><li><a href="About.dc.html" style="color: #5d5d63; text-decoration: none">About</a></li></ul></nav>
+<a href="Apply.dc.html" style="margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 999px; background: #9a5226; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 550; white-space: nowrap">Apply</a>
+</div>
+</header>
+
+<main style="max-width: 1180px; margin: 0 auto; padding: clamp(40px, 5vw, 72px) clamp(16px, 2vw, 24px) 120px; box-sizing: border-box">
+<p style="margin: 0; font-size: 16px"><a href="Zack.dc.html" style="text-decoration: none; font-weight: 500">‹ All agents</a></p>
+
+<!-- No valid token: the gate, not the instructions -->
+<sc-if value="{{noToken}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 32px; max-width: 640px">
+<h1 style="margin: 0; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">Zack for Claude</h1>
+<p style="margin: 16px 0 0; font-size: clamp(19px, 1.6vw, 21px); line-height: 1.45">Enter your email to open the instructions. We’ll send you a link so you can come back to them.</p>
+<div style="margin-top: 24px; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 28px">
+<label for="gate-email" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Email</label>
+<div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 12px">
+<input id="gate-email" type="email" autocomplete="email" placeholder="you@company.com" style="flex: 1 1 260px; min-width: 0; height: 52px; padding: 0 16px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; font-size: 17px; box-sizing: border-box">
+<button type="button" onClick="{{unlock}}" style="min-height: 52px; padding: 0 28px; border-radius: 999px; border: 0; background: #9a5226; color: #ffffff; font: inherit; font-size: 17px; font-weight: 550; cursor: pointer">Send me Zack for Claude</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{hasToken}}" hint-placeholder-val="{{ true }}">
+<div style="margin-top: 32px; display: flex; flex-wrap: wrap; gap: 48px 64px; align-items: flex-start">
+
+<!-- The guide, rendered from content/zack/claude.md -->
+<article style="flex: 999 1 600px; min-width: 0; max-width: 760px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Zack the Collector · for Claude · v1.8</p>
+<h1 style="margin: 12px 0 0; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">Run Zack once on your past week</h1>
+<p style="margin: 20px 0 0; font-size: clamp(19px, 1.6vw, 21px); line-height: 1.45">[Intro paragraph from the file: what Zack does and what you’ll get back.]</p>
+
+<sc-if value="{{projectsCaveat}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 24px; background: #f3f3f5; border-radius: 8px; padding: 20px 24px">
+<p style="margin: 0; font-size: 16px"><span style="font-weight: 620">If you keep your work in Claude Projects:</span> Zack may not see chats inside a project. Run him from inside the project you use most, or your report will look thinner than your week was.</p>
+</div>
+</sc-if>
+
+<h2 style="margin: 48px 0 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">Before you start</h2>
+<ul style="margin: 16px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px">
+<li>[List item from the file]</li>
+<li>[List item from the file]</li>
+<li>[List item from the file]</li>
+</ul>
+
+<h2 style="margin: 48px 0 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">The run-once prompt</h2>
+<p style="margin: 12px 0 0">Start a new chat in Claude, paste this in, and let it run to the end.</p>
+<div style="margin-top: 16px; border-radius: 8px; background: #0c0c0e; color: #f5f5f7; overflow: hidden">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 20px; border-bottom: 1px solid #2c2c31">
+<span style="font-size: 13px; color: #a3a3aa">Prompt</span>
+<button type="button" onClick="{{copy}}" style="min-height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid #2c2c31; background: #19191c; color: #f5f5f7; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">{{copyLabel}}</button>
+</div>
+<pre style="margin: 0; padding: 20px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 14px; line-height: 1.6; white-space: pre-wrap; color: #f5f5f7">[The run-once prompt from Zack The Collector (for Claude).md,
+copied exactly. The Copy button copies this text and nothing else.]
+
+…</pre>
+</div>
+
+<h2 style="margin: 48px 0 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">What Zack gives back</h2>
+<p style="margin: 12px 0 0">[Paragraph from the file.]</p>
+<div style="margin-top: 16px; overflow-x: auto; border: 1px solid #e2e2e6; border-radius: 8px; background: #ffffff">
+<table style="width: 100%; border-collapse: collapse; font-size: 16px; text-align: left">
+<thead><tr style="border-bottom: 1px solid #1d1d1f"><th style="padding: 12px 16px; font-weight: 560; color: #5d5d63">Part</th><th style="padding: 12px 16px; font-weight: 560; color: #5d5d63">What it holds</th></tr></thead>
+<tbody>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px">[Row]</td><td style="padding: 12px 16px">[From the file]</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px">[Row]</td><td style="padding: 12px 16px">[From the file]</td></tr>
+<tr><td style="padding: 12px 16px">[Row]</td><td style="padding: 12px 16px">[From the file]</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- Paste-back -->
+<section id="paste" aria-labelledby="paste-title" style="margin-top: 72px; border-top: 1px solid #1d1d1f; padding-top: 40px">
+<h2 id="paste-title" style="margin: 0; font-size: clamp(28px, 3vw, 40px); line-height: 1.1; letter-spacing: -0.032em; font-weight: 640">Paste your Zack report</h2>
+<p style="margin: 12px 0 0; color: #5d5d63">Optional, unless you’re applying. Your report is the main part of a Circle application.</p>
+
+<sc-if value="{{notSaved}}" hint-placeholder-val="{{ true }}">
+<div role="note" style="margin-top: 24px; display: flex; gap: 12px; align-items: flex-start; background: #f6ece4; border-radius: 8px; padding: 16px 20px">
+<svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="#1d1d1f" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px"><circle cx="10" cy="10" r="7.5"></circle><path d="M10 6v4.5M10 13.5v.1"></path></svg>
+<p style="margin: 0; font-size: 16px">Check your report for client names or private details before pasting. Only Roger’s team reads it.</p>
+</div>
+<label for="report" style="margin-top: 24px; display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Your Zack report</label>
+<textarea id="report" rows="14" maxlength="20000" style="margin-top: 8px; display: block; width: 100%; min-height: 320px; padding: 16px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 16px; line-height: 1.55; color: #1d1d1f; box-sizing: border-box; resize: vertical"></textarea>
+<div style="margin-top: 8px; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #5d5d63"><span>Plain text, exactly as Zack wrote it.</span><span style="font-variant-numeric: tabular-nums">0 / 20,000</span></div>
+<button type="button" onClick="{{save}}" style="margin-top: 24px; min-height: 52px; padding: 0 28px; border-radius: 999px; border: 0; background: #1d1d1f; color: #ffffff; font: inherit; font-size: 17px; font-weight: 550; cursor: pointer">Save my report</button>
+</sc-if>
+
+<sc-if value="{{saved}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="margin-top: 24px; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 28px">
+<p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Report saved.</p>
+<p style="margin: 8px 0 0; font-size: 16px; color: #5d5d63">Only Roger’s team will read it. Your application opens at step 2 with your email, agent and report already filled in.</p>
+<a href="Apply.dc.html" style="margin-top: 20px; display: inline-flex; align-items: center; min-height: 52px; padding: 0 28px; border-radius: 999px; background: #9a5226; color: #ffffff; text-decoration: none; font-size: 17px; font-weight: 550">Continue to your application</a>
+</div>
+</sc-if>
+</section>
+</article>
+
+<!-- Sticky side note -->
+<aside style="flex: 1 1 260px; min-width: 0; position: sticky; top: 24px">
+<div style="background: #f3f3f5; border-radius: 8px; padding: 24px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Then</p>
+<p style="margin: 8px 0 0; font-size: 21px; line-height: 1.3; font-weight: 620; letter-spacing: -0.018em">When Zack finishes, come back and paste your report.</p>
+<p style="margin: 12px 0 0; font-size: 16px"><a href="#paste" style="text-decoration: none; font-weight: 500">Go to the paste box ›</a></p>
+<p style="margin: 20px 0 0; padding-top: 16px; border-top: 1px solid #e2e2e6; font-size: 13px; color: #5d5d63">We emailed you this link, so you can close the tab and come back.</p>
+</div>
+</aside>
+</div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tokenValid":{"editor":"boolean","default":true,"section":"State"},"projectsCaveat":{"editor":"boolean","default":false,"section":"State"},"$preview":{"width":1440,"height":2400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const token = this.state.unlocked ?? !!(this.props.tokenValid ?? true);
+    const saved = !!this.state.saved;
+    return {
+      hasToken: token,
+      noToken: !token,
+      projectsCaveat: !!(this.props.projectsCaveat ?? false),
+      saved: saved,
+      notSaved: !saved,
+      copyLabel: this.state.copied ? 'Copied' : 'Copy',
+      copy: () => this.setState({ copied: true }),
+      save: () => this.setState({ saved: true }),
+      unlock: () => this.setState({ unlocked: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

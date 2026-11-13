@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Header and footer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1300px; box-sizing: border-box; padding: 64px 80px; background: #f3f3f5; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 17px; line-height: 1.55; display: flex; flex-direction: column; gap: 40px">
+
+<div>
+<p style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #5d5d63">Header · every page in circlesMode, including the hidden ones</p>
+<div style="background: #fbfbfd; border: 1px solid #e2e2e6; border-radius: 8px; overflow: hidden">
+<div style="height: 60px; padding: 0 24px; display: flex; align-items: center; gap: 24px">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger</span>
+<ul style="margin: 0 0 0 auto; padding: 0; list-style: none; display: flex; gap: 28px; font-size: 16px; color: #5d5d63"><li>How it works</li><li>Run Zack</li><li>Use cases</li><li>FAQ</li><li>About</li></ul>
+<span style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 999px; background: #9a5226; color: #ffffff; font-size: 16px; font-weight: 550">Apply for a founding Circle</span>
+</div>
+</div>
+<p style="margin: 10px 0 0; font-size: 13px; color: #5d5d63">Links: /how-it-works, /zack, /library, /faq, /about. Button: /apply. Setup, plan, companies, packs and workshops are gone from every nav. <span style="font-weight: 600">siteConfig.flags.circlesMode = false</span> restores today’s header.</p>
+</div>
+
+<div>
+<p style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #5d5d63">Header · /apply and /apply/thanks: no button</p>
+<div style="background: #fbfbfd; border: 1px solid #e2e2e6; border-radius: 8px; overflow: hidden">
+<div style="height: 60px; padding: 0 24px; display: flex; align-items: center; gap: 24px">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger</span>
+<ul style="margin: 0 0 0 auto; padding: 0; list-style: none; display: flex; gap: 28px; font-size: 16px; color: #5d5d63"><li>How it works</li><li>Run Zack</li><li>Use cases</li><li>FAQ</li><li>About</li></ul>
+</div>
+</div>
+</div>
+
+<div style="display: flex; gap: 40px; align-items: flex-start">
+<div style="width: 390px">
+<p style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #5d5d63">Mobile · closed</p>
+<div style="background: #fbfbfd; border: 1px solid #e2e2e6; border-radius: 8px; overflow: hidden">
+<div style="height: 60px; padding: 0 16px; display: flex; align-items: center; gap: 8px">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger</span>
+<span style="margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 999px; background: #9a5226; color: #ffffff; font-size: 16px; font-weight: 550">Apply</span>
+<button type="button" aria-label="Open menu" style="width: 44px; height: 44px; border: 0; background: transparent; display: grid; place-items: center; padding: 0"><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="#1d1d1f" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 7h14M3 13h14"></path></svg></button>
+</div>
+</div>
+</div>
+<div style="width: 390px">
+<p style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #5d5d63">Mobile · menu open</p>
+<div style="background: #fbfbfd; border: 1px solid #e2e2e6; border-radius: 8px; overflow: hidden">
+<div style="height: 60px; padding: 0 16px; display: flex; align-items: center; gap: 8px">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger</span>
+<span style="margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 999px; background: #9a5226; color: #ffffff; font-size: 16px; font-weight: 550">Apply</span>
+<button type="button" aria-label="Close menu" aria-expanded="true" style="width: 44px; height: 44px; border: 0; background: transparent; display: grid; place-items: center; padding: 0"><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="#1d1d1f" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"></path></svg></button>
+</div>
+<ul style="margin: 0; padding: 8px 16px 12px; list-style: none; background: #f3f3f5; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">
+<li style="min-height: 48px; display: flex; align-items: center">How it works</li>
+<li style="min-height: 48px; display: flex; align-items: center">Run Zack</li>
+<li style="min-height: 48px; display: flex; align-items: center">Use cases</li>
+<li style="min-height: 48px; display: flex; align-items: center">FAQ</li>
+<li style="min-height: 48px; display: flex; align-items: center">About</li>
+</ul>
+</div>
+</div>
+<div style="flex: 1; min-width: 0">
+<p style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #5d5d63">Hidden pages</p>
+<div style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 20px 24px; font-size: 16px">
+<p style="margin: 0">/setup, /companies, /packs/[id], /workshops, /refunds and /thanks/* still load, carry noindex, and are disallowed in robots.ts. They show the header above, so nothing on them leads back to the old offers. Library cards drop the “We can set this up” link.</p>
+<p style="margin: 12px 0 0; color: #5d5d63">Sitemap: /, /zack, /apply, /how-it-works, /about, /faq, /library, /privacy, /terms.</p>
+</div>
+</div>
+</div>
+
+<div>
+<p style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #5d5d63">Footer · one quiet line</p>
+<div style="background: #fbfbfd; border: 1px solid #e2e2e6; border-radius: 8px; padding: 32px 24px; display: flex; align-items: baseline; gap: 32px; font-size: 16px; color: #5d5d63">
+<span style="color: #1d1d1f">Roger, Toronto</span>
+<span style="color: #9a5226; font-weight: 500">hello@meetroger.ai</span>
+<span style="margin-left: auto; color: #1d1d1f">How it works</span>
+<span style="color: #1d1d1f">Run Zack</span>
+<span style="color: #1d1d1f">Use cases</span>
+<span style="color: #1d1d1f">FAQ</span>
+<span style="color: #1d1d1f">About</span>
+<span style="color: #1d1d1f">Privacy</span>
+<span style="color: #1d1d1f">Terms</span>
+<span>© 2026</span>
+</div>
+<p style="margin: 10px 0 0; font-size: 13px; color: #5d5d63">Removed: Starter packs, Setup, Companies, Workshops, Refunds.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

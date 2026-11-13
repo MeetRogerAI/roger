@@ -1,0 +1,254 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "About.dc.html": {
+      "expand": "fill",
+      "h": 2400,
+      "page": "v1",
+      "title": "/about · the letter",
+      "w": 1440,
+      "x": 11110,
+      "y": 0
+    },
+    "Admin-applications.dc.html": {
+      "expand": "fill",
+      "h": 1500,
+      "is_interactive": true,
+      "page": "v2",
+      "title": "/admin/applications",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Admin-circles.dc.html": {
+      "expand": "fill",
+      "h": 2100,
+      "page": "v2",
+      "title": "/admin/circles · seats and this week",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Admin-funnel.dc.html": {
+      "expand": "fill",
+      "h": 1700,
+      "page": "v3",
+      "title": "/admin/funnel and weekly best plays",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "Admin-overview.dc.html": {
+      "expand": "fill",
+      "h": 1500,
+      "page": "v2",
+      "title": "/admin overview and /admin/zack",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "Admin-prospects.dc.html": {
+      "expand": "fill",
+      "h": 1400,
+      "page": "v3",
+      "title": "/admin/prospects",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Admin-replies.dc.html": {
+      "expand": "fill",
+      "h": 1600,
+      "is_interactive": true,
+      "page": "v3",
+      "title": "/admin/replies · today",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Apply-thanks.dc.html": {
+      "expand": "fill",
+      "h": 1000,
+      "is_interactive": true,
+      "page": "v1",
+      "title": "/apply/thanks",
+      "w": 1440,
+      "x": 6550,
+      "y": 0
+    },
+    "Apply.dc.html": {
+      "expand": "fill",
+      "h": 2300,
+      "is_interactive": true,
+      "page": "v1",
+      "title": "/apply · two-step application",
+      "w": 1440,
+      "x": 5030,
+      "y": 0
+    },
+    "Chrome.dc.html": {
+      "h": 1300,
+      "page": "v1",
+      "title": "Header and footer",
+      "w": 1440,
+      "x": 8070,
+      "y": 0
+    },
+    "FAQ.dc.html": {
+      "expand": "fill",
+      "h": 3000,
+      "page": "v1",
+      "title": "/faq",
+      "w": 1440,
+      "x": 12630,
+      "y": 0
+    },
+    "Home-mobile.dc.html": {
+      "h": 8000,
+      "is_interactive": true,
+      "page": "v1",
+      "title": "Homepage · mobile · part 1",
+      "w": 390,
+      "x": 1520,
+      "y": 0
+    },
+    "Home-mobile-2.dc.html": {
+      "h": 8000,
+      "page": "v1",
+      "title": "Homepage · mobile · part 2",
+      "w": 390,
+      "x": 1520,
+      "y": 8120
+    },
+    "Home-mobile-3.dc.html": {
+      "h": 7000,
+      "page": "v1",
+      "title": "Homepage · mobile · part 3",
+      "w": 390,
+      "x": 1520,
+      "y": 16240
+    },
+    "Home-2.dc.html": {
+      "h": 6000,
+      "page": "v1",
+      "title": "Homepage · desktop · continued",
+      "w": 1440,
+      "x": 0,
+      "y": 8120
+    },
+    "How-it-works.dc.html": {
+      "expand": "fill",
+      "h": 5600,
+      "page": "v1",
+      "title": "/how-it-works",
+      "w": 1440,
+      "x": 9590,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 8000,
+      "is_interactive": true,
+      "page": "v1",
+      "title": "Homepage · desktop",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Zack-claude.dc.html": {
+      "expand": "fill",
+      "h": 2400,
+      "is_interactive": true,
+      "page": "v1",
+      "title": "/zack/claude · instructions and paste-back",
+      "w": 1440,
+      "x": 3510,
+      "y": 0
+    },
+    "Zack.dc.html": {
+      "expand": "fill",
+      "h": 1500,
+      "is_interactive": true,
+      "page": "v1",
+      "title": "/zack · picker and email gate",
+      "w": 1440,
+      "x": 1990,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-12T16:58:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "page": "v1",
+    "view": "canvas"
+  },
+  "notes": {
+    "t1": {
+      "kind": "title1",
+      "maxW": 14070,
+      "page": "v1",
+      "text": "v1 · The public site: understand, run Zack, apply",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t2": {
+      "kind": "title1",
+      "maxW": 4480,
+      "page": "v2",
+      "text": "v2 · Admin: applications, Circles and the weekly cycle",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t3": {
+      "kind": "title1",
+      "maxW": 4480,
+      "page": "v3",
+      "text": "v3 · Lead engine: the library as a prospect list",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Home-2.dc.html",
+    "Home-mobile.dc.html",
+    "Home-mobile-2.dc.html",
+    "Home-mobile-3.dc.html",
+    "Zack.dc.html",
+    "Zack-claude.dc.html",
+    "Apply.dc.html",
+    "Apply-thanks.dc.html",
+    "Chrome.dc.html",
+    "How-it-works.dc.html",
+    "About.dc.html",
+    "FAQ.dc.html",
+    "Admin-applications.dc.html",
+    "Admin-circles.dc.html",
+    "Admin-overview.dc.html",
+    "Admin-prospects.dc.html",
+    "Admin-replies.dc.html",
+    "Admin-funnel.dc.html"
+  ],
+  "pages": [
+    {
+      "id": "v1",
+      "name": "v1 · Public site"
+    },
+    {
+      "id": "v2",
+      "name": "v2 · Admin: applications and Circles"
+    },
+    {
+      "id": "v3",
+      "name": "v3 · Lead engine"
+    }
+  ],
+  "title": "Roger Circles"
+}

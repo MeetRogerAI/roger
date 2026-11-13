@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin · Funnel and weekly best plays</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1700px; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1320px; margin: 0 auto; padding: 0 24px; min-height: 60px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; box-sizing: border-box">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger admin</span>
+<span style="margin-left: auto; font-size: 13px; font-weight: 600; color: #5d5d63; border: 1px dashed #c7c7cd; border-radius: 999px; padding: 4px 12px">Sample data · invented handles</span>
+</div>
+<nav aria-label="Admin" style="max-width: 1320px; margin: 0 auto; padding: 0 24px 12px; display: flex; flex-wrap: wrap; gap: 4px; box-sizing: border-box">
+<a href="Admin-overview.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Overview</a>
+<a href="Admin-applications.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Applications</a>
+<a href="Admin-circles.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Circles</a>
+<a href="Admin-overview.dc.html#zack" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Zack runs</a>
+<a href="Admin-prospects.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Prospects</a>
+<a href="Admin-replies.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Replies</a>
+<a href="Admin-funnel.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: #1d1d1f; color: #fbfbfd; text-decoration: none; font-weight: 560">Funnel</a>
+</nav>
+</header>
+
+<main style="max-width: 1320px; margin: 0 auto; padding: 40px 24px 96px; box-sizing: border-box; display: flex; flex-direction: column; gap: 64px">
+
+<section aria-labelledby="f-title">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 32px">
+<div>
+<h1 id="f-title" style="margin: 0; font-size: 32px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 640">Funnel</h1>
+<p style="margin: 6px 0 0; color: #5d5d63">Since the first reply · Oct 26 to Nov 12 · totals reconcile with outreach, zack_runs and applications</p>
+</div>
+<select aria-label="Period" style="margin-left: auto; height: 40px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit"><option>All time</option><option>This week</option></select>
+</div>
+
+<div role="img" aria-label="Replies sent 142, link clicks 38, Zack runs 17, applications 5, members 1" style="margin-top: 28px; display: flex; flex-direction: column; gap: 10px; font-variant-numeric: tabular-nums">
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 140px; gap: 16px; align-items: center"><span style="font-weight: 600">Replies sent</span><span style="height: 36px; width: 100%; background: #1d1d1f; border-radius: 0 4px 4px 0"></span><span><span style="font-size: 21px; font-weight: 640">142</span></span></div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 140px; gap: 16px; align-items: center"><span style="font-weight: 600">Link clicks</span><span style="height: 36px; width: 26.8%; background: #1d1d1f; border-radius: 0 4px 4px 0"></span><span><span style="font-size: 21px; font-weight: 640">38</span> <span style="font-size: 13px; color: #5d5d63">27% of replies</span></span></div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 140px; gap: 16px; align-items: center"><span style="font-weight: 600">Zack runs</span><span style="height: 36px; width: 12%; background: #1d1d1f; border-radius: 0 4px 4px 0"></span><span><span style="font-size: 21px; font-weight: 640">17</span> <span style="font-size: 13px; color: #5d5d63">45% of clicks</span></span></div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 140px; gap: 16px; align-items: center"><span style="font-weight: 600">Applications</span><span style="height: 36px; width: 3.5%; background: #1d1d1f; border-radius: 0 4px 4px 0"></span><span><span style="font-size: 21px; font-weight: 640">5</span> <span style="font-size: 13px; color: #5d5d63">29% of runs</span></span></div>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 140px; gap: 16px; align-items: center"><span style="font-weight: 600">Members</span><span style="height: 36px; width: 0.7%; min-width: 4px; background: #9a5226; border-radius: 0 4px 4px 0"></span><span><span style="font-size: 21px; font-weight: 640">1</span> <span style="font-size: 13px; color: #5d5d63">20% of applications</span></span></div>
+</div>
+</section>
+
+<section aria-labelledby="w-title">
+<h2 id="w-title" style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">By week</h2>
+<div style="margin-top: 12px; overflow-x: auto; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px">
+<table style="width: 100%; min-width: 620px; border-collapse: collapse; text-align: right; font-variant-numeric: tabular-nums">
+<thead><tr style="border-bottom: 1px solid #1d1d1f; color: #5d5d63; font-size: 13px"><th style="padding: 12px 16px; font-weight: 560; text-align: left">Week of</th><th style="padding: 12px 16px; font-weight: 560">Replies</th><th style="padding: 12px 16px; font-weight: 560">Clicks</th><th style="padding: 12px 16px; font-weight: 560">Zack runs</th><th style="padding: 12px 16px; font-weight: 560">Applications</th><th style="padding: 12px 16px; font-weight: 560">Members</th></tr></thead>
+<tbody>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left">Nov 9</td><td style="padding: 12px 16px">61</td><td style="padding: 12px 16px">18</td><td style="padding: 12px 16px">8</td><td style="padding: 12px 16px">3</td><td style="padding: 12px 16px">1</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left">Nov 2</td><td style="padding: 12px 16px">54</td><td style="padding: 12px 16px">14</td><td style="padding: 12px 16px">6</td><td style="padding: 12px 16px">2</td><td style="padding: 12px 16px">0</td></tr>
+<tr><td style="padding: 12px 16px; text-align: left">Oct 26</td><td style="padding: 12px 16px">27</td><td style="padding: 12px 16px">6</td><td style="padding: 12px 16px">3</td><td style="padding: 12px 16px">0</td><td style="padding: 12px 16px">0</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section aria-label="Breakdowns" style="display: flex; flex-wrap: wrap; gap: 24px">
+<div style="flex: 1 1 480px; min-width: 0">
+<h2 style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">By agent</h2>
+<div style="margin-top: 12px; overflow-x: auto; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px">
+<table style="width: 100%; min-width: 460px; border-collapse: collapse; text-align: right; font-variant-numeric: tabular-nums">
+<thead><tr style="border-bottom: 1px solid #1d1d1f; color: #5d5d63; font-size: 13px"><th style="padding: 12px 16px; font-weight: 560; text-align: left">Agent</th><th style="padding: 12px 16px; font-weight: 560">Replies</th><th style="padding: 12px 16px; font-weight: 560">Clicks</th><th style="padding: 12px 16px; font-weight: 560">Runs</th><th style="padding: 12px 16px; font-weight: 560">Applied</th></tr></thead>
+<tbody>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left; font-weight: 600">Claude</td><td style="padding: 12px 16px">31</td><td style="padding: 12px 16px">12</td><td style="padding: 12px 16px">9</td><td style="padding: 12px 16px">3</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left; font-weight: 600">Grok Bot</td><td style="padding: 12px 16px">96</td><td style="padding: 12px 16px">22</td><td style="padding: 12px 16px">7</td><td style="padding: 12px 16px">2</td></tr>
+<tr><td style="padding: 12px 16px; text-align: left; font-weight: 600">Muse</td><td style="padding: 12px 16px">15</td><td style="padding: 12px 16px">4</td><td style="padding: 12px 16px">1 interest</td><td style="padding: 12px 16px; color: #5d5d63">can’t apply</td></tr>
+</tbody>
+</table>
+</div>
+<p style="margin: 10px 0 0; font-size: 13px; color: #5d5d63">Replies to people on an agent without a Zack file can only produce interest sign-ups.</p>
+</div>
+<div style="flex: 1 1 480px; min-width: 0">
+<h2 style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">By library tab</h2>
+<div style="margin-top: 12px; overflow-x: auto; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px">
+<table style="width: 100%; min-width: 400px; border-collapse: collapse; text-align: right; font-variant-numeric: tabular-nums">
+<thead><tr style="border-bottom: 1px solid #1d1d1f; color: #5d5d63; font-size: 13px"><th style="padding: 12px 16px; font-weight: 560; text-align: left">Tab</th><th style="padding: 12px 16px; font-weight: 560">Replies</th><th style="padding: 12px 16px; font-weight: 560">Clicks</th><th style="padding: 12px 16px; font-weight: 560">Applied</th></tr></thead>
+<tbody>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left">Chief of Staff</td><td style="padding: 12px 16px">58</td><td style="padding: 12px 16px">17</td><td style="padding: 12px 16px">3</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left">Solo business</td><td style="padding: 12px 16px">34</td><td style="padding: 12px 16px">9</td><td style="padding: 12px 16px">1</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left">Bookkeeping</td><td style="padding: 12px 16px">22</td><td style="padding: 12px 16px">7</td><td style="padding: 12px 16px">1</td></tr>
+<tr style="border-bottom: 1px solid #e2e2e6"><td style="padding: 12px 16px; text-align: left">Customers</td><td style="padding: 12px 16px">18</td><td style="padding: 12px 16px">3</td><td style="padding: 12px 16px">0</td></tr>
+<tr><td style="padding: 12px 16px; text-align: left">Marketing</td><td style="padding: 12px 16px">10</td><td style="padding: 12px 16px">2</td><td style="padding: 12px 16px">0</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+
+<!-- Weekly best plays post -->
+<section aria-labelledby="bp-title">
+<h2 id="bp-title" style="margin: 0; font-size: 32px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 640">Weekly best plays post</h2>
+<p style="margin: 6px 0 0; color: #5d5d63">This week’s top library entries by tab. Entries used in an earlier post are marked and left out by default.</p>
+<div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+<ul style="flex: 1 1 520px; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+<li><label style="display: grid; grid-template-columns: auto 120px minmax(0, 1fr); gap: 14px; align-items: start; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px; cursor: pointer"><input type="checkbox" checked="" style="margin: 3px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f"><span style="font-size: 13px; font-weight: 600; color: #5d5d63; padding-top: 2px">Chief of Staff</span><span><span style="display: block">Four bots split across inbox, invoices and the Monday plan.</span><span style="display: block; font-size: 13px; color: #5d5d63">@ops_marta · Grok Bot</span></span></label></li>
+<li><label style="display: grid; grid-template-columns: auto 120px minmax(0, 1fr); gap: 14px; align-items: start; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px; cursor: pointer"><input type="checkbox" checked="" style="margin: 3px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f"><span style="font-size: 13px; font-weight: 600; color: #5d5d63; padding-top: 2px">Solo business</span><span><span style="display: block">Weekly client reports written from project notes.</span><span style="display: block; font-size: 13px; color: #5d5d63">@kdbuilds · Claude</span></span></label></li>
+<li><label style="display: grid; grid-template-columns: auto 120px minmax(0, 1fr); gap: 14px; align-items: start; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 16px 20px; cursor: pointer"><input type="checkbox" checked="" style="margin: 3px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f"><span style="font-size: 13px; font-weight: 600; color: #5d5d63; padding-top: 2px">Bookkeeping</span><span><span style="display: block">Tax-season intake that flags missing documents.</span><span style="display: block; font-size: 13px; color: #5d5d63">@jtorres_cpa · Grok Bot</span></span></label></li>
+<li><label style="display: grid; grid-template-columns: auto 120px minmax(0, 1fr); gap: 14px; align-items: start; background: #f3f3f5; border-radius: 8px; padding: 16px 20px; cursor: pointer"><input type="checkbox" style="margin: 3px 0 0; width: 18px; height: 18px; accent-color: #1d1d1f"><span style="font-size: 13px; font-weight: 600; color: #5d5d63; padding-top: 2px">Customers</span><span><span style="display: block">Overnight drafts for every support ticket.</span><span style="display: block; font-size: 13px; color: #5d5d63">@ops_marta · Grok Bot · used in the Nov 5 post</span></span></label></li>
+</ul>
+<div style="flex: 1 1 420px; min-width: 0; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 24px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Post preview · credits every author</p>
+<div style="margin-top: 12px; background: #f3f3f5; border-radius: 8px; padding: 18px 20px; white-space: pre-line; font-size: 16px; line-height: 1.6">Three agent plays from this week’s posts:
+
+Chief of Staff: four bots split across inbox, invoices and the Monday plan. (@ops_marta)
+Solo business: weekly client reports written from project notes. (@kdbuilds)
+Bookkeeping: tax-season intake that flags missing documents. (@jtorres_cpa)</div>
+<div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: #1d1d1f; color: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Copy post</button>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Mark these as used</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

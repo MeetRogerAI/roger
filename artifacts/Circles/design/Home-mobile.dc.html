@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Roger · Founding Circles (mobile)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; background: #fbfbfd; font-family: 'Mona Sans', system-ui, sans-serif; color: #1d1d1f">
+<dc-import name="Main" seats-taken="{{seatsTaken}}" currency="{{currency}}" sharing-mode="{{sharingMode}}" founder-photo="{{founderPhoto}}" library-total="{{libraryTotal}}" hint-size="390px,21000px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"seatsTaken":{"editor":"range","min":0,"max":24,"step":1,"default":0,"section":"State"},"currency":{"editor":"enum","options":["USD","CAD"],"default":"USD","section":"State"},"sharingMode":{"editor":"enum","options":["manual","auto"],"default":"manual","section":"State"},"founderPhoto":{"editor":"boolean","default":false,"section":"State"},"libraryTotal":{"editor":"text","default":"{total}","section":"State"},"$preview":{"width":390,"height":8000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      seatsTaken: this.props.seatsTaken ?? 0,
+      currency: this.props.currency ?? 'USD',
+      sharingMode: this.props.sharingMode ?? 'manual',
+      founderPhoto: this.props.founderPhoto ?? false,
+      libraryTotal: this.props.libraryTotal ?? '{total}'
+    };
+  }
+}
+</script>
+</body>
+</html>
