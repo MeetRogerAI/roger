@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin · Applications</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 1500px; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1320px; margin: 0 auto; padding: 0 24px; min-height: 60px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; box-sizing: border-box">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger admin</span>
+<span style="margin-left: auto; font-size: 13px; font-weight: 600; color: #5d5d63; border: 1px dashed #c7c7cd; border-radius: 999px; padding: 4px 12px">Sample data</span>
+</div>
+<nav aria-label="Admin" style="max-width: 1320px; margin: 0 auto; padding: 0 24px 12px; display: flex; flex-wrap: wrap; gap: 4px; box-sizing: border-box">
+<a href="Admin-overview.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Overview</a>
+<a href="Admin-applications.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: #1d1d1f; color: #fbfbfd; text-decoration: none; font-weight: 560">Applications</a>
+<a href="Admin-circles.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Circles</a>
+<a href="Admin-overview.dc.html#zack" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Zack runs</a>
+<a href="Admin-prospects.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Prospects</a>
+<a href="Admin-replies.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Replies</a>
+<a href="Admin-funnel.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; color: #5d5d63; text-decoration: none; font-weight: 560">Funnel</a>
+<span style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; color: #5d5d63; font-weight: 560">Use cases</span>
+<span style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; color: #5d5d63; font-weight: 560">Sign-ups</span>
+<span style="display: flex; align-items: center; min-height: 40px; padding: 0 16px; color: #5d5d63; font-weight: 560">Settings</span>
+</nav>
+</header>
+
+<main style="max-width: 1320px; margin: 0 auto; padding: 40px 24px 96px; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 32px">
+<div>
+<h1 style="margin: 0; font-size: 32px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 640">Applications</h1>
+<p style="margin: 6px 0 0; color: #5d5d63; font-variant-numeric: tabular-nums">7 total · 2 new · 1 started, no report yet · seats filled 2 of 24</p>
+</div>
+<button type="button" style="margin-left: auto; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-weight: 550; cursor: pointer">Export CSV (no reports)</button>
+</div>
+
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="7">
+<button type="button" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}" style="min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid {{f.border}}; background: {{f.bg}}; color: {{f.color}}; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">{{f.label}} <span style="font-variant-numeric: tabular-nums">{{f.n}}</span></button>
+</sc-for>
+<label for="pf" style="margin-left: 12px; font-size: 13px; font-weight: 600; color: #5d5d63">Agent</label>
+<select id="pf" style="height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 13px"><option>All</option><option>Claude</option><option>Grok Bot</option><option>Duet</option><option>Hark</option></select>
+</div>
+
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+<!-- List -->
+<div style="flex: 999 1 600px; min-width: 0; overflow-x: auto; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px">
+<table style="width: 100%; min-width: 640px; border-collapse: collapse; text-align: left; font-size: 16px">
+<thead><tr style="border-bottom: 1px solid #1d1d1f; color: #5d5d63; font-size: 13px"><th style="padding: 12px 16px; font-weight: 560">Name</th><th style="padding: 12px 16px; font-weight: 560">Agent</th><th style="padding: 12px 16px; font-weight: 560">Agents</th><th style="padding: 12px 16px; font-weight: 560">Daily</th><th style="padding: 12px 16px; font-weight: 560">Status</th><th style="padding: 12px 16px; font-weight: 560; text-align: right">Applied</th></tr></thead>
+<tbody>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+<tr style="border-bottom: 1px solid #e2e2e6; background: {{r.bg}}">
+<td style="padding: 0"><button type="button" onClick="{{r.pick}}" style="display: block; width: 100%; text-align: left; padding: 14px 16px; border: 0; background: transparent; font: inherit; color: #1d1d1f; cursor: pointer"><span style="display: block; font-weight: 600">{{r.name}}</span><span style="display: block; font-size: 13px; color: #5d5d63">{{r.role}}</span></button></td>
+<td style="padding: 14px 16px">{{r.platform}}</td>
+<td style="padding: 14px 16px; font-variant-numeric: tabular-nums">{{r.count}}</td>
+<td style="padding: 14px 16px">{{r.daily}}</td>
+<td style="padding: 14px 16px"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{r.dot}}; border: 1.5px solid {{r.ring}}; box-sizing: border-box"></span>{{r.status}}</span></td>
+<td style="padding: 14px 16px; text-align: right; color: #5d5d63; font-variant-numeric: tabular-nums; white-space: nowrap">{{r.date}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+
+<!-- Detail -->
+<aside aria-labelledby="d-name" style="flex: 1 1 440px; min-width: 0; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 28px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Applied {{d.date}} · {{d.email}}</p>
+<h2 id="d-name" style="margin: 6px 0 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">{{d.name}}</h2>
+<p style="margin: 4px 0 0; color: #5d5d63">{{d.role}}</p>
+
+<dl style="margin: 20px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; font-size: 13px">
+<div><dt style="color: #5d5d63; font-weight: 560">Main agent</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.platform}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Also uses</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.others}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Agents and routines</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.count}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Daily work use</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.daily}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Company</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.company}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Time zone</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.tz}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Currency</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.currency}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Keep apart from</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.excl}}</dd></div>
+<div><dt style="color: #5d5d63; font-weight: 560">Came from</dt><dd style="margin: 2px 0 0; font-size: 16px">{{d.source}}</dd></div>
+</dl>
+
+<h3 style="margin: 28px 0 0; font-size: 13px; font-weight: 600; color: #5d5d63">Zack report · admin only</h3>
+<div style="margin-top: 8px; max-height: 260px; overflow-y: auto; background: #f3f3f5; border-radius: 8px; padding: 16px 18px; font-size: 16px; line-height: 1.6; white-space: pre-line">{{d.report}}</div>
+
+<div style="margin-top: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px">
+<div><label for="d-status" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Status</label><select id="d-status" style="margin-top: 6px; width: 100%; height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit"><option>{{d.status}}</option><option>new</option><option>reviewing</option><option>accepted</option><option>seated</option><option>waitlist</option><option>declined</option><option>withdrawn</option></select></div>
+<div><label for="d-circle" style="display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Circle · any forming Circle</label><select id="d-circle" style="margin-top: 6px; width: 100%; height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit"><option>{{d.circle}}</option><option>Founding Circle 1 (2 of 8)</option></select></div>
+</div>
+<label for="d-notes" style="margin-top: 16px; display: block; font-size: 13px; font-weight: 600; color: #5d5d63">Private notes</label>
+<textarea id="d-notes" rows="3" style="margin-top: 6px; width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #c7c7cd; font: inherit; box-sizing: border-box; resize: vertical"></textarea>
+
+<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e2e6">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Emails · nothing sends on a status change</p>
+<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 0; background: #1d1d1f; color: #ffffff; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">Send accepted</button>
+<button type="button" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">Send waitlist</button>
+<button type="button" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #c7c7cd; background: #ffffff; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">Send declined</button>
+<button type="button" style="min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px dashed #c7c7cd; background: #ffffff; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">Send step 2 reminder</button>
+</div>
+<p style="margin: 10px 0 0; font-size: 13px; color: #5d5d63">Last sent: {{d.lastEmail}}</p>
+</div>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const data = [
+      { id: 'a1', name: 'Dana Whitfield', role: 'Founder, 9-person bookkeeping firm', email: 'dana@example.com', platform: 'Claude', others: 'Muse', count: '6–15', daily: 'Yes', status: 'reviewing', date: 'Nov 11', company: 'whitfieldbooks.example', tz: 'Eastern', excl: 'None given', source: 'Zack page', circle: 'Not placed', lastEmail: 'none', report: 'Sample report text.\n\n1. Month-end close checklist that chases missing receipts by email. About 3 hours saved.\n2. Client onboarding pack drafted from a call transcript. About 1.5 hours.\n3. Weekly cash summary for two retainer clients. About 1 hour.' },
+      { id: 'a2', name: 'Marcus Oyelaran', role: 'Operations lead, property management', email: 'marcus@example.com', platform: 'Grok Bot', others: 'none', count: '3–5', daily: 'Yes', status: 'new', date: 'Nov 12', company: 'none given', tz: 'Eastern', excl: 'Another local manager', source: 'Library card', circle: 'Not placed', lastEmail: 'none', report: 'Sample report text.\n\n1. Maintenance requests sorted and routed each morning.\n2. Lease renewal letters drafted from the rent roll.\n3. Vendor quotes compared in one table.' },
+      { id: 'a3', name: 'Priya Natarajan', role: 'Solo patent attorney', email: 'priya@example.com', platform: 'Claude', others: 'Grok Bot', count: '16+', daily: 'Yes', status: 'seated', date: 'Nov 9', company: 'none given', tz: 'Pacific', excl: 'None given', source: 'Reply on X', circle: 'Founding Circle 1 (2 of 8)', lastEmail: 'accepted, Nov 10', report: 'Sample report text.\n\n1. Prior-art search notes turned into a first-draft claims chart.\n2. Docket reminders from a scheduled routine.\n3. Client update emails from case notes.' },
+      { id: 'a4', name: 'Tom Reyes', role: 'Agency owner, paid social', email: 'tom@example.com', platform: 'Claude', others: 'Hark, Dots', count: '3–5', daily: 'Yes', status: 'new', date: 'Nov 12', company: 'reyes.example', tz: 'Central', excl: 'None given', source: 'Homepage', circle: 'Not placed', lastEmail: 'none', report: 'Sample report text.\n\n1. Weekly ad report per client.\n2. Creative briefs from a voice note.\n3. Invoice reminders.' },
+      { id: 'a5', name: 'Elena Sokolova', role: 'Independent recruiter', email: 'elena@example.com', platform: 'Claude', others: 'none', count: '1–2', daily: 'No', status: 'waitlist', date: 'Nov 8', company: 'none given', tz: 'Central European', excl: 'None given', source: 'Zack page', circle: 'Not placed', lastEmail: 'waitlist, Nov 10', report: 'Sample report text.\n\n1. Candidate summaries from CVs.' },
+      { id: 'a6', name: 'Ben Hartley', role: 'CTO, 40-person software company', email: 'ben@example.com', platform: 'Hark', others: 'Instinct', count: '6–15', daily: 'Yes', status: 'seated', date: 'Nov 7', company: 'hartley.example', tz: 'Eastern', excl: 'His co-founder', source: 'Homepage', circle: 'Founding Circle 1 (2 of 8)', lastEmail: 'accepted, Nov 8', report: 'Sample report text.\n\n1. Incident write-ups from the on-call channel.\n2. Release notes from merged pull requests.\n3. Interview scorecards summarised for the hiring meeting.' },
+      { id: 'a7', name: 'Ines Carvalho', role: 'Head of operations, freight broker', email: 'ines@example.com', platform: 'Grok Bot', others: 'none', count: '6–15', daily: 'Yes', status: 'started', date: 'Nov 12', company: 'not asked yet', tz: 'not asked yet', excl: 'not asked yet', source: 'Reply on X', circle: 'Not placed', lastEmail: 'link to step 2, Nov 12', report: 'No report yet. Step 1 was finished on Nov 12. Step 2 is open.' }
+    ];
+    const tone = {
+      started: ['#ffffff', '#c7c7cd'], new: ['#1d1d1f', '#1d1d1f'], reviewing: ['#ffffff', '#1d1d1f'], accepted: ['#9a5226', '#9a5226'],
+      seated: ['#5d5d63', '#5d5d63'], waitlist: ['#ffffff', '#5d5d63'], declined: ['#ffffff', '#c7c7cd'], withdrawn: ['#ffffff', '#c7c7cd']
+    };
+    const filter = this.state.filter ?? 'all';
+    const sel = this.state.sel ?? 'a1';
+    const names = ['all', 'started', 'new', 'reviewing', 'accepted', 'seated', 'waitlist', 'declined'];
+    const filters = names.map((n) => ({
+      label: n === 'all' ? 'All' : n[0].toUpperCase() + n.slice(1),
+      n: n === 'all' ? data.length : data.filter((x) => x.status === n).length,
+      pressed: filter === n ? 'true' : 'false',
+      bg: filter === n ? '#1d1d1f' : '#ffffff',
+      color: filter === n ? '#fbfbfd' : '#1d1d1f',
+      border: filter === n ? '#1d1d1f' : '#c7c7cd',
+      pick: () => this.setState({ filter: n })
+    }));
+    const rows = data.filter((x) => filter === 'all' || x.status === filter).map((x) => ({
+      ...x,
+      bg: x.id === sel ? '#f6ece4' : '#ffffff',
+      dot: (tone[x.status] || tone.new)[0],
+      ring: (tone[x.status] || tone.new)[1],
+      pick: () => this.setState({ sel: x.id })
+    }));
+    const cadIds = { a1: true, a6: true };
+    const d0 = data.find((x) => x.id === sel) || data[0];
+    const d = { ...d0, currency: cadIds[d0.id] ? 'CAD · $280 a month' : 'USD · $200 a month' };
+    return { filters: filters, rows: rows, d: d };
+  }
+}
+</script>
+</body>
+</html>

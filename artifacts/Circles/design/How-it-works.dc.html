@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How a Circle works</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@75..125,200..900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#9a5226}a:hover{color:#83431c}
+</style>
+</helmet>
+<div style="width: 100%; background: #fbfbfd; color: #1d1d1f; font-family: 'Mona Sans', system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 17px; line-height: 1.55">
+
+<header style="border-bottom: 1px solid #e2e2e6">
+<div style="max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 2vw, 24px); height: 60px; display: flex; align-items: center; gap: 24px; box-sizing: border-box">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 8px; color: #1d1d1f; text-decoration: none; font-size: 17px; font-weight: 620; letter-spacing: -0.015em"><svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#9a5226" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19.5C5.9 19 4 16.6 4 13.8 4 10.6 6.6 8 9.8 8c.5 0 1 .1 1.5.2C12.3 5.7 14 4 16 4s3.7 1.7 4.7 4.2c.5-.1 1-.2 1.5-.2C25.4 8 28 10.6 28 13.8c0 2.8-1.9 5.2-5 5.7"></path><path d="M9 19.5V27h14v-7.5"></path><path d="M9 23.5h14"></path><path d="M12.5 15.5v4M16 14.5v5M19.5 15.5v4"></path></svg>Roger</a>
+<nav aria-label="Main" style="margin-left: auto; max-width: max(0px, calc((100vw - 960px) * 999)); overflow: hidden"><ul style="display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; white-space: nowrap; font-size: 16px"><li><a href="How-it-works.dc.html" aria-current="page" style="color: #1d1d1f; text-decoration: none">How it works</a></li><li><a href="Zack.dc.html" style="color: #5d5d63; text-decoration: none">Run Zack</a></li><li><a href="Main.dc.html#proof" style="color: #5d5d63; text-decoration: none">Use cases</a></li><li><a href="FAQ.dc.html" style="color: #5d5d63; text-decoration: none">FAQ</a></li><li><a href="About.dc.html" style="color: #5d5d63; text-decoration: none">About</a></li></ul></nav>
+<a href="Apply.dc.html" style="margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 999px; background: #9a5226; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 550; white-space: nowrap">Apply</a>
+</div>
+</header>
+
+<main>
+<!-- Hero -->
+<section style="max-width: 820px; margin: 0 auto; padding: clamp(56px, 7vw, 104px) clamp(16px, 2vw, 24px) clamp(40px, 5vw, 64px); box-sizing: border-box; text-align: center">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">How it works</p>
+<h1 style="margin: 16px 0 0; font-size: clamp(42px, 6vw, 80px); line-height: 1.0; letter-spacing: -0.045em; font-weight: 650; font-stretch: 104%">Your week in a Circle.</h1>
+<p style="margin: 24px auto 0; max-width: 36rem; font-size: clamp(19px, 1.6vw, 21px); line-height: 1.45; color: #5d5d63">One prompt on Sunday. One ranked list on Monday. Everything else is optional.</p>
+</section>
+
+<!-- The week, day by day -->
+<section aria-labelledby="week-h" style="max-width: 980px; margin: 0 auto; padding: 0 clamp(16px, 2vw, 24px) clamp(72px, 8vw, 112px); box-sizing: border-box">
+<h2 id="week-h" style="margin: 0; font-size: clamp(28px, 3vw, 40px); line-height: 1.1; letter-spacing: -0.032em; font-weight: 640">The week, day by day</h2>
+<ol style="margin: 32px 0 0; padding: 0; list-style: none; border-top: 1px solid #1d1d1f">
+<li style="display: flex; flex-wrap: wrap; gap: 4px 32px; padding: 22px 0; border-bottom: 1px solid #e2e2e6"><p style="margin: 0; flex: 0 0 220px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Sunday</span><span style="font-size: 13px; color: #5d5d63">By 11:59 PM Eastern</span></p><p style="margin: 0; flex: 1 1 360px"><span style="font-weight: 620">Collect.</span> You run Zack in your own agent account. He reads your past seven days and writes up your best plays. You read the run, then email it to hello@meetroger.ai.</p></li>
+<li style="display: flex; flex-wrap: wrap; gap: 4px 32px; padding: 22px 0; border-bottom: 1px solid #e2e2e6"><p style="margin: 0; flex: 0 0 220px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Monday</span><span style="font-size: 13px; color: #5d5d63">1:00 AM Eastern</span></p><p style="margin: 0; flex: 1 1 360px"><span style="font-weight: 620">Rank.</span> Cora reads every run from your Circle, merges plays that do the same job, scores each one and sorts the best into three tiers.</p></li>
+<li style="display: flex; flex-wrap: wrap; gap: 4px 32px; padding: 22px 0; border-bottom: 1px solid #e2e2e6"><p style="margin: 0; flex: 0 0 220px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Monday</span><span style="font-size: 13px; color: #5d5d63">Morning</span></p><p style="margin: 0; flex: 1 1 360px"><span style="font-weight: 620">Share.</span> Your list arrives by email: Install this week, Worth trying, Niche but great, and your own top 3.</p></li>
+<li style="display: flex; flex-wrap: wrap; gap: 4px 32px; padding: 22px 0; border-bottom: 1px solid #e2e2e6"><p style="margin: 0; flex: 0 0 220px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Tuesday</span><span style="font-size: 13px; color: #5d5d63">12:00 PM Eastern · optional</span></p><p style="margin: 0; flex: 1 1 360px"><span style="font-weight: 620">Deploy.</span> Working session on Google Meet, one hour, hosted by Peter. Install the play you picked, with help.</p></li>
+<li style="display: flex; flex-wrap: wrap; gap: 4px 32px; padding: 22px 0; border-bottom: 1px solid #e2e2e6"><p style="margin: 0; flex: 0 0 220px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Thursday</span><span style="font-size: 13px; color: #5d5d63">12:00 PM Eastern · optional</span></p><p style="margin: 0; flex: 1 1 360px"><span style="font-weight: 620">Deploy.</span> Second working session. Bring what broke.</p></li>
+<li style="display: flex; flex-wrap: wrap; gap: 4px 32px; padding: 22px 0; border-bottom: 1px solid #e2e2e6"><p style="margin: 0; flex: 0 0 220px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">All week</span></p><p style="margin: 0; flex: 1 1 360px"><span style="font-weight: 620">Use.</span> Work the way you work. Zack only sees what you actually did.</p></li>
+</ol>
+</section>
+
+<!-- The anatomy of a play -->
+<section aria-labelledby="play-h" style="background: #f3f3f5">
+<div style="max-width: 1180px; margin: 0 auto; padding: clamp(72px, 8vw, 112px) clamp(16px, 2vw, 24px); box-sizing: border-box">
+<h2 id="play-h" style="margin: 0; text-align: center; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">The anatomy of a play</h2>
+<p style="margin: 16px auto 0; max-width: 38rem; text-align: center; font-size: clamp(19px, 1.6vw, 21px); color: #5d5d63">Every play in Monday’s list is written the same way. This one is from a Roger pilot week.</p>
+<div style="margin-top: 48px; display: flex; flex-wrap: wrap; gap: 24px 40px; align-items: flex-start">
+<article style="flex: 3 1 520px; min-width: 0; background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: clamp(24px, 3vw, 40px); box-sizing: border-box">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Install this week</p>
+<h3 style="margin: 8px 0 0; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">1. [PLAY TITLE]: score [S] of 100</h3>
+<p style="margin: 14px 0 0">[One to three plain sentences: what the play does, what triggers it, and what you get.]</p>
+<dl style="margin: 20px 0 0; display: grid; grid-template-columns: minmax(0, 180px) minmax(0, 1fr); gap: 10px 20px; font-size: 16px">
+<dt style="font-weight: 620">Hours saved</dt><dd style="margin: 0">About [X] hours a week ([low] to [high]), [counted or estimated]. Heavy user (best guess): [H] hours a week.</dd>
+<dt style="font-weight: 620">Minutes saved each time</dt><dd style="margin: 0">About [M] minutes saved</dd>
+<dt style="font-weight: 620">Run by</dt><dd style="margin: 0">[N] members</dd>
+<dt style="font-weight: 620">Why</dt><dd style="margin: 0">[One sentence on why it landed in this tier.]</dd>
+</dl>
+<div style="margin-top: 24px; border-top: 1px solid #e2e2e6; padding-top: 20px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Playbook</p>
+<div style="margin-top: 12px; background: #f6ece4; border-radius: 8px; padding: 16px 20px"><p style="margin: 0; font-size: 13px; font-weight: 600; color: #5d5d63">Added to the top of every playbook</p><p style="margin: 6px 0 0; font-size: 16px">I want you to take this document, and update it so that it works for my agent system and then install the playbook, asking me questions as needed.</p></div>
+<dl style="margin: 12px 0 0; display: grid; grid-template-columns: minmax(0, 180px) minmax(0, 1fr); gap: 8px 20px; font-size: 16px">
+<dt style="font-weight: 620">Play</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+<dt style="font-weight: 620">Trigger</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+<dt style="font-weight: 620">Setup first</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+<dt style="font-weight: 620">Steps</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+<dt style="font-weight: 620">Guardrails</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+<dt style="font-weight: 620">Output</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+<dt style="font-weight: 620">Pitfalls seen</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+<dt style="font-weight: 620">Done when</dt><dd style="margin: 0; color: #5d5d63">[…]</dd>
+</dl>
+<div style="margin-top: 16px; border-radius: 8px; background: #0c0c0e; color: #f5f5f7; overflow: hidden">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 20px; border-bottom: 1px solid #2c2c31"><span style="font-size: 13px; color: #a3a3aa">Paste to install</span><span style="display: flex; flex-wrap: wrap; gap: 8px"><button type="button" style="min-height: 36px; padding: 0 16px; border-radius: 999px; border: 0; background: #f5f5f7; color: #0c0c0e; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">Download playbook</button><button type="button" style="min-height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid #2c2c31; background: #19191c; color: #f5f5f7; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer">Copy</button></span></div>
+<pre style="margin: 0; padding: 20px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 14px; line-height: 1.6; white-space: pre-wrap">[The whole playbook as one block. Downloaded or copied, it starts with the line above.]</pre>
+</div>
+</div>
+</article>
+<ul style="flex: 2 1 300px; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 20px; font-size: 16px">
+<li><span style="display: block; font-weight: 620">The score</span><span style="color: #5d5d63">Out of 100, from five things: hours saved, reach, ease to copy, proof and surprise.</span></li>
+<li><span style="display: block; font-weight: 620">Counted or estimated</span><span style="color: #5d5d63">Hours counted from real history weigh twice as much as estimates, and the list says which is which.</span></li>
+<li><span style="display: block; font-weight: 620">Run by</span><span style="color: #5d5d63">How many members run it. Never who.</span></li>
+<li><span style="display: block; font-weight: 620">Pitfalls seen</span><span style="color: #5d5d63">What went wrong for the members who run it, so it doesn’t go wrong for you.</span></li>
+<li><span style="display: block; font-weight: 620">Hand it to your agent</span><span style="color: #5d5d63">Download or copy the playbook and give it to your own agent. The first line tells it to adapt the play to your setup and install it, asking you questions as it goes.</span></li>
+<li><span style="display: block; font-weight: 620">Time only</span><span style="color: #5d5d63">A play is measured in hours and minutes saved. Never in money.</span></li>
+</ul>
+</div>
+</div>
+</section>
+
+<!-- How Cora ranks -->
+<section aria-labelledby="rank-h" style="max-width: 980px; margin: 0 auto; padding: clamp(72px, 8vw, 112px) clamp(16px, 2vw, 24px); box-sizing: border-box">
+<div aria-hidden="true" style="width: 0; height: 56px; margin: 0 auto 32px; border-left: 1px dashed #c7c7cd"></div>
+<h2 id="rank-h" style="margin: 0; text-align: center; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">How Cora ranks</h2>
+<ol style="margin: 48px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 24px">
+<li style="border-top: 1px solid #1d1d1f; padding-top: 16px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Hours saved</span><span style="font-size: 16px; color: #5d5d63">Time saved a week, from Zack’s numbers.</span></li>
+<li style="border-top: 1px solid #1d1d1f; padding-top: 16px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Reach</span><span style="font-size: 16px; color: #5d5d63">How many in your Circle could use it.</span></li>
+<li style="border-top: 1px solid #1d1d1f; padding-top: 16px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Surprise</span><span style="font-size: 16px; color: #5d5d63">It isn’t the obvious thing everyone already does.</span></li>
+<li style="border-top: 1px solid #1d1d1f; padding-top: 16px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Proof</span><span style="font-size: 16px; color: #5d5d63">How many members already run it, and how sure Zack was.</span></li>
+<li style="border-top: 1px solid #1d1d1f; padding-top: 16px"><span style="display: block; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Ease to copy</span><span style="font-size: 16px; color: #5d5d63">Setup steps and the tools it needs connected.</span></li>
+</ol>
+<div style="margin-top: 56px; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px">
+<div style="background: #1d1d1f; color: #fbfbfd; border-radius: 8px; padding: 24px"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Install this week</p><p style="margin: 8px 0 0; font-size: 16px; color: #c7c7cd">Saves real time, most of the Circle could use it, and it’s proven.</p></div>
+<div style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 24px"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Worth trying</p><p style="margin: 8px 0 0; font-size: 16px; color: #5d5d63">Strong on the same three, a step below the top.</p></div>
+<div style="background: #ffffff; border: 1px solid #e2e2e6; border-radius: 8px; padding: 24px"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Niche but great</p><p style="margin: 8px 0 0; font-size: 16px; color: #5d5d63">Saves a lot of time for the few it fits.</p></div>
+<div style="border: 1.5px solid #9a5226; border-radius: 8px; padding: 24px; box-sizing: border-box"><p style="margin: 0; font-size: 21px; font-weight: 620; letter-spacing: -0.018em">Your top 3</p><p style="margin: 8px 0 0; font-size: 16px; color: #5d5d63">The same list, re-ranked for the work you do, minus what you already run.</p></div>
+</div>
+<p style="margin: 24px 0 0; text-align: center; font-size: 16px; color: #5d5d63">Install this week always has at least three plays. Up to five in each tier.</p>
+</section>
+
+<!-- What gets removed -->
+<section aria-labelledby="priv-h" style="background: #0c0c0e; color: #f5f5f7">
+<div style="max-width: 980px; margin: 0 auto; padding: clamp(72px, 8vw, 112px) clamp(16px, 2vw, 24px); box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 40px 64px">
+<div style="flex: 1 1 360px; min-width: 0">
+<h2 id="priv-h" style="margin: 0; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">What gets removed. Twice.</h2>
+<p style="margin: 20px 0 0; font-size: clamp(19px, 1.6vw, 21px); line-height: 1.45; color: #a3a3aa">Zack strips private details before a run leaves your account. Cora checks again before anything reaches your Circle.</p>
+</div>
+<div style="flex: 1 1 360px; min-width: 0">
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 17px">
+<li style="padding: 14px 0; border-top: 1px solid #2c2c31">Names of anyone but you</li>
+<li style="padding: 14px 0; border-top: 1px solid #2c2c31">Client and company names</li>
+<li style="padding: 14px 0; border-top: 1px solid #2c2c31">Addresses, emails, phone numbers, meeting links</li>
+<li style="padding: 14px 0; border-top: 1px solid #2c2c31">Order numbers and prices tied to a person</li>
+<li style="padding: 14px 0; border-top: 1px solid #2c2c31; border-bottom: 1px solid #2c2c31">Children’s names and schools</li>
+</ul>
+<p style="margin: 20px 0 0; font-size: 16px; color: #a3a3aa">Replaced with roles: “a buyer”, “a listing client”, “a family of five”. If a play can’t be described without a private detail, it is dropped.</p>
+</div>
+</div>
+</section>
+
+<!-- Three rules -->
+<section aria-labelledby="rules-h" style="max-width: 1180px; margin: 0 auto; padding: clamp(72px, 8vw, 112px) clamp(16px, 2vw, 24px); box-sizing: border-box">
+<div aria-hidden="true" style="width: 0; height: 56px; margin: 0 auto 32px; border-left: 1px dashed #c7c7cd"></div>
+<h2 id="rules-h" style="margin: 0; text-align: center; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">The three rules</h2>
+<ol style="margin: 48px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px 48px">
+<li><p aria-hidden="true" style="margin: 0; font-size: 64px; line-height: 1; font-weight: 640; letter-spacing: -0.04em; color: #c7c7cd">1</p><h3 style="margin: 12px 0 0; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">Contribute.</h3><p style="margin: 12px 0 0; color: #5d5d63">Send your Zack run by Sunday at 11:59 PM Eastern. No run, no list that Monday. A run that arrives late counts for the next week. Miss three weeks in a row and your seat goes to the waiting list.</p></li>
+<li><p aria-hidden="true" style="margin: 0; font-size: 64px; line-height: 1; font-weight: 640; letter-spacing: -0.04em; color: #c7c7cd">2</p><h3 style="margin: 12px 0 0; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">Confidential.</h3><p style="margin: 12px 0 0; color: #5d5d63">Nothing shared in your Circle leaves it. Every member signs an agreement before joining. Plays are anonymous: the list says “run by 3 members”, never who.</p></li>
+<li><p aria-hidden="true" style="margin: 0; font-size: 64px; line-height: 1; font-weight: 640; letter-spacing: -0.04em; color: #c7c7cd">3</p><h3 style="margin: 12px 0 0; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; letter-spacing: -0.03em; font-weight: 640">Candid.</h3><p style="margin: 12px 0 0; color: #5d5d63">Share what failed as well as what worked. A play that wasted your week saves seven other people theirs. And no selling to each other.</p></li>
+</ol>
+</section>
+
+<!-- Guarantee -->
+<section id="guarantee" aria-labelledby="g-h" style="background: #f3f3f5">
+<div style="max-width: 680px; margin: 0 auto; padding: clamp(72px, 8vw, 112px) clamp(16px, 2vw, 24px); box-sizing: border-box">
+<h2 id="g-h" style="margin: 0; text-align: center; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">The 45-day guarantee</h2>
+<p style="margin: 20px 0 0; text-align: center; font-size: clamp(19px, 1.6vw, 21px); line-height: 1.45">If a Circle isn’t for you, tell us within 45 days of kickoff and we refund what you’ve paid.</p>
+<ul style="margin: 32px 0 0; padding: 0; list-style: none; border-top: 1px solid #1d1d1f; font-size: 17px">
+<li style="padding: 16px 0; border-bottom: 1px solid #e2e2e6">Ask within 45 days of your Circle’s kickoff date and you get back every membership payment you’ve made.</li>
+<li style="padding: 16px 0; border-bottom: 1px solid #e2e2e6">One email to hello@meetroger.ai. No form and no call.</li>
+<li style="padding: 16px 0; border-bottom: 1px solid #e2e2e6">Refunds go to your original payment method, in the currency you paid, within 10 business days.</li>
+<li style="padding: 16px 0; border-bottom: 1px solid #e2e2e6">After a refund your membership ends and your seat goes to the waiting list.</li>
+</ul>
+<p style="margin: 20px 0 0; font-size: 16px; color: #5d5d63; text-align: center">After 45 days: leave any time. Billing is monthly.</p>
+</div>
+</section>
+
+<!-- Closing band -->
+<section aria-labelledby="close-h" style="background: #0c0c0e; color: #f5f5f7">
+<div style="max-width: 760px; margin: 0 auto; padding: clamp(72px, 8vw, 112px) clamp(16px, 2vw, 24px); box-sizing: border-box; text-align: center">
+<h2 id="close-h" style="margin: 0; font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.034em; font-weight: 640">Already running agents every day?</h2>
+<p style="margin: 16px 0 0; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; letter-spacing: -0.03em; color: #a3a3aa">Find out what the other seven know.</p>
+<a href="Apply.dc.html" style="margin-top: 40px; display: inline-flex; align-items: center; min-height: 52px; padding: 0 28px; border-radius: 999px; background: #9a5226; color: #ffffff; text-decoration: none; font-size: 17px; font-weight: 550">Apply for a founding Circle</a>
+</div>
+</section>
+</main>
+
+<footer style="font-size: 16px; color: #5d5d63; border-top: 1px solid #e2e2e6">
+<div style="max-width: 1180px; margin: 0 auto; padding: 40px clamp(16px, 2vw, 24px) 32px; display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: baseline; box-sizing: border-box">
+<p style="margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px"><span style="color: #1d1d1f">Roger, Toronto</span><a href="mailto:hello@meetroger.ai" style="text-decoration: none; font-weight: 500">hello@meetroger.ai</a></p>
+<nav aria-label="Footer" style="margin-left: auto"><ul style="display: flex; flex-wrap: wrap; gap: 4px 22px; list-style: none; margin: 0; padding: 0"><li><a href="How-it-works.dc.html" style="color: #1d1d1f; text-decoration: none">How it works</a></li><li><a href="Zack.dc.html" style="color: #1d1d1f; text-decoration: none">Run Zack</a></li><li><a href="Main.dc.html#proof" style="color: #1d1d1f; text-decoration: none">Use cases</a></li><li><a href="FAQ.dc.html" style="color: #1d1d1f; text-decoration: none">FAQ</a></li><li><a href="About.dc.html" style="color: #1d1d1f; text-decoration: none">About</a></li><li><a href="https://meetroger.ai/privacy" style="color: #1d1d1f; text-decoration: none">Privacy</a></li><li><a href="https://meetroger.ai/terms" style="color: #1d1d1f; text-decoration: none">Terms</a></li><li><span>© 2026</span></li></ul></nav>
+</div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":5600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
