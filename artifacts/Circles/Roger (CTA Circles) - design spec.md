@@ -395,13 +395,13 @@ create index if not exists applications_status on applications (status);
 
 *What is wrong with today's text for this launch* (`privacy` in `src/data/legal.ts`, dated October 2026): it says nothing about the Zack tool, applications, pasted reports, members' weekly runs, Cora or currency; it is already out of date about starter-pack and watch emails; it names only Formspree, Stripe and Cal.com as services; and it does not mention that the library summarises public posts.
 
-*Replacement text* (same plain style; replace the whole `privacy` object, set `updated` to "November 2026"; `{retention}` is Peter's decision, see section 11):
+*Replacement text* (same plain style; replace the whole `privacy` object, set `updated` to "November 2026"; retention is decided: 90 days after we answer the application, see section 11):
 
 > **Intro.** Roger is a for profit company. We're responsible for the personal information this site collects. Here is all of it, in plain language.
 >
 > **The Zack tool.** To get the Zack instructions you give us your email address and tell us which AI agent you use. We email you a link to the instructions. Zack runs inside your own agent account; this site never connects to that account and cannot see your activity.
 >
-> **Your Zack report, when you apply.** If you choose to paste your report into this site, we store the text you paste. It is read by our team to assess your application, and we may use AI tools to help us read it. It is never published, sold or shared with anyone outside our team and the services named on this page. Check it for client names and private details before you paste it. We keep it {retention}, and delete it sooner if you ask.
+> **Your Zack report, when you apply.** If you choose to paste your report into this site, we store the text you paste. It is read by our team to assess your application, and we may use AI tools to help us read it. It is never published, sold or shared with anyone outside our team and the services named on this page. Check it for client names and private details before you paste it. We keep it for 90 days after we answer your application, and delete it sooner if you ask. If you join, we keep it for as long as you are a member.
 >
 > **Circle applications.** The application collects what you type into it: your name, email, the agents you use, what you do, how you use agents, your company or website, a profile link, your time zone, anyone you should not be grouped with, the currency you chose, and your Zack report. We use it to decide on your application and to place you in a Circle.
 >
@@ -424,6 +424,8 @@ create index if not exists applications_status on applications (status);
 > **Your choices.** You can ask what we hold about you, or ask us to correct or delete it, including your application, your Zack report and your weekly runs, by emailing {contactEmail}. We act on deletion requests within 30 days.
 >
 > **Questions.** Email us at {contactEmail}.
+
+Reports must actually be deleted 90 days after the application is answered. That needs a hand-run admin action or a scheduled job (engineering's call), and it must exist before launch, because the privacy text promises it.
 
 The sentence about the model provider not training on runs must be checked against the provider's actual terms before launch; change it if it is not true. This draft is written to be accurate about what the site does; it has not been reviewed by a lawyer, and Peter should decide whether to have it and the guarantee terms reviewed before launch.
 
@@ -786,27 +788,25 @@ Then three lines:
 
 ### 10.2 The letter
 
-Short version (homepage). The `/about` version adds the two paragraphs marked *(about only)*.
+Approved by Peter, November 15, 2026. One version, used on the homepage and on `/about`. Signed "Peter" (typed name when the signature file is missing).
 
 > Hey there,
 >
-> I'm Peter Kuperman. I run AI agents every day, including my own AI chief of staff, and I deploy them inside companies for a living.
+> I’m Peter Kuperman. I run AI agents every day, including my own AI chief of staff, and I deploy them inside companies for a living.
 >
-> Here is what I kept noticing. The most useful things people do with agents never get posted. They involve clients, money and how the business actually runs. What does get posted is the highlight reel. So everyone works out the same things alone, a few months apart.
+> Here is what I kept noticing. The most useful things people do with agents never get shared with others. The highlight reel sometimes gets posted. But never the playbook. So everyone is left to work out the same things alone.
 >
-> *(about only)* Every morning Roger reads public posts about what people's agents do and adds the real ones to a library. It holds {total} of them now. Reading them, one thing stands out: the people getting the most from agents are not the ones posting the most.
+> My answer is Roger: A service that compiles full AI Agent playbooks from people. Every Sunday an agent called Zack writes up what worked that week for a Circle of people. Every Monday you get the best of it, ranked, with private details removed.
 >
-> A Circle fixes that. Eight people who already use agents heavily. Every Sunday an agent called Zack writes up what worked for each of you. Every Monday you get the best of it, ranked, with private details removed.
+> I read every application to Roger myself. I host the working sessions for the founding Circles.
 >
-> I read every application myself, and I host the working sessions for the founding Circles.
+> I made my first real estate investment at 17 and still own it, 35+ years later. I also spent 18+ years in real estate finance, then built a company that taught children to code and went on to build AI software for businesses. I studied finance and computer science at Penn.
 >
-> *(about only)* A bit about me. I made my first real estate investment at 17 and still own it. I spent 17 years in real estate finance, then built a company that taught children to code and went on to build AI software for businesses. I studied finance and computer science at Penn.
+> If you run three or more agents every day and suspect you’re using a fraction of what they can do, apply.
 >
-> If you're already running agents and suspect you're using a fraction of what they can do, apply.
+> Thanks,
 >
 > Peter
-
-On the homepage the bio paragraph is replaced by one line under the signature: "Peter Kuperman · 17 years in real estate finance, then software and AI · Finance and computer science, Penn".
 
 ### 10.3 Application
 
@@ -867,9 +867,9 @@ The six marked ★ appear on the homepage.
 | 3 | The pilot week: the real Cora sort file, turned into `content/pilot/week.json`. Everyone whose plays appear has agreed (confirmed Nov 13) | The "One cycle" section (it stays hidden without it). |
 | 4 | The animation, to the storyboard in 7.4 | The animated version of that section (the poster shows without it). |
 | 5 | LinkedIn headshot at `public/media/peter.jpg` and a signature at `public/media/peter-signature.svg` | The letter's photo and signature (both have fallbacks). |
-| 6 | An edit and approval of the letter in 10.2 | The letter on the homepage and `/about`. |
+| 6 | ~~An edit and approval of the letter in 10.2~~ Done, November 15, 2026 | The letter on the homepage and `/about`. |
 | 7 | The confidentiality agreement, off the site. It must say that Cora, an AI, processes members' weekly runs | Seating the first member. |
-| 8 | A decision on how long reports are kept, and a read of the privacy text and guarantee terms in 6.8 | The privacy and terms pages. |
+| 8 | ~~A decision on how long reports are kept~~ Decided November 15, 2026: 90 days after we answer the application (members: as long as they are members). Still open: a read of the privacy text and guarantee terms in 6.8 | The privacy and terms pages. |
 | 9 | Two Stripe payment links: US$200 and CA$280 a month | The first kickoff. |
 | 10 | The recurring Google Meet links | The kickoff email. |
 | 11 | Confirmation of the `Cora The Curator v1.1.md` draft, which applies the changes in section 12 | The first Monday list. |

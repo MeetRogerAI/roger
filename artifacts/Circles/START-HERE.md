@@ -69,13 +69,12 @@ From spec section 11:
 
 1. The pilot week as `content/pilot/week.json`, and the animation built to the storyboard in spec 7.4.
 2. His headshot at `public/media/peter.jpg` and his signature at `public/media/peter-signature.svg`.
-3. His edit and approval of the letter (spec 10.2).
-4. The confidentiality agreement, which must say that Cora, an AI, processes members' weekly runs.
-5. A decision on how long reports are kept, and a read of the privacy text and guarantee terms (spec 6.8).
-6. Two Stripe payment links: US$200 and CA$280 a month.
-7. The recurring Google Meet links.
-8. Zack files for Instinct, Muse, Dots and Viktor, when those agents open.
-9. A test of whether Zack for Claude can see chats inside Claude projects.
+3. The confidentiality agreement, which must say that Cora, an AI, processes members' weekly runs.
+4. A read of the privacy text and guarantee terms (spec 6.8). Report retention is decided: 90 days after we answer the application.
+5. Two Stripe payment links: US$200 and CA$280 a month.
+6. The recurring Google Meet links.
+7. Zack files for Instinct, Muse, Dots and Viktor, when those agents open.
+8. A test of whether Zack for Claude can see chats inside Claude projects.
 
 ## Before writing code
 
