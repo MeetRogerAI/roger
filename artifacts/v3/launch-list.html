@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Roger v3 launch list</title>
+<!--
+  FOR CLAUDE CODE: how to use this file
+
+  This is the live checklist for Roger v3. The spec is "Roger v3 - design spec.md" in this folder.
+
+  1. Read this file before starting work on any version (A1, A2, B1, B2, B3).
+  2. Every row is a <tr> with a stable data-id and a data-status.
+       Supply items (S1 to S14):  data-status is "open" or "done".
+       Defaults (D1 to D12):      data-status is "unconfirmed", "confirmed" or "changed".
+  3. If a row with data-blocks naming the version you are about to build is still "open",
+     stop and ask Peter for it. Do not invent the content. The only exceptions are rows
+     whose "Until then" cell names a fallback; build with that fallback.
+  4. When Peter supplies an item, check it against its "Done when" cell. If it passes:
+     set data-status="done", set data-done-on="YYYY-MM-DD", change the status cell's text
+     to "Done" and its class to "st done", and add one line to the Notes cell saying where
+     it now lives. Never mark an item done without evidence in the repo, in the database
+     settings, or from Peter in the conversation.
+  5. Build every default as written while it is "unconfirmed". When Peter confirms one,
+     set data-status="confirmed" and the status cell to "Confirmed". When Peter changes one,
+     set data-status="changed", write the new value in the Notes cell, and update the
+     matching section of the spec and the setting or rule in code in the same change.
+  6. Never delete a row. Never renumber. Add new rows at the end of their table with the
+     next number.
+  7. The counts at the top are computed from data-status when the page is opened.
+-->
+<style>
+  :root{
+    --ground:#fbfbfd; --ground-2:#f3f3f5; --surface:#ffffff; --ink:#1d1d1f; --ink-2:#5d5d63;
+    --rule:#e2e2e6; --rule-strong:#c7c7cd; --accent:#9a5226; --accent-wash:#f6ece4;
+    --ok:#1f6f4a; --ok-wash:#e6f3ec; --wait:#7a5a00; --wait-wash:#fbf1d0; --chg:#2a5d9a; --chg-wash:#e6eef8;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--ground);color:var(--ink);
+    font-family:"Mona Sans",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 20px 80px}
+  .eyebrow{font-size:13px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:0}
+  h1{font-size:clamp(30px,4.6vw,46px);line-height:1.05;letter-spacing:-.035em;font-weight:650;margin:8px 0 10px;text-wrap:balance}
+  .lead{font-size:18px;color:var(--ink-2);max-width:62ch;margin:0}
+  .meta{font-size:13px;color:var(--ink-2);margin:14px 0 0}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:28px 0 0}
+  .tile{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:16px 18px}
+  .tile b{display:block;font-size:34px;line-height:1;letter-spacing:-.03em;font-weight:650;font-variant-numeric:tabular-nums}
+  .tile span{display:block;margin-top:6px;font-size:14px;color:var(--ink-2)}
+  .how{background:var(--accent-wash);border-radius:8px;padding:18px 20px;margin:28px 0 0}
+  .how h2{font-size:17px;margin:0 0 8px;letter-spacing:-.01em}
+  .how ol{margin:0;padding-left:20px}
+  .how li{margin:4px 0;font-size:15px}
+  section{margin-top:52px}
+  h2{font-size:26px;letter-spacing:-.025em;line-height:1.15;font-weight:640;margin:0 0 6px}
+  .sub{color:var(--ink-2);margin:0 0 16px;max-width:70ch}
+  .scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;min-width:940px;font-size:14.5px}
+  caption{text-align:left;padding:0;height:0;overflow:hidden;position:absolute;clip:rect(0 0 0 0)}
+  th,td{text-align:left;vertical-align:top;padding:12px 14px;border-bottom:1px solid var(--rule)}
+  thead th{font-size:12.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);background:var(--ground-2);white-space:nowrap}
+  tbody tr:last-child td, tbody tr:last-child th{border-bottom:0}
+  tbody th{font-weight:620;width:19%}
+  td.id{font-variant-numeric:tabular-nums;font-weight:650;color:var(--ink-2);white-space:nowrap;width:1%}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;background:var(--ground-2);border-radius:4px;padding:1px 5px;overflow-wrap:anywhere}
+  .st{display:inline-block;border-radius:999px;padding:3px 11px;font-size:12.5px;font-weight:650;white-space:nowrap}
+  .st.open{background:var(--wait-wash);color:var(--wait)}
+  .st.done,.st.confirmed{background:var(--ok-wash);color:var(--ok)}
+  .st.unconfirmed{background:var(--wait-wash);color:var(--wait)}
+  .st.changed{background:var(--chg-wash);color:var(--chg)}
+  .ver{display:inline-block;border:1px solid var(--rule-strong);border-radius:4px;padding:0 6px;font-size:12.5px;font-weight:650;margin:0 4px 4px 0;white-space:nowrap}
+  .none{color:var(--ink-2)}
+  tr[data-status="done"] th, tr[data-status="done"] td:not(.statuscell){color:var(--ink-2)}
+  footer{margin-top:48px;font-size:13px;color:var(--ink-2)}
+  @media print{body{background:#fff}.scroll{overflow:visible;border:0}table{min-width:0;font-size:11px}.how{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Roger v3 · launch list</p>
+  <h1>What Peter still has to supply, and the defaults waiting for his yes</h1>
+  <p class="lead">The build spec leaves 14 things only Peter can provide and 12 choices made on his behalf. Nothing here is finished until its row says so.</p>
+  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Source: <code>artifacts/v3/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
+
+  <div class="tiles" aria-label="Progress">
+    <div class="tile"><b id="n-open">13</b><span>items still to supply</span></div>
+    <div class="tile"><b id="n-done">0</b><span>items supplied</span></div>
+    <div class="tile"><b id="n-unconf">11</b><span>defaults not yet confirmed</span></div>
+    <div class="tile"><b id="n-conf">1</b><span>defaults confirmed or changed</span></div>
+  </div>
+
+  <div class="how">
+    <h2>How this list is used</h2>
+    <ol>
+      <li>Claude Code reads it before starting any version of the build.</li>
+      <li>If an item that blocks that version is still open, Claude Code stops and asks Peter. It does not make the content up. Where a row names a fallback, the build goes ahead with the fallback.</li>
+      <li>When Peter supplies an item, Claude Code checks it against "Done when", marks the row done with the date, and notes where it now lives.</li>
+      <li>Every default is built as written. When Peter confirms or changes one, Claude Code records it here and, if it changed, updates the spec and the code together.</li>
+    </ol>
+  </div>
+
+  <section aria-labelledby="h-supply">
+    <h2 id="h-supply">1. Items Peter needs to supply</h2>
+    <p class="sub">Items S1 to S12 are the spec's own list. S13 was added when this list was made, because billing, the admin and email cannot run without it. S14 was added on November 22, 2026, because Cora has nothing to pick from on the first Monday without the pilot runs.</p>
+    <div class="scroll">
+      <table id="supply">
+        <caption>Items Peter needs to supply</caption>
+        <thead>
+          <tr><th scope="col">No.</th><th scope="col">Item</th><th scope="col">Where it goes</th><th scope="col">Done when</th><th scope="col">Blocks</th><th scope="col">Until then</th><th scope="col">Status</th><th scope="col">Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr data-id="S1" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S1</td>
+            <th scope="row">Zack version 2.0, for Claude, Duet, Grok Bot and Hark</th>
+            <td><code>content/zack/{claude,duet,grok-bot,hark}.md</code> and the connector text in <code>content/zack/connect/</code></td>
+            <td>Each file carries the seven changes in spec B.5, its header says version 2.0, and a test run from each agent ends with a valid <code>roger-run</code> block.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Claude Code may draft all four from the 1.9 files and the spec for Peter to approve. The public 1.9 files stay as they are for the free tool.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S2" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S2</td>
+            <th scope="row">Cora version 2.0</th>
+            <td><code>content/cora/cora.md</code></td>
+            <td>The file applies the nine changes in spec B.7 to Cora v1.1, and Peter has approved it.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Claude Code may draft it from <code>artifacts/Circles/Cora The Curator v1.1.md</code> for Peter to approve.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S3" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S3</td>
+            <th scope="row">The fixed category list, confirmed</th>
+            <td>One shared file read by Zack, the quiz and Cora</td>
+            <td>Peter has confirmed the list, and the same list appears in the Zack files, the quiz and Cora.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Build with default D10.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S4" data-status="done" data-blocks="B1" data-done-on="2026-11-22">
+            <td class="id">S4</td>
+            <th scope="row">Tax registration in Stripe, and the accountant's word on charging US customers</th>
+            <td>Stripe dashboard, Stripe Tax registrations</td>
+            <td>Stripe shows an active registration, and a test invoice for a Canadian customer shows HST as its own line.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Build and test in Stripe test mode. No live charge before this is done.</td>
+            <td class="statuscell"><span class="st done">Done</span></td>
+            <td class="notes">2026-11-22, Peter: tax registration is already done in Stripe; cards can be charged right away. Lives in the Stripe dashboard. The HST line on a test invoice is still to be seen during the build (spec check 26). The accountant's word on US customers was not mentioned.</td>
+          </tr>
+          <tr data-id="S5" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S5</td>
+            <th scope="row">Google sign-in credentials</th>
+            <td>Vercel environment variables for the Google client ID and secret</td>
+            <td>"Sign in with Google" completes on the preview deployment and on production.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Email-link sign-in works without it. Hide the Google button while the variables are missing.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S6" data-status="open" data-blocks="A1" data-done-on="">
+            <td class="id">S6</td>
+            <th scope="row">Peter's letter, edited for v3</th>
+            <td><code>src/data/v3-copy.ts</code></td>
+            <td>The letter no longer mentions Circles or applications, and Peter has approved the text.</td>
+            <td><span class="ver">A1</span></td>
+            <td>Show only the paragraphs that are still true: the first two and the one about his background (spec A.10).</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S7" data-status="open" data-blocks="" data-done-on="">
+            <td class="id">S7</td>
+            <th scope="row">Headshot and signature</th>
+            <td><code>public/media/peter.jpg</code> (square, at least 480px) and <code>public/media/peter-signature.svg</code></td>
+            <td>Both files exist and the letter block shows them.</td>
+            <td><span class="none">Nothing</span></td>
+            <td>Initials and a typed name.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S8" data-status="open" data-blocks="A1" data-done-on="">
+            <td class="id">S8</td>
+            <th scope="row">Testimonial attributions confirmed, and a quote from Grace</th>
+            <td>The <code>testimonials</code> table, edited at <code>/admin/testimonials</code></td>
+            <td>Peter has confirmed the role and city shown for Chris, Robyn and Ken, and Grace has a quote of her own entered and switched on.</td>
+            <td><span class="ver">A1</span></td>
+            <td>Seed the four quotes in spec B.12 with "Real estate, Toronto". The section shows whatever is switched on.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S9" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S9</td>
+            <th scope="row">The starter setup file, version 1, read through</th>
+            <td><code>setup_files</code>, version 1, published; shown on <code>/getstarted</code></td>
+            <td>Version 1 is seeded from <code>Real estate Grok Bot Setup.md</code> with the two edits in spec B.11, and Peter has read and published it.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Seed it unpublished. The startup page shows no setup block until a version is published.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S10" data-status="open" data-blocks="A1 B1" data-done-on="">
+            <td class="id">S10</td>
+            <th scope="row">A read of the privacy and terms text, and the model provider's position on training</th>
+            <td><code>src/data/legal.ts</code></td>
+            <td>Peter has had both pages read, the privacy page states the provider's position, and the "draft" label is removed.</td>
+            <td><span class="ver">A1</span><span class="ver">B1</span></td>
+            <td>Publish both pages marked as drafts. Do not open sign-up to the public until this is done.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">2026-11-22, Peter: people who are sent the <code>/start</code> link may sign up and be charged while both pages are still labelled drafts, as long as the pages are live and linked from sign-up. Start buttons on the public site still wait for this row.</td>
+          </tr>
+          <tr data-id="S11" data-status="open" data-blocks="B2" data-done-on="">
+            <td class="id">S11</td>
+            <th scope="row">The group session's day, time and Meet link</th>
+            <td>Settings <code>v3.sessionDay</code>, <code>v3.sessionTime</code>, <code>v3.sessionLink</code></td>
+            <td>All three settings are filled and the session card shows the next session.</td>
+            <td><span class="ver">B2</span></td>
+            <td>The session card stays hidden while the settings are empty.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S12" data-status="open" data-blocks="A2" data-done-on="">
+            <td class="id">S12</td>
+            <th scope="row">The demo video, and the data for the "one real week" example</th>
+            <td>Video and poster in <code>public/media/</code>; the week's figures in the copy file</td>
+            <td>The video plays with captions and a pause control, and the worked example shows its sample size.</td>
+            <td><span class="ver">A2</span></td>
+            <td>Both sections stay absent.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="S13" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S13</td>
+            <th scope="row">Keys and settings in Vercel</th>
+            <td>Environment variables: the Stripe secret key and webhook secret, <code>ADMIN_EMAILS</code> (Peter and Ehab), and the sending address for "Roger support". In Stripe: a monthly price at the standard rate and at the higher rate, and a one-list price, each in US and Canadian dollars.</td>
+            <td>A test sign-up saves a card, the webhook is received, both admins can open <code>/admin</code>, and an automatic email arrives from the support address.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Build against Stripe test keys. Never commit a key to the repo.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.</td>
+          </tr>
+          <tr data-id="S14" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S14</td>
+            <th scope="row">The existing pilot Zack runs, as seed data for the pool</th>
+            <td><code>artifacts/v3/Zack Runs/</code>, one Markdown file per run, then imported with the seed tool on <code>/admin/cora</code></td>
+            <td>The files are in the repo, Peter has confirmed they hold no client names or private details (the repo is public), and the imported plays appear in the pool under the seed user.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Build and test with made-up runs. The first real Cora run waits for these.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-22. Spec B.7, "Seed data". 2026-11-22: Peter added 13 run files (November 12 to 15, Zack 1.8 and 1.9, no <code>roger-run</code> block). A pattern scan found no email addresses, phone numbers or links. Peter confirmed the same day that the files are cleared for the public repo. Each contributor's runs go under one hidden contributor record (requirements R25). Still open: the import itself, which needs the seed tool.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-defaults">
+    <h2 id="h-defaults">2. Defaults waiting for Peter's yes</h2>
+    <p class="sub">Each was chosen to fill a gap in the interview. The build uses the default as written until Peter confirms or changes it.</p>
+    <div class="scroll">
+      <table id="defaults">
+        <caption>Defaults to confirm</caption>
+        <thead>
+          <tr><th scope="col">No.</th><th scope="col">Default</th><th scope="col">What it decides</th><th scope="col">Where it lives</th><th scope="col">Spec</th><th scope="col">Version</th><th scope="col">Status</th><th scope="col">Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr data-id="D1" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D1</td>
+            <th scope="row">A run held for a privacy check still counts as contributed</th>
+            <td>Whether a user is charged the higher price in a week their run was flagged through no choice of their own.</td>
+            <td>The weekly contribution rule (<code>contribution_weeks</code>)</td>
+            <td>B.6, B.9</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D2" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D2</td>
+            <th scope="row">A trial user with Zack on gets a list only in weeks their run arrives; with Zack off, every Monday</th>
+            <td>When the two free lists are used up, and so when the first charge falls.</td>
+            <td>Cora's eligibility rule</td>
+            <td>B.7</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D3" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D3</td>
+            <th scope="row">Recency weights: last 4 weeks count in full, weeks 5 to 12 at half, older at a quarter; no evidence in 26 weeks retires a play from picking</th>
+            <td>How strongly Cora favours recent runs over old ones.</td>
+            <td>Setting <code>v3.recencyWeights</code></td>
+            <td>B.7</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D4" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D4</td>
+            <th scope="row">Zack runs on Sunday at 6:00 PM in the user's own time zone</th>
+            <td>When each user's agent does its weekly review, ahead of the 11:59 PM Toronto cutoff.</td>
+            <td>Setting <code>v3.zackDefaultSchedule</code> and the connector text</td>
+            <td>0.9, B.5</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D5" data-status="unconfirmed" data-blocks="B2">
+            <td class="id">D5</td>
+            <th scope="row">A referral link is remembered for 60 days, and the first referrer wins</th>
+            <td>Who earns the credit when two people refer the same person.</td>
+            <td>The referral link at <code>/r/[code]</code></td>
+            <td>B.15</td>
+            <td><span class="ver">B2</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D6" data-status="unconfirmed" data-blocks="B2">
+            <td class="id">D6</td>
+            <th scope="row">A sponsor is invoiced from each sponsored user's third list</th>
+            <td>Whether people paid for by a brokerage also get two free lists.</td>
+            <td>The sponsor invoice on <code>/admin/sponsors</code></td>
+            <td>B.15</td>
+            <td><span class="ver">B2</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D7" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D7</td>
+            <th scope="row">The four seeded testimonials start with their switches on</th>
+            <td>Whether quotes appear the moment the site launches or wait for Peter to switch each one on.</td>
+            <td>Seed rows in <code>testimonials</code></td>
+            <td>B.12</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D8" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D8</td>
+            <th scope="row">The "not ready" note appears only for people who answer both "Not yet" and "I avoid it"</th>
+            <td>How many sign-ups see the note that Roger works best once you use AI agents most days.</td>
+            <td>The quiz routing in <code>/start</code></td>
+            <td>B.4</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D9" data-status="changed" data-blocks="A1">
+            <td class="id">D9</td>
+            <th scope="row">The à la carte link shows a price: US$100 or CA$140 a list</th>
+            <td>Whether the demand test measures interest at a real price or interest in the idea alone.</td>
+            <td>Settings <code>v3.priceRunUsd</code>, <code>v3.priceRunCad</code>; the price block</td>
+            <td>A.7</td>
+            <td><span class="ver">A1</span></td>
+            <td class="statuscell"><span class="st changed">Changed</span></td>
+            <td class="notes">2026-11-21, Peter: single lists are sold at US$100 or CA$140, so there is no demand link. Spec 1.1, sections A.7 and B.9.</td>
+          </tr>
+          <tr data-id="D10" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D10</td>
+            <th scope="row">Categories: Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands</th>
+            <td>The one list Zack labels plays with, the quiz offers, and Cora matches on. Confirming this also closes S3.</td>
+            <td>The shared category file</td>
+            <td>B.5</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D11" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D11</td>
+            <th scope="row">A one-at-a-time order is charged on Monday at 6:00 AM only if that week's Zack run arrived; if not, no charge, no list, and the order does not carry over</th>
+            <td>What happens to someone who ordered a list but whose Zack sent nothing that week.</td>
+            <td>The Monday charge job and the <code>orders</code> table</td>
+            <td>B.9</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+          <tr data-id="D12" data-status="unconfirmed" data-blocks="B1">
+            <td class="id">D12</td>
+            <th scope="row">One-at-a-time lists need sharing switched on</th>
+            <td>Whether a person who has switched sharing off can still buy single lists. As written, they cannot until it is back on.</td>
+            <td>The order button on <code>/app</code> and <code>/app/billing</code></td>
+            <td>B.9</td>
+            <td><span class="ver">B1</span></td>
+            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
+            <td class="notes"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>Statuses are stored in this file. To change one, edit the row's <code>data-status</code> and its status label; the counts at the top update when the page is opened.</p>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    function count(table, status) {
+      return document.querySelectorAll('#' + table + ' tbody tr[data-status="' + status + '"]').length;
+    }
+    var set = function (id, n) { var el = document.getElementById(id); if (el) el.textContent = n; };
+    set('n-open', count('supply', 'open'));
+    set('n-done', count('supply', 'done'));
+    set('n-unconf', count('defaults', 'unconfirmed'));
+    set('n-conf', count('defaults', 'confirmed') + count('defaults', 'changed'));
+  })();
+</script>
+</body>
+</html>
