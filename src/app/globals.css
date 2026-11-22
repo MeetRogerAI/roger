@@ -33,6 +33,33 @@
   /* Status, only where state lives */
   --color-error: #b3261e;
 
+  /*
+   * Data palette (v3 spec 0.7). Graphics only: Cora's five score bars, the
+   * bricks and the compounding graph. Never text, never an action, and every
+   * bar or brick also carries a label or number. Each is at least 3:1 on
+   * ground, ground-2 and surface (lowest: hours 3.7:1 on ground-2). The
+   * "-night" versions are lifted for night chapters, 6:1 or better on night
+   * and night-2.
+   */
+  --color-f-hours: #b86a12;
+  --color-f-reach: #2a6aa8;
+  --color-f-ease: #2c8463;
+  --color-f-proof: #6650b4;
+  --color-f-surprise: #b0457a;
+  --color-marker: #c63b2b;
+  --color-f-hours-night: #e0a050;
+  --color-f-reach-night: #6fa8e0;
+  --color-f-ease-night: #5fc29a;
+  --color-f-proof-night: #a593ea;
+  --color-f-surprise-night: #e283b0;
+  --color-marker-night: #f0705f;
+  /* Brick and graph colour per level: reach, ease, proof, surprise, hours */
+  --color-level-1: var(--color-f-reach);
+  --color-level-2: var(--color-f-ease);
+  --color-level-3: var(--color-f-proof);
+  --color-level-4: var(--color-f-surprise);
+  --color-level-5: var(--color-f-hours);
+
   /* Type: Mona Sans, one family; width and weight do the contrast */
   --font-sans: var(--font-mona), system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif;
 
