@@ -1,0 +1,38 @@
+[
+  {
+    "person": "Chris M.",
+    "attribution": "Real estate, Toronto",
+    "quote": "After looking at my own Grok Bot activity and the Zack the Collector reports in the shared folder, I already have three useful ideas I'm putting to work just in Week 1.",
+    "said_on": "2026-11-17",
+    "audience": "re",
+    "position": 1,
+    "cleared": true
+  },
+  {
+    "person": "Robyn M.",
+    "attribution": "Real estate, Toronto",
+    "quote": "I had Grok Bot look over my past week of activity along with the Zack reports in our shared folder, and asked it for the top 3 ways I could get more out of it. Here's what it came up with, and I've now set all three up in my system.",
+    "said_on": "2026-11-17",
+    "audience": "re",
+    "position": 2,
+    "cleared": true
+  },
+  {
+    "person": "Robyn M.",
+    "attribution": "Real estate, Toronto",
+    "quote": "I'm discovering something new with this every day and it's exciting to see what's possible for the office.",
+    "said_on": "2026-11-11",
+    "audience": "re",
+    "position": 3,
+    "cleared": true
+  },
+  {
+    "person": "Ken F.",
+    "attribution": "Real estate, Toronto",
+    "quote": "Everything is looking good with Grok. I am saving well over 30 minutes a day with the bots. I have created new bots to organize my database.",
+    "said_on": "2026-11-12",
+    "audience": "re",
+    "position": 4,
+    "cleared": true
+  }
+]
