@@ -5,7 +5,7 @@ import { siteConfig } from "@/data/config";
 import { CopyButton } from "./copy-button";
 import { OtherAgentPrompt } from "./other-agent";
 
-const title = "Instructions for Zack The Collector";
+const title = "Zack The Collector Page";
 const description = "Run Zack The Collector in your own agent, save the .md output and email it to Roger.";
 
 // Shared by link only: kept out of search, the sitemap and the nav
@@ -16,12 +16,6 @@ export const metadata: Metadata = {
   openGraph: { url: "/hampton", title, description, siteName: "Roger", type: "website" },
   robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
-
-const dates = [
-  { label: "Date", value: "November 12, 2026" },
-  { label: "Deadline", value: "End of Friday, November 13" },
-  { label: "Results", value: "Monday, November 16" },
-];
 
 const agents = [
   { name: "Claude", version: "1.9", file: "zack-the-collector-claude.md", download: "Zack The Collector (for Claude) v1.9.md" },
@@ -50,20 +44,12 @@ export default async function HamptonPage() {
 
   return (
     <>
-      {/* Hero: the title and the three dates that matter */}
+      {/* Hero: the title */}
       <section aria-labelledby="hero-title" className="bg-ground">
         <div className="wrap pb-14 pt-12 md:pb-20 md:pt-20">
           <h1 id="hero-title" className="max-w-[14ch] text-display text-stretch-display">
             {title}
           </h1>
-          <dl className="mt-10 grid max-w-[52rem] gap-y-5 border-t hairline pt-6 sm:grid-cols-3 sm:gap-x-8">
-            {dates.map((d) => (
-              <div key={d.label}>
-                <dt className="text-meta font-[560] uppercase tracking-[0.08em] text-accent">{d.label}</dt>
-                <dd className="mt-1 text-title">{d.value}</dd>
-              </div>
-            ))}
-          </dl>
         </div>
       </section>
 

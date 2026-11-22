@@ -33,7 +33,7 @@ const company: NavSet = {
 };
 
 function navFor(path: string): NavSet {
-  if (siteConfig.flags.circlesMode && !(path.startsWith("/for/") || ["/rlpsignature", "/hampton", "/founders", "/rlp"].includes(path))) {
+  if (siteConfig.flags.circlesMode && !(path.startsWith("/for/") || ["/rlpsignature", "/hampton", "/zack", "/founders", "/rlp"].includes(path))) {
     return {
       links: [
         { href: "/#how", label: "How it works" },

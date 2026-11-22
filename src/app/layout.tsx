@@ -84,7 +84,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <Reveals />
           <SiteHeader />
           {!siteConfig.flags.circlesMode && <CodeBanner />}
-          {siteConfig.flags.circlesMode && !siteConfig.circles.applyOpen && <aside aria-label="Preview notice" className="border-b border-rule bg-ground-2 px-4 py-2 text-center text-meta text-ink-2">Marketing preview. Applications and weekly delivery are not live.</aside>}
           <main id="main" className="flex-1">
             {children}
           </main>
