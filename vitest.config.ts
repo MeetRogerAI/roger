@@ -6,5 +6,5 @@ import { defineConfig } from "vitest/config";
 // vitest.scenarios.config.ts and run only with `npm run test:scenarios`.
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  test: { environment: "node", include: ["src/**/*.test.ts", "db/**/*.test.ts"] },
+  test: { environment: "node", include: ["src/**/*.test.ts", "src/**/*.test.tsx", "db/**/*.test.ts"] },
 });
