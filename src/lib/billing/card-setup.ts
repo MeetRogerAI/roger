@@ -2,6 +2,7 @@ import { addDays, weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { welcomeEmail } from "@/lib/mail/templates/welcome";
+import { claimFreeRun } from "@/lib/zack/receive";
 import type { V3Settings } from "@/lib/v3-settings";
 import type { CardGateway } from "./gateway";
 import type { Currency, Plan } from "./prices";
@@ -111,9 +112,9 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
     );
     // Another call may have started the trial between our read and this update.
     const now_ = started[0] ?? (await loadUser(q, u.id));
-    return now_?.status === "trial" ? sendWelcome(now_, o) : "pending";
+    return now_?.status === "trial" ? sendWelcome(q, now_, o) : "pending";
   }
-  if (u.status === "trial") return sendWelcome(u, o);
+  if (u.status === "trial") return sendWelcome(q, u, o);
   return "done";
 }
 
@@ -122,9 +123,12 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
  * webhook answers with an error and Stripe tries again later; the trial has
  * already started either way.
  */
-async function sendWelcome(u: SignupUser, o: CompleteOptions): Promise<"done"> {
+async function sendWelcome(q: Query, u: SignupUser, o: CompleteOptions): Promise<"done"> {
   const startedAt = u.trial_started_at ? new Date(u.trial_started_at) : (o.now ?? new Date());
   const currency = u.currency ?? "USD";
+  const settings = await o.getSettings();
+  // A report brought from the free tool becomes this week's run (claimed once; never blocks the trial).
+  await claimFreeRun(q, u.id, settings.runCutoff, o.now).catch((e) => console.error("[billing] free-tool run not claimed", e));
   const result = await sendToUser(
     { id: u.id, email: u.email },
     "welcome",
@@ -134,7 +138,7 @@ async function sendWelcome(u: SignupUser, o: CompleteOptions): Promise<"done"> {
       plan: u.plan,
       currency,
       path: u.path,
-      settings: await o.getSettings(),
+      settings,
       firstChargeNoEarlier: addDays(weekOf(startedAt), 14),
     }),
     o,

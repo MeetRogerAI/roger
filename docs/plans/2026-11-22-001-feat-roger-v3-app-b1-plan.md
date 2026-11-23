@@ -569,7 +569,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ### Phase 2: Zack
 
-- [ ] **Unit 8: The Zack connection and Zack 2.0**
+- [x] **Unit 8: The Zack connection and Zack 2.0**
 
 **Goal:** Per-user keys, the instructions endpoint with the user's rules, the send endpoint, the upload route, test runs, the four Zack 2.0 files and their connector text.
 
@@ -607,6 +607,16 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 **Verification:** a run sent from a real agent with the connector text appears for that user within a minute.
 
+**As built (2026-11-22, after review):**
+- Zack 2.0 sends two files. The run goes to `/api/zack/runs?kind=run` and the private profile to `?kind=profile` (stored in `zack_profiles`, matching only). A body that looks like a profile at the run address, or holds both, is refused, so the profile can never become a run. Every address carries a query string, so `&key=` works for agents that cannot set headers.
+- A valid key always works. Only wrong keys are counted per IP (agents share their platform's IPs); an IP past ten wrong keys a minute gets 429 for wrong keys only. Requests with no key are not counted. This replaces "refused before any lookup".
+- Sends count against the daily six only after the size and kind checks, and tests have their own six. The "connected" email goes out after the answer (`after()`).
+- A replacement bumps `runs.revision` and deletes plays made from the old text in the same statement. A profile arriving within an hour of the run keeps the run's week.
+- The free-tool claim requires the token's email to match the account, and spends the token only when the run is stored (never over an existing run for the week).
+- A test fetch always gives send addresses, even with sharing off, and says not to schedule them.
+- The "1.9 plus seven changes" scenario is replaced: Peter rewrote Zack for 2.0, so the test checks the served files equal his drafts in `artifacts/Zack` byte for byte.
+- Not in this unit: the key, connector and upload screens (Unit 10 onboarding and `/app/zack`).
+
 ---
 
 - [ ] **Unit 9: Intake and the privacy check**
@@ -630,6 +640,13 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 - Processing runs as the run arrives, bounded by a time limit, and again as a batch at the start of Cora for anything still waiting. It is safe to run twice on the same run.
 
 **Execution note:** Implement the pattern pass and validation test-first; they are pure rules with privacy consequences.
+
+**Contract from Unit 8 review:**
+- Write intake results only with `where id = $1 and revision = $read`; a run replaced mid-intake is left for the next pass.
+- A run is shareable only if both `runs.sharing` and the user's sharing at the cutoff are `share`; runs with sharing `off` are never pooled or matched.
+- Test runs (`is_test`) never produce pool plays.
+- Profiles in `zack_profiles` are parsed for matching only and never reach the pool or another user.
+- Retry `claimFreeRun` for users whose `pending_zack_token` has no claimed run (a failed claim at trial start is otherwise final).
 
 **Patterns to follow:** `src/lib/ingest/extract.ts` for the model call shape and tagging of untrusted text.
 
@@ -671,6 +688,8 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 - Delete removes the run and any plays not yet shared; plays already in the pool stay in anonymous form. The confirmation says so.
 - The upload box accepts pasted text or a `.md` file and uses the same receive path as the endpoint.
 - The price change itself is applied in Unit 14; until then the control is present and the change is recorded.
+- From the Unit 8 review: the rule values and extra rules reach a broadly privileged agent, so the save action refuses links, email addresses and words like send, post, upload or forward in extra rules and category values, caps their length, and emails the user whenever extra rules change. The page shows the key once (replace on demand), the connector text and test prompt from `src/lib/zack/instructions.ts`, and says plainly that a key in the address can end up in logs.
+- Retry `claimFreeRun` on the first `/app` load if a pending free-tool token has no claimed run.
 
 **Patterns to follow:** `src/components/admin-ui.tsx` for form and message styling; toggles as real buttons with `aria-pressed`.
 
