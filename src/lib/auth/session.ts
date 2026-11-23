@@ -1,5 +1,5 @@
 import type { Query } from "@/lib/db-query";
-import { hashSecret, newSecret } from "./secrets";
+import { hashSecret, newSecret } from "./tokens";
 
 /**
  * Sessions (spec B.3): a random id in an httpOnly cookie, only its hash in
@@ -71,11 +71,12 @@ export const ADMIN_SIGNIN_DAYS = 14;
 
 /**
  * Admin rights (spec B.3): a verified email listed in ADMIN_EMAILS, checked on
- * every request; a session from an email link (not Google alone); and a
- * sign-in within the last 14 days.
+ * every request; a session from an email link the admin requested (not
+ * Google alone, not a pilot link); and a sign-in within the last 14 days.
  */
 export function sessionIsAdmin(s: SessionInfo, adminEmails: string[], now = new Date()): boolean {
   if (!adminEmails.includes(s.email.toLowerCase())) return false;
-  if (s.method === "google") return false;
+  // An email link the admin asked for themselves: not Google alone, not an admin-made pilot link.
+  if (s.method !== "email") return false;
   return now.getTime() - s.createdAt.getTime() < ADMIN_SIGNIN_DAYS * DAY_MS;
 }

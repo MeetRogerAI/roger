@@ -15,19 +15,33 @@ export function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 /** A rate-limit key for an address that does not contain the address. */
 export function emailKey(email: string): string {
   return createHash("sha256").update(`rl:${normaliseEmail(email)}`).digest("base64url").slice(0, 22);
 }
 
+/** True for any backslash, space or control character (code 0 to 32, or 127). */
+function hasUnsafeChar(path: string): boolean {
+  for (let i = 0; i < path.length; i++) {
+    const c = path.charCodeAt(i);
+    if (c <= 32 || c === 127 || c === 92) return true;
+  }
+  return false;
+}
+
 /**
- * Only same-site paths are followed after sign-in, never another host
- * ("//evil.test", "/\\evil.test" and full URLs are refused).
+ * Only same-site paths are followed after sign-in, never another host. Any
+ * backslash, whitespace or control character is refused: browsers strip tabs
+ * and newlines from URLs, so a tab after the first slash would otherwise turn
+ * the path into "//other-host". The result must also resolve to this site.
  */
 export function safeNext(path: string | null | undefined, fallback = "/app"): string {
-  if (!path || typeof path !== "string") return fallback;
-  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\") || /[\r\n]/.test(path)) return fallback;
-  return path.slice(0, 300);
+  if (!path || typeof path !== "string" || path.length > 300) return fallback;
+  if (!path.startsWith("/") || path.startsWith("//") || hasUnsafeChar(path)) return fallback;
+  try {
+    if (new URL(path, "http://roger.invalid").origin !== "http://roger.invalid") return fallback;
+  } catch {
+    return fallback;
+  }
+  return path;
 }

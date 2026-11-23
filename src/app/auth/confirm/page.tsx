@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { tokenIsLive } from "@/lib/auth/login-link";
 import { hasDb } from "@/lib/db";
@@ -14,6 +15,7 @@ export const metadata: Metadata = { title: "Sign in", robots: { index: false, fo
  */
 async function Confirm({ searchParams }: { searchParams: PageProps<"/auth/confirm">["searchParams"] }) {
   const { t } = await searchParams;
+  await connection(); // the token check reads the clock: always at request time
   const token = typeof t === "string" ? t : "";
   const live = hasDb() && token ? await tokenIsLive(query, token) : false;
   if (!live) {

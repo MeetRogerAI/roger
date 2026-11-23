@@ -2,6 +2,7 @@
 
 import { useActionState, useId } from "react";
 import { saveNotReadyLead, type StartFormState } from "@/app/start/actions";
+import { Honeypot } from "./honeypot";
 
 const idle: StartFormState = { status: "idle" };
 
@@ -18,12 +19,7 @@ export function NotReadyForm() {
   const err = state.status === "error" ? state.message : undefined;
   return (
     <form action={action} className="relative mt-4 max-w-[30rem]" noValidate>
-      <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
-        <label>
-          Leave this field empty
-          <input type="text" name="_gotcha" tabIndex={-1} autoComplete="off" />
-        </label>
-      </div>
+      <Honeypot />
       <label htmlFor={`${id}-email`} className="block text-small font-[560]">
         Your email
       </label>

@@ -1,4 +1,4 @@
-import { sql } from "./db";
+import { query, type Query } from "./db-query";
 
 /**
  * Fixed-window rate limits kept in Postgres (there is no Redis). One row per
@@ -30,14 +30,22 @@ export function windowStart(now: Date, windowSeconds: number): number {
 /** Increments the counter for (key, window) and returns the new count. */
 export type Counter = (key: string, windowStart: number, expiresAt: Date) => Promise<number>;
 
-export const postgresCounter: Counter = async (key, start, expiresAt) => {
-  const rows = (await sql`
-    insert into rate_events (key, window_start, count, expires_at)
-    values (${key}, ${start}, 1, ${expiresAt.toISOString()})
-    on conflict (key, window_start) do update set count = rate_events.count + 1
-    returning count`) as { count: number }[];
-  return rows[0].count;
-};
+/** The Postgres counter, over any query function (the app's, or a test database's). */
+export function counterFor(q: Query): Counter {
+  return async (key, start, expiresAt) => {
+    const rows = await q<{ count: number | string }>(
+      `insert into rate_events (key, window_start, count, expires_at)
+       values ($1, $2, 1, $3)
+       on conflict (key, window_start) do update set count = rate_events.count + 1
+       returning count`,
+      [key, start, expiresAt.toISOString()],
+    );
+    // Drivers may hand back integers as strings; compare as numbers.
+    return Number(rows[0].count);
+  };
+}
+
+export const postgresCounter: Counter = (key, start, expiresAt) => counterFor(query)(key, start, expiresAt);
 
 /**
  * Counts one attempt and says whether it is within the limit. The attempt is

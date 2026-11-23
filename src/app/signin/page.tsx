@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SignInForm } from "@/components/app/signin-form";
-import { safeNext } from "@/lib/auth/secrets";
+import { safeNext } from "@/lib/auth/tokens";
 
 export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false } };
 
 const notes: Record<string, string> = {
   expired: "That link has expired or was already used. Ask for a new one below.",
   noaccount: "There’s no Roger account for that address yet.",
+  retry: "Something went wrong on our side while signing you in. Ask for a new link below.",
 };
 
 async function Body({ searchParams }: { searchParams: PageProps<"/signin">["searchParams"] }) {

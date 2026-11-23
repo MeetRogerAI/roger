@@ -24,7 +24,8 @@ async function Start({ searchParams }: { searchParams: PageProps<"/start">["sear
   const session = await getSession();
   if (session) {
     const [u] = await query<{ signup_step: string }>(`select signup_step from users where id = $1`, [session.userId]);
-    if (u && u.signup_step !== "quiz") redirect(stepPaths[u.signup_step] ?? "/app");
+    // Only steps that need no draft cookie; "quiz" and "account" stay here, so there is no loop.
+    if (u && ["plan", "card", "done"].includes(u.signup_step)) redirect(stepPaths[u.signup_step]);
   }
 
   let open = false;
@@ -52,7 +53,7 @@ async function Start({ searchParams }: { searchParams: PageProps<"/start">["sear
   const withCur = { ...params, cur: params.cur ?? (country === "CA" ? "CAD" : "USD") };
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 1 of 4</p>
+      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 1 of 5</p>
       <h1 className="mt-3 text-h2">A few questions first.</h1>
       <p className="mt-6 max-w-[40rem] text-lead text-ink-2">
         Your answers tell Cora what kind of work you do, so the ideas she picks fit you. Nobody is turned away.

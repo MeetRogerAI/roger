@@ -114,3 +114,20 @@ describe("alertAdmins", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("one-shot emails (sign-in links)", () => {
+  it("alerts the admins on the first failure, once per hour however many visitors hit it", async () => {
+    const calls: Parameters<Transport>[0][] = [];
+    const t: Transport = async (m) => {
+      calls.push(m);
+      return m.to.includes("peter@example.com") ? { ok: true } : { ok: false, error: "resend 503", retryable: true };
+    };
+    const deps = { query, transport: t, sleep: noSleep };
+    for (let i = 0; i < 4; i++) {
+      expect(await sendToUser({ id: `email:${i}`, email: `v${i}@example.com` }, "signin_link", `ref${i}`, msg, deps)).toBe("failed");
+    }
+    const alerts = calls.filter((c) => c.to.includes("peter@example.com"));
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].subject).toMatch(/signin_link/);
+  });
+});

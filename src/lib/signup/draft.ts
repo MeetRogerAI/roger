@@ -21,16 +21,11 @@ const draftSchema = z.object({
   utm: z.string().max(200),
 });
 
-export type SignupDraft = {
-  answers: QuizAnswers;
-  path: SignupPath;
-  continuedAnyway: boolean;
-  source: "re" | "agents" | null;
-  cur: "USD" | "CAD";
-  ref: string | null;
-  zack: string | null;
-  utm: string;
-};
+/** One shape, from the schema, so the type and the check cannot drift apart. */
+export type SignupDraft = z.infer<typeof draftSchema>;
+// Kept in step with the quiz module's own types.
+const _fits: { answers: QuizAnswers; path: SignupPath } = {} as SignupDraft;
+void _fits;
 
 export function encodeDraft(d: SignupDraft): string {
   return Buffer.from(JSON.stringify(d), "utf8").toString("base64url");
@@ -40,7 +35,7 @@ export function decodeDraft(raw: string | undefined): SignupDraft | null {
   if (!raw || raw.length > 8000) return null;
   try {
     const r = draftSchema.safeParse(JSON.parse(Buffer.from(raw, "base64url").toString("utf8")));
-    return r.success ? (r.data as SignupDraft) : null;
+    return r.success ? r.data : null;
   } catch {
     return null;
   }

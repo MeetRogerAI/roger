@@ -173,6 +173,8 @@ create table if not exists users (
   last_seen_at timestamptz
 );
 create index if not exists users_status on users (status);
+-- Every path writes lower-cased emails; this makes a slip impossible, not just unlikely.
+create unique index if not exists users_email_lower on users (lower(email));
 
 create table if not exists sessions (
   id_hash text primary key,
@@ -190,6 +192,7 @@ create table if not exists login_tokens (
   purpose text not null default 'signin' check (purpose in ('signin', 'pilot', 'email_change')),
   user_id uuid references users (id) on delete cascade,
   next_path text not null default '',
+  payload jsonb,
   created_by text,
   expires_at timestamptz not null,
   used_at timestamptz,
@@ -290,7 +293,7 @@ create table if not exists plays (
   contributor_id uuid references seed_contributors (id) on delete cascade,
   week_of date not null,
   set_ text not null check (set_ in ('A', 'B', 'runner_up')),
-  position int not null default 0,
+  position int not null,
   title text not null,
   category text not null,
   body jsonb not null,
@@ -299,7 +302,8 @@ create table if not exists plays (
   cleared_by text,
   pool_play_id uuid references pool_plays (id) on delete set null,
   merged_at timestamptz,
-  unique (run_id, set_, position)
+  unique (run_id, set_, position),
+  check ((user_id is null) <> (contributor_id is null))
 );
 create index if not exists plays_pool on plays (pool_play_id);
 create index if not exists plays_unmerged on plays (week_of) where pool_play_id is null and shareable;
@@ -406,9 +410,10 @@ create table if not exists pending_adjustments (
   stripe_item text,
   status text not null default 'pending' check (status in ('pending', 'deleted', 'invoiced')),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (user_id, period_start)
+  updated_at timestamptz not null default now()
 );
+-- One live adjustment per billing period. A deleted or invoiced one does not block a new one.
+create unique index if not exists pending_adjustments_one_live on pending_adjustments (user_id, period_start) where status = 'pending';
 
 -- At most one automatic email per (recipient, kind, ref). recipient is a user
 -- id, or "admins" for alerts. A failed send can be claimed again, up to three

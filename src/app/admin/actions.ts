@@ -1,13 +1,10 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireAdmin, signIn, signOut } from "@/lib/admin-auth";
-import { clearSessionCookies } from "@/lib/auth/cookies";
-import { revokeSession, SESSION_COOKIE } from "@/lib/auth/session";
-import { hasDb, sql } from "@/lib/db";
-import { query } from "@/lib/db-query";
+import { endCurrentSession } from "@/lib/auth/cookies";
+import { sql } from "@/lib/db";
 import { CATEGORIES, PERSONAS } from "@/lib/ingest/extract";
 import { ingest } from "@/lib/ingest/run";
 import { isSecretName, newPushToken, removeSecret, saveSecret } from "@/lib/secrets";
@@ -29,9 +26,7 @@ export async function signInAction(_p: AdminState, fd: FormData): Promise<AdminS
 export async function signOutAction() {
   await signOut();
   // Also end an email-link session, if that is how this admin signed in.
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (token && hasDb()) await revokeSession(query, token).catch(() => {});
-  await clearSessionCookies();
+  await endCurrentSession();
   redirect("/admin");
 }
 

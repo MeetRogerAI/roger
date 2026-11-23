@@ -1,18 +1,23 @@
 import type { Query } from "@/lib/db-query";
-import { hit, limits, type Counter } from "@/lib/rate-limit";
+import { isEmail } from "@/lib/form";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { noAccountEmail, signInLinkEmail } from "@/lib/mail/templates/sign-in";
+import { hit, limits, type Counter } from "@/lib/rate-limit";
 import { issueToken } from "./login-link";
-import { emailKey, hashSecret, normaliseEmail } from "./secrets";
+import { emailKey, hashSecret, normaliseEmail } from "./tokens";
 
 /**
- * "Email me a sign-in link." The caller always shows the same answer, whether
- * the address has an account, has none, or has asked too often, so the form
- * cannot be used to find out who uses Roger.
+ * "Email me a sign-in link."
  *
- * Returns what happened, for tests and logs only. Never show it to the visitor.
+ * An email goes out whether or not the address has an account (an unknown
+ * address is told where to start), so "sent" and "no_account" must look the
+ * same to the visitor. "send_failed" may be shown: it happens for either kind
+ * of address and says nothing about which. "limited" is shown as "sent", so a
+ * stranger cannot use the limit to learn anything either.
+ *
+ * Throws if the database cannot be reached; the caller shows a plain error.
  */
-export type LinkOutcome = "sent" | "no_account" | "limited" | "invalid";
+export type LinkOutcome = "sent" | "no_account" | "limited" | "invalid" | "send_failed";
 
 export async function requestSignInLink(
   q: Query,
@@ -22,7 +27,7 @@ export async function requestSignInLink(
   deps: MailDeps & { counter?: Counter; now?: Date } = {},
 ): Promise<LinkOutcome> {
   const email = normaliseEmail(rawEmail);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return "invalid";
+  if (!isEmail(email)) return "invalid";
   const now = deps.now ?? new Date();
   const okEmail = await hit(`signin:email:${emailKey(email)}`, limits.signinPerEmail, now, deps.counter);
   const okIp = await hit(`signin:ip:${ip}`, limits.signinPerIp, now, deps.counter);
@@ -33,10 +38,9 @@ export async function requestSignInLink(
   // Each request is its own trigger, keyed by its token.
   const ref = hashSecret(token).slice(0, 16);
   const recipient = { id: users[0]?.id ?? `email:${emailKey(email)}`, email };
-  if (!users[0]) {
-    await sendToUser(recipient, "signin_no_account", ref, noAccountEmail(), deps);
-    return "no_account";
-  }
-  await sendToUser(recipient, "signin_link", ref, signInLinkEmail(token), deps);
-  return "sent";
+  const result = users[0]
+    ? await sendToUser(recipient, "signin_link", ref, signInLinkEmail(token), deps)
+    : await sendToUser(recipient, "signin_no_account", ref, noAccountEmail(), deps);
+  if (result === "failed") return "send_failed";
+  return users[0] ? "sent" : "no_account";
 }

@@ -14,7 +14,7 @@ async function Account() {
 export default function AccountPage() {
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 2 of 4</p>
+      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 2 of 5</p>
       <h1 className="mt-3 text-h2">Your account</h1>
       <p className="mt-6 max-w-[40rem] text-lead text-ink-2">No password. We’ll email you a link to confirm your address, then you choose your plan.</p>
       <Suspense fallback={null}>

@@ -8,8 +8,10 @@ import { SESSION_COOKIE, SESSION_DAYS } from "@/lib/auth/session";
  * the session itself (src/lib/auth/access.ts).
  *
  * - /app with no session cookie goes to /signin.
- * - With a session cookie, both cookies' lifetimes are renewed (spec B.3,
- *   "renewed on use"). The stored session decides whether it is still valid.
+ * - With a session cookie, both cookies' lifetimes are renewed on page loads
+ *   (spec B.3, "renewed on use"). The proxy cannot tell a live session from a
+ *   dead one; the stored session decides, and a dead cookie is removed by
+ *   /auth/clear when a page checks it.
  * - /admin is left to its own gate, which still offers the shared password
  *   until the email check is confirmed on production.
  */
@@ -26,7 +28,10 @@ export function proxy(request: NextRequest) {
   }
 
   const res = NextResponse.next();
-  if (token) {
+  // Renew only on ordinary page loads. A form post or server action (sign-out among them)
+  // may be clearing these cookies, and a renewal on the same response could put them back.
+  const plainGet = request.method === "GET" && !request.headers.has("next-action");
+  if (token && plainGet) {
     const base = { secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: SESSION_DAYS * 86_400 };
     res.cookies.set(SESSION_COOKIE, token, { ...base, httpOnly: true });
     res.cookies.set(SIGNED_IN_HINT_COOKIE, SIGNED_IN_HINT_VALUE, { ...base, httpOnly: false });

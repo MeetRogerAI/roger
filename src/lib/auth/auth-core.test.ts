@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
 import { consumeToken, issueToken, tokenIsLive, userForToken } from "./login-link";
-import { safeNext } from "./secrets";
+import { safeNext } from "./tokens";
 import { createSession, findSession, revokeSession, revokeUserSessions, sessionIsAdmin } from "./session";
 
 let query: Query;
@@ -129,8 +129,9 @@ describe("admin", () => {
     expect(sessionIsAdmin(s, admins, later(15 * DAY))).toBe(false);
   });
 
-  it("is never granted by Google alone or to an unlisted address", () => {
+  it("is never granted by Google alone, by an admin-made pilot link, or to an unlisted address", () => {
     expect(sessionIsAdmin({ ...s, method: "google" }, admins, later(DAY))).toBe(false);
+    expect(sessionIsAdmin({ ...s, method: "pilot" }, admins, later(DAY))).toBe(false);
     expect(sessionIsAdmin({ ...s, email: "someone@example.com" }, admins, later(DAY))).toBe(false);
   });
 
@@ -142,9 +143,20 @@ describe("admin", () => {
 describe("safeNext", () => {
   it("keeps same-site paths and refuses anything else", () => {
     expect(safeNext("/app/billing")).toBe("/app/billing");
+    expect(safeNext("/app?x=1&y=2")).toBe("/app?x=1&y=2");
     expect(safeNext("https://evil.test")).toBe("/app");
     expect(safeNext("//evil.test")).toBe("/app");
-    expect(safeNext("/\\evil.test")).toBe("/app");
     expect(safeNext(undefined, "/admin")).toBe("/admin");
+  });
+
+  it("refuses a backslash, a tab, a newline or a space anywhere, which browsers can turn into another host", () => {
+    const tab = String.fromCharCode(9);
+    const nl = String.fromCharCode(10);
+    const bs = String.fromCharCode(92);
+    expect(safeNext("/" + tab + "/evil.test")).toBe("/app");
+    expect(safeNext("/" + bs + "evil.test")).toBe("/app");
+    expect(safeNext("/app" + nl + "Set-Cookie:x")).toBe("/app");
+    expect(safeNext("/a b")).toBe("/app");
+    expect(safeNext("/" + "x".repeat(400))).toBe("/app");
   });
 });

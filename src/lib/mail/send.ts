@@ -1,5 +1,6 @@
 import { siteConfig } from "@/data/config";
 import { query as defaultQuery, type Query } from "@/lib/db-query";
+import { adminEmails } from "@/lib/auth/admin-emails";
 import { getSecret } from "@/lib/secrets";
 import type { Rendered } from "./layout";
 
@@ -22,6 +23,9 @@ export const optionalKinds: Record<string, "monday" | "friday_prompt"> = {
   monday_list: "monday",
   order_prompt: "friday_prompt",
 };
+
+/** Emails sent once per request, with a fresh ref each time: a failure is never retried by a later trigger. */
+export const oneShotKinds = new Set(["signin_link", "signin_no_account", "signup_confirm", "email_change"]);
 
 export type Recipient = { id: string; email: string; emailPrefs?: Record<string, unknown> | null };
 export type SendResult = "sent" | "already" | "skipped" | "failed";
@@ -65,6 +69,8 @@ export const resendTransport: Transport = async ({ to, subject, html, text, idem
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "idempotency-key": idempotencyKey },
       body: JSON.stringify({ from, to, subject, html, text, reply_to: siteConfig.contactEmail }),
+      // A stalled provider must not hold a visitor's form, or leave a claim stuck.
+      signal: AbortSignal.timeout(8000),
     });
   } catch (e) {
     return { ok: false, error: `network: ${(e as Error).message}`, retryable: true };
@@ -85,7 +91,7 @@ async function deliver(t: Transport, msg: Parameters<Transport>[0], sleep: (ms: 
   for (let i = 0; i < 3; i++) {
     last = await t(msg);
     if (last.ok || !last.retryable) return last;
-    await sleep(500 * 2 ** i);
+    if (i < 2) await sleep(500 * 2 ** i);
   }
   return last;
 }
@@ -118,21 +124,17 @@ export async function sendToUser(
     return "sent";
   }
   await record(q, user.id, kind, ref, "failed", result.error);
-  if (attempt >= MAX_ATTEMPTS || !result.retryable) {
-    await alertAdmins(`email_failed:${kind}`, `${user.id}/${ref}`, adminAlert(
-      `An email could not be sent: ${kind}`,
-      [`To user ${user.id}, for ${ref}. Attempt ${attempt}.`, `Error: ${result.error}`],
+  // Alert when nothing will try again: the last attempt, an error retrying cannot fix, or a
+  // one-shot email (a sign-in link) whose next request makes a new row. One alert per kind
+  // per hour, so an outage does not become one email per visitor.
+  if (attempt >= MAX_ATTEMPTS || !result.retryable || oneShotKinds.has(kind)) {
+    const hour = new Date().toISOString().slice(0, 13);
+    await alertAdmins(`email_failed:${kind}`, hour, adminAlert(
+      `Emails are failing: ${kind}`,
+      [`First failure this hour: user ${user.id}, ${ref}, attempt ${attempt}.`, `Error: ${result.error}`],
     ), deps).catch(() => {});
   }
   return "failed";
-}
-
-/** The addresses in ADMIN_EMAILS (Peter and Ehab). */
-export function adminEmails(): string[] {
-  return (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
 }
 
 /** One alert to both admins, at most once per (kind, ref). Never alerts about itself. */
