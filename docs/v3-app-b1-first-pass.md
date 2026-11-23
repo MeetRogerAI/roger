@@ -1,22 +1,22 @@
 # Roger v3 app B1 first pass
 
-November 23, 2026. Branch `feat/v3-e2e` off `main` (Units 1 to 18 merged). Plan Unit 19, the parts that need no owner input. Nothing was deployed, no production database or live Stripe was touched, and sign-up and the cycle stay off on production.
+November 23, 2026. Branch `feat/v3-e2e` off `main` (Units 1 to 18 merged), updated the same day after `main` (PR #42, the whole-system seams review) was merged in. Plan Unit 19, the parts that need no owner input. Nothing was deployed, no production database or live Stripe was touched, and sign-up and the cycle stay off on production.
 
 ## Included
 
 - Scenario tests in `tests/scenarios/`, driving the real job functions (`runCoraJob`, `runChargeJob`, `runSendJob`, `runHourly`, `handleStripeEvent`) week by week on a simulated clock, each from a fresh database (`testDb()`), with one fake Stripe that implements every gateway the app has and sends the webhook events Stripe would, a recording mail transport, and fake intake, merge and Fit models. `helpers.ts` documents the `SCENARIO_TARGET` switch: `fakes` (default) or `sandbox` (the Stripe sandbox and the scenario Neon branch; a seam only, it throws today). They run in `npx vitest run` and alone with `npm run test:scenarios`.
 - All 41 checks of spec B.18 walked below.
-- The spec write-back (marked "Written back from the B1 build" in `artifacts/v3/Roger v3 - design spec.md`) and the launch list update (`artifacts/v3/launch-list.html`).
+- The spec write-back (marked *(1.2)* in `artifacts/v3/Roger v3 - design spec.md`) and the launch list update (`artifacts/v3/launch-list.html`).
 
 | Scenario file | What it proves | Result |
 |---|---|---|
-| `trial-to-paid.test.ts` | Canadian (CA$280 + HST row) and US (US$200, no tax row) members: two free Mondays, the second-list email and the 48-hour reminder state the amount, the charge with the third list matches it; request shape checked. No run on the first-charge Monday: nothing charged, charged the next Monday. The 21-day close with nudges on days 3, 10, 17. | 4 tests: 3 pass, 1 known failure (below) |
-| `failed-first-charge.test.ts` | Decline, retries on days 1 and 3, success sends the held list at once; four failures close on day 7 with no charge; a hard decline is not retried and closes on day 7. | 3 pass |
+| `trial-to-paid.test.ts` | Canadian (CA$280 + HST row) and US (US$200, no tax row) members: two free Mondays, the second-list email and the 48-hour reminder state the amount, the charge with the third list matches it; request shape checked. No run on the first-charge Monday: nothing charged, a "first charge moved" note, charged the next Monday. The 21-day close with nudges on days 3, 10, 17. | 5 tests: 4 pass, 1 known failure (below) |
+| `failed-first-charge.test.ts` | Decline, retries on days 1 and 3, success sends the held list at once; four failures close on day 7 with no charge and one closing email (no decline email on day 7); a hard decline is not retried and closes on day 7. | 3 pass |
 | `missed-weeks.test.ts` | Contributed, forgiven, second miss (one pending item, labelled, keyed by its row), third miss adds nothing, itemised email three days before, renewal invoice with one difference line and HST as its own row; an admin excuse deletes the item. | 2 pass |
 | `one-at-a-time.test.ts` | Order with a run: its own invoice, one item, tax row, paid, list and receipt; order with no run: no charge, email why; no order: never charged; ordering with sharing off is refused. | 2 pass |
-| `thin-weeks.test.ts` | Two-play pool: short lists for a trial, a third-list, a monthly and a one-at-a-time member (free list used, first charge made, order charged in full); then no eligible plays: notes by state, no charge, no free list, the week excused for the monthly member, the order closed; a member linked to the seed contributor gets "first charge moved". | 2 tests: 1 pass, 1 known failure (below) |
+| `thin-weeks.test.ts` | Two-play pool: short lists for a trial, a third-list, a monthly and a one-at-a-time member (free list used, first charge made, order charged in full); then no eligible plays: notes by state, no charge, no free list, the week excused for the monthly member, the order closed; a member linked to the seed contributor gets "first charge moved"; both admins are alerted for every member with none (R15). | 2 pass |
 | `switch-and-cancel.test.ts` | Monthly to one at a time (lists to the month's end, then orders only); one at a time to monthly with an order for that Monday (one charge); cancel in the trial (card removed, "not charged"); cancel, undo, one renewal, cancel again, ends with the month. | 4 pass |
-| `full-cycle.test.ts` | One unattended cycle from Sunday 6:00 PM runs to Monday emails, every route called at the UTC minutes `vercel.json` schedules and gated as the route gates it; a summer-time run. Repeating the morning changes nothing. | 3 tests: 2 pass, 1 known failure (below) |
+| `full-cycle.test.ts` | One unattended cycle from Sunday 6:00 PM runs to Monday emails, every route called at the UTC minutes `vercel.json` schedules (read from the file) and gated as the route gates it; a summer-time run, and early charge and send times honoured. Repeating the morning changes nothing. | 3 pass |
 | `seed-import.test.ts` | 13 files from nine people (three with several agents) give nine contributor records; linked pilots are never sent a play from their own seed files across three Mondays. | 2 pass |
 
 ## The 41 checks (spec B.18)
@@ -55,7 +55,7 @@ Tally: **34 pass**, **7 need the live environment**, **0 fail**. Check 12 is rea
 19. Passes: `trial-to-paid.test.ts` "charges a Canadian and a US member once each, with the third list"; `src/lib/billing/first-charge.test.ts`.
 20. Passes: `trial-to-paid.test.ts` "a trial with no first list" (three "No list this week" notes, count stays 0); `thin-weeks.test.ts`; `src/lib/cora/send-job.test.ts`.
 21. Passes: `trial-to-paid.test.ts` (both emails and the charge carry the same amount, CAD and USD); `src/lib/billing/quote.test.ts`. Repeat once on the sandbox, where the amount comes from Stripe's real preview.
-22. Passes: `failed-first-charge.test.ts` (all three).
+22. Passes: `failed-first-charge.test.ts` (all three; the day-7 failure sends only the closing email).
 23. Passes: `trial-to-paid.test.ts` "nudges on days 3, 10 and 17, closes on day 21"; `src/lib/housekeeping/trial.test.ts`.
 24. Passes: `missed-weeks.test.ts` "forgives the first miss, bills the second as one difference line". The `/app` banner comes from `src/lib/app/status.ts` (`src/lib/app/status.test.ts`); look at it once on preview.
 25. Passes: `missed-weeks.test.ts` "never counts an excused week"; `src/lib/billing/contribution.test.ts`.
@@ -84,14 +84,18 @@ Tally: **34 pass**, **7 need the live environment**, **0 fail**. Check 12 is rea
 
 ## Found in this pass (outside the 41)
 
-Each is a test marked `it.fails`, so the suite stays green and the test turns red the day it is fixed. Nothing in `src/` was changed.
+**Fixed by PR #42 (the seams review), merged into this branch.** The first pass recorded these as `it.fails`; they are now ordinary passing tests.
 
-- **No note when a third-list member's Zack sends nothing.** The plan ("If the Monday passes with no run or no eligible plays, the user gets one note with the next possible date") and the reminder email ("If it doesn't, nothing is charged and we'll tell you the next date") promise it. `src/lib/billing/charge-job.ts:53` sends "Your first charge moved" only for `outcome = 'none'`; with no run the week is `not_eligible`, and the send job's no-run note is for free lists only (`src/lib/cora/send-job.ts:156`). Nothing is charged; the member hears nothing that Monday. Test: `trial-to-paid.test.ts` "tells a third-list member whose Zack sent nothing that the first charge moved".
-- **R15's admin alert only for paying members.** R15: "If a user has no eligible plays ... both admins are alerted." `src/lib/cora/send-job.ts:166` alerts only for an active monthly member. Decide whether R15 or the build is right. Test: `thin-weeks.test.ts` "alerts both admins for a trial member with no eligible plays too".
-- **Early job times are not honoured in summer.** The settings accept charge and send times from 1:00 AM (`src/lib/v3-settings.ts:28`), but `vercel.json` runs charge from 10:00 UTC and send from 11:00 UTC, so in summer a charge before 6:00 AM or a send before 7:00 AM runs late. Never early and never twice. Test: `full-cycle.test.ts` "honours a 4:00 AM charge time and a 5:00 AM send time in summer". Either widen the two schedules to 05-17 like Cora's, or have the settings refuse those times.
-- Wording, not tested: R15 asks the monthly member's no-ideas note to say the list is missing because of Roger and the week never counts as a miss; `noIdeasThisWeekEmail` (`src/lib/mail/templates/monday.ts:54`) says neither. The behaviour is right (the week is excused).
-- For the sandbox run: the webhook's `customer.subscription.deleted` and `invoice.paid` handlers use the real clock (`new Date()`, `src/lib/billing/webhook.ts:89` and `:129`) rather than `o.now`. Harmless on production (the route passes no `now`), but a test-clock run will see real dates in those two steps.
+- No note when a third-list member's Zack sent nothing: each Monday without the first paid list now sends one "first charge moved" note with the next date. Test: `trial-to-paid.test.ts` "tells a third-list member whose Zack sent nothing that the first charge moved".
+- R15's admin alert: both admins now hear of every member with no eligible plays (`[Roger] A member had no eligible ideas`), and the paying member's note says the list is missing because of Roger and the week never counts as a miss; others are told nothing was charged. Tests: `thin-weeks.test.ts`.
+- Early job times: charge and send now run every 10 minutes on Mondays from 05:00 UTC, so a 4:00 AM charge or 5:00 AM send is honoured in summer. `vercelCron` in `helpers.ts` now reads the schedules from `vercel.json` instead of copying them. Test: `full-cycle.test.ts` "honours a 4:00 AM charge time and a 5:00 AM send time in summer".
+- The webhook now settles with the job clock.
 
+**Behaviour PR #42 changed, tests updated to match:** a day-7 decline with no retry left sends no "card didn't go through" email, only the close email (`failed-first-charge.test.ts`, three decline emails, not four); the closing emails say "Want to come back? Write to us"; a trial past its free lists with no first paid list closes `trialCloseDays` after its last delivered list.
+
+**Found by the second pass, then fixed on this branch:**
+
+- **The new "no first charge" close read the database's clock (fixed: `deliverWeek` now takes the job clock and the send job passes it).** It counts from `max(picks.delivered_at)` (`src/lib/housekeeping/trial.ts:62`), but delivery stamps `delivered_at = now()`, the database's clock, not the job's (`src/lib/cora/deliver.ts:55` and `:64`, on `picks` and `cora_user_weeks`). On production the two agree. On any "as of" run (preview, R24, and these scenarios) the close starts from the real date instead of the simulated one: a member whose last list was December 14 closed on December 21 instead of January 4, so the next Monday's charge never happened. Fix: pass the job clock into `deliverWeek` and stamp it. Test: `trial-to-paid.test.ts` "charges with the list on the next Monday the run arrives (the close counts from the last list, on the job clock)".
 ## Needs the live environment (beyond the seven checks)
 
 - The scenario files once against the Stripe sandbox and the scenario Neon branch (`SCENARIO_TARGET=sandbox`, to be wired): that Checkout works for a customer on a test clock; the real error for a charge that needs bank confirmation; a second renewal while a renewal is held under "leave unpaid" (plan Unit 15 known gap 2); that a renewal sweeps the pending difference item onto its invoice as the fakes assume.
@@ -101,6 +105,6 @@ Each is a test marked `it.fails`, so the suite stays green and the test turns re
 ## Verification
 
 - `npx tsc --noEmit -p .`: clean.
-- `npx vitest run`: 89 files passed, 1 skipped; 922 tests passed, 13 skipped (the live model and seed-run tests). The 8 scenario files hold 22 of those tests, 3 of them known failures marked `it.fails`.
+- `npx vitest run` (after merging PR #42): 90 files passed, 1 skipped; 947 tests passed, 13 skipped (the live model and seed-run tests). The 8 scenario files hold 23 of those tests, all passing.
 - `npx eslint src tests`: no errors; 6 warnings, all in existing `src/` files, none in `tests/`.
 - Dependencies were not changed.

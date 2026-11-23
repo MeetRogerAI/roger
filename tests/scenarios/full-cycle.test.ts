@@ -85,7 +85,7 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
 });
 
 describe("the same cycle in summer time", () => {
-  it("starts Cora at 05:00 UTC and sends at 11:00 UTC, the first slots of the wider schedule", async () => {
+  it("starts Cora at 05:00 UTC (1:00 AM EDT), charges at 10:00 and sends at 11:00 UTC, each at its own time", async () => {
     const s = await newWorld({ start: "2027-06-28T15:00:00Z" });
     await seedPool(s, { contributors: 3, playsEach: 3, ranOn: "2027-06-24" });
     await s.at("2027-06-30T16:00:00Z");
@@ -99,12 +99,10 @@ describe("the same cycle in summer time", () => {
     expect(await delivered(s, m.id, "2027-07-05")).toHaveLength(3);
   });
 
-  // The plan made the job times editable "between 1:00 AM and 11:00 AM" because the routes would run all morning
-  // (Key Technical Decisions, "The weekly jobs"), and the settings accept any time in that range
-  // (src/lib/v3-settings.ts:28). As built, vercel.json schedules charge only from 10:00 UTC and send from 11:00 UTC,
-  // so in summer time a charge time before 6:00 AM or a send time before 7:00 AM is not honoured: the jobs run late,
-  // at the first scheduled slot. Nothing is charged twice or early; the setting just does not mean what it says.
-  it.fails("honours a 4:00 AM charge time and a 5:00 AM send time in summer", async () => {
+  // The settings accept job times from 1:00 AM (src/lib/v3-settings.ts), so every route runs all Monday morning: since
+  // PR #42 charge and send run from 05:00 UTC like Cora (a known failure in the first pass, when they began at 10:00 and
+  // 11:00). The schedules are read from vercel.json, so this test follows the file as shipped.
+  it("honours a 4:00 AM charge time and a 5:00 AM send time in summer", async () => {
     const s = await newWorld({ start: "2027-06-28T15:00:00Z", settings: [{ key: "v3.chargeAt", value: "04:00" }, { key: "v3.sendAt", value: "05:00" }] });
     await seedPool(s, { contributors: 3, playsEach: 3, ranOn: "2027-06-24" });
     await s.at("2027-06-30T16:00:00Z");

@@ -71,8 +71,11 @@ describe("a failed first charge", () => {
     const u = await userRow(w, m.id);
     expect(u).toMatchObject({ status: "closed", free_lists_used: 2 });
     expect(u.access_ends_at).not.toBeNull();
-    expect(w.subjects(m.email).filter((s) => s === "Your Roger trial has closed")).toHaveLength(1);
-    expect(declines()).toHaveLength(4);
+    const closed = w.mail(m.email).filter((x) => x.subject === "Your Roger trial has closed");
+    expect(closed).toHaveLength(1);
+    expect(closed[0].text).toContain("Want to come back? Write to us");
+    // Seams review: the day-7 decline, with no retry left, sends no "card didn't go through"; the close email stands alone.
+    expect(declines()).toHaveLength(3);
     expect(w.stripe.subs.size).toBe(0);
     expect(w.stripe.invoicesFor(m.customer)).toEqual([]);
     expect(await delivered(w, m.id, THIRD)).toEqual([]);

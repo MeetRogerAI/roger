@@ -115,11 +115,19 @@ describe("no run on the announced first-charge Monday", () => {
     return { m, r };
   }
 
-  it("charges nothing and sends no list, then charges with the list on the next Monday the run arrives", async () => {
+  it("charges nothing and sends no list that Monday", async () => {
     const { m, r } = await toThirdMondayWithoutRun();
     expect(r.charge.first?.charged).toBe(0);
     expect(w.stripe.callsTo("subscriptions.create")).toEqual([]);
     expect(await delivered(w, m.id, WEEKS[2])).toEqual([]);
+    expect(await userRow(w, m.id)).toMatchObject({ status: "trial", free_lists_used: 2 });
+  });
+
+  // Seams review: a trial past its free lists closes `trialCloseDays` after its last delivered list (here December 14,
+  // so January 4), and is charged with the next list before then. Delivery stamps `delivered_at` with the job clock
+  // (deliverWeek's `now`), which the close counts from; before that fix it closed on December 21 under "as of" runs.
+  it("charges with the list on the next Monday the run arrives (the close counts from the last list, on the job clock)", async () => {
+    const { m } = await toThirdMondayWithoutRun();
     await passHours(w, toronto("2026-12-27", "15:00"), 6);
     expect(w.subjects(m.email).filter((s) => s === "Your first charge could be on Monday")).toHaveLength(2);
     await sendRun(w, m);
@@ -128,12 +136,9 @@ describe("no run on the announced first-charge Monday", () => {
     expect(await delivered(w, m.id, "2026-12-28")).toHaveLength(3);
   });
 
-  // Plan, Resolved During Planning: "If the Monday passes with no run or no eligible plays, the user gets one note with
-  // the next possible date", and the reminder promises "If it doesn't, nothing is charged and we'll tell you the next
-  // date." As built, the "date moved" note goes only when Cora found no eligible plays (cw.outcome = 'none',
-  // src/lib/billing/charge-job.ts:53); with no run the member's week is 'not_eligible', and the send job's no-run note
-  // is only for members still on free lists (src/lib/cora/send-job.ts:156), so this member hears nothing that Monday.
-  it.fails("tells a third-list member whose Zack sent nothing that the first charge moved, with the next date", async () => {
+  // Plan, Resolved During Planning and the seams review: "If the Monday passes with no run or no eligible plays, the
+  // user gets one note with the next possible date" (fixed in PR #42; this was a known failure in the first pass).
+  it("tells a third-list member whose Zack sent nothing that the first charge moved, with the next date", async () => {
     const { m } = await toThirdMondayWithoutRun();
     const moved = w.mail(m.email).filter((x) => x.subject === "Your first charge moved");
     expect(moved).toHaveLength(1);

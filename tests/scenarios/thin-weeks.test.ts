@@ -87,11 +87,13 @@ describe("thin weeks", () => {
     // Trial on free lists: a note, and the free list is not used.
     expect((await userRow(w, trial.id)).free_lists_used).toBe(1);
     const trialNote = w.mail(trial.email).find((x) => x.subject === "No new ideas for you this week")!;
-    expect(trialNote.text).toContain("doesn’t use one of your free lists");
-    // Paying monthly: a note that never mentions charges, an alert, and the week is excused, never a miss (R15).
+    expect(trialNote.text).toContain("Nothing was charged, and this week doesn’t use one of your free lists.");
+    // Paying monthly: a note that never mentions charges, says the list is missing because of Roger and the week never
+    // counts as a miss, an alert, and the week is excused (R15).
     const payingNote = w.mail(paying.email).find((x) => x.subject === "No new ideas for you this week")!;
     expect(payingNote.text).not.toMatch(/not charged|no charge|nothing was charged/i);
-    const alert = admins().filter((x) => x.subject === "[Roger] A paying member had no eligible ideas" && x.text.includes(paying.id));
+    expect(payingNote.text).toContain("missing because of Roger, not you, and this week never counts as a missed week");
+    const alert = admins().filter((x) => x.subject === "[Roger] A member had no eligible ideas" && x.text.includes(paying.id));
     expect(alert.map((x) => x.to.split(",").sort())).toEqual([["ehab@example.com", "peter@example.com"]]);
     expect(await w.query(`select result, excused_by from contribution_weeks where user_id = $1 and week_of = $2`, [paying.id, B])).toEqual([{ result: "excused", excused_by: "roger" }]);
     // One at a time: the order is closed with no charge and an email saying why; it does not carry over.
@@ -101,10 +103,9 @@ describe("thin weeks", () => {
     expect(await w.query(`select status from orders where user_id = $1 order by week_of`, [single.id])).toEqual([{ status: "sent" }, { status: "no_run" }]);
   });
 
-  // R15 says both admins are alerted whenever a member has no eligible plays. As built, only a paying monthly member
-  // raises an alert (src/lib/cora/send-job.ts:166, `if (paying)`); a trial or one-at-a-time member with none raises nothing.
-  // Kept as a known failure until the owner decides whether R15 or the build is right.
-  it.fails("alerts both admins for a trial member with no eligible plays too (R15)", async () => {
+  // R15: both admins are alerted whenever any member has no eligible plays (a known failure in the first pass; fixed in
+  // PR #42, the seams review).
+  it("alerts both admins for a trial member with no eligible plays too (R15)", async () => {
     await week(A);
     await week(B);
     expect(await outcome(w, trial.id, B)).toBe("none");

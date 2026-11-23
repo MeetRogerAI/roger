@@ -26,6 +26,7 @@
  *
  * Every scenario moves the clock forward only; amounts are in cents.
  */
+import { readFileSync } from "node:fs";
 import type Stripe from "stripe";
 import { vi } from "vitest";
 import { addDays, currentMonday, isAtOrPast, wallParts, wallToInstant } from "@/lib/clock";
@@ -537,11 +538,46 @@ export const toronto = (date: string, hm: string) => wallToInstant(date, hm);
 /** One call Vercel Cron made, and what the job said. */
 export type CronCall = { at: string; route: "cora" | "charge" | "send" | "housekeeping"; status: string; result: unknown };
 
+/** One field of a cron expression (`*`, `*\/n`, `a-b`, `a-b/n`, numbers, comma lists) against a value. */
+function cronField(field: string, value: number): boolean {
+  return field.split(",").some((part) => {
+    const [range, stepText] = part.split("/");
+    const step = stepText ? Number(stepText) : 1;
+    let lo: number, hi: number;
+    if (range === "*") [lo, hi] = [0, 59];
+    else if (range.includes("-")) [lo, hi] = range.split("-").map(Number) as [number, number];
+    else [lo, hi] = [Number(range), stepText ? 59 : Number(range)];
+    return value >= lo && value <= hi && (value - lo) % step === 0;
+  });
+}
+
+/** The cron schedules in vercel.json, read from the file, so a schedule change is tested as shipped. */
+const SCHEDULES: Record<CronCall["route"], string> = (() => {
+  const crons = (JSON.parse(readFileSync(new URL("../../vercel.json", import.meta.url), "utf8")) as { crons: { path: string; schedule: string }[] }).crons;
+  const of = (route: string) => {
+    const c = crons.find((x) => x.path === `/api/cron/${route}`);
+    if (!c) throw new Error(`vercel.json has no cron for /api/cron/${route}`);
+    return c.schedule;
+  };
+  return { cora: of("cora"), charge: of("charge"), send: of("send"), housekeeping: of("housekeeping") };
+})();
+
+/** Whether a five-field UTC cron schedule fires at this minute (day of month and month are not used by Roger's). */
+export function cronFires(schedule: string, at: Date): boolean {
+  const [minute, hour, dom, month, dow] = schedule.trim().split(/\s+/);
+  return (
+    cronField(minute, at.getUTCMinutes()) &&
+    cronField(hour, at.getUTCHours()) &&
+    cronField(dom, at.getUTCDate()) &&
+    cronField(month, at.getUTCMonth() + 1) &&
+    cronField(dow, at.getUTCDay())
+  );
+}
+
 /**
  * Vercel Cron, unattended, from now until `until`: each route at the UTC
- * minutes `vercel.json` schedules it (cora every 10 minutes 05-17 on Mondays,
- * charge 10-17, send 11-17, housekeeping at minute 5 of every hour), passed
- * through the same gates the route applies before calling its job.
+ * minutes `vercel.json` schedules it (read from the file), passed through the
+ * same gates the route applies before calling its job.
  */
 export async function vercelCron(w: World, until: Date): Promise<CronCall[]> {
   const log: CronCall[] = [];
@@ -549,26 +585,23 @@ export async function vercelCron(w: World, until: Date): Promise<CronCall[]> {
   for (let t = Math.ceil(w.now.getTime() / step) * step; t <= until.getTime(); t += step) {
     await w.at(new Date(t));
     const d = new Date(t);
-    const hour = d.getUTCHours();
-    const minute = d.getUTCMinutes();
-    const mondayUtc = d.getUTCDay() === 1;
     const at = d.toISOString();
     const torontoMonday = wallParts(w.now).dow === 1;
     const today = currentMonday(w.now);
-    if (mondayUtc && minute % 10 === 0 && hour >= 5 && hour <= 17 && torontoMonday && isAtOrPast(w.now, today, w.settings.coraAt)) {
+    if (cronFires(SCHEDULES.cora, d) && torontoMonday && isAtOrPast(w.now, today, w.settings.coraAt)) {
       const r = await runCoraJob(w.query, w.cora, { now: w.now, settings: w.settings, week: today, budgetMs: 240_000 });
       log.push({ at, route: "cora", status: r.status, result: r });
     }
-    if (mondayUtc && minute % 10 === 0 && hour >= 10 && hour <= 17 && torontoMonday) {
+    if (cronFires(SCHEDULES.charge, d) && torontoMonday) {
       const r = await runChargeJob(w.query, w.charge(), { week: today });
       log.push({ at, route: "charge", status: r.status, result: r });
     }
-    if (mondayUtc && minute % 10 === 0 && hour >= 11 && hour <= 17 && torontoMonday) {
+    if (cronFires(SCHEDULES.send, d) && torontoMonday) {
       const c = w.charge();
       const r = await runSendJob(w.query, { settings: c.settings, now: c.now, gw: c.gw, adjust: c.adjust, query: c.query, transport: c.transport, sleep: c.sleep }, { week: today });
       log.push({ at, route: "send", status: r.status, result: r });
     }
-    if (minute === 5) {
+    if (cronFires(SCHEDULES.housekeeping, d)) {
       const r = await hourly(w);
       log.push({ at, route: "housekeeping", status: "done", result: r });
     }

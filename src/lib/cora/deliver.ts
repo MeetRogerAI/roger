@@ -47,12 +47,13 @@ export const DELIVERABLE_SQL = `(
  * now (0 if already delivered, none, or not deliverable). A list paid by order
  * never uses a free list.
  */
-export async function deliverWeek(q: Query, userId: string, week: string, freeRuns: number): Promise<{ delivered: number; freeListNumber: number | null }> {
+export async function deliverWeek(q: Query, userId: string, week: string, freeRuns: number, now?: Date): Promise<{ delivered: number; freeListNumber: number | null }> {
+  // `now` is the job clock: "as of" runs must stamp the simulated time, which the trial close counts from.
   const [r] = await q<{ delivered: number | string; free_list: number | null }>(
     `with u as (select * from users u where u.id = $1 and ${DELIVERABLE_SQL} for update),
      paid as (select exists (select 1 from orders o where o.user_id = $1 and o.week_of = $2 and o.status in ('charged', 'sent')) as yes),
      p as (
-       update picks set delivered_at = now(), is_free_list = ((select status from u) = 'trial' and (select sponsor_id from u) is null and not (select yes from paid))
+       update picks set delivered_at = coalesce($4::timestamptz, now()), is_free_list = ((select status from u) = 'trial' and (select sponsor_id from u) is null and not (select yes from paid))
        where user_id = $1 and week_of = $2 and not dry_run and delivered_at is null and exists (select 1 from u)
        returning position
      ),
@@ -61,9 +62,9 @@ export async function deliverWeek(q: Query, userId: string, week: string, freeRu
        where id = $1 and status = 'trial' and sponsor_id is null and exists (select 1 from p) and not (select yes from paid)
        returning free_lists_used
      ),
-     w as (update cora_user_weeks set delivered_at = now() where user_id = $1 and week_of = $2 and not dry_run and exists (select 1 from p))
+     w as (update cora_user_weeks set delivered_at = coalesce($4::timestamptz, now()) where user_id = $1 and week_of = $2 and not dry_run and exists (select 1 from p))
      select (select count(*) from p) as delivered, (select free_lists_used from c) as free_list`,
-    [userId, week, freeRuns],
+    [userId, week, freeRuns, now ? now.toISOString() : null],
   );
   return { delivered: Number(r?.delivered ?? 0), freeListNumber: r?.free_list ?? null };
 }
