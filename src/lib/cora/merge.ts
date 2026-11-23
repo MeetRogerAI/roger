@@ -1,5 +1,6 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
+import { rethrowIfUnavailable } from "@/lib/ai/errors";
 import type { Query } from "@/lib/db-query";
 
 /**
@@ -100,7 +101,17 @@ const STILL_SHAREABLE = `exists (
  * play, so Cora knows the user already runs it; it never creates or changes
  * one. Flagged plays wait until an admin clears them.
  */
-export async function mergePending(q: Query, model: MergeModel, o: { until?: Date; limit?: number; runIds?: string[]; holder?: string } = {}): Promise<MergeTally> {
+/** Tries before a play is placed anyway: an undecidable play is kept separate rather than holding up the week. */
+export const MERGE_ATTEMPTS = 3;
+
+/** Who contributed a play, one key per person: a user id, or "seed:<contributor id>". */
+const CONTRIBUTOR = `(select coalesce(cp.user_id::text, 'seed:' || cp.contributor_id::text) from plays cp where cp.id = $1)`;
+
+export async function mergePending(
+  q: Query,
+  model: MergeModel,
+  o: { until?: Date; limit?: number; runIds?: string[]; holder?: string; week?: string } = {},
+): Promise<MergeTally> {
   const tally: MergeTally = { joined: 0, created: 0, matchOnly: 0, kept: 0, failed: 0, busy: false };
   const holder = o.holder ?? crypto.randomUUID();
   if (!(await takeLease(q, "cora-merge", holder, 120))) return { ...tally, busy: true };
@@ -111,9 +122,11 @@ export async function mergePending(q: Query, model: MergeModel, o: { until?: Dat
        from plays p join runs r on r.id = p.run_id
        where p.merged_at is null and p.flag is null and r.status in ('accepted', 'flagged') and not r.is_test
          and ($2::uuid[] is null or p.run_id = any($2::uuid[]))
+         -- A week's merge never reaches next week's plays before their own cutoff.
+         and ($3::date is null or p.week_of <= $3::date)
        order by p.week_of, r.received_at, p.set_, p.position
        limit $1`,
-      [o.limit ?? 500, o.runIds ?? null],
+      [o.limit ?? 500, o.runIds ?? null, o.week ?? null],
     );
     for (const p of rows) {
       if (o.until && Date.now() > o.until.getTime()) break;
@@ -126,9 +139,13 @@ export async function mergePending(q: Query, model: MergeModel, o: { until?: Dat
       try {
         match = await model.sameJob(p, candidates);
       } catch (e) {
-        // When in doubt, keep them separate.
-        console.error("[cora] merge decision failed; kept separate", p.id, e instanceof Error ? e.message : e);
+        // No credits or no key: stop, by name. Anything else is tried again; after a few tries the play is
+        // kept separate ("when in doubt, keep them separate") so one play never holds up the week.
+        rethrowIfUnavailable(e);
         tally.failed++;
+        const [a] = await q<{ merge_attempts: number }>(`update plays set merge_attempts = merge_attempts + 1 where id = $1 returning merge_attempts`, [p.id]);
+        console.error("[cora] merge decision failed", p.id, a?.merge_attempts, e instanceof Error ? e.message : e);
+        if ((a?.merge_attempts ?? 0) < MERGE_ATTEMPTS) continue;
       }
       try {
         if (match) {
@@ -138,6 +155,11 @@ export async function mergePending(q: Query, model: MergeModel, o: { until?: Dat
              seen as (
                update pool_plays set last_seen = greatest(last_seen, (select week_of from placed)), first_seen = least(first_seen, (select week_of from placed)), active = true
                where id = $2 and (select shared from ok) and exists (select 1 from placed)
+             ),
+             who as (
+               insert into pool_play_contributors (pool_play_id, contributor)
+               select $2, ${CONTRIBUTOR} where (select shared from ok) and exists (select 1 from placed)
+               on conflict do nothing
              )
              select exists (select 1 from placed) as placed, (select shared from ok) as shared`,
             [p.id, match],
@@ -162,7 +184,8 @@ export async function mergePending(q: Query, model: MergeModel, o: { until?: Dat
                insert into pool_plays (id, title, category, description, heavy_use_for, playbook_md, paste_to_install, job, first_seen, last_seen)
                select $10, $2, $3, $4, $5, $6, $7, $8, $9, $9 from claim where (select shared from ok)
                returning id
-             )
+             ),
+             who as (insert into pool_play_contributors (pool_play_id, contributor) select np.id, ${CONTRIBUTOR} from np on conflict do nothing)
              select exists (select 1 from np) as created, exists (select 1 from claim) as claimed`,
             [p.id, p.title, p.category, s("description"), s("heavy_use_for"), s("playbook_md"), s("install_notes"), p.job, p.week_of, newId],
           );
@@ -170,8 +193,11 @@ export async function mergePending(q: Query, model: MergeModel, o: { until?: Dat
           else if (r?.claimed) tally.kept++;
         }
       } catch (e) {
-        console.error("[cora] placing a play failed; it will be tried again", p.id, e instanceof Error ? e.message : e);
         tally.failed++;
+        const [a] = await q<{ merge_attempts: number }>(`update plays set merge_attempts = merge_attempts + 1 where id = $1 returning merge_attempts`, [p.id]).catch(() => []);
+        console.error("[cora] placing a play failed", p.id, e instanceof Error ? e.message : e);
+        // A play that can never be placed is set aside, so it cannot hold up the week.
+        if ((a?.merge_attempts ?? 0) >= MERGE_ATTEMPTS) await q(`update plays set merged_at = now() where id = $1 and merged_at is null`, [p.id]).catch(() => {});
       }
     }
     // A pool play no play points to any more (its text was replaced) has no evidence: retire it, keep it on record.

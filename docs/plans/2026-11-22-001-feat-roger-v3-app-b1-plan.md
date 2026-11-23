@@ -725,7 +725,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 11: The pool, seed import, scoring, picks and the Cora job**
+- [x] **Unit 11: The pool, seed import, scoring, picks and the Cora job**
 
 **Goal:** Cora 2.0 as a document and as a job: merge plays into the pool, score in code, pick for every eligible user, mark the week ready, and survive being run twice or interrupted.
 
@@ -753,6 +753,14 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 - **Delivery:** this unit lands as three changes. 11a: pool storage, merge and seed import. 11b: scoring, eligibility, picking and who-gets-a-list, as pure code with tests. 11c: the job, its route, the lease, failure handling and the dry run. 11b does not depend on 11a.
 
 **Execution note:** Implement scoring, eligibility and picking test-first, against a small hand-worked pool.
+
+**11c as built (2026-11-23, after review):** `src/lib/cora/job.ts`, `context.ts`, `fit.ts`, `src/lib/ai/errors.ts`, `src/app/api/cron/cora/route.ts` (every 10 minutes on Mondays, 05:00 to 17:50 UTC), `content/cora/cora.md` (draft, S2); schema `cora_weeks.holder`, `cora_weeks.error_count`, `plays.merge_attempts`, `pool_play_contributors`.
+- Only the lease holder writes the week; the lease is renewed while working. A real run waits while a dry run holds the week, then replaces it; a dry run's alert has its own name.
+- A passing error is retried by the next run; three in a row, a model with no credits or a refused key (named), or noon fail the week. A week whose picks are all made is finished even at noon; a week that never started is reported at noon.
+- The "merged" phase stores the week's scores; picking reads them, so every user is ranked against one snapshot. Fit runs four users at a time; after three model failures in a run the rest are fitted by code.
+- Merge: a model error is retried up to three times per play, then the play is kept separate; next week's plays are never merged early. Evidence comes only from people who still share; the public sample is never rewritten; contributions are recorded for good (`pool_play_contributors`).
+- Fit is bounded by code (never below the category fit; 5 only with a friction match or a category or role match); the reason line comes from fixed templates; "It needs" lists plain names only. "Sent" means delivered. Contributions record "by choice" for members who don't share.
+- For later units: (Units 12/13) a user found not eligible at 1:00 AM whose held payment succeeds at 6:00 gets no list; decide whether charge or send picks for them late. (Unit 14) sharing "at the cutoff" is read when intake closes, not from the history at the cutoff instant. (Unit 17) a dry run still runs intake, merge and scoring on the real pool; only its picks are separate. Not built yet: matching "Also runs" and profile Setup to pool plays (change 8), upgrades (change 11), adoption counts (change 15).
 
 **11a as built (2026-11-23, after review):** `src/lib/cora/merge.ts`, `seed-import.ts`, `scripts/seed-import.ts`; schema `pool_plays.job`, `leases`.
 - Merging holds a lease (`cora-merge`), so the job and a seed import never place plays at the same time. Each play is claimed before a pool play is made from it, and the binding sharing check (still shareable, unflagged, a shared non-test run, a user who still shares) is inside the statement that copies text into the pool. Flagged plays wait until cleared. A "matching only" play only attaches to an existing pool play. Retired pool plays are candidates and are revived by a match. A pool play no play points to is retired.

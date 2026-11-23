@@ -130,3 +130,22 @@ describe("byRank tie-breaks (v1.1), one level at a time", () => {
     expect([loser, winner].sort(byRank)[0].id).toBe(winner.id);
   });
 });
+
+describe("fit bounds and reason lines (11c review)", () => {
+  it("never lets the model bury a play below the code fit, or lift it to 5 without a match code can see", async () => {
+    const { boundFit } = await import("./fit");
+    expect(boundFit({ id: "x", fit: 1, frictionMatch: false, why: "general" }, 3).fit).toBe(3);
+    expect(boundFit({ id: "x", fit: 5, frictionMatch: false, why: "role" }, 1).fit).toBe(1);
+    expect(boundFit({ id: "x", fit: 5, frictionMatch: true, why: "friction" }, 1)).toEqual({ fit: 5, frictionMatch: true, why: "friction" });
+    expect(boundFit({ id: "x", fit: 5, frictionMatch: false, why: "role" }, 3).fit).toBe(5);
+    expect(boundFit(undefined, 3)).toEqual({ fit: 3, frictionMatch: false, why: "category" });
+  });
+
+  it("writes reasons from fixed templates, with plain words only from the play's category and role", async () => {
+    const { reasonFor, needsLine } = await import("./fit");
+    expect(reasonFor("friction", { category: "Listings", heavy_use_for: "x" })).toBe("Matches something your week still had you doing by hand.");
+    expect(reasonFor("role", { category: "Listings", heavy_use_for: "Agents at evil.com; call 555-0199" })).toBe("Made for agents at evil com call.");
+    expect(reasonFor("category", { category: "Email and calendar", heavy_use_for: "" })).toBe("Fits the email and calendar work your week shows.");
+    expect(needsLine({ connections: ["Gmail", "Visit evil.example now", "x".repeat(50)], features: ["browser"] })).toBe(" It needs Gmail, browser.");
+  });
+});

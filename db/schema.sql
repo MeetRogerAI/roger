@@ -541,3 +541,16 @@ create table if not exists leases (
   holder text not null,
   until timestamptz not null
 );
+
+-- 2026-11-23, Unit 11c: who holds the week (so only that worker writes it),
+-- consecutive errors before a week fails, merge attempts per play, and a
+-- lasting record of who contributed to each pool play (spec check 13).
+alter table cora_weeks add column if not exists holder text;
+alter table cora_weeks add column if not exists error_count int not null default 0;
+alter table plays add column if not exists merge_attempts int not null default 0;
+create table if not exists pool_play_contributors (
+  pool_play_id uuid not null references pool_plays (id) on delete cascade,
+  contributor text not null,
+  primary key (pool_play_id, contributor)
+);
+create index if not exists pool_play_contributors_who on pool_play_contributors (contributor);
