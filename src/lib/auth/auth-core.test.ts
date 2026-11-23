@@ -72,12 +72,12 @@ describe("sign-in links", () => {
     expect(await consumeToken(query, tok, later(6 * DAY))).not.toBeNull();
   });
 
-  it("changes the email only when the new address's link is used, and never to one in use", async () => {
-    await query("insert into users (email) values ('taken@example.com')");
-    const tok = await issueToken(query, { email: "taken@example.com", purpose: "email_change", userId }, t0);
+  it("never signs in or changes anything from an email-change link (those go through src/lib/auth/email-change.ts)", async () => {
+    const tok = await issueToken(query, { email: "new@example.com", purpose: "email_change", userId }, t0);
     expect(await userForToken(query, (await consumeToken(query, tok, later(MIN)))!)).toBeNull();
-    const ok = await issueToken(query, { email: "new@example.com", purpose: "email_change", userId }, t0);
-    expect((await userForToken(query, (await consumeToken(query, ok, later(MIN)))!))?.email).toBe("new@example.com");
+    const approve = await issueToken(query, { email: "a@example.com", purpose: "email_approve", userId, data: { from: "a@example.com", to: "x@example.com" } }, t0);
+    expect(await userForToken(query, (await consumeToken(query, approve, later(MIN)))!)).toBeNull();
+    expect(await query("select 1 from users where email <> 'a@example.com'")).toHaveLength(0);
   });
 });
 

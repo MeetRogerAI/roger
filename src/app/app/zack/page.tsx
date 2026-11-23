@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { CopyTextButton } from "@/components/app/copy-text-button";
 import { KeyPanel, SettingsForm, SharingForm, UploadForm } from "@/components/app/zack-controls";
+import { noteOnboarding } from "@/lib/app/onboarding";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { ZACK_CATEGORIES } from "@/lib/intake/validate";
@@ -41,6 +42,8 @@ async function ZackPage({ searchParams }: { searchParams: PageProps<"/app/zack">
 
   // A free-tool report whose claim failed at trial start gets another chance here.
   if (canAct) await retryPendingClaim(query, u.id, async () => (await readV3Settings()).runCutoff);
+  // The onboarding checklist's "Check your Zack controls" step (spec B.10).
+  if (canAct) await noteOnboarding(query, u.id, "controls_at").catch((e) => console.error("[onboarding] controls", e instanceof Error ? e.message : e));
 
   const agent = zackFileFor(u.agent);
   const [rules, runs, core, instructions] = await Promise.all([

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { OrderBox, WeekIdeas } from "@/components/app/week-ideas";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
@@ -26,6 +27,8 @@ async function Home() {
         <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : "Your first list is on its way"}</h1>
         <p className="mt-3 text-small text-ink-2">{home.statusLine}</p>
       </header>
+
+      <OnboardingChecklist userId={session.userId} />
 
       {home.ideas.length > 0 ? (
         <>

@@ -1,4 +1,6 @@
 import type { Query } from "@/lib/db-query";
+import { syncStripeEmails } from "@/lib/auth/email-change";
+import { stripe } from "@/lib/billing/stripe";
 import { staleClaims, takeOver } from "@/lib/billing/claims";
 import { takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
@@ -44,6 +46,15 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, query: d.query, transport: d.transport, sleep: d.sleep }) },
   // A paid user left held or in trial is made active.
   { name: "repair_paid_users", run: (q, d) => repairPaidUsers(q, d) },
+  // Stripe customers still holding an address the user has since changed (Unit 16).
+  {
+    name: "stripe_email_sync",
+    run: (q, d) => {
+      const s = stripe();
+      if (!s) return Promise.resolve({ skipped: "Stripe is not set up." });
+      return syncStripeEmails(q, async (customer, email) => void (await s.customers.update(customer, { email })), { query: d.query, transport: d.transport, sleep: d.sleep });
+    },
+  },
 ];
 
 export async function runHourly(q: Query, d: ChargeDeps, tasks: HourlyTask[] = HOURLY_TASKS): Promise<Record<string, unknown>> {
