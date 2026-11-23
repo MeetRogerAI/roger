@@ -754,6 +754,12 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 **Execution note:** Implement scoring, eligibility and picking test-first, against a small hand-worked pool.
 
+**11b as built (2026-11-23, after review):** `src/lib/cora/score.ts`, `eligible.ts`, `pick.ts`, `who-gets-a-list.ts`.
+- One person counts once in every figure (medians, Proof, Surprise, contributors), whatever the weeks or agents. Each person's figure is their recency-weighted median; the play's figure is the median across people, Actual counted twice for hours.
+- Old evidence keeps the "older" weight while the play is active; a play is retired when it has no evidence in 26 weeks. Surprise counts people without recency. Size counts only when steps and connections were both stated.
+- `whoGetsAList(facts, phase)`: at the 1:00 AM cutoff a one-at-a-time order with a run is picked for (so there is a list to charge for); at send time it also needs the charge.
+- Decisions taken by reading the drafts literally, for Peter to confirm: (1) a play the user cannot install ranks below every play they can, Fit 1 included (Cora 2.0 change 9); (2) an idea that could not be installed may be sent again once the setup has what it needs, overriding B.7 rule 1 (change 12); (3) changes 6 and 7 (Running-for bonus, adopted plays out of Surprise) are built in, with no switch; (4) a missing figure scores 1 on its factor (v1.1 says "or 0"); (5) in a pool of fewer than ten plays the lowest decile is above 1 (e.g. two plays score 10 and 5); (6) a runner-up counts 1 toward Surprise.
+
 **Technical design:** *(directional)*
 
 ```text
