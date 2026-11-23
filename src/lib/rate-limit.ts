@@ -16,6 +16,9 @@ export const limits = {
   signinPerIp: { limit: 20, windowSeconds: 15 * 60 },
   checkoutPerUser: { limit: 3, windowSeconds: 60 },
   checkoutPerIp: { limit: 10, windowSeconds: 60 },
+  // Card-testing scripts open many setup sessions slowly; a daily cap stops that too.
+  checkoutPerUserDay: { limit: 10, windowSeconds: 24 * 60 * 60 },
+  checkoutPerIpDay: { limit: 40, windowSeconds: 24 * 60 * 60 },
   zackSendsPerKey: { limit: 6, windowSeconds: 24 * 60 * 60 },
   zackBadKeyPerIp: { limit: 10, windowSeconds: 60 },
   leadPerIp: { limit: 5, windowSeconds: 60 * 60 },

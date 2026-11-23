@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { AdminTabs, LoginForm } from "@/components/admin-ui";
 import { isAdmin } from "@/lib/admin-auth";
+import { stripeMode } from "@/lib/billing/stripe";
 import { hasDb } from "@/lib/db";
 import { signOutAction } from "./actions";
 
@@ -40,6 +41,7 @@ async function Gate({ children }: { children: React.ReactNode }) {
     <div className="wrap pb-24 pt-6">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rule pb-4">
         <AdminTabs />
+        <StripeModeBadge />
         <form action={signOutAction}>
           <button type="submit" className="min-h-10 rounded-full px-3 text-small text-ink-2 hover:text-ink">
             Sign out
@@ -57,4 +59,11 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
       <Gate>{children}</Gate>
     </Suspense>
   );
+}
+
+/** Requirements R12: never confuse a sandbox with real money. */
+function StripeModeBadge() {
+  const mode = stripeMode();
+  const text = mode === "live" ? "Stripe: live, real charges" : mode === "test" ? "Stripe: test mode" : "Stripe: not set up";
+  return <span className={`rounded-full border px-3 py-1 text-meta ${mode === "live" ? "border-accent text-accent" : "border-rule text-ink-2"}`}>{text}</span>;
 }
