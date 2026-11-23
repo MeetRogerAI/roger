@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { requireUserForAction } from "@/lib/auth/access";
 import { cancelOrder, placeOrder, type OrderResult } from "@/lib/billing/orders";
-import { cutoffInstant, weekOf } from "@/lib/clock";
+import { cutoffInstant, isRealDate, weekOf } from "@/lib/clock";
 import { query } from "@/lib/db-query";
 import { readV3Settings } from "@/lib/v3-settings";
 
@@ -14,7 +14,7 @@ import { readV3Settings } from "@/lib/v3-settings";
  */
 function weekFrom(fd: FormData): string | null {
   const w = String(fd.get("week") ?? "");
-  return /^\d{4}-\d{2}-\d{2}$/.test(w) ? w : null;
+  return isRealDate(w) ? w : null;
 }
 
 export async function orderNextList(fd: FormData): Promise<OrderResult> {

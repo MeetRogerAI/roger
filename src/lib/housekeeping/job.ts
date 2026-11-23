@@ -2,6 +2,7 @@ import type { Query } from "@/lib/db-query";
 import { staleClaims, takeOver } from "@/lib/billing/claims";
 import { takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
+import { deliverLate } from "@/lib/cora/send-job";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, takeOverFirstCharge, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -39,6 +40,8 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, d) },
   // Order invoices left open after a failed void.
   { name: "void_leftover_invoices", run: async (q, d) => (d.orders ? voidLeftoverInvoices(q, { ...d, orders: d.orders }) : 0) },
+  // A list whose charge settled after Monday is delivered then.
+  { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, query: d.query, transport: d.transport, sleep: d.sleep }) },
   // A paid user left held or in trial is made active.
   { name: "repair_paid_users", run: (q, d) => repairPaidUsers(q, d) },
 ];

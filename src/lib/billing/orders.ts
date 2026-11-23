@@ -130,11 +130,11 @@ async function applyOrderResult(q: Query, d: OrderDeps, u: Pick<U, "id" | "email
          where id = $1 and outcome in ('claimed', 'unknown') returning user_id, week_of
        ),
        o as (
-         update orders o set status = 'charged', amount_cents = coalesce($3, o.amount_cents), currency = coalesce($4, o.currency), stripe_invoice = $2, updated_at = now()
+         update orders o set status = 'charged', amount_cents = coalesce($3, o.amount_cents), currency = coalesce($4, o.currency), stripe_invoice = $2, receipt_url = $5, updated_at = now()
          from s where o.user_id = s.user_id and o.week_of = s.week_of and o.status = 'ordered'
        )
        update users set status = 'active', hold_reason = null where id in (select user_id from s) and status = 'trial'`,
-      [claim.id, r.object, r.amountCents, r.currency],
+      [claim.id, r.object, r.amountCents, r.currency, r.receiptUrl ?? null],
     );
     return "charged";
   }

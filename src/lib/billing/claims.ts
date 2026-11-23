@@ -32,7 +32,7 @@ const GUARD: Record<Purpose, string> = {
                       or (u.status = 'held' and u.hold_reason = 'first_charge_failed')
                       or (u.status = 'held' and u.hold_reason = 'amount_changed' and (u.quote->>'at')::timestamptz <= $8::timestamptz - interval '24 hours'))
                  -- A list already bought by order that Monday is never charged again as the first month.
-                 and not exists (select 1 from orders o where o.user_id = u.id and o.week_of = $3 and o.status = 'charged')`,
+                 and not exists (select 1 from orders o where o.user_id = u.id and o.week_of = $3 and o.status in ('charged', 'sent'))`,
   amount_changed: `u.status = 'held' and u.hold_reason = 'amount_changed' and u.cancel_requested_at is null and u.stripe_subscription is null`,
   // An open order for that week, and no monthly first charge already made for it (a switch the same Monday, spec check 41).
   order: `u.status in ('active', 'trial') and u.plan = 'per_run' and u.cancel_requested_at is null and u.stripe_subscription is null

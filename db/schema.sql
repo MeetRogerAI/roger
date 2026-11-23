@@ -558,3 +558,6 @@ create index if not exists pool_play_contributors_who on pool_play_contributors 
 -- 2026-11-23, Unit 12a: the price a claim was made with, so a takeover repeats
 -- exactly the call that was claimed.
 alter table charge_attempts add column if not exists price text;
+
+-- 2026-11-23, Unit 13: the link to an order's receipt (Stripe's hosted invoice page).
+alter table orders add column if not exists receipt_url text;

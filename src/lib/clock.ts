@@ -163,3 +163,11 @@ export function jobNow(asOf: string | null | undefined, allowed: boolean, real: 
 }
 
 export class AsOfRefused extends Error {}
+
+/** True for a real calendar date written "YYYY-MM-DD" (2026-13-45 is not one). */
+export function isRealDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}

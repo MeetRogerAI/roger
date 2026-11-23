@@ -11,6 +11,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: high
+last_updated: 2026-11-23
 tags: [idempotency, claim-first, notifications, webhooks, stripe, at-most-once, side-effects]
 ---
 
@@ -52,6 +53,15 @@ The notifications claim (`recipient, kind, ref` unique; a sent row is never re-c
 - Test it: make the first send fail, call again, assert exactly one email.
 - The same shape is coming in the charge and send jobs (Units 12 and 13): "charge succeeded, send the receipt", "list delivered, send the Monday email".
 
+## Seen again: the Monday send (Unit 13, 2026-11-23)
+The prediction above came true, twice, despite this note:
+- **The trigger was a value only the winning pass sees.** `deliverWeek` returns the new `free_lists_used` only from the call that counted the free list, and the "your next list is your first paid one" email was sent only when that value was present. One Stripe preview timeout, and no later pass could ever send it. Fix: decide from stored state on every pass (`trial`, `free_lists_used >= freeRuns`, and no `sent` notification of that kind for this week or later).
+- **The retry pass selected only the before-state.** The hourly late pass picked users with *undelivered* picks. A user delivered mid-week whose email failed was no longer selected. Fix: the pass also selects delivered weeks with no `sent` Monday notification.
+- **Order the side effects so they agree.** The Monday email's status line quotes the stored amount, and the first-paid-next email is what stores it. Sending the Monday email first produced two emails a few seconds apart with different amounts. Send the email that writes the shared fact first, then re-read.
+
+A related rule from the same review: the eligibility check for the transition belongs inside the statement that makes it (`with u as (select ... where <deliverable> for update)`), not in a JavaScript check on a row read earlier. A cancel, a hold, or a second delivery in another pass can land in between.
+
 ## Related Issues
 - `src/lib/billing/card-setup.ts`, `src/lib/billing/card-setup.followups.test.ts`
+- `src/lib/cora/send-job.ts`, `src/lib/cora/deliver.ts`, `src/lib/cora/send-job.test.ts`
 - `docs/solutions/best-practices/test-claim-sql-on-pglite-2026-11-22.md`
