@@ -1,8 +1,10 @@
 import { connection } from "next/server";
+import { isAdmin } from "@/lib/admin-auth";
 import { sql } from "@/lib/db";
 
 export default async function AdminLeads() {
   await connection();
+  if (!(await isAdmin())) return null;
   const rows = (await sql`select email, kind, persona, utm, created_at from leads order by created_at desc limit 500`) as { email: string; kind: string; persona: string; utm: string; created_at: string }[];
   return (
     <section>

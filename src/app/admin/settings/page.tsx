@@ -1,9 +1,11 @@
 import { connection } from "next/server";
 import { SettingsEditor } from "@/components/admin-ui";
+import { isAdmin } from "@/lib/admin-auth";
 import { getSettings } from "@/lib/settings";
 
 export default async function AdminSettings() {
   await connection();
+  if (!(await isAdmin())) return null;
   const s = await getSettings();
   return (
     <section className="max-w-[52rem]">

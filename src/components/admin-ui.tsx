@@ -47,6 +47,14 @@ const tabs = [
   { href: "/admin/connections", label: "Connections" },
   { href: "/admin/settings", label: "Settings" },
   { href: "/admin/setup-file", label: "Setup file" },
+  { href: "/admin/ops", label: "Operations" },
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/runs", label: "Runs" },
+  { href: "/admin/flags", label: "Flags" },
+  { href: "/admin/cora", label: "Cora" },
+  { href: "/admin/testimonials", label: "Testimonials" },
+  { href: "/admin/sample", label: "Sample idea" },
+  { href: "/admin/interest", label: "Interest" },
 ];
 
 export function AdminTabs() {

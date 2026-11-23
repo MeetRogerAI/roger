@@ -1,10 +1,12 @@
 import { connection } from "next/server";
 import Link from "next/link";
 import { RunIngest } from "@/components/admin-ui";
+import { isAdmin } from "@/lib/admin-auth";
 import { sql } from "@/lib/db";
 
 export default async function AdminOverview() {
   await connection();
+  if (!(await isAdmin())) return null;
   const [[c], [l], [w], runs, byPersona] = (await Promise.all([
     sql`select count(*)::int total, count(*) filter (where created_at > now() - interval '7 days' and source <> 'seed')::int week, count(*) filter (where source not in ('seed','admin'))::int found from use_cases`,
     sql`select count(*) filter (where kind = 'pack')::int packs, count(*) filter (where kind = 'interest')::int interest, count(*) filter (where created_at > now() - interval '7 days')::int week from leads`,

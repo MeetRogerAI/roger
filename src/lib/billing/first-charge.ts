@@ -21,10 +21,10 @@ export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; adjust?: A
 export type FirstOutcome = "charged" | "declined" | "held_amount" | "unknown" | "error" | "skipped" | "open";
 
 type Quote = { totalCents?: number; currency?: string; price?: string; extraCents?: number; at?: string; week?: string };
-type U = { id: string; email: string; currency: Currency | null; status: string; hold_reason: string | null; stripe_customer: string | null; quote: Quote | null };
+type U = { id: string; email: string; currency: Currency | null; status: string; hold_reason: string | null; stripe_customer: string | null; quote: Quote | null; free_lists_used: number };
 
 async function loadUser(q: Query, userId: string): Promise<U | null> {
-  const [u] = await q<U>(`select id, email, currency, status, hold_reason, stripe_customer, quote from users where id = $1`, [userId]);
+  const [u] = await q<U>(`select id, email, currency, status, hold_reason, stripe_customer, quote, free_lists_used from users where id = $1`, [userId]);
   return u ?? null;
 }
 
@@ -54,6 +54,8 @@ const extraOf = (cents: number, currency: string): FirstExtra => (cents > 0 ? { 
 export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week: string, o: { reset?: boolean } = {}): Promise<FirstOutcome> {
   const u = await loadUser(q, userId);
   if (!u) return "skipped";
+  // A trial member who still has a free list (an admin gave one back after the job listed them) is not charged.
+  if (u.status === "trial" && u.free_lists_used < d.settings.freeRuns) return "skipped";
   if (!u.stripe_customer) {
     await alert("charge_setup", `${userId}:${week}`, "A first charge has no Stripe customer", [`User ${userId}, week ${week}.`], d);
     return "error";
@@ -81,8 +83,8 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
     (u.quote.extraCents ?? 0) !== extraCents
   ) {
     const held = await q(
-      `update users set status = 'held', hold_reason = 'amount_changed', quote = $2 where id = $1 and status in ('trial', 'held') and stripe_subscription is null returning id`,
-      [userId, JSON.stringify(fresh)],
+      `update users set status = 'held', hold_reason = 'amount_changed', quote = $2 where id = $1 and status in ('trial', 'held') and stripe_subscription is null and free_lists_used >= $3 returning id`,
+      [userId, JSON.stringify(fresh), d.settings.freeRuns],
     );
     if (held.length) {
       await sendToUser({ id: u.id, email: u.email }, "amount_changed", `${week}:${preview.totalCents}:${price}`, amountChangedEmail({ amountCents: preview.totalCents, currency: preview.currency as Currency }), d).catch(() => {});

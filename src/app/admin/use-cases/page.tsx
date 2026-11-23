@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { isAdmin } from "@/lib/admin-auth";
 import { AddCase, EditCase } from "@/components/admin-ui";
 import { categoryLabel, type UseCaseCategory } from "@/data/library";
 import { sql } from "@/lib/db";
@@ -8,6 +9,7 @@ type Row = { id: string; title: string; summary: string; category: string; perso
 
 export default async function AdminUseCases({ searchParams }: PageProps<"/admin/use-cases">) {
   await connection();
+  if (!(await isAdmin())) return null;
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const rows = (q

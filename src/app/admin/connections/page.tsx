@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { headers } from "next/headers";
 import { removeSecretAction, rotatePushToken } from "@/app/admin/actions";
 import { SecretForm } from "@/components/admin-ui";
+import { isAdmin } from "@/lib/admin-auth";
 import { CopyPrompt } from "@/components/pack-gate";
 import { sql } from "@/lib/db";
 import { getSecret, secretStatus } from "@/lib/secrets";
@@ -28,6 +29,7 @@ Reply with how many it added.`;
 
 export default async function AdminConnections() {
   await connection();
+  if (!(await isAdmin())) return null;
   const [keys, token, rows] = await Promise.all([
     secretStatus(),
     getSecret("PUSH_TOKEN"),
