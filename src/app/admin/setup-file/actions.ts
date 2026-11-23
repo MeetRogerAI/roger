@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh, updateTag } from "next/cache";
+import { logAdminAction } from "@/lib/admin/log";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getSession, isEmailAdmin } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
@@ -30,7 +31,9 @@ export async function saveSetupFile(_prev: SetupFileState, fd: FormData): Promis
     return { status: "error", message, body, note };
   }
   if (note.length > MAX_NOTE_CHARS) return { status: "error", message: `Keep the note under ${MAX_NOTE_CHARS} characters.`, body, note };
-  const version = await saveVersion(query, { bodyMd: body, note, savedBy: await who() });
+  const by = await who();
+  const version = await saveVersion(query, { bodyMd: body, note, savedBy: by });
+  await logAdminAction(query, { by, action: "setup_file_saved", detail: { version } });
   refresh();
   return { status: "ok", message: `Saved as version ${version}. It isn’t live until you publish it.`, body, note: "", at: Date.now() };
 }
@@ -42,6 +45,7 @@ export async function publishSetupFile(fd: FormData) {
   if (v === null) return;
   try {
     await publishVersion(query, v);
+    await logAdminAction(query, { by: await who(), action: "setup_file_published", detail: { version: v } });
   } finally {
     // Whatever happened, the public page must not keep showing a stale answer.
     updateTag(SETUP_FILE_TAG);
@@ -54,6 +58,8 @@ export async function restoreSetupFile(fd: FormData) {
   await requireAdmin();
   const v = versionOf(fd);
   if (v === null) return;
-  await restoreVersion(query, v, await who());
+  const by = await who();
+  await restoreVersion(query, v, by);
+  await logAdminAction(query, { by, action: "setup_file_restored", detail: { version: v } });
   refresh();
 }

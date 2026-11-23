@@ -1,0 +1,113 @@
+import { statusLine } from "@/lib/app/status";
+import { contributionStatus } from "@/lib/billing/contribution";
+import type { Currency } from "@/lib/billing/prices";
+import type { Query } from "@/lib/db-query";
+import type { V3Settings } from "@/lib/v3-settings";
+import { actionsForUser, type LoggedAction } from "./log";
+import { userPicks, type UserPick } from "./cora";
+import { loadOps, type OpsRow } from "./ops";
+import { listRuns, type RunListItem } from "./runs";
+
+/** Everything about one person (spec B.12 Users): profile, plan, runs, ideas, emails and the admin log. */
+export type UserDetail = {
+  row: OpsRow;
+  week: string;
+  profile: Record<string, unknown>;
+  createdAt: string;
+  createdBy: string | null;
+  timezone: string;
+  agent: string;
+  stripeSubscription: string | null;
+  statusLine: string;
+  runs: RunListItem[];
+  picks: UserPick[];
+  emails: { kind: string; ref: string; status: string; at: string }[];
+  log: LoggedAction[];
+  contributor: { id: string; label: string } | null;
+  contributors: { id: string; label: string; userId: string | null }[];
+};
+
+type U = {
+  status: string;
+  plan: "monthly" | "per_run";
+  sponsored: boolean;
+  sharing: "share" | "match_only" | "off";
+  currency: Currency | null;
+  free_lists_used: number;
+  quote: { totalCents: number; currency: Currency; week: string } | null;
+  first_charge_at: string | null;
+  access_ends_at: string | null;
+  profile: Record<string, unknown>;
+  created_at: string;
+  created_by: string | null;
+  timezone: string;
+  agent: string;
+  stripe_subscription: string | null;
+};
+
+/** The status line the member sees right now (the same function as the Monday email and /app). */
+export async function memberStatusLine(q: Query, userId: string, s: V3Settings, now: Date): Promise<string | null> {
+  const [u] = await q<U>(USER_SQL, [userId]);
+  return u ? lineFor(q, userId, u, s, now) : null;
+}
+
+const USER_SQL = `select status, plan, (sponsor_id is not null) as sponsored, sharing, currency, free_lists_used, quote, first_charge_at::text, access_ends_at::text,
+  profile, created_at::text, created_by, timezone, agent, stripe_subscription from users where id = $1`;
+
+async function lineFor(q: Query, userId: string, u: U, s: V3Settings, now: Date): Promise<string> {
+  const contribution = u.status === "active" && u.plan === "monthly" ? await contributionStatus(q, userId, s, now).catch(() => null) : null;
+  return statusLine(
+    {
+      status: u.status,
+      plan: u.plan,
+      sponsored: u.sponsored,
+      sharing: u.sharing,
+      currency: u.currency,
+      freeListsUsed: u.free_lists_used,
+      freeRuns: s.freeRuns,
+      quote: u.quote,
+      firstChargeAt: u.first_charge_at,
+      orderCents: null,
+      accessEndsAt: u.access_ends_at,
+      contribution,
+      now,
+    },
+    s,
+  );
+}
+
+export async function userDetail(q: Query, userId: string, s: V3Settings, now: Date): Promise<UserDetail | null> {
+  const [u] = await q<U>(USER_SQL, [userId]);
+  if (!u) return null;
+  const { week, rows } = await loadOps(q, { now, settings: s, userId });
+  const row = rows[0];
+  if (!row) return null;
+  const [runs, picks, emails, log, contributors] = await Promise.all([
+    listRuns(q, { userId, limit: 30 }),
+    userPicks(q, userId),
+    q<{ kind: string; ref: string; status: string; at: string }>(
+      `select kind, ref, status, coalesce(sent_at, claimed_at)::text as at from notifications where recipient = $1 order by claimed_at desc limit 60`,
+      [userId],
+    ),
+    actionsForUser(q, userId),
+    q<{ id: string; label: string; userId: string | null }>(`select id, label, user_id as "userId" from seed_contributors order by label`),
+  ]);
+  const mine = contributors.find((c) => c.userId === userId);
+  return {
+    row,
+    week,
+    profile: u.profile ?? {},
+    createdAt: u.created_at,
+    createdBy: u.created_by,
+    timezone: u.timezone,
+    agent: u.agent,
+    stripeSubscription: u.stripe_subscription,
+    statusLine: await lineFor(q, userId, u, s, now),
+    runs,
+    picks,
+    emails,
+    log,
+    contributor: mine ? { id: mine.id, label: mine.label } : null,
+    contributors,
+  };
+}

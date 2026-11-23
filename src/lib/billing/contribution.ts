@@ -1,3 +1,4 @@
+import { logAdminAction } from "@/lib/admin/log";
 import { addDays, currentMonday, cutoffInstant, torontoDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser } from "@/lib/mail/send";
@@ -64,9 +65,18 @@ export async function recordWeek(q: Query, week: string, s: V3Settings): Promise
     result: u.sharing !== "share" ? "by_choice" : u.contributed ? "contributed" : "missed",
     period_start: periodAt(u.anchor, cutoff)?.startDate ?? null,
   }));
+  // A week an admin excused before it was recorded (for this member, or for everyone): a miss is recorded as
+  // excused. Contributed and by choice are never overridden. The member's own excuse names its admin plainly.
   const ins = await q(
-    `insert into contribution_weeks (user_id, week_of, result, period_start)
-     select x.user_id, $1, x.result, x.period_start from jsonb_to_recordset($2::jsonb) as x(user_id uuid, result text, period_start date)
+    `insert into contribution_weeks (user_id, week_of, result, excused_by, period_start)
+     select x.user_id, $1, case when x.result = 'missed' and e.excused_by is not null then 'excused' else x.result end,
+            case when x.result = 'missed' then e.excused_by end, x.period_start
+     from jsonb_to_recordset($2::jsonb) as x(user_id uuid, result text, period_start date)
+     left join lateral (
+       select case when w.user_id is null then w.excused_by || ' (everyone)' else w.excused_by end as excused_by
+       from week_excuses w where w.week_of = $1::date and (w.user_id = x.user_id or w.user_id is null)
+       order by w.user_id nulls last limit 1
+     ) e on true
      on conflict (user_id, week_of) do nothing returning user_id`,
     [week, JSON.stringify(rows)],
   );
@@ -199,33 +209,73 @@ export async function processContributions(q: Query, d: AdjustDeps): Promise<Rec
 /**
  * An admin excuses a week, for one member or for everyone who missed it
  * (spec B.9, B.12). The week then never counts; an adjustment it caused is
- * deleted (or, if already invoiced, admins are told to credit it). A single
- * member's week can be excused before it is recorded.
+ * deleted (or, if already invoiced, admins are told to credit it). A week
+ * not recorded yet is excused in advance through `week_excuses`, which
+ * recordWeek applies only to a result that would be "missed". Returns how
+ * many recorded weeks changed (a pending excuse changes none yet).
  */
 export async function excuseWeek(q: Query, d: AdjustDeps, o: { week: string; userId: string | null; by: string }): Promise<number> {
   let rows: { user_id: string; period_start: string | null }[];
+  let pending = false;
   if (o.userId) {
-    const [u] = await q<{ anchor: string | null }>(`select ${ISO(ANCHOR("users"))} as anchor from users where id = $1`, [o.userId]);
-    if (!u) return 0;
-    const period = periodAt(u.anchor, cutoffInstant(o.week, d.settings.runCutoff));
     rows = await q(
-      `insert into contribution_weeks (user_id, week_of, result, excused_by, period_start) values ($1, $2, 'excused', $3, $4)
-       on conflict (user_id, week_of) do update set result = 'excused', excused_by = excluded.excused_by where contribution_weeks.result = 'missed'
+      `update contribution_weeks set result = 'excused', excused_by = $3 where user_id = $1 and week_of = $2 and result = 'missed'
        returning user_id, to_char(period_start, 'YYYY-MM-DD') as period_start`,
-      [o.userId, o.week, o.by, period?.startDate ?? null],
+      [o.userId, o.week, o.by],
     );
+    if (!rows.length) {
+      // Not recorded yet: a pending excuse, applied by recordWeek only if the week turns out missed.
+      const made = await q(
+        `insert into week_excuses (week_of, user_id, excused_by)
+         select $2, u.id, $3 from users u where u.id = $1 and not exists (select 1 from contribution_weeks c where c.user_id = $1 and c.week_of = $2)
+         on conflict (week_of, coalesce(user_id, '00000000-0000-0000-0000-000000000000'::uuid)) do nothing returning id`,
+        [o.userId, o.week, o.by],
+      );
+      pending = made.length > 0;
+    }
   } else {
+    // Kept for the week, so members not recorded yet are covered when they are, and so the excuse can be undone.
+    await q(
+      `insert into week_excuses (week_of, user_id, excused_by) values ($1, null, $2)
+       on conflict (week_of, coalesce(user_id, '00000000-0000-0000-0000-000000000000'::uuid)) do nothing`,
+      [o.week, o.by],
+    );
     rows = await q(
-      `update contribution_weeks set result = 'excused', excused_by = $2 where week_of = $1 and result = 'missed'
+      `update contribution_weeks set result = 'excused', excused_by = $2 || ' (everyone)' where week_of = $1 and result = 'missed'
        returning user_id, to_char(period_start, 'YYYY-MM-DD') as period_start`,
       [o.week, o.by],
     );
   }
-  await q(`insert into admin_actions (admin_email, user_id, action, detail) values ($1, $2, 'excuse_week', $3)`, [
-    o.by,
-    o.userId,
-    JSON.stringify({ week: o.week, everyone: !o.userId, rows: rows.length }),
-  ]);
+  await logAdminAction(q, { by: o.by, userId: o.userId, action: "excuse_week", detail: { week: o.week, everyone: !o.userId, rows: rows.length, pending } });
+  await settleAll(q, d, rows);
+  return rows.length;
+}
+
+/**
+ * Undoes an excuse for everyone: its row goes, and the weeks it excused are
+ * missed again, except where the member has an excuse of their own or Roger
+ * caused the miss (a failed week, or nothing in the pool fit them), which
+ * stay excused. Each month is then settled again. Returns how many weeks
+ * changed, or null when there was no such excuse.
+ */
+export async function undoExcuseForEveryone(q: Query, d: AdjustDeps, o: { week: string; by: string }): Promise<number | null> {
+  const gone = await q(`delete from week_excuses where week_of = $1 and user_id is null returning id`, [o.week]);
+  if (!gone.length) return null;
+  const roger = `(exists (select 1 from cora_weeks w where w.week_of = cw.week_of and not w.dry_run and w.status = 'failed')
+                  or exists (select 1 from cora_user_weeks c where c.user_id = cw.user_id and c.week_of = cw.week_of and not c.dry_run and c.outcome = 'none'))`;
+  const rows = await q<{ user_id: string; period_start: string | null }>(
+    `update contribution_weeks cw set result = case when ${roger} then 'excused' else 'missed' end, excused_by = case when ${roger} then 'roger' end
+     where cw.week_of = $1 and cw.result = 'excused' and cw.excused_by like '% (everyone)'
+       and not exists (select 1 from week_excuses w where w.week_of = cw.week_of and w.user_id = cw.user_id)
+     returning cw.user_id, to_char(cw.period_start, 'YYYY-MM-DD') as period_start`,
+    [o.week],
+  );
+  await logAdminAction(q, { by: o.by, action: "excuse_week_undone", detail: { week: o.week, rows: rows.length } });
+  await settleAll(q, d, rows);
+  return rows.length;
+}
+
+async function settleAll(q: Query, d: AdjustDeps, rows: { user_id: string; period_start: string | null }[]): Promise<void> {
   for (const r of rows) {
     if (!r.period_start) continue;
     // One member's failure never stops the others; the hourly pass settles a pending adjustment again.
@@ -235,7 +285,6 @@ export async function excuseWeek(q: Query, d: AdjustDeps, o: { week: string; use
       console.error("[contribution] excuse", r.user_id, e instanceof Error ? e.message : e);
     }
   }
-  return rows.length;
 }
 
 /** What the status strip and the /app banner need about the month so far (spec B.9 notices 2 to 4). */
