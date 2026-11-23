@@ -1,4 +1,3 @@
-import { wallToInstant } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 
 /**
@@ -18,17 +17,29 @@ import type { Query } from "@/lib/db-query";
  * whatever the account's state, a list whose order for the week was paid.
  * Held, closed and unpaid users wait.
  *
- * A paid month covers a week when it was still running at that week's charge
- * instant (the Monday at the charge time; $4): a list for a paid week
- * delivered late still arrives, and the Monday the month ends on (its
- * renewal, which is not paid) is not covered.
+ * A paid month covers a week when access ends on a later Toronto date than
+ * the week's Monday (COVERS_WEEK): a list for a paid week delivered late
+ * still arrives, and the Monday the month ends on (its renewal, which is not
+ * paid, at whatever time of day) is not covered.
+ *
+ * A cancelled account is covered only by a paid subscription period that
+ * outlived the week: it was charged (`first_charge_at`), it still names the
+ * subscription (an account that ended at once never had one; a switch to one
+ * at a time clears it), and `access_ends_at` is that subscription's end: the
+ * period end for a cancellation, or the start of the unpaid period for an
+ * unpaid end (cancel.ts `endUnpaid`, renewals.ts `subscriptionEnded`). An
+ * account that ended at once (`endNow`: trial, a held first charge, one at a
+ * time) is covered by nothing here; only a paid order delivers its list.
  */
+export const COVERS_WEEK = (week: string, u = "u") => `(${u}.access_ends_at at time zone 'America/Toronto')::date > ${week}::date`;
+
 export const DELIVERABLE_SQL = `(
   exists (select 1 from orders o where o.user_id = u.id and o.week_of = $2 and o.status in ('charged', 'sent'))
   or (u.status = 'trial' and u.cancel_requested_at is null and (u.sponsor_id is not null or u.free_lists_used < $3))
   or (u.status = 'active' and (u.sponsor_id is not null
-       or (u.plan = 'monthly' and (u.cancel_requested_at is null or u.access_ends_at is null or u.access_ends_at > $4::timestamptz))))
-  or (u.status = 'cancelled' and u.plan = 'monthly' and (u.access_ends_at is null or u.access_ends_at > $4::timestamptz))
+       or (u.plan = 'monthly' and (u.cancel_requested_at is null or u.access_ends_at is null or ${COVERS_WEEK("$2")}))))
+  or (u.status = 'cancelled' and u.plan = 'monthly' and u.first_charge_at is not null and u.stripe_subscription is not null
+       and u.access_ends_at is not null and ${COVERS_WEEK("$2")})
 )`;
 
 /**
@@ -36,7 +47,7 @@ export const DELIVERABLE_SQL = `(
  * now (0 if already delivered, none, or not deliverable). A list paid by order
  * never uses a free list.
  */
-export async function deliverWeek(q: Query, userId: string, week: string, freeRuns: number, chargeAt: string): Promise<{ delivered: number; freeListNumber: number | null }> {
+export async function deliverWeek(q: Query, userId: string, week: string, freeRuns: number): Promise<{ delivered: number; freeListNumber: number | null }> {
   const [r] = await q<{ delivered: number | string; free_list: number | null }>(
     `with u as (select * from users u where u.id = $1 and ${DELIVERABLE_SQL} for update),
      paid as (select exists (select 1 from orders o where o.user_id = $1 and o.week_of = $2 and o.status in ('charged', 'sent')) as yes),
@@ -52,7 +63,7 @@ export async function deliverWeek(q: Query, userId: string, week: string, freeRu
      ),
      w as (update cora_user_weeks set delivered_at = now() where user_id = $1 and week_of = $2 and not dry_run and exists (select 1 from p))
      select (select count(*) from p) as delivered, (select free_lists_used from c) as free_list`,
-    [userId, week, freeRuns, wallToInstant(week, chargeAt).toISOString()],
+    [userId, week, freeRuns],
   );
   return { delivered: Number(r?.delivered ?? 0), freeListNumber: r?.free_list ?? null };
 }

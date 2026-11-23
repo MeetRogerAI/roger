@@ -32,7 +32,7 @@ export async function runChargeJob(q: Query, d: ChargeDeps, o: { week: string })
   const due = await q<{ id: string }>(
     `select u.id from users u join cora_user_weeks cw on cw.user_id = u.id and cw.week_of = $1 and not cw.dry_run
      where u.status = 'trial' and u.plan = 'monthly' and u.cancel_requested_at is null and u.stripe_subscription is null
-       and u.free_lists_used >= $2 and cw.outcome in ('picked', 'short')
+       and u.sponsor_id is null and u.free_lists_used >= $2 and cw.outcome in ('picked', 'short')
      order by u.id`,
     [week, d.settings.freeRuns],
   );
@@ -47,14 +47,17 @@ export async function runChargeJob(q: Query, d: ChargeDeps, o: { week: string })
     }
   }
 
-  // The announced Monday passed without a third list: one note with the next possible date.
-  const moved = await q<{ id: string; email: string }>(
-    `select u.id, u.email from users u join cora_user_weeks cw on cw.user_id = u.id and cw.week_of = $1 and not cw.dry_run
-     where u.status = 'trial' and u.plan = 'monthly' and u.free_lists_used >= $2 and cw.outcome = 'none'`,
+  // The announced Monday passed without a third list: one note with the next possible date. No eligible plays
+  // ('none'), or no run by the cutoff ('not_eligible': a trial with no run is the only trial Cora passes over).
+  const moved = await q<{ id: string; email: string; outcome: string }>(
+    `select u.id, u.email, cw.outcome from users u join cora_user_weeks cw on cw.user_id = u.id and cw.week_of = $1 and not cw.dry_run
+     where u.status = 'trial' and u.plan = 'monthly' and u.free_lists_used >= $2 and u.sponsor_id is null and u.cancel_requested_at is null
+       and u.stripe_subscription is null and cw.outcome in ('none', 'not_eligible')`,
     [week, d.settings.freeRuns],
   );
   for (const u of moved) {
-    await sendToUser({ id: u.id, email: u.email }, "charge_date_moved", week, chargeDateMovedEmail({ nextMonday: nextChargeMonday(week) }), d).catch(() => {});
+    const reason = u.outcome === "none" ? "no_plays" : "no_run";
+    await sendToUser({ id: u.id, email: u.email }, "charge_date_moved", week, chargeDateMovedEmail({ nextMonday: nextChargeMonday(week), reason }), d).catch(() => {});
   }
   const orders = d.orders ? await chargeOrders(q, { ...d, orders: d.orders }, week) : undefined;
   return { week, status: "done", first, orders, dateMoved: moved.length };

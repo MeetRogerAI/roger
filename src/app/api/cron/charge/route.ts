@@ -11,7 +11,7 @@ export const maxDuration = 300;
 export async function GET(request: Request) {
   if (!cronAuthorized(request)) return new Response("Unauthorized", { status: 401 });
   try {
-    const now = await cronNow(request);
+    const now = await cronNow(request, { money: true });
     if (wallParts(now).dow !== 1) return Response.json({ status: "skipped", note: "Charges run on Mondays." });
     const gw = stripeBilling();
     if (!gw) return Response.json({ status: "skipped", note: "Stripe is not configured." });

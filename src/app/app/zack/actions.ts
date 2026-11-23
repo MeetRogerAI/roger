@@ -23,13 +23,25 @@ import { sharingEffect } from "@/lib/zack/sharing-effect";
 import { noticeQuoteChange } from "@/lib/billing/quote";
 import { stripeBilling } from "@/lib/billing/subscriptions";
 
-type Me = { id: string; email: string; plan: Plan; currency: Currency | null; sharing: Sharing; agent: string; status: string; trial_started_at: string | null };
+type Me = {
+  id: string;
+  email: string;
+  plan: Plan;
+  currency: Currency | null;
+  sharing: Sharing;
+  agent: string;
+  status: string;
+  trial_started_at: string | null;
+  switched: boolean;
+  quote_week: string | null;
+};
 
 /** The signed-in user, who must have an account that can receive lists (the same rule as the Zack endpoints). */
 async function me(): Promise<Me> {
   const s = await requireUserForAction();
   const [u] = await query<Me>(
-    `select id, email, plan, currency, sharing, agent, status, trial_started_at::text from users where id = $1`,
+    `select id, email, plan, currency, sharing, agent, status, trial_started_at::text, switched_from_per_run_at is not null as switched, quote->>'week' as quote_week
+     from users where id = $1`,
     [s.userId],
   );
   if (!u || u.status === "signup") redirect("/start");
@@ -77,7 +89,11 @@ export async function changeSharing(_prev: SharingState, fd: FormData): Promise<
   const sharing = field(fd, "sharing") as Sharing;
   if (!["share", "match_only", "off"].includes(sharing)) return { status: "error", message: "Choose one." };
   if (sharing === u.sharing) return { status: "saved", sharing, message: "That’s already your setting." };
-  const effect = sharingEffect({ settings: await readV3Settings(), plan: u.plan, currency: u.currency, from: u.sharing, to: sharing, trialStartedAt: u.trial_started_at, status: u.status });
+  const effect = sharingEffect({ settings: await readV3Settings(), plan: u.plan, currency: u.currency, from: u.sharing, to: sharing, trialStartedAt: u.trial_started_at,
+    status: u.status,
+    switchedFromPerRun: u.switched,
+    quoteWeek: u.quote_week,
+  });
   if (field(fd, "confirm") !== "yes") return { status: "confirm", sharing, effect };
   await setSharing(query, u, sharing, { priceLine: effect });
   // The first charge's stored amount follows the change, and the user is told if it moved (spec check 21).

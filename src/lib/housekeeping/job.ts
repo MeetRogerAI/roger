@@ -40,7 +40,7 @@ import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from 
  * by then is left to the next pass. Cheap database-only tasks run first.
  */
 export const PASS_SECONDS = 240;
-export type PassContext = { /** Epoch ms. */ deadline: number };
+export type PassContext = { /** Epoch ms. */ deadline: number; /** The real clock (tests that simulate time pass their own); defaults to now. */ realNow?: Date };
 export type HourlyTask = { name: string; run: (q: Query, d: ChargeDeps, ctx: PassContext) => Promise<unknown> };
 
 export const HOURLY_TASKS: HourlyTask[] = [
@@ -134,7 +134,8 @@ export async function reconcileStripe(q: Query, d: ChargeDeps, c: PassContext, g
     console.error("[hourly] reconcile users", e instanceof Error ? e.message : e);
     out.users = { error: e instanceof Error ? e.message : String(e) };
   }
-  out.finished = await finishReconcilePass(q, d.now);
+  // Never recorded ahead of the real clock: an "as of" pass in the future must not hold off the real daily pass.
+  out.finished = await finishReconcilePass(q, d.now, c.realNow);
   return out;
 }
 

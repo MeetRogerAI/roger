@@ -58,13 +58,25 @@ export type PlanUser = {
   renewal_invoice: string | null;
   switched_from_per_run_at: string | null;
   anchor: string | null;
+  renewal_failed_at: string | null;
 };
+
+/**
+ * Where an unpaid end leaves access (the deliverable rule compares against
+ * it): the start of the billing month whose renewal was never paid, found
+ * from the first failure of that renewal; never later than now. With no
+ * failure on record, now.
+ */
+export function unpaidStart(anchor: string | null, failedAt: string | null, now: Date): Date {
+  const start = failedAt ? periodAt(anchor, new Date(failedAt))?.start : null;
+  return start && start < now ? start : now;
+}
 
 export async function loadPlanUser(q: Query, userId: string): Promise<PlanUser | null> {
   const [u] = await q<PlanUser>(
     `select id, email, status, plan, hold_reason, stripe_customer, stripe_subscription, ${ISO("cancel_requested_at")} as cancel_requested_at,
             ${ISO("access_ends_at")} as access_ends_at, plan_change_to, ${ISO("plan_change_at")} as plan_change_at, free_lists_used, renewal_invoice,
-            ${ISO("switched_from_per_run_at")} as switched_from_per_run_at, ${ISO(ANCHOR("users"))} as anchor
+            ${ISO("switched_from_per_run_at")} as switched_from_per_run_at, ${ISO(ANCHOR("users"))} as anchor, ${ISO("renewal_failed_at")} as renewal_failed_at
      from users where id = $1`,
     [userId],
   );
@@ -112,7 +124,12 @@ export async function cancelPlan(q: Query, d: PlanDeps, o: { userId: string; rea
   return endAtPeriodEnd(q, d, u, reason);
 }
 
-/** Nothing is subscribed: the account ends now, in one statement that also re-checks no charge is in flight. */
+/**
+ * Nothing is subscribed: the account ends now, in one statement that also
+ * re-checks no charge is in flight. Access ends at the moment of cancelling;
+ * with no subscription, the deliverable rule covers no later week (a list
+ * held for a first charge is never delivered), only a paid order's.
+ */
 async function endNow(q: Query, d: PlanDeps, u: PlanUser, reason: string | null): Promise<PlanResult> {
   const rows = await q<{ id: string }>(
     `with u as (
@@ -163,11 +180,12 @@ async function endUnpaid(q: Query, d: PlanDeps, u: PlanUser, reason: string | nu
     console.error("[billing] cancel unpaid", u.id, e instanceof Error ? e.message : e);
     return { ok: false, message: UNREACHABLE, busy: true };
   }
+  // Access ends where the unpaid month starts: a list for a week of that month is never delivered.
   await q(
-    `update users set status = 'cancelled', hold_reason = null, cancel_requested_at = $3, access_ends_at = $3, cancel_reason = coalesce($4, cancel_reason),
+    `update users set status = 'cancelled', hold_reason = null, cancel_requested_at = $3, access_ends_at = $5, cancel_reason = coalesce($4, cancel_reason),
        plan_change_to = null, plan_change_at = null, renewal_failed_at = null, renewal_invoice = null
      where id = $1 and stripe_subscription = $2 and status in ('held', 'active')`,
-    [u.id, u.stripe_subscription, d.now.toISOString(), reason],
+    [u.id, u.stripe_subscription, d.now.toISOString(), reason, unpaidStart(u.anchor, u.renewal_failed_at, d.now).toISOString()],
   );
   await adjustmentOnCancelScheduled(q, d, u.id).catch((e) => console.error("[billing] cancel adjustment", u.id, e instanceof Error ? e.message : e));
   await alertAdmins(

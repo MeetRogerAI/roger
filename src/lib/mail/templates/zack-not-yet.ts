@@ -1,4 +1,4 @@
-import { appUrl, renderEmail, type Rendered } from "../layout";
+import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
 import { longDate } from "./welcome";
 
 /**
@@ -21,6 +21,20 @@ export function zackNotYetEmail(o: { day: number; closesOn: string }): Rendered 
   });
 }
 
+/** The free lists were used, but no report came for the first paid list in the trial's last 21 days: it closes with no charge. */
+export function trialNoChargeClosedEmail(): Rendered {
+  return renderEmail({
+    subject: "Your Roger trial has closed",
+    preview: "Nothing was charged.",
+    heading: "Your trial has closed.",
+    paragraphs: [
+      "Your free lists went out, but we haven’t had a report from Zack in the three weeks since, so your first paid list never came and your trial has closed. Nothing was charged.",
+      COME_BACK_LINE,
+    ],
+    button: comeBackButton(),
+  });
+}
+
 /** Spec B.13 email 11, the day-21 form: no first list in the trial's 21 days, so it closes with no charge. */
 export function trialNoListClosedEmail(): Rendered {
   return renderEmail({
@@ -29,8 +43,8 @@ export function trialNoListClosedEmail(): Rendered {
     heading: "Your trial has closed.",
     paragraphs: [
       "We didn’t get a report from Zack in your trial’s 21 days, so no list went out and your trial has closed. Nothing was charged.",
-      "You can start again any time.",
+      COME_BACK_LINE,
     ],
-    button: { label: "Start again", url: appUrl("/start") },
+    button: comeBackButton(),
   });
 }

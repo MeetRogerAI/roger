@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/charge",
-      "schedule": "*/10 10-17 * * 1"
+      "schedule": "*/10 5-17 * * 1"
     },
     {
       "path": "/api/cron/housekeeping",
@@ -31,7 +31,7 @@
     },
     {
       "path": "/api/cron/send",
-      "schedule": "*/10 11-17 * * 1"
+      "schedule": "*/10 5-17 * * 1"
     }
   ]
 }

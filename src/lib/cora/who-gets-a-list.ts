@@ -14,16 +14,20 @@ export type ListFacts = {
   ordered: boolean;
   /** One at a time: this week's charge succeeded. Known only at send time. */
   charged: boolean;
-  /** Cancelled: the paid month has ended. */
+  /** Cancelled, or a monthly member cancelling or switching: the paid month does not cover this week. */
   accessEnded: boolean;
+  /** Held: why. An unpaid renewal is still picked for; the list waits for the payment. */
+  holdReason?: string | null;
 };
 
 export type ListDecision = { gets: boolean; why: string };
 
 export function whoGetsAList(f: ListFacts, phase: "pick" | "send"): ListDecision {
-  if (f.status === "held") return { gets: false, why: "payment held" };
+  // A renewal unpaid: picked, and delivered once it is paid (the deliverable rule withholds it until then).
+  if (f.status === "held" && !(phase === "pick" && f.holdReason === "renewal_unpaid")) return { gets: false, why: "payment held" };
   if (f.status === "closed" || f.status === "signup") return { gets: false, why: f.status === "closed" ? "closed" : "not signed up" };
   if (f.status === "cancelled" && f.accessEnded) return { gets: false, why: "cancelled and past the paid month" };
+  if (f.status === "active" && f.plan === "monthly" && !f.sponsored && f.accessEnded) return { gets: false, why: "monthly ending before this week" };
   if (f.sponsored) return { gets: true, why: "sponsored: every Monday" };
   if (f.status === "trial") {
     if (f.sharing === "off") return { gets: true, why: "trial, Zack off: matched from the profile" };

@@ -165,7 +165,7 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
   if (phase === "merged") {
     await rebuildContent(q, o.week);
     const pool = await loadPool(q, o.week);
-    const users = (await loadUsers(q, o.week)).filter((u) => whoGetsAList(u.facts, "pick").gets);
+    const users = (await loadUsers(q, o.week, { now: o.now })).filter((u) => whoGetsAList(u.facts, "pick").gets);
     const plays = pool.rows.map((r) => ({ id: r.id, title: r.title, evidence: pool.evidence.get(r.id) ?? [], reachCount: users.filter((u) => couldUse(u, r)).length }));
     const { scored, retired } = scorePool(plays, { asOf: o.week, weights: o.settings.recencyWeights, activeUsers: users.length });
     // This is the week's snapshot: picking reads these stored scores, so every user is ranked against the same pool.
@@ -188,7 +188,7 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
     const scored = await storedScores(q);
     const pool = await loadPool(q, o.week);
     const byId = new Map(pool.rows.map((r) => [r.id, r]));
-    const allUsers = await loadUsers(q, o.week);
+    const allUsers = await loadUsers(q, o.week, { now: o.now });
     const decided = new Set((await q<{ user_id: string }>(`select user_id from cora_user_weeks where week_of = $1 and dry_run = $2`, [o.week, o.dry])).map((r) => r.user_id));
     const todo = allUsers.filter((u) => !decided.has(u.id));
     const breaker = { failures: 0 };

@@ -48,16 +48,18 @@ const OPEN_ORDER = `exists (select 1 from orders o where o.user_id = u.id and o.
 export async function giveExtraFreeList(q: Query, by: string, userId: string): Promise<Done> {
   const rows = await q<{ free_lists_used: number }>(
     `update users u set free_lists_used = u.free_lists_used - 1, quote = null
-     where u.id = $1 and u.status = 'trial' and u.stripe_subscription is null and u.free_lists_used > 0 and not ${OPEN_CLAIM} and not ${OPEN_ORDER}
+     where u.id = $1 and u.status = 'trial' and u.stripe_subscription is null and u.free_lists_used > 0 and u.switched_from_per_run_at is null
+       and not ${OPEN_CLAIM} and not ${OPEN_ORDER}
      returning u.free_lists_used`,
     [userId],
   );
   if (!rows.length) {
-    const [u] = await q<{ status: string; free_lists_used: number; open: boolean; ordered: boolean }>(
-      `select status, free_lists_used, ${OPEN_CLAIM} as open, ${OPEN_ORDER} as ordered from users u where id = $1`,
+    const [u] = await q<{ status: string; free_lists_used: number; open: boolean; ordered: boolean; switched: boolean }>(
+      `select status, free_lists_used, ${OPEN_CLAIM} as open, ${OPEN_ORDER} as ordered, switched_from_per_run_at is not null as switched from users u where id = $1`,
       [userId],
     );
     if (!u) return no("No such user.");
+    if (u.switched) return no("They switched to monthly from paying one list at a time: they are not on the trial, so there is no free list to give.");
     if (u.open) return no("A charge for this user is in progress. Try again in a few minutes.");
     if (u.ordered) return no("They have a list ordered, which would be charged. Give the extra list after that Monday, or once they cancel the order.");
     if (u.status !== "trial") return no("Only a member still on the trial can get an extra free list.");

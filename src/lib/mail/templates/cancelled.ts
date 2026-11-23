@@ -1,4 +1,4 @@
-import { appUrl, renderEmail, type Rendered } from "../layout";
+import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
 import { longDate } from "./welcome";
 
 /**
@@ -16,9 +16,9 @@ export function cancelledEmail(o: { when: "now"; charged: boolean } | { when: "p
       paragraphs: [
         o.charged ? "Nothing more will be charged." : "You have not been charged, and we removed your saved card.",
         "Your reports and the ideas you were sent stay readable when you sign in.",
-        "You can start again any time.",
+        COME_BACK_LINE,
       ],
-      button: { label: "Start again", url: appUrl("/start") },
+      button: comeBackButton(),
     });
   }
   return renderEmail({
