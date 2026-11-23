@@ -83,11 +83,11 @@
 
   <p class="eyebrow">Roger v3 · launch list</p>
   <h1>What Peter still has to supply, and the defaults waiting for his yes</h1>
-  <p class="lead">The build spec leaves 14 things only Peter can provide and 12 choices made on his behalf. Nothing here is finished until its row says so.</p>
-  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Source: <code>artifacts/v3/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
+  <p class="lead">The build spec leaves 14 things only Peter can provide and 12 choices made on his behalf; the B1 build added eight more owner-only go-live items (S15 to S22). Nothing here is finished until its row says so.</p>
+  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Updated November 23, 2026 for spec version 1.2 and the B1 build (section 3) · Source: <code>artifacts/v3/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
 
   <div class="tiles" aria-label="Progress">
-    <div class="tile"><b id="n-open">13</b><span>items still to supply</span></div>
+    <div class="tile"><b id="n-open">21</b><span>items still to supply</span></div>
     <div class="tile"><b id="n-done">0</b><span>items supplied</span></div>
     <div class="tile"><b id="n-unconf">11</b><span>defaults not yet confirmed</span></div>
     <div class="tile"><b id="n-conf">1</b><span>defaults confirmed or changed</span></div>
@@ -105,7 +105,7 @@
 
   <section aria-labelledby="h-supply">
     <h2 id="h-supply">1. Items Peter needs to supply</h2>
-    <p class="sub">Items S1 to S12 are the spec's own list. S13 was added when this list was made, because billing, the admin and email cannot run without it. S14 was added on November 22, 2026, because Cora has nothing to pick from on the first Monday without the pilot runs.</p>
+    <p class="sub">Items S1 to S12 are the spec's own list. S13 was added when this list was made, because billing, the admin and email cannot run without it. S14 was added on November 22, 2026, because Cora has nothing to pick from on the first Monday without the pilot runs. S15 to S22 were added on November 23, 2026: owner-only items the B1 build found it needs before go-live.</p>
     <div class="scroll">
       <table id="supply">
         <caption>Items Peter needs to supply</caption>
@@ -161,7 +161,7 @@
             <td><span class="ver">B1</span></td>
             <td>Email-link sign-in works without it. Hide the Google button while the variables are missing.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes"></td>
+            <td class="notes">2026-11-23, build: Google sign-in is built and hidden until both <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> are set (plan Unit 18). To do: create a Google OAuth client (web application) and register <code>https://meetroger.ai/auth/google/callback</code>, plus each preview or local base URL to test on (or set <code>APP_URL</code> there).</td>
           </tr>
           <tr data-id="S6" data-status="open" data-blocks="A1" data-done-on="">
             <td class="id">S6</td>
@@ -201,7 +201,7 @@
             <td><span class="ver">B1</span></td>
             <td>Seed it unpublished. The startup page shows no setup block until a version is published.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes"></td>
+            <td class="notes">2026-11-23, build: <code>/getstarted</code>, the versioned editor at <code>/admin/setup-file</code> and publishing are built (plan Unit 16); the table is empty, so the page shows no setup block. To do: supply <code>Real estate Grok Bot Setup.md</code> (not in the repo), read version 1 after the two edits, publish it; and give the Grok Bot download link the "Install" step points to.</td>
           </tr>
           <tr data-id="S10" data-status="open" data-blocks="A1 B1" data-done-on="">
             <td class="id">S10</td>
@@ -211,7 +211,7 @@
             <td><span class="ver">A1</span><span class="ver">B1</span></td>
             <td>Publish both pages marked as drafts. Do not open sign-up to the public until this is done.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">2026-11-22, Peter: people who are sent the <code>/start</code> link may sign up and be charged while both pages are still labelled drafts, as long as the pages are live and linked from sign-up. Start buttons on the public site still wait for this row.</td>
+            <td class="notes">2026-11-22, Peter: people who are sent the <code>/start</code> link may sign up and be charged while both pages are still labelled drafts, as long as the pages are live and linked from sign-up. Start buttons on the public site still wait for this row.<br>2026-11-23, build: the privacy notes the build raised are listed in S22.</td>
           </tr>
           <tr data-id="S11" data-status="open" data-blocks="B2" data-done-on="">
             <td class="id">S11</td>
@@ -241,7 +241,7 @@
             <td><span class="ver">B1</span></td>
             <td>Build against Stripe test keys. Never commit a key to the repo.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.</td>
+            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.<br>2026-11-23, build: everything that reads these is built. The exact list: <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_WEBHOOK_SECRET</code> (test values on Preview, live on Production); the six price ids <code>STRIPE_PRICE_MONTHLY_USD</code>, <code>_MONTHLY_CAD</code>, <code>_MONTHLY_HIGHER_USD</code>, <code>_MONTHLY_HIGHER_CAD</code>, <code>_RUN_USD</code>, <code>_RUN_CAD</code> (US$200, CA$280, US$400, CA$560, US$100, CA$140, before tax, each in test and live mode); <code>ADMIN_EMAILS</code> (Peter's and Ehab's sign-in addresses); <code>EMAIL_FROM_SUPPORT</code> ("Roger support &lt;support@meetroger.ai&gt;", a verified Resend sender). The webhook endpoint, its events and the dashboard settings are S16.</td>
           </tr>
           <tr data-id="S14" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S14</td>
@@ -251,7 +251,87 @@
             <td><span class="ver">B1</span></td>
             <td>Build and test with made-up runs. The first real Cora run waits for these.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-22. Spec B.7, "Seed data". 2026-11-22: Peter added 13 run files (November 12 to 15, Zack 1.8 and 1.9, no <code>roger-run</code> block). A pattern scan found no email addresses, phone numbers or links. Peter confirmed the same day that the files are cleared for the public repo. Each contributor's runs go under one hidden contributor record (requirements R25). Still open: the import itself, which needs the seed tool.</td>
+            <td class="notes">Added 2026-11-22. Spec B.7, "Seed data". 2026-11-22: Peter added 13 run files (November 12 to 15, Zack 1.8 and 1.9, no <code>roger-run</code> block). A pattern scan found no email addresses, phone numbers or links. Peter confirmed the same day that the files are cleared for the public repo. Each contributor's runs go under one hidden contributor record (requirements R25). Still open: the import itself, which needs the seed tool.<br>2026-11-23, build: the seed tool is built (<code>/admin/cora</code> and <code>scripts/seed-import.ts</code>), with nine contributor records and linking to accounts on the user page; the scenario test <code>tests/scenarios/seed-import.test.ts</code> proves a linked pilot is never sent their own seed plays. To do on production, at go-live: run the 13 files through the real model first (<code>INTAKE_LIVE=1</code>, needs S15), import them, link each pilot's record when their account exists, then a Cora dry run that an admin reads.</td>
+          </tr>
+          <tr data-id="S15" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S15</td>
+            <th scope="row">Vercel access and the AI Gateway token</th>
+            <td>The Vercel project (deploy and log in to check the first deploy, cron runs and logs); AI Gateway credentials for the intake, merge and Fit models</td>
+            <td>A preview deploy of the merged branch builds; the cron jobs show in Vercel; a run sent on preview is read by the model (intake) and a Cora dry run completes.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Runs with a <code>roger-run</code> block are read by code without the model; everything else waits.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build. The 13 seed runs have no <code>roger-run</code> block, so they need the model (plan Unit 9, "Not verified"). Also confirm the plan allows the 10-minute Monday schedules and 300-second functions.</td>
+          </tr>
+          <tr data-id="S16" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S16</td>
+            <th scope="row">Stripe dashboard settings and the webhook endpoint</th>
+            <td>Stripe dashboard, test and live mode</td>
+            <td>The endpoint <code>https://meetroger.ai/api/stripe/webhook</code> (live) and a stable preview address (test) exist on API version <code>2026-11-18.endive</code> with these events: <code>checkout.session.completed</code>, <code>invoice.paid</code>, <code>invoice.finalized</code>, <code>invoice.payment_failed</code>, <code>customer.subscription.updated</code>, <code>customer.subscription.deleted</code>, <code>customer.updated</code>; their signing secrets are in S13. Stripe's own failed-payment and upcoming-renewal emails are off. Failed renewals leave the subscription unpaid, not cancelled, when retries run out. Radar is on for saved payment methods. A test invoice for a Canadian customer shows HST as its own row.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Build and test against fakes and Stripe test mode.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build (plan Units 12 to 15). The preview webhook needs an address that is not behind Vercel's deployment protection.</td>
+          </tr>
+          <tr data-id="S17" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S17</td>
+            <th scope="row">Neon: the scenario-test branch and the plan</th>
+            <td>Neon project <code>roger-db</code>: a third branch for scenario tests, with the non-production marker row written</td>
+            <td>The branch exists and holds the marker; its URL is set for <code>SCENARIO_DATABASE_URL</code>; Peter has decided whether the free plan is enough before real cards (short backups, shared compute).</td>
+            <td><span class="ver">B1</span></td>
+            <td>Scenario tests run against an in-process Postgres with fakes (<code>tests/scenarios/</code>).</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build. The switch to the sandbox and this branch is documented at the top of <code>tests/scenarios/helpers.ts</code> and still to be wired.</td>
+          </tr>
+          <tr data-id="S18" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S18</td>
+            <th scope="row">Wording sign-offs</th>
+            <td>Email templates in <code>src/lib/mail/templates/</code>; the plan, card and done steps; the status strip; the sharing confirmation</td>
+            <td>Peter has read every automatic email (spec B.13, 1 to 30) and the sign-up screens and said yes or given changes.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Ship the drafted wording.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build. Points to decide: emails state amounts as "tax included" where spec B.8 says "plus {tax}"; the no-ideas note to a paying member does not say the week never counts as a miss (requirements R15); the first invoice's higher-rate line carries the plan's product name (spec B.9, 1.2).</td>
+          </tr>
+          <tr data-id="S19" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S19</td>
+            <th scope="row">The Next.js security upgrade decision</th>
+            <td><code>package.json</code> (Next.js 16.4.1 today)</td>
+            <td>Peter has decided whether to take the pending Next.js security release before real cards, and the upgrade is merged with the build, lint and tests passing, or the decision to wait is recorded here.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Stay on 16.4.1.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build.</td>
+          </tr>
+          <tr data-id="S20" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S20</td>
+            <th scope="row">Open Cora decisions</th>
+            <td><code>content/cora/cora.md</code> and <code>src/lib/cora/</code></td>
+            <td>Peter has ruled on each literal reading the build made, and on the Cora 2.0 changes not built yet.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Build as read (plan Unit 11b, "Decisions taken by reading the drafts literally").</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build. The six readings: a play the user cannot install ranks below every play they can; an idea that could not be installed may be sent again once their setup has what it needs; changes 6 and 7 are on with no switch; a missing figure scores 1; in a pool under ten plays the lowest decile is above 1; a runner-up counts 1 toward Surprise. Not built: matching "Also runs" and profile Setup (change 8), upgrades (change 11), adoption counts (change 15). Also: should the admins be alerted when a trial or one-at-a-time member has no eligible plays (requirements R15 says yes; built only for paying members)?</td>
+          </tr>
+          <tr data-id="S21" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S21</td>
+            <th scope="row">Removing the shared admin password</th>
+            <td>Vercel: unset <code>ADMIN_PASSWORD</code>; then a small change removes the code</td>
+            <td>Peter and Ehab have each signed in to <code>/admin</code> on production with an email link, and <code>ADMIN_PASSWORD</code> is unset.</td>
+            <td><span class="ver">B1</span></td>
+            <td>The password login stays, limited to 5 tries per IP.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build (plan Unit 17). Unsetting the variable turns the login off at once and ends every password cookie.</td>
+          </tr>
+          <tr data-id="S22" data-status="open" data-blocks="B1" data-done-on="">
+            <td class="id">S22</td>
+            <th scope="row">Privacy-policy notes from the build</th>
+            <td><code>src/data/legal.ts</code> (marketing builder) and S10's read</td>
+            <td>Peter has decided each point and the privacy page says what happens.</td>
+            <td><span class="ver">B1</span></td>
+            <td>Build the defaults in the plan's "Needs a Decision From Peter".</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build. A deleted member's email stays in the admin log row that records the deletion (and email-change rows); admins reading runs and picks is not logged; retention erases runs 90 days after access ends but not for long-idle one-at-a-time or held members; pooled plays stay after a run is deleted; whether a contributor can have pooled plays withdrawn; how long sign-up interest, notification and Stripe event records are kept.</td>
           </tr>
         </tbody>
       </table>
@@ -391,6 +471,39 @@
         </tbody>
       </table>
     </div>
+  </section>
+
+  <section aria-labelledby="h-built">
+    <h2 id="h-built">3. B1: what is built, and the go-live gate</h2>
+    <p class="sub">Updated November 23, 2026. Units 1 to 18 of <code>docs/plans/2026-11-22-001-feat-roger-v3-app-b1-plan.md</code> are merged to <code>main</code>; Unit 19's scenario tests, first-pass record (<code>docs/v3-app-b1-first-pass.md</code>) and the spec write-back (version 1.2) are on <code>feat/v3-e2e</code>. On production both <code>v3.cycleLive</code> and <code>v3.signupOpen</code> are off.</p>
+    <div class="scroll">
+      <table id="built">
+        <caption>B1 build status</caption>
+        <thead>
+          <tr><th scope="col">Part</th><th scope="col">Built</th><th scope="col">Waits on</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Accounts and sign-in</th><td>Built: email links with a confirm button, sessions, the admin check by <code>ADMIN_EMAILS</code>, Google sign-in (hidden).</td><td>S5, S13, S21</td></tr>
+          <tr><th scope="row">Sign-up and the card step</th><td>Built: <code>/start</code> quiz, account, plan and consent, Stripe card step, done, welcome email, pilot links, the "not open yet" note.</td><td>S10, S13, S16</td></tr>
+          <tr><th scope="row">Zack</th><td>Built: key, instructions and runs endpoints, <code>/app/zack</code> controls, upload, run history and delete. Zack 2.0 files drafted.</td><td>S1, S3</td></tr>
+          <tr><th scope="row">Intake</th><td>Built: block parsing, the model fallback, validation, the three privacy passes and the fourth (harm) pass, flags.</td><td>S15 (the model)</td></tr>
+          <tr><th scope="row">Cora</th><td>Built: pool, merge, scoring in code, eligibility, picks, short lists, the job with lease, phases, noon deadline and dry run, seed import. Cora 2.0 drafted.</td><td>S2, S14, S20</td></tr>
+          <tr><th scope="row">Monday money</th><td>Built: first charge with retries and closes, orders, stored quotes, the contributor rule's difference line, the billing page, switching, cancelling, renewals, the webhook and the daily reconcile.</td><td>S13, S16, S4 (US tax)</td></tr>
+          <tr><th scope="row">Send, dashboard, startup page, admin, upkeep</th><td>Built: send job and emails, <code>/app</code>, history and week pages, <code>/getstarted</code> and its editor, settings with two-step email change, the admin pages and log, the hourly pass, nudges, the 21-day close, retention.</td><td>S9, S18, S22</td></tr>
+          <tr><th scope="row">Proof</th><td>Built: over 900 unit and integration tests; scenario tests for the trial to the first charge (CAD and USD), failed charges, the 21-day close, missed weeks, orders, thin weeks, switching and cancelling, one unattended cycle and the seed import. Of the 41 acceptance checks, 34 pass in tests and 7 need the live environment. Three gaps are recorded as known failures in the first-pass record.</td><td>S15, S16, S17</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub" style="margin-top:20px"><b>The go-live gate, in order.</b></p>
+    <ol class="sub">
+      <li>S1, S2, S3 approved; S13, S15, S16 in place on Preview; the scenario tests run once against the sandbox (S17) and the checks marked "needs the live environment" in the first-pass record are walked on preview.</li>
+      <li>S19 decided. Run <code>db/setup.mjs</code> on production (an owner step).</li>
+      <li>Live keys and prices (S13) and the live webhook (S16) on Production; a Canadian test invoice shows HST as its own row.</li>
+      <li>The 13 seed runs imported on production (S14), pilots' records linked, a Cora dry run read by an admin.</li>
+      <li>Privacy and terms linked from <code>/start</code> (S10); the Circles banner hidden on app pages and the header change agreed with the marketing builder.</li>
+      <li>An admin turns on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</li>
+      <li>After both admins have signed in by email on production: S21.</li>
+    </ol>
   </section>
 
   <footer>
