@@ -70,6 +70,10 @@ export type OpsRow = {
   freeListsUsed: number;
   stripeCustomer: string | null;
   cancelRequested: boolean;
+  /** A switch to one at a time waiting for the paid month's end (also on cancel_requested_at, but not a cancellation). */
+  switching: boolean;
+  /** A paying one-at-a-time member who switched to monthly: "trial" in the data, never a trial (no free lists, no trial close). */
+  switched: boolean;
   /** This week's order, for one at a time. */
   order: string | null;
   run: RunState;
@@ -122,15 +126,19 @@ export function filterOps(rows: OpsRow[], f: OpsFilter): OpsRow[] {
   return rows.filter((r) => (!f.attention || r.attention.length > 0) && (!f.status || statusKey(r) === f.status) && (!f.path || r.path === f.path));
 }
 
-export const STATUS_KEYS = ["signup", "trial", "monthly", "per_run", "held", "sponsored", "cancelled", "closed"] as const;
+export const STATUS_KEYS = ["signup", "trial", "monthly", "per_run", "switching", "held", "sponsored", "cancelled", "closed"] as const;
 
-/** The status column's kind (spec B.12): trial, monthly, one at a time, payment held, sponsored, cancelled. */
-export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "cancelRequested">): (typeof STATUS_KEYS)[number] {
+/** The status column's kind (spec B.12): trial, monthly, one at a time, switching, payment held, sponsored, cancelled. */
+export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "cancelRequested"> & Partial<Pick<OpsRow, "switching" | "switched">>): (typeof STATUS_KEYS)[number] {
   if (r.status === "held") return "held";
   if (r.status === "cancelled" || r.status === "closed" || r.status === "signup") return r.status;
+  // Monthly to one at a time, waiting for the paid month's end: a switch, not a cancellation.
+  if (r.status === "active" && r.switching) return "switching";
   // A monthly subscriber who cancelled stays active until the paid month ends (Unit 15).
   if (r.status === "active" && r.cancelRequested) return "cancelled";
   if (r.sponsored) return "sponsored";
+  // One at a time to monthly, waiting for the first monthly charge: a paying member, not a trial.
+  if (r.status === "trial" && r.switched) return "monthly";
   if (r.status === "trial") return "trial";
   return r.plan === "per_run" ? "per_run" : "monthly";
 }
@@ -163,6 +171,8 @@ type Row = {
   stripe_customer: string | null;
   stripe_subscription: string | null;
   cancel_requested: boolean;
+  switching: boolean;
+  switched: boolean;
   quote: { totalCents: number; currency: Currency; week: string } | null;
   first_charge_at: string | null;
   trial_started_at: string | null;
@@ -183,6 +193,7 @@ type Row = {
 const ROW_SQL = `
   select u.id, u.email, u.name, u.path, u.not_ready, u.status, u.hold_reason, u.plan, (u.sponsor_id is not null) as sponsored, u.sharing, u.currency,
          u.free_lists_used, u.stripe_customer, u.stripe_subscription, (u.cancel_requested_at is not null) as cancel_requested, u.quote,
+         (u.cancel_requested_at is not null and u.plan_change_to = 'per_run') as switching, (u.switched_from_per_run_at is not null) as switched,
          u.first_charge_at::text, u.trial_started_at::text, u.admin_note,
          o.status as order_status, o.amount_cents as order_cents,
          r.status as run_status, r.route as run_route, r.received_at::text as run_at,
@@ -207,8 +218,11 @@ function coraState(r: Row, weekStatus: string | null): CoraState {
 }
 
 function closesAt(r: Row, s: V3Settings, noListCloses: Map<string, Date>): string | null {
-  if (r.status === "held" && r.hold_reason === "first_charge_failed" && r.last_first_week) return closeTrialAt(r.last_first_week, s.chargeAt).toISOString();
-  // A trial with no list yet: the 21-day close housekeeping applies (src/lib/housekeeping/trial.ts).
+  // A switched member's failed first monthly charge goes back to one at a time on day 7: nothing closes.
+  if (r.switched) return null;
+  const failed = r.hold_reason === "first_charge_failed" || (r.hold_reason === "amount_changed" && r.quote?.week === r.last_first_week);
+  if (r.status === "held" && failed && r.last_first_week) return closeTrialAt(r.last_first_week, s.chargeAt).toISOString();
+  // A trial with no list yet, or past its free lists with no first paid list: the trial clocks apply (src/lib/housekeeping/trial.ts).
   return noListCloses.get(r.id)?.toISOString() ?? null;
 }
 
@@ -219,14 +233,14 @@ async function moneyOf(q: Query, r: Row, s: V3Settings, now: Date): Promise<{ te
   if (r.status === "trial") {
     if (r.plan === "per_run") return { text: r.order_status ? `Order: ${r.order_status}` : "One at a time, no order", missesUsed: null };
     const left = s.freeRuns - r.free_lists_used;
-    if (left > 0) return { text: `${left} free list${left === 1 ? "" : "s"} left`, missesUsed: null };
+    if (left > 0 && !r.switched) return { text: `${left} free list${left === 1 ? "" : "s"} left`, missesUsed: null };
     return { text: r.quote ? `${r.quote.week}: ${moneyCents(r.quote.totalCents, r.quote.currency)} with tax` : "First charge next ready week (no amount told yet)", missesUsed: null };
   }
   if (r.status === "active" && r.plan === "monthly") {
     const c = await contributionStatus(q, r.id, s, now).catch(() => null);
     const next = c?.periodEnd ?? (r.first_charge_at ? nextMonthly(r.first_charge_at, now) : null);
     const extra = c?.adjustment ? ` plus ${moneyCents(c.adjustment.amountCents, c.adjustment.currency)} difference` : "";
-    return { text: `${next ?? "?"}: ${money(amount(s, "monthly", cur), cur)} plus tax${extra}${r.cancel_requested ? " (cancelling)" : ""}`, missesUsed: c?.used ?? 0 };
+    return { text: `${next ?? "?"}: ${money(amount(s, "monthly", cur), cur)} plus tax${extra}${r.switching ? " (switching to one at a time)" : r.cancel_requested ? " (cancelling)" : ""}`, missesUsed: c?.used ?? 0 };
   }
   if (r.status === "active") return { text: r.order_status ? `Order: ${r.order_status}${r.order_cents != null ? `, ${moneyCents(r.order_cents, cur)}` : ""}` : "No order this week", missesUsed: null };
   return { text: "", missesUsed: null };
@@ -238,7 +252,9 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
   const [w] = await q<{ status: string }>(`select status from cora_weeks where week_of = $1 and not dry_run`, [week]);
   const rows = await q<Row>(ROW_SQL, [week, o.userId ?? null]);
   const eligible = await eligibleCounts(q, week, o.userId ? [o.userId] : undefined);
-  const noListCloses = new Map((await trialClocks(q, o.settings, o.now, o.userId ? [o.userId] : undefined)).map((t) => [t.id, t.closesAt]));
+  const only = o.userId ? [o.userId] : undefined;
+  const clocks = [...(await trialClocks(q, o.settings, o.now, only)), ...(await trialClocks(q, o.settings, o.now, only, "no_charge"))];
+  const noListCloses = new Map(clocks.map((t) => [t.id, t.closesAt]));
   const out: OpsRow[] = [];
   for (const r of rows) {
     const m = await moneyOf(q, r, o.settings, o.now);
@@ -264,6 +280,8 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       currency: r.currency,
       stripeCustomer: r.stripe_customer,
       cancelRequested: r.cancel_requested,
+      switching: r.switching,
+      switched: r.switched,
       cora: coraState(r, w?.status ?? null),
       money: m.text,
       missesUsed: m.missesUsed,

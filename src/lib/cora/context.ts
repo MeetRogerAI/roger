@@ -1,5 +1,6 @@
 import { addDays } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
+import { COVERS_WEEK } from "./deliver";
 import type { UserContext } from "./eligible";
 import type { Evidence } from "./score";
 import type { ListFacts } from "./who-gets-a-list";
@@ -130,6 +131,7 @@ type UserRow = {
   plan: ListFacts["plan"];
   sponsored: boolean;
   sharing: ListFacts["sharing"];
+  hold_reason: string | null;
   access_ended: boolean;
   run_arrived: boolean;
   ordered: boolean;
@@ -137,19 +139,28 @@ type UserRow = {
   profile: Record<string, unknown> | null;
 };
 
-/** The users Cora considers this week, with what it needs to pick for each. */
-export async function loadUsers(q: Query, week: string, o: { onlyIds?: string[] } = {}): Promise<CoraUser[]> {
+/**
+ * The users Cora considers this week, with what it needs to pick for each.
+ * Access is read as the deliverable rule reads it (deliver.ts COVERS_WEEK):
+ * ended for this week when it ends on or before the week's Monday (Toronto
+ * date), or before the job's clock (`now`, so an "as of" run reads the same).
+ * A member held for an unpaid renewal is picked for (the list waits, and
+ * paying releases it, as the renewal emails promise); a held first charge is
+ * not.
+ */
+export async function loadUsers(q: Query, week: string, o: { onlyIds?: string[]; now?: Date } = {}): Promise<CoraUser[]> {
   const rows = await q<UserRow>(
-    `select u.id, u.email, u.status, u.plan, (u.sponsor_id is not null) as sponsored, u.sharing,
-            (u.access_ends_at is not null and u.access_ends_at < now()) as access_ended,
+    `select u.id, u.email, u.status, u.plan, (u.sponsor_id is not null) as sponsored, u.sharing, u.hold_reason,
+            (u.access_ends_at is not null and (not ${COVERS_WEEK("$1::date")} or u.access_ends_at < $3::timestamptz)) as access_ended,
             exists (select 1 from runs r where r.user_id = u.id and r.week_of = $1 and not r.is_test and r.status in ('received', 'accepted', 'flagged')) as run_arrived,
             exists (select 1 from orders o where o.user_id = u.id and o.week_of = $1 and o.status in ('ordered', 'charged')) as ordered,
             u.profile as quiz,
             (select zp.parsed from zack_profiles zp where zp.user_id = u.id and zp.status = 'accepted' and not zp.is_test order by zp.week_of desc limit 1) as profile
      from users u
-     where u.status in ('trial', 'active', 'cancelled') and ($2::uuid[] is null or u.id = any($2::uuid[]))
+     where (u.status in ('trial', 'active', 'cancelled') or (u.status = 'held' and u.hold_reason = 'renewal_unpaid'))
+       and ($2::uuid[] is null or u.id = any($2::uuid[]))
      order by u.id`,
-    [week, o.onlyIds ?? null],
+    [week, o.onlyIds ?? null, (o.now ?? new Date()).toISOString()],
   );
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
@@ -190,6 +201,7 @@ export async function loadUsers(q: Query, week: string, o: { onlyIds?: string[] 
         plan: r.plan,
         sponsored: r.sponsored,
         sharing: r.sharing,
+        holdReason: r.hold_reason,
         runArrived: r.run_arrived,
         ordered: r.ordered,
         charged: false,

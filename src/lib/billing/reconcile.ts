@@ -136,10 +136,14 @@ export async function reconcilePassUnderway(q: Query, now: Date): Promise<boolea
   return true;
 }
 
-/** Records the pass as finished once neither step has anything left. */
-export async function finishReconcilePass(q: Query, now: Date): Promise<boolean> {
+/**
+ * Records the pass as finished once neither step has anything left. Never
+ * later than the real clock: an "as of" run in the future would otherwise
+ * keep the real daily pass from starting until that date.
+ */
+export async function finishReconcilePass(q: Query, now: Date, realNow: Date = new Date()): Promise<boolean> {
   if ((await cursorPending(q, EVENTS_CURSOR)) || (await cursorPending(q, USERS_CURSOR))) return false;
-  await saveCursor(q, LAST_FINISHED, { at: now.toISOString() });
+  await saveCursor(q, LAST_FINISHED, { at: new Date(Math.min(now.getTime(), realNow.getTime())).toISOString() });
   return true;
 }
 

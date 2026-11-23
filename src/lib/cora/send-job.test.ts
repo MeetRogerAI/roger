@@ -167,7 +167,16 @@ describe("the Monday send", () => {
     await runSendJob(query, deps(), { week: WEEK });
     expect(to("a@example.com")[0].subject).toBe("No new ideas for you this week");
     expect(to("a@example.com")[0].text).not.toMatch(/not charged|nothing was charged/i);
-    expect(sent.map((m) => m.subject)).toContain("[Roger] A paying member had no eligible ideas");
+    expect(to("a@example.com")[0].text).toContain("missing because of Roger, not you, and this week never counts as a missed week");
+    expect(sent.map((m) => m.subject)).toContain("[Roger] A member had no eligible ideas");
+  });
+
+  it("alerts admins for any member with no eligible ideas, and tells a trial member nothing was charged (R15)", async () => {
+    const a = await member("a@example.com");
+    await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, $2, 'none')", [a, WEEK]);
+    await runSendJob(query, deps(), { week: WEEK });
+    expect(to("a@example.com")[0].text).toContain("Nothing was charged, and this week doesn’t use one of your free lists.");
+    expect(sent.map((m) => m.subject)).toContain("[Roger] A member had no eligible ideas");
   });
 
   it("after the second free list, sends the first-paid-next email with the date and amount", async () => {

@@ -1,4 +1,9 @@
-import { torontoDate } from "@/lib/clock";
+import { addDays, torontoDate } from "@/lib/clock";
+
+/** A renewal still unpaid this many Toronto calendar days after its first failure holds the account (renewals.ts). */
+export const HOLD_DAYS = 7;
+/** The Toronto date a renewal that first failed at `failedAt` is held, if still unpaid. */
+export const holdDate = (failedAt: string | Date) => addDays(torontoDate(new Date(failedAt)), HOLD_DAYS);
 
 /**
  * The contributor rule's billing month (spec B.9: "the subscription's own

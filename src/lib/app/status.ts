@@ -1,6 +1,7 @@
 import { addDays, torontoDate } from "@/lib/clock";
 import { amount, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { ContributionStatus } from "@/lib/billing/contribution";
+import { holdDate } from "@/lib/billing/period";
 import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
 import { carriedMissText, notSharingText, secondMissText } from "@/lib/mail/templates/second-miss";
 import { longDate } from "@/lib/mail/templates/welcome";
@@ -19,8 +20,10 @@ export type StatusFacts = {
   currency: Currency | null;
   freeListsUsed: number;
   freeRuns: number;
-  /** The told quote for the first charge (monthly trial). */
-  quote: { totalCents: number; currency: Currency; week: string } | null;
+  /** The told quote for the first charge (monthly trial; held for a changed amount: the new amount and when it was told). */
+  quote: { totalCents: number; currency: Currency; week: string; at?: string } | null;
+  /** A monthly renewal Stripe could not collect (first failure), not yet held. */
+  renewalFailedAt?: string | null;
   firstChargeAt: string | null;
   /** One at a time: what this week's list cost, with tax. */
   orderCents: number | null;
@@ -61,6 +64,7 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
   if (f.status === "held" && f.holdReason === "renewal_unpaid") {
     return "Your monthly payment didn’t go through, so your lists are paused. Update your card on the billing page and they start again straight away.";
   }
+  if (f.status === "held" && f.holdReason === "amount_changed") return amountChangedLine(f.quote);
   if (f.status === "held") return "Your payment didn’t go through, so your list is waiting. Update your card on the billing page and it comes straight away.";
   if (f.status === "closed") return "Your account is closed. Nothing more will be charged.";
   if (f.status === "cancelled") {
@@ -96,6 +100,8 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
     // Spec B.9: every email to a one-at-a-time user says what monthly costs.
     return `This list: ${paid}. Order next Monday’s whenever you want one. Monthly is ${money(amount(s, "monthly", cur), cur)} for every Monday.`;
   }
+  // A renewal Stripe could not collect: lists continue for now, and pause on the hold date unless it is paid.
+  if (f.status === "active" && f.renewalFailedAt) return `Your payment didn’t go through; lists pause on ${longDate(holdDate(f.renewalFailedAt))} unless it’s paid.`;
   const c = f.contribution ?? null;
   const higher = money(amount(s, "monthly", cur, "higher"), cur);
   // The renewal ending this billing month (from the subscription's anchor), else the first charge's anniversary.
@@ -113,6 +119,21 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
   if (f.sharing !== "share") return `${lead}${line} ${SHARING_OFF(higher)}`;
   if (c?.missedThisWeek && c.missed > 0 && c.missed <= c.allowed) return `${lead}${forgivenText({ periodEnd: c.periodEnd, higher })} ${line}`;
   return `${lead}Contributing. This month: ${c?.used ?? 0} of ${c?.allowed ?? s.forgivenMissesPerMonth} forgiven misses used. ${line}`;
+}
+
+/**
+ * A first charge held because its amount changed: charged at the first hourly
+ * pass 24 hours after the new amount was told (first-charge.ts dueRetries).
+ */
+export function changedAmountChargeDate(quote: Pick<NonNullable<StatusFacts["quote"]>, "at"> | null): string | null {
+  const at = quote?.at ? Date.parse(quote.at) : NaN;
+  return Number.isNaN(at) ? null : torontoDate(new Date(at + 24 * 3600_000));
+}
+
+function amountChangedLine(quote: StatusFacts["quote"]): string {
+  const when = changedAmountChargeDate(quote);
+  if (!quote || !when) return "Your first charge amount changed, so your list waits a day while we tell you the new amount.";
+  return `Your first charge is now ${moneyCents(quote.totalCents, quote.currency)} with tax, not the amount we told you before. We charge it on ${longDate(when)}, and your list comes straight after; if you’d rather not, cancel on the billing page before then.`;
 }
 
 /** What sharing off means under the contributor rule (the strip, and the sharing confirmation on /app/zack). */

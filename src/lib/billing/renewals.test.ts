@@ -95,7 +95,7 @@ describe("a renewal that fails", () => {
 
     // Monday's list is not delivered while held.
     await picksFor("2027-01-11");
-    expect((await deliverWeek(query, uid, "2027-01-11", 2, "06:00")).delivered).toBe(0);
+    expect((await deliverWeek(query, uid, "2027-01-11", 2)).delivered).toBe(0);
 
     // Paid (from Stripe's hosted page): released at once, and the waiting list goes out.
     plans.bills.find((i) => i.id === "in_r1")!.status = "paid";

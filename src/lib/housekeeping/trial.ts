@@ -2,7 +2,7 @@ import { addDays, currentMonday, cutoffInstant, torontoDate, wallParts, wallToIn
 import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { uploadReminderEmail } from "@/lib/mail/templates/upload-reminder";
-import { trialNoListClosedEmail, zackNotYetEmail } from "@/lib/mail/templates/zack-not-yet";
+import { trialNoChargeClosedEmail, trialNoListClosedEmail, zackNotYetEmail } from "@/lib/mail/templates/zack-not-yet";
 import { CYCLE_LIVE_SINCE, type V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -48,6 +48,27 @@ export type TrialClock = {
 const ON_CLOCK = `u.status = 'trial' and u.trial_started_at is not null and u.switched_from_per_run_at is null and u.sponsor_id is null and u.free_lists_used = 0  and not exists (select 1 from picks p where p.user_id = u.id and not p.dry_run and p.delivered_at is not null)`;
 
 /**
+ * The second clock (the seams review): a monthly trial past its free lists
+ * whose first paid list never comes (no run arrives) would stay a trial for
+ * ever, told each Monday that its first charge moved. It closes the same way,
+ * `trialCloseDays` after its last list was delivered (or the first go-live,
+ * if later), with each Monday Roger failed to give a list moving the close a
+ * week, and never while a run, a picked list or a charge is on its way. Not
+ * a member mid-switch from one at a time, sponsored, or cancelling.
+ */
+const WAITING = (free: number) =>
+  `u.status = 'trial' and u.plan = 'monthly' and u.switched_from_per_run_at is null and u.sponsor_id is null and u.cancel_requested_at is null
+   and u.stripe_subscription is null and u.free_lists_used >= ${Math.max(1, Math.floor(free))}`;
+const LAST_LIST = `(select max(p.delivered_at) from picks p where p.user_id = u.id and not p.dry_run and p.delivered_at is not null)`;
+
+export type ClockKind = "no_list" | "no_charge";
+export const CLOSED_NO_CHARGE = "no_first_charge";
+const CLOCK = (kind: ClockKind, s: Pick<V3Settings, "freeRuns">) =>
+  kind === "no_list"
+    ? { on: ON_CLOCK, start: "u.trial_started_at", reason: CLOSED_NO_LIST }
+    : { on: `${WAITING(s.freeRuns)} and ${LAST_LIST} is not null`, start: LAST_LIST, reason: CLOSED_NO_CHARGE };
+
+/**
  * A real run for one of the coming weeks (`$n`, a date array) whose week is
  * not finished: Cora's week not yet sent or failed, or no decision for this
  * member yet. Its list may still go out, so the trial waits.
@@ -77,7 +98,8 @@ export function closeMoment(start: Date, days: number, rogerWeeks: string[], sen
 }
 
 /** Every trial on the clock (or only the named ones), with its start and close. */
-export async function trialClocks(q: Query, s: V3Settings, now: Date, onlyIds?: string[]): Promise<TrialClock[]> {
+export async function trialClocks(q: Query, s: V3Settings, now: Date, onlyIds?: string[], kind: ClockKind = "no_list"): Promise<TrialClock[]> {
+  const c = CLOCK(kind, s);
   const rows = await q<{ id: string; email: string; started_at: string; start: string; has_run: boolean; roger_weeks: string[] | null; undelivered: string[] | null }>(
     `with live as (
        select coalesce(
@@ -86,9 +108,9 @@ export async function trialClocks(q: Query, s: V3Settings, now: Date, onlyIds?: 
          (select max(updated_at) from settings where key = 'v3.cycleLive' and value = 'true'::jsonb)) as since
      ),
      t as (
-       select u.id, u.email, u.trial_started_at, greatest(u.trial_started_at, (select since from live)) as start
+       select u.id, u.email, coalesce(u.trial_started_at, ${c.start}) as trial_started_at, greatest(${c.start}, (select since from live)) as start
        from users u
-       where ${ON_CLOCK} and ($1::uuid[] is null or u.id = any($1::uuid[])) and not ${runWaiting("u.id", "$3")}
+       where ${c.on} and ($1::uuid[] is null or u.id = any($1::uuid[])) and not ${runWaiting("u.id", "$3")}
      )
      select t.id, t.email,
        to_char(t.trial_started_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as started_at,
@@ -162,38 +184,44 @@ export async function sendTrialNudges(q: Query, d: TrialDeps): Promise<number> {
 export async function closeTrialsWithNoList(q: Query, d: TrialDeps): Promise<number> {
   let closed = 0;
   const monday = currentMonday(d.now);
-  for (const t of await trialClocks(q, d.settings, d.now)) {
-    if (closed >= MAX_SENDS || outOfTime(d)) break;
-    if (d.now < t.closesAt) continue;
-    const rows = await q(
-      `with c as (
-         update users u set status = 'closed', closed_reason = $3, hold_reason = null, access_ends_at = coalesce(u.access_ends_at, $2::timestamptz)
-         where u.id = $1 and ${ON_CLOCK} and not ${runWaiting("u.id", "$5")}
-           and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
-           and not exists (select 1 from picks p where p.user_id = u.id and not p.dry_run and p.delivered_at is null and p.week_of >= $4::date)
-         returning u.id
-       ),
-       o as (update orders set status = 'cancelled', updated_at = now() where user_id in (select id from c) and status = 'ordered')
-       select id from c`,
-      [t.id, d.now.toISOString(), CLOSED_NO_LIST, monday, comingWeeks(d.now, d.settings)],
-    );
-    if (rows.length) closed++;
+  for (const kind of ["no_list", "no_charge"] as const) {
+    const c = CLOCK(kind, d.settings);
+    for (const t of await trialClocks(q, d.settings, d.now, undefined, kind)) {
+      if (closed >= MAX_SENDS || outOfTime(d)) break;
+      if (d.now < t.closesAt) continue;
+      const rows = await q(
+        `with c as (
+           update users u set status = 'closed', closed_reason = $3, hold_reason = null, quote = null, access_ends_at = coalesce(u.access_ends_at, $2::timestamptz)
+           where u.id = $1 and ${c.on} and not ${runWaiting("u.id", "$5")}
+             and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
+             and not exists (select 1 from picks p where p.user_id = u.id and not p.dry_run and p.delivered_at is null and p.week_of >= $4::date)
+           returning u.id
+         ),
+         o as (update orders set status = 'cancelled', updated_at = now() where user_id in (select id from c) and status = 'ordered')
+         select id from c`,
+        [t.id, d.now.toISOString(), c.reason, monday, comingWeeks(d.now, d.settings)],
+      );
+      if (rows.length) closed++;
+    }
   }
-  // Every account this close ended in the last week whose email has not gone yet.
-  const due = await q<{ id: string; email: string; ended: string }>(
+  // Every account these closes ended in the last week whose email has not gone yet.
+  const due = await q<{ id: string; email: string; ended: string; reason: string }>(
     `with x as (
-       select id, email, to_char(access_ends_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as ended from users
-       where status = 'closed' and closed_reason = $1 and access_ends_at > $2::timestamptz - interval '7 days'
+       select id, email, closed_reason as reason, to_char(access_ends_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as ended from users
+       where status = 'closed' and closed_reason in ($1, $4) and access_ends_at > $2::timestamptz - interval '7 days'
      )
      select * from x where not exists (
-       select 1 from notifications n where n.recipient = x.id::text and n.kind = 'trial_closed' and n.status = 'sent' and n.ref like 'no_list:' || x.ended || '%')
+       select 1 from notifications n where n.recipient = x.id::text and n.kind = 'trial_closed' and n.status = 'sent'
+         and n.ref like (case when x.reason = $1 then 'no_list:' else 'no_charge:' end) || x.ended || '%')
      limit $3`,
-    [CLOSED_NO_LIST, d.now.toISOString(), MAX_SENDS],
+    [CLOSED_NO_LIST, d.now.toISOString(), MAX_SENDS, CLOSED_NO_CHARGE],
   );
   const today = torontoDate(d.now);
   for (const u of due) {
     if (outOfTime(d)) break;
-    await sendToUser({ id: u.id, email: u.email }, "trial_closed", `no_list:${u.ended}:${today}`, trialNoListClosedEmail(), d).catch(() => {});
+    const noList = u.reason === CLOSED_NO_LIST;
+    const ref = `${noList ? "no_list" : "no_charge"}:${u.ended}:${today}`;
+    await sendToUser({ id: u.id, email: u.email }, "trial_closed", ref, noList ? trialNoListClosedEmail() : trialNoChargeClosedEmail(), d).catch(() => {});
   }
   return closed;
 }

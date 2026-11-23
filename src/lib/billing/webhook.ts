@@ -86,9 +86,10 @@ export async function handleStripeEvent(
       const sub = event.data.object;
       const [u] = await q<{ id: string }>(`select id from users where stripe_subscription = $1`, [sub.id]);
       if (u) {
-        await adjustmentOnSubscriptionEnded(q, { settings: await o.getSettings(), now: new Date(), adjust: o.adjust, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
+        // The job's clock (the reconcile replays events "as of" its own time), never the real one.
+        await adjustmentOnSubscriptionEnded(q, { settings: await o.getSettings(), now: o.now ?? new Date(), adjust: o.adjust, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
         // The account follows: cancelled, or one list at a time after a switch (Unit 15).
-        const r = await subscriptionEnded(q, await rdeps(), { subscription: sub.id, endedAt: sub.ended_at ? new Date(sub.ended_at * 1000) : new Date() });
+        const r = await subscriptionEnded(q, await rdeps(), { subscription: sub.id, endedAt: sub.ended_at ? new Date(sub.ended_at * 1000) : (o.now ?? new Date()) });
         if (r === "none") note = "subscription ended: no account changed";
         outcome = "handled";
       }
@@ -126,7 +127,7 @@ export async function handleStripeEvent(
         const r = await settleFromInvoice(
           q,
           { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, anchor: planLineStart(inv) },
-          { settings: await o.getSettings(), now: new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
+          { settings: await o.getSettings(), now: o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
         );
         outcome = "handled";
         if (r !== "charged") note = `invoice.paid: ${r}`;

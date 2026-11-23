@@ -149,6 +149,23 @@ export function asOfAllowed(c: AsOfConditions): boolean {
 }
 
 /**
+ * A job that can move money (the charge job, the hourly pass, "charge and
+ * send") run "as of" another time: only where an "as of" is allowed at all
+ * (so on a database marked non-production) and with a Stripe key that is
+ * clearly a test key; never with no key, never a live one.
+ *
+ * Stripe does not follow the "as of" time: subscriptions, invoices and
+ * renewals happen at Stripe's own clock. A run "as of" a later date therefore
+ * gets a subscription anchored at the real time, and renewals that never come
+ * at the simulated dates. To move through billing months, attach the sandbox
+ * customers to a Stripe test clock and advance it to the same time as the
+ * "as of" value (plan Unit 19's scenario runs).
+ */
+export function moneyAsOfAllowed(c: AsOfConditions): boolean {
+  return asOfAllowed(c) && Boolean(c.stripeKey && (c.stripeKey.startsWith("sk_test_") || c.stripeKey.startsWith("rk_test_")));
+}
+
+/**
  * The moment a job should act as of. `asOf` (an ISO timestamp, usually from a
  * request) is used only when allowed; a malformed value is refused rather
  * than silently ignored, so a test never runs against the real time by

@@ -18,12 +18,14 @@ export async function loadInterest(q: Query): Promise<Interest> {
   const [open] = await q<{ n: number }>(`select count(*)::int as n from leads where kind = 'not_open'`);
   const cancelReasons = await q<{ reason: string; n: number }>(
     `select coalesce(nullif(trim(cancel_reason), ''), '(no answer)') as reason, count(*)::int as n from users
-     where cancel_requested_at is not null or status = 'cancelled' group by 1 order by n desc, reason`,
+     -- A switch to one at a time also waits on cancel_requested_at; it is not a cancellation.
+     where (cancel_requested_at is not null and plan_change_to is distinct from 'per_run') or status = 'cancelled' group by 1 order by n desc, reason`,
   );
+  // A paying one-at-a-time member who switched to monthly is "trial" in the data until the first monthly charge: counted as monthly.
   const [plans] = await q<Interest["plans"]>(
-    `select count(*) filter (where status = 'active' and plan = 'monthly' and sponsor_id is null)::int as monthly,
+    `select count(*) filter (where sponsor_id is null and plan = 'monthly' and (status = 'active' or (status = 'trial' and switched_from_per_run_at is not null)))::int as monthly,
             count(*) filter (where status = 'active' and plan = 'per_run' and sponsor_id is null)::int as "perRun",
-            count(*) filter (where status = 'trial')::int as trial,
+            count(*) filter (where status = 'trial' and sponsor_id is null and switched_from_per_run_at is null)::int as trial,
             count(*) filter (where sponsor_id is not null and status in ('trial', 'active'))::int as sponsored
      from users`,
   );

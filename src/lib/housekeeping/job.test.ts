@@ -42,15 +42,30 @@ describe("the hourly pass", () => {
     plans.end("sub_1", new Date("2026-12-14T11:05:00Z"));
     const d = { gw: {} as BillingGateway, plans, settings, now: NOW, query, transport, sleep: async () => {} };
     const failing = { source: async () => Promise.reject(new Error("Stripe is down")), handle: async () => {} };
-    const out = (await reconcileStripe(query, d, { deadline: Date.now() + 60_000 }, failing)) as Record<string, unknown>;
+    // The simulated clock is also the real one here (finishing is never recorded ahead of the real clock).
+    const ctx = (now: Date) => ({ deadline: Date.now() + 60_000, realNow: now });
+    const out = (await reconcileStripe(query, d, ctx(NOW), failing)) as Record<string, unknown>;
     expect(out.events).toEqual({ error: "Stripe is down" });
     expect(out.users).toMatchObject({ finished: true });
     expect(out.finished).toBe(false);
     expect(await query("select status from users")).toEqual([{ status: "cancelled" }]);
     // Next hour: only the events step is left, and the pass then finishes.
     const ok = { source: async () => ({ events: [], hasMore: false }), handle: async () => {} };
-    const next = (await reconcileStripe(query, { ...d, now: new Date(NOW.getTime() + 3_600_000) }, { deadline: Date.now() + 60_000 }, ok)) as Record<string, unknown>;
+    const hour = new Date(NOW.getTime() + 3_600_000);
+    const next = (await reconcileStripe(query, { ...d, now: hour }, ctx(hour), ok)) as Record<string, unknown>;
     expect(next).toMatchObject({ users: "done", finished: true });
-    expect(await reconcileStripe(query, { ...d, now: new Date(NOW.getTime() + 7_200_000) }, { deadline: Date.now() + 60_000 }, ok)).toBe("not due");
+    const two = new Date(NOW.getTime() + 7_200_000);
+    expect(await reconcileStripe(query, { ...d, now: two }, ctx(two), ok)).toBe("not due");
+  });
+
+  it("an 'as of' pass in the future records its finish at the real time, so the real daily pass is not held off", async () => {
+    const d = { gw: {} as BillingGateway, plans: fakePlans(), settings, now: new Date(NOW.getTime() + 30 * 86_400_000), query, transport, sleep: async () => {} };
+    const ok = { source: async () => ({ events: [], hasMore: false }), handle: async () => {} };
+    expect(await reconcileStripe(query, d, { deadline: Date.now() + 60_000, realNow: NOW }, ok)).toMatchObject({ finished: true });
+    const [r] = await query<{ at: string }>("select value->>'at' as at from settings where key = 'reconcile.lastFinished'");
+    expect(r.at).toBe(NOW.toISOString());
+    // The real clock a day later: due again.
+    const later = new Date(NOW.getTime() + 25 * 3_600_000);
+    expect(await reconcileStripe(query, { ...d, now: later }, { deadline: Date.now() + 60_000, realNow: later }, ok)).toMatchObject({ finished: true });
   });
 });

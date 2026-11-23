@@ -121,7 +121,7 @@ export async function sendFirstChargeReminders(q: Query, d: QuoteDeps): Promise<
   const users = await q<{ id: string }>(
     `select u.id from users u
      where u.status = 'trial' and u.plan = 'monthly' and u.free_lists_used >= $1 and u.cancel_requested_at is null
-       and u.stripe_subscription is null and u.stripe_customer is not null
+       and u.stripe_subscription is null and u.stripe_customer is not null and u.sponsor_id is null
        and not exists (select 1 from notifications n where n.recipient = u.id::text and n.kind = 'first_charge_reminder' and n.ref = $2 and n.status = 'sent')`,
     [d.settings.freeRuns, week],
   );

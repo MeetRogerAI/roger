@@ -1,4 +1,4 @@
-import { addDays, torontoDate } from "@/lib/clock";
+import { torontoDate } from "@/lib/clock";
 import { deliverLate } from "@/lib/cora/send-job";
 import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
@@ -6,8 +6,9 @@ import { planChangedEmail } from "@/lib/mail/templates/plan-changed";
 import { renewalFailedEmail, renewalHeldEmail, renewalPaidEmail } from "@/lib/mail/templates/renewal";
 import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnCancelScheduled, adjustmentOnSubscriptionEnded, adjustmentOnSwitchScheduled, adjustmentOnSwitchToPerRun, ANCHOR, ISO } from "./adjustment";
-import { finishCancellation, resettleAfterUndo, unixIso } from "./cancel";
-import { retryNow } from "./first-charge";
+import { finishCancellation, resettleAfterUndo, unixIso, unpaidStart } from "./cancel";
+import { recheckChangedAmount, retryNow } from "./first-charge";
+import { HOLD_DAYS, holdDate } from "./period";
 import { amount, money, type Currency } from "./prices";
 import { noticeQuoteChange } from "./quote";
 import type { AdjustmentGateway, BillingGateway, OrderGateway, PlanGateway } from "./subscriptions";
@@ -32,11 +33,8 @@ import type { AdjustmentGateway, BillingGateway, OrderGateway, PlanGateway } fro
  */
 export type RenewalDeps = { plans?: PlanGateway; gw?: BillingGateway; orders?: OrderGateway; adjust?: AdjustmentGateway; settings: V3Settings; now: Date } & MailDeps;
 
-export const HOLD_DAYS = 7;
+export { HOLD_DAYS, holdDate };
 const LIVE = new Set(["active", "trialing", "past_due", "unpaid"]);
-
-/** The Toronto date a renewal that first failed at `failedAt` is held, if still unpaid. */
-export const holdDate = (failedAt: string | Date) => addDays(torontoDate(new Date(failedAt)), HOLD_DAYS);
 
 const quoteDeps = (d: RenewalDeps & { gw: BillingGateway }) => ({ gw: d.gw, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep });
 
@@ -184,13 +182,19 @@ export async function subscriptionEnded(q: Query, d: RenewalDeps, o: { subscript
     ).catch(() => {});
     return "switched";
   }
+  // A subscription that ended with a renewal unpaid: access ends where the unpaid month starts, so its weeks are never delivered.
+  const [due] = await q<{ anchor: string | null; failed_at: string | null }>(
+    `select ${ISO(ANCHOR("users"))} as anchor, ${ISO("renewal_failed_at")} as failed_at from users where stripe_subscription = $1 and status in ('active', 'held', 'cancelled')`,
+    [o.subscription],
+  );
+  const unpaidFrom = due?.failed_at ? unpaidStart(due.anchor, due.failed_at, o.endedAt).toISOString() : null;
   const [ended] = await q<{ id: string; asked: boolean }>(
     `with b as (select id, cancel_requested_at is not null as asked from users where stripe_subscription = $1 and status in ('active', 'held', 'cancelled') for update)
      update users u set status = 'cancelled', hold_reason = null, renewal_failed_at = null, plan_change_to = null, plan_change_at = null,
-       cancel_requested_at = coalesce(u.cancel_requested_at, $2), access_ends_at = least(coalesce(u.access_ends_at, $2), $2)
+       cancel_requested_at = coalesce(u.cancel_requested_at, $2), access_ends_at = least(coalesce(u.access_ends_at, $2), $2, coalesce($3::timestamptz, $2))
      from b where u.id = b.id
      returning u.id, b.asked`,
-    [o.subscription, o.endedAt.toISOString()],
+    [o.subscription, o.endedAt.toISOString(), unpaidFrom],
   );
   if (!ended) return "none";
   await adjustmentOnSubscriptionEnded(q, d, ended.id).catch((e) => console.error("[renewal] ended adjustment", ended.id, e instanceof Error ? e.message : e));
@@ -299,8 +303,13 @@ export async function afterCardChange(q: Query, d: RenewalDeps, userId: string, 
   if (d.gw) await noticeQuoteChange(q, quoteDeps({ ...d, gw: d.gw }), userId).catch((e) => console.error("[card] quote", userId, e instanceof Error ? e.message : e));
   // Only an account that can still be charged: never one cancelled meanwhile.
   if (u.status !== "active" && u.status !== "held") return "none";
+  const chargeDeps = (gw: BillingGateway) => ({ gw, orders: d.orders, adjust: d.adjust, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep });
   if (u.status === "held" && u.hold_reason === "first_charge_failed" && d.gw) {
-    return `first_charge:${await retryNow(q, { gw: d.gw, orders: d.orders, adjust: d.adjust, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }, userId)}`;
+    return `first_charge:${await retryNow(q, chargeDeps(d.gw), userId)}`;
+  }
+  // Held for a changed amount: previewed again with the new card and told again if it moved.
+  if (u.status === "held" && u.hold_reason === "amount_changed" && d.gw) {
+    return `amount_changed:${await recheckChangedAmount(q, chargeDeps(d.gw), userId)}`;
   }
   if (u.stripe_subscription && d.plans && (u.renewal_invoice || (u.status === "held" && u.hold_reason === "renewal_unpaid"))) {
     // Every open invoice of the subscription, oldest first; the first that fails stops the run.
