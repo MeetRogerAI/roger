@@ -11,6 +11,7 @@ applies_when:
   - The database driver has no interactive transactions (Neon over HTTP)
   - A test would otherwise mock the sql function
 tags: [pglite, vitest, neon, claims, idempotency, at-most-once, testing]
+last_updated: 2026-11-23
 ---
 
 # Test claim-first SQL against an in-process Postgres, not mocks
@@ -46,7 +47,7 @@ const { query } = await testDb();
 const r = await Promise.all([consumeToken(query, tok), consumeToken(query, tok)]);
 expect(r.filter(Boolean)).toHaveLength(1);
 ```
-Each `testDb()` builds a fresh database (about 0.8 s). Create one per test for isolation; group assertions where speed matters.
+Each `testDb()` gives a fresh database. Applying the whole schema per test grew to several seconds as the schema grew, and with every test file running in parallel the `beforeEach` hooks began timing out at 10 s (2026-11-23). The helper now applies the schema once per test worker, keeps it with `db.dumpDataDir("none")`, and starts each test from `new PGlite({ loadDataDir: snapshot })`. `vitest.config.ts` also allows 30 s for hooks. A timed-out hook is a setup-speed problem, not a test failure: check the durations before suspecting the code.
 
 ## Related
 - `src/test-helpers/pglite-db.ts`, `src/lib/db-query.ts`
