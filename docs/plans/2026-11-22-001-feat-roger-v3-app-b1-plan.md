@@ -619,7 +619,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 9: Intake and the privacy check**
+- [x] **Unit 9: Intake and the privacy check**
 
 **Goal:** Every run is parsed, validated, checked three ways for private details, and ends as accepted, flagged or rejected.
 
@@ -666,6 +666,16 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 - Integration: each of the 13 files in `artifacts/v3/Zack Runs/` parses to at least one valid play with no invented figure.
 
 **Verification:** spec checks 10 and 11 pass; the 13 seed files parse on preview.
+
+---
+
+**As built (2026-11-23, after review):**
+- One model review pass (`IntakeModel.review`) finds names and harm together; the report sits in a randomly named tag. Every string in a play is checked (not a field list), and runners-up in `runs.parsed` too. Clear names are replaced in every play, longest first, any capitalisation; a clear name that replaces nothing, an unclear name, harm, or a finding for an unknown play flags. Fails closed.
+- Harm patterns ignore guardrails ("never send outside", "never print a password"); links, bare domains and hidden text always flag. `plays.flag` holds reasons and field names, never the private text.
+- On the model path, a figure is kept only if the number is written in the report; a play whose playbook cannot be located is flagged; `sensitive` is read. Our reader's invalid output retries and never emails the member. ai@7 throws `NoObjectGeneratedError` for a truncated object, which is mapped to the cut-off retry.
+- Each pass claims an attempt before any model call; the batch pass takes a time budget. Plays carry the run revision, and plays from an older text are removed.
+- Plays in a category the member skips are dropped. Reasons shown to members are fixed sentences; errors go to the log.
+- Not verified: the 13 seed runs through the real model (`INTAKE_LIVE=1`, needs fresh AI Gateway credentials).
 
 ---
 
@@ -719,6 +729,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 - Modify: `vercel.json`
 
 **Approach:**
+- From the Unit 9 review: at the cutoff, before merging, set `shareable = false` on plays whose run is a test, whose run sharing is not `share`, or whose user's sharing at the cutoff is not `share`. Intake decides from what it knew on arrival; this is the binding check. The merge copies only cleaned `plays.body` fields, never `flag` or `runs.raw_text`.
 - `content/cora/cora.md` is v1.1 with the nine changes in spec B.7, amended for short lists. A draft until Peter approves it (launch list S2).
 - Code computes everything numeric: medians, recency weights, deciles across active pool plays, the five factor scores, the network score scaled to 100, the personal score, and tie-breaks. A model decides only: do two plays do the same job, which category and role a play fits, Fit, the reason line.
 - Evidence and "run by N users" count distinct contributors: a real user, or a seed contributor record.
@@ -1011,6 +1022,7 @@ evidence weight by age: weeks 1-4 full, 5-12 half, older a quarter; none in 26 w
 - Modify: `src/components/admin-ui.tsx` (the tabs array only), `src/app/admin/layout.tsx`, `src/lib/admin-auth.ts`, existing `src/app/admin/*/page.tsx` (call the admin check in each page)
 
 **Approach:**
+- From the Unit 9 review: clearing a flag computes `shareable` from the run (sharing `share`, not a test, user sharing `share`), never from the flag alone, and clears `flag`.
 - New interactive admin pieces go in `src/components/app/admin-v3.tsx`; the shared `admin-ui.tsx` changes only to add tabs.
 - Every admin page and action calls "require an admin" itself, including the existing pages, which today rely on the layout.
 - Operations shows one row per user with the columns in spec B.12, plus eligible plays remaining (from `eligible.ts`). "Needs attention" covers the spec's cases and fewer than three eligible plays (R16).

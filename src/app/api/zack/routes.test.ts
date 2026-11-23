@@ -9,6 +9,8 @@ let cutoff = "23:59";
 const deferred: (() => unknown)[] = [];
 const mailed: string[] = [];
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: (fn: () => unknown) => deferred.push(fn) }));
+const arrived: string[] = [];
+vi.mock("@/lib/intake/arrival", () => ({ processArrived: async (_q: unknown, s: { kind: string }) => void arrived.push(s.kind) }));
 vi.mock("@/lib/db-query", () => ({ query: (t: string, p?: unknown[]) => current(t, p) }));
 vi.mock("@/lib/v3-settings", async (orig) => ({
   ...(await orig<typeof import("@/lib/v3-settings")>()),
@@ -143,6 +145,7 @@ describe("POST /api/zack/runs", () => {
     expect(mailed).toEqual([]);
     for (const fn of deferred) await fn();
     expect(mailed).toEqual(["zack_connected:test"]);
+    expect(arrived).toEqual(["run"]);
     const [r] = await current<{ is_test: boolean }>("select is_test from runs");
     expect(r.is_test).toBe(true);
   });

@@ -521,3 +521,7 @@ create unique index if not exists zack_profiles_user_week on zack_profiles (user
 -- 2026-11-22, Unit 8: a replaced run gets a new revision, so intake writes its
 -- result only for the text it read (where id = $1 and revision = $read).
 alter table runs add column if not exists revision int not null default 0;
+
+-- 2026-11-23, Unit 9: each play records the run revision it was made from, so
+-- plays from a replaced text are removed even if a replacement races intake.
+alter table plays add column if not exists revision int not null default 0;

@@ -3,9 +3,11 @@ import { query } from "@/lib/db-query";
 import { counterFor, hit, limits } from "@/lib/rate-limit";
 import { readV3Settings } from "@/lib/v3-settings";
 import { authenticate, PRIVATE_HEADERS } from "@/lib/zack/key";
+import { processArrived } from "@/lib/intake/arrival";
 import { checkReport, MAX_REPORT_CHARS, reportText, sendConnected, storeReport } from "@/lib/zack/receive";
 
-export const maxDuration = 30;
+// Intake (the model passes) runs after the answer, within this limit.
+export const maxDuration = 180;
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: PRIVATE_HEADERS });
 const TOO_BIG = `The report is over ${MAX_REPORT_CHARS.toLocaleString("en-US")} characters.`;
@@ -51,7 +53,11 @@ export async function POST(request: Request) {
     const settings = await readV3Settings();
     const stored = await storeReport(query, user, checked, { route: "connector", test, cutoff: settings.runCutoff });
     // The answer never waits on email: Zack treats a slow answer as a failed send.
-    after(() => sendConnected(user, stored, test));
+    after(async () => {
+      await sendConnected(user, stored, test);
+      // Intake as the run arrives; anything this misses is picked up by the batch pass before Cora.
+      await processArrived(query, stored).catch((e) => console.error("[intake] on arrival", e instanceof Error ? e.message : e));
+    });
     return json({ ok: true, week_of: stored.week_of, replaced: stored.replaced });
   } catch (e) {
     // Never log the request address: it may carry the key.

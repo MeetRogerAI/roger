@@ -41,8 +41,8 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("storing a run", () => {
   it("stores a Sunday-evening run for the coming Monday, and a second before the cutoff replaces it (spec check 7)", async () => {
-    expect(await receive(run("first"))).toEqual({ ok: true, week_of: "2026-11-30", replaced: false, kind: "run" });
-    expect(await receive(run("second"))).toEqual({ ok: true, week_of: "2026-11-30", replaced: true, kind: "run" });
+    expect(await receive(run("first"))).toMatchObject({ ok: true, week_of: "2026-11-30", replaced: false, kind: "run" });
+    expect(await receive(run("second"))).toMatchObject({ ok: true, week_of: "2026-11-30", replaced: true, kind: "run" });
     const rows = await query<{ raw_text: string; zack_version: string; revision: number }>("select raw_text, zack_version, revision from runs");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ zack_version: "2.0", revision: 1 });
