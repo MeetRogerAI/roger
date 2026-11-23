@@ -95,12 +95,11 @@ export default async function HamptonPage() {
               </summary>
               <div className="pb-6">
                 <p className="max-w-[36rem] text-ink-2">
-                  Start from the Hark file. Give it to your agent with this prompt, and it will make a version that
-                  works for you.
+                  Start from this file.
                 </p>
                 <div className="mt-5">
                   <a className={ghost} href={`/zack/${hark.file}`} download={hark.download}>
-                    Download the Hark file
+                    Download the file
                   </a>
                 </div>
                 <OtherAgentPrompt />
