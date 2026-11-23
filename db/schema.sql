@@ -678,3 +678,31 @@ alter table users add column if not exists cancel_reason text;
 -- away and back never dodges it. The first charge bills it and marks it
 -- invoiced.
 alter table pending_adjustments add column if not exists carried_at timestamptz;
+
+-- 2026-11-23, Unit 18 (housekeeping): why housekeeping closed an account
+-- (no_first_list, the 21-day trial close), so its closing email is tried
+-- again on later passes until it is sent. Closing also sets access_ends_at,
+-- which the retention clock counts from.
+alter table users add column if not exists closed_reason text;
+
+-- 2026-11-23, Unit 18 (Google sign-in): one row per sign-in started with
+-- Google. Only the hash of the state value is stored, and the browser holds
+-- the state itself in a cookie. The callback uses a row once (used_at), so a
+-- replayed callback finds nothing. payload carries a sign-up's details, as
+-- the email sign-up link does. Expired rows are removed hourly.
+create table if not exists oauth_states (
+  state_hash text primary key,
+  verifier text not null,
+  nonce text not null,
+  next_path text not null default '',
+  payload jsonb,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists oauth_states_expiry on oauth_states (expires_at);
+
+-- 2026-11-23, Unit 18 review: the Google address a sign-in was linked with
+-- (shown on the settings page). Cleared with google_sub on unlink and on any
+-- change of the Roger email address.
+alter table users add column if not exists google_email text;

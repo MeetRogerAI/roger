@@ -265,6 +265,8 @@ export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number
          hold_reason = case when u.switched_from_per_run_at is not null then null else u.hold_reason end,
          quote = case when u.switched_from_per_run_at is not null then null else u.quote end,
          plan_switched_at = case when u.switched_from_per_run_at is not null then now() else u.plan_switched_at end,
+         -- A close ends access: the retention clock counts from here (Unit 18).
+         access_ends_at = case when u.switched_from_per_run_at is not null then u.access_ends_at else coalesce(u.access_ends_at, now()) end,
          switched_from_per_run_at = null
        from b
        where u.id = b.id and u.id = $1 and u.status = 'held' and u.hold_reason = 'first_charge_failed'

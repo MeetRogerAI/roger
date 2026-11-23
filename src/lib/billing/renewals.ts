@@ -41,19 +41,29 @@ export const holdDate = (failedAt: string | Date) => addDays(torontoDate(new Dat
 const quoteDeps = (d: RenewalDeps & { gw: BillingGateway }) => ({ gw: d.gw, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep });
 
 /** Stripe could not collect a renewal (invoice.payment_failed): the first failure starts the 7 days; each attempt is emailed. */
-export async function renewalFailed(q: Query, d: RenewalDeps, o: { subscription: string; invoice: string; attempt: number }): Promise<boolean> {
+export async function renewalFailed(
+  q: Query,
+  d: RenewalDeps,
+  o: { subscription: string; invoice: string; attempt: number; /** When Stripe made the event: a replayed one keeps its own time. */ at?: Date },
+): Promise<boolean> {
   // The event is a signal: the invoice is re-read, and a failure already paid, voided or replaced is ignored.
   if (d.plans) {
     const inv = await d.plans.invoice(o.invoice);
     if (!inv || inv.status !== "open") return false;
   }
   const [u] = await q<{ id: string; email: string; failed_at: string }>(
-    `update users set renewal_failed_at = coalesce(renewal_failed_at, $3), renewal_invoice = $2
+    `update users set renewal_failed_at = least(coalesce(renewal_failed_at, $3::timestamptz), $3::timestamptz), renewal_invoice = $2
      where stripe_subscription = $1 and status in ('active', 'held') and plan = 'monthly'
      returning id, email, ${ISO("renewal_failed_at")} as failed_at`,
-    [o.subscription, o.invoice, d.now.toISOString()],
+    [o.subscription, o.invoice, (o.at ?? d.now).toISOString()],
   );
   if (!u) return false;
+  // A replay (the reconcile handles missed events newest first) emails only the newest failed attempt of an invoice.
+  const [newer] = await q(
+    `select 1 from notifications where recipient = $1 and kind = 'renewal_failed' and ref like $2 || ':%' and split_part(ref, ':', 2) ~ '^[0-9]+$' and split_part(ref, ':', 2)::int > $3`,
+    [u.id, o.invoice, o.attempt],
+  );
+  if (newer) return true;
   await sendToUser({ id: u.id, email: u.email }, "renewal_failed", `${o.invoice}:${o.attempt}`, renewalFailedEmail({ holdOn: holdDate(u.failed_at) }), d).catch(() => {});
   return true;
 }
@@ -216,6 +226,13 @@ export async function syncSubscription(q: Query, d: RenewalDeps & { plans: PlanG
         [u.id, d.now.toISOString(), ends],
       );
       if (!rows.length) return "unchanged";
+      // An undo may have raced this (the event, or our read, came from before it): read Stripe again, and if the
+      // cancellation is gone, take our write back before anything follows from it (Unit 18 review).
+      const again = await d.plans.getSubscription(subscription);
+      if (again && !again.cancelAt && !again.endedAt && again.status !== "canceled") {
+        await q(`update users set cancel_requested_at = null, access_ends_at = null where id = $1 and cancel_requested_at = $2::timestamptz`, [u.id, d.now.toISOString()]);
+        return "unchanged";
+      }
       await (switching ? adjustmentOnSwitchScheduled : adjustmentOnCancelScheduled)(q, d, u.id).catch((e) => console.error("[renewal] sync adjustment", u.id, e instanceof Error ? e.message : e));
       if (!switching) await finishCancellation(q, { ...d, plans: d.plans }, u.id);
       return switching ? "switching" : "cancelled";

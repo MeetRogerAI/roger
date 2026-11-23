@@ -12,6 +12,19 @@ export function signInLinkEmail(token: string): Rendered {
   });
 }
 
+/** Google sign-in was linked to an existing account (plan Unit 18): told at the account's own address. */
+export function googleLinkedEmail(): Rendered {
+  return renderEmail({
+    subject: "Google sign-in added to your Roger account",
+    heading: "Google sign-in is now on",
+    paragraphs: [
+      "Someone just signed in to your Roger account with Google for the first time, using a Google account with this email address. From now on that Google account signs you in too.",
+      "If that was you, there’s nothing to do. If it wasn’t, unlink Google on your settings page straight away, and write to us.",
+    ],
+    button: { label: "Open your settings", url: appUrl("/app/settings") },
+  });
+}
+
 /** Asked to sign in with an address that has no account: say so, and where to start. */
 export function noAccountEmail(): Rendered {
   return renderEmail({

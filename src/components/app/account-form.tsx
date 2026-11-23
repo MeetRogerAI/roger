@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState, useId } from "react";
-import { submitAccount, type StartFormState } from "@/app/start/actions";
+import { startGoogleSignup, submitAccount, type StartFormState } from "@/app/start/actions";
 import { Honeypot } from "./honeypot";
 
 const idle: StartFormState = { status: "idle" };
 const field = "mt-2 w-full rounded-[8px] border border-rule-strong bg-surface px-4 py-3 text-body";
 
-export function AccountForm() {
+/** `google`: whether "Continue with Google" is offered (only while Google's keys are set, plan Unit 18). */
+export function AccountForm({ google = false }: { google?: boolean }) {
   const [state, action, pending] = useActionState(submitAccount, idle);
   const id = useId();
   const e = state.errors ?? {};
@@ -73,6 +74,14 @@ export function AccountForm() {
       <button type="submit" className="btn btn-l" disabled={pending}>
         {pending ? "Sending…" : "Email me a link"}
       </button>
+      {google && (
+        <div className="border-t border-rule pt-6">
+          <p className="text-small text-ink-2">Or use your Google account. Its email address becomes your Roger address.</p>
+          <button type="submit" formAction={startGoogleSignup} formNoValidate className="btn btn-m mt-3" disabled={pending}>
+            Continue with Google
+          </button>
+        </div>
+      )}
     </form>
   );
 }

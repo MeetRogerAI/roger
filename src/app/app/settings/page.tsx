@@ -5,18 +5,31 @@ import { Suspense } from "react";
 import { EmailForm, ProfileForm } from "@/components/app/settings-forms";
 import { siteConfig } from "@/data/config";
 import { COMMON_ZONES } from "@/lib/app/settings";
+import { unlinkGoogleAction } from "./actions";
 import { requireUser } from "@/lib/auth/access";
+import { adminEmails } from "@/lib/auth/admin-emails";
+import { googleEnabled } from "@/lib/auth/google";
 import { query } from "@/lib/db-query";
 
 export const metadata: Metadata = { title: "Settings" };
 
-type Me = { email: string; name: string; display_name: string; timezone: string; plan: string; status: string; email_prefs: Record<string, unknown> | null };
+type Me = {
+  email: string;
+  name: string;
+  display_name: string;
+  timezone: string;
+  plan: string;
+  status: string;
+  email_prefs: Record<string, unknown> | null;
+  google_sub: string | null;
+  google_email: string | null;
+};
 
 /** Spec B.10: name, display name, email, time zone, and which emails to receive. */
 async function SettingsPage({ searchParams }: { searchParams: PageProps<"/app/settings">["searchParams"] }) {
   await connection();
   const session = await requireUser("/app/settings");
-  const [u] = await query<Me>(`select email, name, display_name, timezone, plan, status, email_prefs from users where id = $1`, [session.userId]);
+  const [u] = await query<Me>(`select email, name, display_name, timezone, plan, status, email_prefs, google_sub, google_email from users where id = $1`, [session.userId]);
   if (!u || u.status === "signup") redirect("/start");
   const sp = await searchParams;
   const prefs = u.email_prefs ?? {};
@@ -55,6 +68,37 @@ async function SettingsPage({ searchParams }: { searchParams: PageProps<"/app/se
           <EmailForm current={u.email} supportEmail={siteConfig.contactEmail} />
         </div>
       </section>
+      {(u.google_sub || (googleEnabled() && !adminEmails().includes(u.email.toLowerCase()))) && (
+        <section aria-labelledby="google-h">
+          <h2 id="google-h" className="text-h3">
+            Google sign-in
+          </h2>
+          <div className="mt-4 max-w-[32rem] text-ink-2">
+            {sp.google === "unlinked" && (
+              <p role="status" className="mb-3 text-small">
+                Google sign-in is off for this account.
+              </p>
+            )}
+            {u.google_sub ? (
+              <>
+                <p>Google sign-in is on{u.google_email ? ` for ${u.google_email}` : ""}. Changing your email address turns it off.</p>
+                <form action={unlinkGoogleAction} className="mt-4">
+                  <button type="submit" className="btn btn-m">
+                    Unlink Google
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p>Sign in with your Google account as well as by email link.</p>
+                <a href="/auth/google?next=%2Fapp%2Fsettings" className="btn btn-m mt-4">
+                  Link Google
+                </a>
+              </>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

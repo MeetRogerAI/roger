@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { GoogleSignInLink } from "@/components/app/google-button";
 import { SignInForm } from "@/components/app/signin-form";
 import { safeNext } from "@/lib/auth/tokens";
 
@@ -12,6 +13,15 @@ const notes: Record<string, string> = {
   retry: "Something went wrong on our side while signing you in. Ask for a new link below.",
   changed: "Your email address is changed. Sign in with the new address.",
   approved: "Approved. If the change is still current, we’ve sent a link to the new address. Open it there to finish the change.",
+  google: "We couldn’t sign you in with Google. Try again, or ask for an email link below.",
+  google_cancelled: "Google sign-in was cancelled. Try again, or ask for an email link below.",
+  google_unverified: "Google hasn’t verified that email address, so we can’t use it to sign you in. Ask for an email link below.",
+  google_other: "This Roger account is linked to a different Google account. Sign in with that one, or ask for an email link below.",
+  google_email_first: "Sign in with an email link first, then you can use Google.",
+  google_admin: "Admin accounts sign in with an email link only. Ask for one below.",
+  google_closed: "Sign-up isn’t open right now, so no account was made.",
+  google_check_email: "Google can’t confirm that address for us, so we’ve emailed it a link to finish signing up. Open it on this device.",
+  limited: "Too many sign-in attempts from here. Try again in a few minutes.",
 };
 
 async function Body({ searchParams }: { searchParams: PageProps<"/signin">["searchParams"] }) {
@@ -26,6 +36,7 @@ async function Body({ searchParams }: { searchParams: PageProps<"/signin">["sear
         </p>
       )}
       <SignInForm next={next} />
+      <GoogleSignInLink next={next} />
     </>
   );
 }

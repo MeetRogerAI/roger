@@ -69,9 +69,8 @@ describe("needs attention (spec check 30)", () => {
     await run(rejected, "rejected");
     const held = await user("held@example.com", { status: "held", hold_reason: "first_charge_failed" });
     await run(held, "accepted");
-    // A trial with no list yet, started 18 days ago: it closes in 3 days.
+    // A trial with no list yet, started 18 days ago: it closes in 3 days. (No run: a run for the coming week would hold the close.)
     const closing = await user("closing@example.com", { trial_started_at: "2026-11-25T12:00:00Z" });
-    await run(closing, "accepted");
     const few = await user("few@example.com", { status: "active", first_charge_at: "2026-12-03T11:05:00Z", stripe_subscription: "sub_1" });
     await run(few, "accepted");
     await linkContributor(query, "admin@example.com", contributor, few);
@@ -117,6 +116,26 @@ describe("needs attention (spec check 30)", () => {
     const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
     expect(rows[0].closesAt).toBe("2026-12-14T11:00:00.000Z");
     expect(rows[0].attention).toEqual(expect.arrayContaining(["held", "trial_closing"]));
+  });
+
+  it("uses the real 21-day close: a Roger week moves it, and a member mid-switch or past a list is not closing", async () => {
+    const pushed = await user("pushed@example.com", { trial_started_at: "2026-11-25T12:00:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2026-11-30', 'none')", [pushed]);
+    const switching = await user("switching@example.com", { trial_started_at: "2026-11-25T12:00:00Z", switched_from_per_run_at: "2026-11-20T12:00:00Z" });
+    const listed = await user("listed@example.com", { trial_started_at: "2026-11-25T12:00:00Z", free_lists_used: 1 });
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const row = (id: string) => rows.find((r) => r.id === id)!;
+    expect(row(pushed).closesAt).toBe("2026-12-23T12:00:00.000Z");
+    expect(row(pushed).attention).not.toContain("trial_closing");
+    expect(row(switching).closesAt).toBeNull();
+    expect(row(listed).closesAt).toBeNull();
+  });
+
+  it("does not show a trial as closing while its run for the coming week waits on Cora", async () => {
+    const waiting = await user("waiting@example.com", { trial_started_at: "2026-11-25T12:00:00Z" });
+    await run(waiting, "accepted");
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    expect(rows.find((r) => r.id === waiting)!.closesAt).toBeNull();
   });
 });
 

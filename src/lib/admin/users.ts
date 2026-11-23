@@ -161,7 +161,8 @@ export async function closeAccount(q: Query, d: AdjustDeps & { gw?: BillingGatew
     }
   }
   const rows = await q(
-    `update users u set status = 'closed', hold_reason = null where u.id = $1 and u.status <> 'closed' and not ${OPEN_CLAIM} and lower(u.email) <> all($2::text[]) returning id`,
+    // Access ends now; the retention clock counts from it (Unit 18).
+    `update users u set status = 'closed', hold_reason = null, access_ends_at = least(coalesce(u.access_ends_at, now()), now()) where u.id = $1 and u.status <> 'closed' and not ${OPEN_CLAIM} and lower(u.email) <> all($2::text[]) returning id`,
     [userId, adminEmails()],
   );
   if (!rows.length) return no("The account changed meanwhile. Reload and try again.");
@@ -229,7 +230,9 @@ export async function changeUserEmail(q: Query, d: MailDeps, by: string, userId:
   let rows: { id: string }[];
   try {
     rows = await q<{ id: string }>(
-      `update users u set email = $3, email_verified_at = null, stripe_email_synced = (u.stripe_customer is null), stripe_email_attempts = 0
+      // A Google sign-in linked through the old address is unlinked with it (Unit 18 review).
+      `update users u set email = $3, email_verified_at = null, stripe_email_synced = (u.stripe_customer is null), stripe_email_attempts = 0,
+         google_sub = null, google_email = null
        where u.id = $1 and u.email = $2 and lower(u.email) <> all($4::text[])
          and not exists (select 1 from users x where lower(x.email) = $3 and x.id <> $1)
        returning u.id`,

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { EMAIL_PREF_KEYS, saveProfile, validateProfile, type EmailPrefKey, type ProfileErrors } from "@/lib/app/settings";
 import { requireUserForAction } from "@/lib/auth/access";
 import { requestEmailChange } from "@/lib/auth/email-change";
+import { unlinkGoogle } from "@/lib/auth/google";
 import { emailKey } from "@/lib/auth/tokens";
 import { query } from "@/lib/db-query";
 import { field } from "@/lib/form";
@@ -33,7 +34,14 @@ export async function saveProfileAction(_prev: ProfileState, fd: FormData): Prom
   return { status: "saved", message: "Saved.", values: { ...v.value, prefs }, at: Date.now() };
 }
 
-export type EmailState = { status: "idle" | "sent" | "error"; message?: string; email?: string };
+/** "Unlink Google": Google stops signing this account in; other Google sessions end, this one stays. */
+export async function unlinkGoogleAction() {
+  const s = await requireUserForAction();
+  await unlinkGoogle(query, s.userId, s.idHash);
+  redirect("/app/settings?google=unlinked");
+}
+
+export type EmailState ={ status: "idle" | "sent" | "error"; message?: string; email?: string };
 
 /** Sends a confirmation link to the new address. The same answer whether or not another account uses it. */
 export async function changeEmailAction(_prev: EmailState, fd: FormData): Promise<EmailState> {

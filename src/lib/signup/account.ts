@@ -1,5 +1,5 @@
 import type { Query } from "@/lib/db-query";
-import { issueToken } from "@/lib/auth/login-link";
+import { issueToken, type NewAccount } from "@/lib/auth/login-link";
 import { emailKey, hashSecret, normaliseEmail } from "@/lib/auth/tokens";
 import { isEmail } from "@/lib/form";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
@@ -30,6 +30,22 @@ export const stepPaths: Record<string, string> = {
   done: "/app",
 };
 
+/** A new account's details from the sign-up draft: carried on the email link, or on a Google sign-in (plan Unit 18). */
+export function newAccountFrom(d: SignupDraft, name: string): NewAccount {
+  const { path, notReady } = accountPath(d);
+  return {
+    name: name.trim().slice(0, 80),
+    path,
+    notReady,
+    profile: { ...d.answers, source: d.source },
+    agent: d.answers.agent === "other" ? d.answers.agentOther : d.answers.agent,
+    currency: d.cur,
+    ref: d.ref ?? "",
+    utm: d.utm,
+    zack: d.zack,
+  };
+}
+
 export async function startAccount(
   q: Query,
   input: { name: string; email: string; draft: SignupDraft; ip: string },
@@ -52,28 +68,15 @@ export async function startAccount(
     return r === "failed" ? "send_failed" : "existing";
   }
 
-  const d = input.draft;
-  const { path, notReady } = accountPath(d);
-  const token = await issueToken(
-    q,
-    {
-      email,
-      purpose: "signin",
-      nextPath: "/start/plan",
-      newAccount: {
-        name,
-        path,
-        notReady,
-        profile: { ...d.answers, source: d.source },
-        agent: d.answers.agent === "other" ? d.answers.agentOther : d.answers.agent,
-        currency: d.cur,
-        ref: d.ref ?? "",
-        utm: d.utm,
-        zack: d.zack,
-      },
-    },
-    now,
-  );
-  const r = await sendToUser({ id: `email:${emailKey(email)}`, email }, "signup_confirm", hashSecret(token).slice(0, 16), startConfirmEmail(token), deps);
-  return r === "failed" ? "send_failed" : "new";
+  return (await sendSignupLink(q, email, newAccountFrom(input.draft, name), { ...deps, now })) === "failed" ? "send_failed" : "new";
+}
+
+/**
+ * The sign-up confirmation link for an address with no account yet: the
+ * account is made only when the link is opened. Also used when a Google
+ * sign-up's address is not one Google can vouch for (Unit 18 review).
+ */
+export async function sendSignupLink(q: Query, email: string, account: NewAccount, deps: MailDeps & { now?: Date } = {}) {
+  const token = await issueToken(q, { email, purpose: "signin", nextPath: "/start/plan", newAccount: account }, deps.now ?? new Date());
+  return sendToUser({ id: `email:${emailKey(email)}`, email }, "signup_confirm", hashSecret(token).slice(0, 16), startConfirmEmail(token), deps);
 }

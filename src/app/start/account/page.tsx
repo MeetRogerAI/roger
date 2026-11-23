@@ -2,13 +2,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AccountForm } from "@/components/app/account-form";
+import { googleEnabled } from "@/lib/auth/google";
 import { decodeDraft, DRAFT_COOKIE } from "@/lib/signup/draft";
 
-/** Spec B.4, screen 2: name, then email link (Google arrives with plan Unit 18, once its keys exist). */
+/** Spec B.4, screen 2: name, then email link or Google (offered only while Google's keys are set). */
 async function Account() {
   const draft = decodeDraft((await cookies()).get(DRAFT_COOKIE)?.value);
   if (!draft) redirect("/start");
-  return <AccountForm />;
+  return <AccountForm google={googleEnabled()} />;
 }
 
 export default function AccountPage() {

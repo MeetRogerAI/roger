@@ -112,7 +112,9 @@ export async function confirmEmailChange(q: Query, t: UsedToken, now = new Date(
   if (!approved) return null;
   try {
     const rows = await q<{ id: string; email: string }>(
-      `update users u set email = $3, email_verified_at = $4, stripe_email_synced = (u.stripe_customer is null), stripe_email_attempts = 0
+      // A Google sign-in was vouched for by the old address: it is unlinked with it (Unit 18 review).
+      `update users u set email = $3, email_verified_at = $4, stripe_email_synced = (u.stripe_customer is null), stripe_email_attempts = 0,
+         google_sub = null, google_email = null
        where u.id = $1 and u.email = $2 and not exists (select 1 from users where email = $3 and id <> $1)
        returning u.id, u.email`,
       [t.userId, d.from, d.to, now.toISOString()],
