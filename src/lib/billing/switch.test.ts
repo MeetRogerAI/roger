@@ -158,7 +158,7 @@ describe("monthly to one list at a time", () => {
 
     // Monday lists continue inside the paid month.
     await ready(id);
-    expect((await deliverWeek(query, id, WEEK, 2, "06:00")).delivered).toBe(1);
+    expect((await deliverWeek(query, id, WEEK, 2)).delivered).toBe(1);
 
     // The month ends: Stripe ends the subscription and the account orders one list at a time.
     plans.end("sub_a", PERIOD_END);

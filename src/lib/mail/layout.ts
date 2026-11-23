@@ -58,6 +58,15 @@ export function renderEmail(e: EmailParts): Rendered {
 }
 
 /**
+ * There is no restart path for a closed or cancelled account yet (plan, Unit
+ * 18 residual): the closing emails invite the member to write to support.
+ */
+export const COME_BACK_LINE = `Want to come back? Write to us at ${siteConfig.contactEmail}.`;
+export function comeBackButton(): { label: string; url: string } {
+  return { label: "Want to come back? Write to us", url: `mailto:${siteConfig.contactEmail}?subject=${encodeURIComponent("Coming back to Roger")}` };
+}
+
+/**
  * The base URL for links in emails and redirects, for the environment this
  * code runs in, so a preview never sends people to production.
  */

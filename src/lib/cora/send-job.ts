@@ -40,6 +40,7 @@ type U = {
   first_charge_at: string | null;
   access_ends_at: string | null;
   hold_reason: string | null;
+  renewal_failed_at: string | null;
   switching_at: string | null;
   ending_at: string | null;
   switched: boolean;
@@ -54,7 +55,7 @@ type U = {
 async function usersFor(q: Query, week: string, onlyIds: string[] | null = null): Promise<U[]> {
   return q<U>(
     `select u.id, u.email, u.email_prefs, u.status, u.plan, (u.sponsor_id is not null) as sponsored, u.sharing, u.currency, u.free_lists_used,
-            u.quote, u.first_charge_at::text, u.access_ends_at::text, u.hold_reason,
+            u.quote, u.first_charge_at::text, u.access_ends_at::text, u.hold_reason, u.renewal_failed_at::text,
             case when u.plan_change_to = 'per_run' and u.cancel_requested_at is not null then u.access_ends_at::text end as switching_at,
             case when u.status = 'active' and u.cancel_requested_at is not null and u.plan_change_to is distinct from 'per_run' then u.access_ends_at::text end as ending_at,
             u.switched_from_per_run_at is not null as switched, cw.outcome,
@@ -69,7 +70,7 @@ async function usersFor(q: Query, week: string, onlyIds: string[] | null = null)
   );
 }
 
-export const facts = (u: Pick<U, "status" | "plan" | "sponsored" | "sharing" | "currency" | "free_lists_used" | "quote" | "first_charge_at" | "order_cents" | "access_ends_at"> & Partial<Pick<U, "hold_reason" | "switching_at" | "ending_at" | "switched">>, s: V3Settings, now: Date): StatusFacts => ({
+export const facts = (u: Pick<U, "status" | "plan" | "sponsored" | "sharing" | "currency" | "free_lists_used" | "quote" | "first_charge_at" | "order_cents" | "access_ends_at"> & Partial<Pick<U, "hold_reason" | "renewal_failed_at" | "switching_at" | "ending_at" | "switched">>, s: V3Settings, now: Date): StatusFacts => ({
   status: u.status,
   plan: u.plan,
   sponsored: u.sponsored,
@@ -82,6 +83,7 @@ export const facts = (u: Pick<U, "status" | "plan" | "sponsored" | "sharing" | "
   orderCents: u.order_cents,
   accessEndsAt: u.access_ends_at,
   holdReason: u.hold_reason ?? null,
+  renewalFailedAt: u.renewal_failed_at ?? null,
   switchingAt: u.switching_at ?? null,
   endingAt: u.ending_at ?? null,
   switchedFromPerRun: u.switched ?? false,
@@ -96,7 +98,7 @@ async function sentAlready(q: Query, userId: string, kind: string, sinceRef: str
 /** Delivers one user's list if nothing is owed, then makes sure its emails went. Returns whether anything was delivered now. */
 export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string): Promise<boolean> {
   if (u.outcome !== "picked" && u.outcome !== "short") return false;
-  const { delivered } = await deliverWeek(q, u.id, week, d.settings.freeRuns, d.settings.chargeAt);
+  const { delivered } = await deliverWeek(q, u.id, week, d.settings.freeRuns);
   const [now] = await usersFor(q, week, [u.id]);
   if (!now?.has_delivered) return false;
 
@@ -160,10 +162,22 @@ export async function runSendJob(q: Query, d: SendDeps, o: { week: string }): Pr
       // R15. Orders and the first charge send their own "no list" notes (order_no_list, charge_date_moved), so they are left out here.
       const coveredElsewhere = (u.plan === "per_run" && u.order_status != null) || (u.status === "trial" && !onFreeLists);
       if (u.outcome === "none" && !coveredElsewhere) {
-        const paying = u.plan === "monthly" && u.status === "active";
-        const note = onFreeLists ? "This week doesn’t use one of your free lists." : "";
+        // R15: a paying monthly member is not told about charges (theirs is unchanged); the list is missing because
+        // of Roger, and the week never counts as missed (contribution.ts excuses an outcome of 'none').
+        const paying = u.plan === "monthly" && u.status === "active" && !u.sponsored;
+        const note = paying
+          ? "This list is missing because of Roger, not you, and this week never counts as a missed week."
+          : onFreeLists
+            ? "Nothing was charged, and this week doesn’t use one of your free lists."
+            : u.sponsored
+              ? ""
+              : "Nothing was charged.";
         if ((await sendToUser({ id: u.id, email: u.email }, "no_ideas_note", week, noIdeasThisWeekEmail({ week, note, status }), d).catch(() => "failed")) === "sent") notes++;
-        if (paying) await alertAdmins("paying_user_no_ideas", `${u.id}:${week}`, adminAlert("A paying member had no eligible ideas", [`User ${u.id}, week ${week}.`]), d).catch(() => {});
+      }
+      // R15: both admins hear of every member with no eligible plays, whatever their plan (R16 is the early warning).
+      if (u.outcome === "none") {
+        const who = u.plan === "monthly" && u.status === "active" ? "paying monthly" : `${u.status}, ${u.plan === "per_run" ? "one at a time" : "monthly"}`;
+        await alertAdmins("no_eligible_ideas", `${u.id}:${week}`, adminAlert("A member had no eligible ideas", [`User ${u.id} (${who}), week ${week}.`]), d).catch(() => {});
       }
     } catch (e) {
       console.error("[send] user", u.id, e instanceof Error ? e.message : e);

@@ -43,6 +43,11 @@ type U = {
   timezone: string;
   agent: string;
   stripe_subscription: string | null;
+  hold_reason: string | null;
+  renewal_failed_at: string | null;
+  switching_at: string | null;
+  ending_at: string | null;
+  switched: boolean;
 };
 
 /** The status line the member sees right now (the same function as the Monday email and /app). */
@@ -52,7 +57,10 @@ export async function memberStatusLine(q: Query, userId: string, s: V3Settings, 
 }
 
 const USER_SQL = `select status, plan, (sponsor_id is not null) as sponsored, sharing, currency, free_lists_used, quote, first_charge_at::text, access_ends_at::text,
-  profile, created_at::text, created_by, timezone, agent, stripe_subscription from users where id = $1`;
+  profile, created_at::text, created_by, timezone, agent, stripe_subscription, hold_reason, renewal_failed_at::text,
+  case when plan_change_to = 'per_run' and cancel_requested_at is not null then access_ends_at::text end as switching_at,
+  case when status = 'active' and cancel_requested_at is not null and plan_change_to is distinct from 'per_run' then access_ends_at::text end as ending_at,
+  switched_from_per_run_at is not null as switched from users where id = $1`;
 
 async function lineFor(q: Query, userId: string, u: U, s: V3Settings, now: Date): Promise<string> {
   const contribution = u.status === "active" && u.plan === "monthly" ? await contributionStatus(q, userId, s, now).catch(() => null) : null;
@@ -69,6 +77,11 @@ async function lineFor(q: Query, userId: string, u: U, s: V3Settings, now: Date)
       firstChargeAt: u.first_charge_at,
       orderCents: null,
       accessEndsAt: u.access_ends_at,
+      holdReason: u.hold_reason,
+      renewalFailedAt: u.renewal_failed_at,
+      switchingAt: u.switching_at,
+      endingAt: u.ending_at,
+      switchedFromPerRun: u.switched,
       contribution,
       now,
     },

@@ -123,7 +123,7 @@ function retryDates(week: string, attempt: number, chargeAt: string, now: Date):
  */
 export async function applyResult(q: Query, d: ChargeDeps, u: Pick<U, "id" | "email" | "currency">, claim: Claim, r: ChargeResult, errorKind?: string): Promise<FirstOutcome> {
   if (r.kind === "succeeded") {
-    const [x] = await q<{ settled: boolean; activated: boolean }>(
+    const [x] = await q<{ settled: boolean; activated: boolean; switched: boolean }>(
       `with s as (
          update charge_attempts set outcome = 'succeeded', stripe_object = $2, amount_cents = coalesce($3, amount_cents), currency = coalesce($4, currency),
            settled_at = now(), error = null, next_attempt_at = null
@@ -144,7 +144,9 @@ export async function applyResult(q: Query, d: ChargeDeps, u: Pick<U, "id" | "em
          select a.id, (a.billing_anchor at time zone 'America/Toronto')::date, s.extra_cents - c.cents, coalesce(s.currency, 'USD'), s.week_of, a.billing_anchor, a.billing_anchor, 'invoiced', 'not_sharing'
          from a join s on s.user_id = a.id cross join c where s.extra_cents - c.cents > 0
        )
-       select exists (select 1 from s) as settled, exists (select 1 from a) as activated`,
+       -- Read from the snapshot before the update: a paying one-at-a-time member's first monthly charge is not a "third list".
+       select exists (select 1 from s) as settled, exists (select 1 from a) as activated,
+              coalesce((select switched_from_per_run_at is not null from users where id in (select user_id from s)), false) as switched`,
       [claim.id, r.object, r.amountCents, r.currency, d.now.toISOString(), r.anchor ? new Date(r.anchor * 1000).toISOString() : null],
     );
     if (!x?.settled) return "open";
@@ -153,7 +155,7 @@ export async function applyResult(q: Query, d: ChargeDeps, u: Pick<U, "id" | "em
       await alert("charged_not_active", claim.id, "A first charge succeeded for a user who is no longer in trial", [`User ${u.id}, subscription ${r.object}. Check and refund if needed.`], d);
       return "charged";
     }
-    await sendToUser({ id: u.id, email: u.email }, "subscribed", claim.weekOf, subscribedEmail({ amountCents: r.amountCents, currency: (r.currency ?? u.currency ?? "USD") as Currency }), d).catch(() => {});
+    await sendToUser({ id: u.id, email: u.email }, "subscribed", claim.weekOf, subscribedEmail({ amountCents: r.amountCents, currency: (r.currency ?? u.currency ?? "USD") as Currency, switched: x.switched }), d).catch(() => {});
     return "charged";
   }
   if (r.kind === "unknown") {
@@ -175,6 +177,9 @@ export async function applyResult(q: Query, d: ChargeDeps, u: Pick<U, "id" | "em
     [claim.id, outcome, declined ? r.code : null, declined ? null : r.error.slice(0, 1000), nextAt?.toISOString() ?? null],
   );
   if (!x?.settled) return "open";
+  // No retry left and the close is due (the day-7 attempt, or a later one): the close follows in this pass, and its
+  // email ("closed", or "back to one at a time") stands alone, never after a "we'll try again" that won't happen.
+  if (declined && !next && d.now >= closeTrialAt(claim.weekOf, d.settings.chargeAt)) return "declined";
   if (declined) {
     const retries = r.hard ? [] : retryDates(claim.weekOf, claim.attempt, d.settings.chargeAt, d.now);
     await sendToUser({ id: u.id, email: u.email }, "charge_failed", `${claim.weekOf}:${claim.attempt}`, chargeFailedEmail({ hard: r.hard, retries }), d).catch(() => {});
@@ -216,19 +221,32 @@ export async function takeOverFirstCharge(q: Query, d: ChargeDeps, claim: Claim)
 /** Retries whose day has come (days 1, 3 and 7), and charges held for a changed amount once 24 hours have passed. */
 export async function dueRetries(q: Query, d: ChargeDeps): Promise<Record<FirstOutcome, number>> {
   const tally: Record<FirstOutcome, number> = { charged: 0, declined: 0, held_amount: 0, unknown: 0, error: 0, skipped: 0, open: 0 };
-  const due = await q<{ user_id: string; week_of: string }>(
-    `select u.id as user_id, to_char(c.week_of, 'YYYY-MM-DD') as week_of
+  const due = await q<{ user_id: string; week_of: string; changed: boolean }>(
+    `select u.id as user_id, to_char(c.week_of, 'YYYY-MM-DD') as week_of, false as changed
      from users u join lateral (
        select week_of, outcome, next_attempt_at from charge_attempts where user_id = u.id and purpose = 'first_charge' order by claimed_at desc limit 1
      ) c on true
      where u.status = 'held' and u.hold_reason = 'first_charge_failed' and c.outcome = 'declined' and c.next_attempt_at is not null and c.next_attempt_at <= $1
      union all
-     select u.id, coalesce(u.quote->>'week', to_char(now(), 'YYYY-MM-DD'))
+     select u.id, coalesce(u.quote->>'week', to_char($1::timestamptz at time zone 'America/Toronto', 'YYYY-MM-DD')), true
      from users u where u.status = 'held' and u.hold_reason = 'amount_changed' and (u.quote->>'at')::timestamptz <= $1::timestamptz - interval '24 hours'`,
     [d.now.toISOString()],
   );
-  for (const r of due) tally[await chargeFirst(q, d, r.user_id, r.week_of)]++;
+  // A changed amount told 24 hours ago is a new attempt whatever ended the last one (a refusal that a new card fixed
+  // and whose retry found the amount moved would otherwise wait for an admin for ever, never charged nor closed).
+  for (const r of due) tally[await chargeFirst(q, d, r.user_id, r.week_of, { reset: r.changed })]++;
   return tally;
+}
+
+/**
+ * A new card while held for a changed amount (the card's address can change
+ * the tax): the amount is previewed again and, if it moved, told again (the
+ * 24 hours start over). It is charged only once 24 hours have passed since
+ * the amount now standing was told.
+ */
+export async function recheckChangedAmount(q: Query, d: ChargeDeps, userId: string): Promise<FirstOutcome> {
+  const [u] = await q<{ week: string | null }>(`select quote->>'week' as week from users where id = $1 and status = 'held' and hold_reason = 'amount_changed'`, [userId]);
+  return u?.week ? chargeFirst(q, d, userId, u.week, { reset: true }) : "skipped";
 }
 
 /** A card replaced while held, or an admin's retry after a fix: try at once, as a new attempt (spec B.9). */
@@ -243,6 +261,11 @@ export async function retryNow(q: Query, d: ChargeDeps, userId: string): Promise
 /**
  * Day 7 with nothing charged and no retry left: the trial closes, once, and
  * its held list is never delivered. Never while a charge is in flight.
+ *
+ * A failed first charge whose retry found the amount changed (held
+ * `amount_changed`, told the new amount) gets that retry 24 hours later; if
+ * the close is due by then and it did not go through, it closes the same way
+ * (or goes back to one at a time), rather than waiting on a changed amount.
  */
 export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number> {
   const rows = await q<{ id: string; email: string; week_of: string; claim_id: string }>(
@@ -250,8 +273,11 @@ export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number
      from users u join lateral (
        select id, week_of, outcome, next_attempt_at from charge_attempts where user_id = u.id and purpose = 'first_charge' order by claimed_at desc limit 1
      ) c on true
-     where u.status = 'held' and u.hold_reason = 'first_charge_failed'
-       and c.outcome in ('declined', 'hard_declined', 'error') and c.next_attempt_at is null`,
+     where u.status = 'held' and c.outcome in ('declined', 'hard_declined', 'error')
+       and ((u.hold_reason = 'first_charge_failed' and c.next_attempt_at is null)
+            or (u.hold_reason = 'amount_changed' and c.week_of = (u.quote->>'week')::date
+                and (u.quote->>'at')::timestamptz <= $1::timestamptz - interval '24 hours'))`,
+    [d.now.toISOString()],
   );
   let closed = 0;
   for (const r of rows) {
@@ -269,7 +295,7 @@ export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number
          access_ends_at = case when u.switched_from_per_run_at is not null then u.access_ends_at else coalesce(u.access_ends_at, now()) end,
          switched_from_per_run_at = null
        from b
-       where u.id = b.id and u.id = $1 and u.status = 'held' and u.hold_reason = 'first_charge_failed'
+       where u.id = b.id and u.id = $1 and u.status = 'held' and u.hold_reason in ('first_charge_failed', 'amount_changed')
          and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
          and (select id from charge_attempts x where x.user_id = u.id and x.purpose = 'first_charge' order by claimed_at desc limit 1) = $2
        returning b.restored`,

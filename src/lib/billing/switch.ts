@@ -37,6 +37,14 @@ import type { SubscriptionInfo } from "./subscriptions";
 export type Target = "monthly" | "per_run";
 
 const OPEN_INVOICE = "Pay the open invoice first: update your card and it is charged straight away. Then you can switch.";
+const HELD = "Update your card first. Once the payment goes through, you can switch.";
+/**
+ * A first charge held a day because its amount changed is not switched (the
+ * held list and the told amount belong to monthly): the member waits for the
+ * charge, or cancels, which charges nothing.
+ */
+const AMOUNT_CHANGED = "Your first charge is waiting a day because its amount changed. You can switch once it has gone through, or cancel before then and nothing is charged.";
+const heldWhy = (u: Pick<PlanUser, "hold_reason">) => (u.hold_reason === "amount_changed" ? AMOUNT_CHANGED : HELD);
 
 /** From a Monday's cutoff to the end of that Monday, a switch waits: the time it may happen, or null when it can happen now. */
 export function switchLockedUntil(now: Date, s: V3Settings): Date | null {
@@ -76,8 +84,16 @@ export function switchEffect(
   const lead = lock ? `Monday’s list stays on your current plan; this applies from ${longDate(torontoDate(lock))}. ` : "";
   if (u.plan === "monthly") {
     if (u.stripe_subscription) {
-      const end = periodEnd ?? periodAt(u.anchor, now)?.endDate ?? null;
+      // Booked in the lock with the paid month ending before the lock lifts (a renewal on that Sunday night or Monday):
+      // the switch is made after the renewal, so Stripe ends the month that renewal starts. Asking Stripe at once instead
+      // would end the plan at the renewal and lose Monday's list (access never covers the Monday it ends on).
+      const current = periodAt(u.anchor, now);
+      const across = !periodEnd && lock && current && current.end <= lock ? periodAt(u.anchor, lock) : null;
+      const end = periodEnd ?? (across ?? current)?.endDate ?? null;
       const until = end ? `until ${longDate(end)}` : "until the end of the month you paid for";
+      if (across && current) {
+        return `${lead}Your monthly plan renews on ${longDate(current.endDate)} as usual, with Monday’s list. It then continues ${until}, with a list every Monday, and is not renewed again. After that nothing is charged unless you order a list, ${run} each.`;
+      }
       return `${lead}Your monthly plan continues ${until}, with a list every Monday, and is not renewed. After that nothing is charged unless you order a list, ${run} each.`;
     }
     return `${lead}Nothing is charged automatically after your free lists. You order a list for any Monday you want one, ${run} each.`;
@@ -102,7 +118,7 @@ export async function switchOffer(q: Query, s: V3Settings, now: Date, userId: st
   if (isCancelling(u)) return null;
   const to: Target = u.plan === "monthly" ? "per_run" : "monthly";
   const effect = switchEffect(u, s, now);
-  if (u.status === "held") return { to, effect, allowed: false, why: "Update your card first. Once the payment goes through, you can switch." };
+  if (u.status === "held") return { to, effect, allowed: false, why: heldWhy(u) };
   if (to === "per_run" && u.renewal_invoice) return { to, effect, allowed: false, why: OPEN_INVOICE };
   return { to, effect, allowed: true };
 }
@@ -112,7 +128,7 @@ export async function switchPlan(q: Query, d: PlanDeps, o: { userId: string; to:
   if (!u || !["trial", "active", "held"].includes(u.status)) {
     return { ok: false, message: u?.status === "cancelled" ? "Undo the cancellation first, then switch." : "Switching isn’t available on this account." };
   }
-  if (u.status === "held") return { ok: false, message: "Update your card first. Once the payment goes through, you can switch." };
+  if (u.status === "held") return { ok: false, message: heldWhy(u) };
   if (isCancelling(u)) return { ok: false, message: "Undo the cancellation first, then switch." };
   if (o.to === "per_run" && u.renewal_invoice) return { ok: false, message: OPEN_INVOICE };
   // Back to monthly while the switch to one at a time waits for the month's end: the same subscription simply continues.

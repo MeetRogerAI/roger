@@ -14,7 +14,7 @@ import { opsWeek } from "@/lib/admin/ops";
 import { addRunForUser, changeUserEmail, closeAccount, deleteAccount, giveExtraFreeList, isMonday, linkContributor, saveNote, sendNudge, type Done } from "@/lib/admin/users";
 import { excuseWeek, undoExcuseForEveryone } from "@/lib/billing/contribution";
 import { runChargeJob } from "@/lib/billing/charge-job";
-import { asOfAllowed, AsOfRefused, currentMonday, jobNow } from "@/lib/clock";
+import { asOfAllowed, AsOfRefused, currentMonday, jobNow, moneyAsOfAllowed } from "@/lib/clock";
 import { gatewayFitModel } from "@/lib/cora/fit";
 import { runCoraJob } from "@/lib/cora/job";
 import { gatewayMergeModel } from "@/lib/cora/merge";
@@ -265,12 +265,18 @@ export async function chooseSampleAction(_p: V3State, fd: FormData): Promise<V3S
 // ---------------------------------------------------------------------------
 // Cora and the Monday jobs
 
-/** "As of" from the form, only where the cron routes accept it (preview or local, test Stripe, a test database). */
-async function jobClock(fd: FormData): Promise<Date> {
+/**
+ * "As of" from the form, only where the cron routes accept it (preview or
+ * local, test Stripe, a test database). A job that can charge (`money`) also
+ * needs a Stripe test key in place (clock.ts `moneyAsOfAllowed`, which also
+ * says why a Stripe test clock is needed to move through billing months).
+ */
+async function jobClock(fd: FormData, o: { money?: boolean } = {}): Promise<Date> {
   const asOf = field(fd, "asOf", 40);
   if (!asOf) return new Date();
-  const allowed = asOfAllowed({ deployment: process.env.VERCEL_ENV ?? "development", stripeKey: process.env.STRIPE_SECRET_KEY, databaseMarkedNonProduction: await databaseMarkedNonProduction() });
-  return jobNow(asOf, allowed);
+  const c = { deployment: process.env.VERCEL_ENV ?? "development", stripeKey: process.env.STRIPE_SECRET_KEY, databaseMarkedNonProduction: await databaseMarkedNonProduction() };
+  if (o.money && asOfAllowed(c) && !moneyAsOfAllowed(c)) throw new AsOfRefused("A charge “as of” another time needs a Stripe test key and a database marked non-production.");
+  return jobNow(asOf, asOfAllowed(c));
 }
 
 async function limited(by: string): Promise<boolean> {
@@ -289,7 +295,7 @@ export async function runJobAction(_p: V3State, fd: FormData): Promise<V3State> 
   const job = field(fd, "job", 10);
   let now: Date;
   try {
-    now = await jobClock(fd);
+    now = await jobClock(fd, { money: job === "charge" || job === "hourly" });
   } catch (e) {
     if (e instanceof AsOfRefused) return bad(e.message);
     throw e;
@@ -319,7 +325,7 @@ export async function chargeAndSendAction(_p: V3State, fd: FormData): Promise<V3
   if (await limited(by)) return bad("Too many runs in a minute. Wait a moment.");
   let now: Date;
   try {
-    now = await jobClock(fd);
+    now = await jobClock(fd, { money: true });
   } catch (e) {
     if (e instanceof AsOfRefused) return bad(e.message);
     throw e;

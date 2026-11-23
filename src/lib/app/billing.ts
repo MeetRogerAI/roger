@@ -6,6 +6,7 @@ import { amount, money, moneyCents, priceId, taxPhrase, type Currency } from "@/
 import type { AdjustmentGateway, InvoiceRow, OrderGateway, PlanGateway } from "@/lib/billing/subscriptions";
 import { switchOffer, type SwitchOffer } from "@/lib/billing/switch";
 import { longDate } from "@/lib/mail/templates/welcome";
+import { changedAmountChargeDate } from "./status";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -34,7 +35,7 @@ type U = {
   hold_reason: string | null;
   currency: Currency | null;
   free_lists_used: number;
-  quote: { totalCents: number; currency: Currency; week: string } | null;
+  quote: { totalCents: number; currency: Currency; week: string; at?: string } | null;
   stripe_customer: string | null;
   stripe_subscription: string | null;
   cancel_requested_at: string | null;
@@ -72,7 +73,13 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
 
   let nextCharge: string;
   if (u.status === "held" && u.hold_reason === "renewal_unpaid") nextCharge = "Your last monthly payment is unpaid. Update your card and it is charged straight away.";
-  else if (u.status === "held") nextCharge = "Your first charge is waiting for a card that works. Update your card and it is tried straight away.";
+  else if (u.status === "held" && u.hold_reason === "amount_changed") {
+    const when = changedAmountChargeDate(u.quote);
+    nextCharge =
+      u.quote && when
+        ? `Your first charge changed to ${moneyCents(u.quote.totalCents, u.quote.currency)} with tax. It is charged on ${longDate(when)}, with your list. If you’d rather not, cancel before then.`
+        : "Your first charge amount changed. It is charged a day after we told you the new amount, with your list.";
+  } else if (u.status === "held") nextCharge = "Your first charge is waiting for a card that works. Update your card and it is tried straight away.";
   else if (u.status === "cancelled" || u.status === "closed") nextCharge = accessLeft && !u.at_once ? `Nothing more will be charged. Your lists continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
   else if (cancelling) nextCharge = accessLeft ? `Nothing more will be charged. Your lists continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
   else if (switching) nextCharge = `Nothing more is charged for monthly. It ends on ${date(u.access_ends_at!)}; after that, only the lists you order.`;

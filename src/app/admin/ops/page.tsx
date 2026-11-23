@@ -14,6 +14,7 @@ const STATUS_WORDS: Record<(typeof STATUS_KEYS)[number], string> = {
   trial: "Trial",
   monthly: "Monthly",
   per_run: "One at a time",
+  switching: "Switching to one at a time",
   held: "Payment held",
   sponsored: "Sponsored",
   cancelled: "Cancelled",
@@ -25,7 +26,8 @@ function statusText(r: OpsRow, freeRuns: number) {
   const k = statusKey(r);
   if (k === "trial") return `Trial (${r.freeListsUsed} of ${freeRuns} free lists used)`;
   if (k === "held") return `Payment held${r.holdReason ? `: ${r.holdReason.replace(/_/g, " ")}` : ""}`;
-  return STATUS_WORDS[k] + (r.cancelRequested && k !== "cancelled" ? " (cancelling)" : "");
+  if (k === "monthly" && r.switched) return "Monthly (first charge to come; was one at a time)";
+  return STATUS_WORDS[k] + (r.cancelRequested && k !== "cancelled" && k !== "switching" ? " (cancelling)" : "");
 }
 
 function runText(r: OpsRow) {
@@ -136,7 +138,7 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
                           Add a run for this user
                         </Link>
                         <ExcuseForm userId={r.id} week={excuseWeek} />
-                        {r.status === "trial" && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
+                        {r.status === "trial" && !r.switched && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
                         <NudgeForm userId={r.id} templates={NUDGES} />
                         {r.stripeCustomer && (
                           <a href={stripeCustomerUrl(r.stripeCustomer, mode)} target="_blank" rel="noreferrer" className="tlink block">

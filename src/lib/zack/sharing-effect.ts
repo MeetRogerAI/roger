@@ -22,6 +22,10 @@ export function sharingEffect(o: {
   to: Sharing;
   trialStartedAt: string | null;
   status: string;
+  /** A paying one-at-a-time member who switched to monthly (status trial, waiting for the first monthly charge): no trial dates. */
+  switchedFromPerRun?: boolean;
+  /** The Monday of the first charge as last told (the stored quote), when there is one. */
+  quoteWeek?: string | null;
 }): string | null {
   const cur = o.currency ?? "USD";
   if (o.plan === "per_run") return o.to === "off" ? "With Zack off, lists can’t be ordered until sharing is back on. Your price doesn’t change." : null;
@@ -29,11 +33,13 @@ export function sharingEffect(o: {
   if (band(o.from) === band(o.to)) return null;
   const standard = money(amount(o.settings, "monthly", cur), cur);
   const higher = money(amount(o.settings, "monthly", cur, "higher"), cur);
-  if (o.status === "trial" && o.trialStartedAt) {
-    const first = longDate(addDays(weekOf(new Date(o.trialStartedAt)), 14));
+  if (o.status === "trial" && (o.trialStartedAt || o.switchedFromPerRun)) {
+    // The told Monday when there is one; a switched member's trial dates mean nothing (their free lists are long past).
+    const week = o.quoteWeek ?? (o.switchedFromPerRun || !o.trialStartedAt ? null : addDays(weekOf(new Date(o.trialStartedAt)), 14));
+    const before = week ? `the Sunday cutoff before your first charge (no earlier than ${longDate(week)})` : "the Sunday cutoff before your first monthly charge";
     return o.to === "share"
-      ? `With sharing on at the Sunday cutoff before your first charge (no earlier than ${first}), your first month is ${standard}.`
-      : `If sharing is still off at the Sunday cutoff before your first charge (no earlier than ${first}), your first month is ${higher}, the rate for members whose Zack doesn’t share. After that, any month with sharing off at a Sunday cutoff is billed at ${higher}, the difference added to your next invoice.`;
+      ? `With sharing on at ${before}, your first month is ${standard}.`
+      : `If sharing is still off at ${before}, your first month is ${higher}, the rate for members whose Zack doesn’t share. After that, any month with sharing off at a Sunday cutoff is billed at ${higher}, the difference added to your next invoice.`;
   }
   return o.to === "share"
     ? `A month with sharing on at every Sunday cutoff is ${standard}. A month that already had sharing off at a cutoff stays at ${higher}.`

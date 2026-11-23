@@ -56,7 +56,8 @@ export async function recordWeek(q: Query, week: string, s: V3Settings): Promise
          case when exists (select 1 from zack_settings_history h where h.user_id = u.id and h.changed_at >= $2) then 'share' else u.sharing end
        ) as sharing,
        exists (select 1 from runs r where r.user_id = u.id and r.week_of = $1 and not r.is_test and r.sharing = 'share' and r.status in ('accepted', 'flagged')) as contributed
-     from users u where u.status = 'active' and u.plan = 'monthly'`,
+     -- A sponsored member pays nothing, so the contributor rule never applies to them.
+     from users u where u.status = 'active' and u.plan = 'monthly' and u.sponsor_id is null`,
     [week, cutoff.toISOString()],
   );
   if (!users.length) return 0;

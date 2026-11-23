@@ -246,9 +246,9 @@ describe("the daily pass", () => {
     expect(await keys()).toEqual(["reconcile.eventsCursor", "reconcile.usersCursor"]);
     // Part-way: still under way the next hour, whatever the clock says.
     expect(await reconcilePassUnderway(query, at("2026-12-15T16:00:00Z"))).toBe(true);
-    expect(await finishReconcilePass(query, at("2026-12-15T16:00:00Z"))).toBe(false);
+    expect(await finishReconcilePass(query, at("2026-12-15T16:00:00Z"), at("2026-12-15T16:00:00Z"))).toBe(false);
     await query("delete from settings where key in ('reconcile.eventsCursor', 'reconcile.usersCursor')");
-    expect(await finishReconcilePass(query, at("2026-12-15T16:00:00Z"))).toBe(true);
+    expect(await finishReconcilePass(query, at("2026-12-15T16:00:00Z"), at("2026-12-15T16:00:00Z"))).toBe(true);
     expect(await reconcilePassUnderway(query, at("2026-12-16T15:00:00Z"))).toBe(false);
     expect(await reconcilePassUnderway(query, at("2026-12-16T16:00:00Z"))).toBe(true);
   });

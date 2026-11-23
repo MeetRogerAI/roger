@@ -1,15 +1,16 @@
 import { moneyCents, type Currency } from "@/lib/billing/prices";
-import { appUrl, renderEmail, type Rendered } from "../layout";
+import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
 import { longDate } from "./welcome";
 
 /** Spec B.13: the first charge succeeded and the subscription started. */
-export function subscribedEmail(o: { amountCents: number | null; currency: Currency }): Rendered {
+export function subscribedEmail(o: { amountCents: number | null; currency: Currency; /** A one-at-a-time member's first monthly charge: not a third list. */ switched?: boolean }): Rendered {
   const paid = o.amountCents != null ? `${moneyCents(o.amountCents, o.currency)}, tax included` : "your first month";
+  const list = o.switched ? "This week’s list" : "Your third list";
   return renderEmail({
     subject: "You’re subscribed",
-    preview: "Your third list is ready.",
+    preview: `${list} is ready.`,
     heading: "You’re subscribed.",
-    paragraphs: [`We charged ${paid}. Your third list is ready now, and a new one arrives every Monday.`, "You can cancel any time on the billing page, in one click."],
+    paragraphs: [`We charged ${paid}. ${list} is ready now, and a new one arrives every Monday.`, "You can cancel any time on the billing page, in one click."],
     button: { label: "Open this week’s list", url: appUrl("/app") },
   });
 }
@@ -36,19 +37,21 @@ export function trialClosedEmail(): Rendered {
     subject: "Your Roger trial has closed",
     preview: "Nothing was charged.",
     heading: "Your trial has closed.",
-    paragraphs: ["We couldn’t charge your card, so your trial has closed. Nothing was charged.", "You can start again any time with a working card."],
-    button: { label: "Start again", url: appUrl("/start") },
+    paragraphs: ["We couldn’t charge your card, so your trial has closed. Nothing was charged.", COME_BACK_LINE],
+    button: comeBackButton(),
   });
 }
 
 /** The announced first-charge Monday passed without a list: the next possible date. */
-export function chargeDateMovedEmail(o: { nextMonday: string }): Rendered {
+export function chargeDateMovedEmail(o: { nextMonday: string; reason?: "no_plays" | "no_run" }): Rendered {
   return renderEmail({
     subject: "Your first charge moved",
     preview: `No earlier than ${longDate(o.nextMonday)}.`,
     heading: "Your first charge moved.",
     paragraphs: [
-      "This Monday there weren’t enough new ideas for your list, so nothing was charged.",
+      o.reason === "no_run"
+        ? "Zack’s report for this Monday didn’t arrive by Sunday night, and your list is built from it, so there was no list and nothing was charged."
+        : "This Monday there weren’t enough new ideas for your list, so nothing was charged.",
       `Your first charge will be no earlier than ${longDate(o.nextMonday)}, with your third list. We’ll email you before it happens.`,
     ],
   });
