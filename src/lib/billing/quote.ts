@@ -5,6 +5,7 @@ import type { Rendered } from "@/lib/mail/layout";
 import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail } from "@/lib/mail/templates/quote";
 import type { V3Settings } from "@/lib/v3-settings";
 import { sharingAtCutoff } from "./first-charge";
+import { carriedDifferenceCents } from "./adjustment";
 import { firstChargePricing, type Currency } from "./prices";
 import type { BillingGateway } from "./subscriptions";
 
@@ -46,7 +47,7 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   const sharing = await sharingAtCutoff(q, u.id, week, d.settings);
   const currency = u.currency ?? "USD";
   // Exactly as the charge prices it: the standard price, plus the month's difference on the first invoice when not sharing at the cutoff.
-  const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw);
+  const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw, await carriedDifferenceCents(q, u.id));
   if (!price) return null;
   const p = await d.gw.preview({ customer: u.stripe_customer!, price, extra: extraCents > 0 ? { amountCents: extraCents, currency } : null });
   return { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week };

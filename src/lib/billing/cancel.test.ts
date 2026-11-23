@@ -140,9 +140,9 @@ describe("cancelling a monthly plan (spec check 27)", () => {
 
     // A Monday inside the paid month still gets its list; the first Monday after it does not.
     await picks(id, "2026-12-14");
-    expect((await deliverWeek(query, id, "2026-12-14", 2, new Date("2026-12-14T12:05:00Z"))).delivered).toBe(1);
+    expect((await deliverWeek(query, id, "2026-12-14", 2, "06:00")).delivered).toBe(1);
     await picks(id, "2027-01-04");
-    expect((await deliverWeek(query, id, "2027-01-04", 2, new Date("2027-01-04T12:05:00Z"))).delivered).toBe(0);
+    expect((await deliverWeek(query, id, "2027-01-04", 2, "06:00")).delivered).toBe(0);
 
     // Stripe ends the subscription at the period end: the account stays cancelled, nothing else is sent.
     plans.end("sub_a", PERIOD_END);
@@ -240,7 +240,7 @@ describe("cancelling, after review", () => {
     const now = new Date("2026-12-14T11:30:00Z");
     expect(await cancelPlan(query, deps(now), { userId: id })).toMatchObject({ ok: true });
     expect((await user(id)).status).toBe("cancelled");
-    expect((await deliverWeek(query, id, "2026-12-14", 2, new Date("2026-12-14T12:05:00Z"))).delivered).toBe(1);
+    expect((await deliverWeek(query, id, "2026-12-14", 2, "06:00")).delivered).toBe(1);
     expect(plans.calls).toEqual([]);
     expect(sent[0].text).toContain("Nothing more will be charged.");
     expect(sent[0].text).not.toContain("removed your saved card");
@@ -260,5 +260,27 @@ describe("cancelling, after review", () => {
     await cancelPlan(query, deps(SATURDAY), { userId: id });
     expect(await claimCharge(query, { userId: id, purpose: "order", weekOf: "2026-12-14", attempt: 1, now: SATURDAY })).toBeNull();
     expect(await query("select 1 from charge_attempts")).toHaveLength(0);
+  });
+});
+
+describe("delivery, after the re-review", () => {
+  it("a paid order's list is delivered whatever the account's state, without using a free list", async () => {
+    // A paying one-at-a-time member switched to monthly after Monday's cutoff: "trial" by Tuesday, the order paid Monday.
+    const id = await member({ status: "trial", plan: "monthly" });
+    await query("update users set switched_from_per_run_at = now() where id = $1", [id]);
+    await picks(id, "2026-12-14");
+    await query("insert into orders (user_id, week_of, status) values ($1, '2026-12-14', 'charged')", [id]);
+    expect((await deliverWeek(query, id, "2026-12-14", 2, "06:00")).delivered).toBe(1);
+    expect(await query("select free_lists_used, (select bool_or(is_free_list) from picks) as free from users where id = $1", [id])).toEqual([{ free_lists_used: 2, free: false }]);
+  });
+
+  it("a list for a week inside the paid month still arrives when delivered after access ended", async () => {
+    const id = await member({ status: "active", sub: "sub_a", first: FIRST });
+    await cancelPlan(query, deps(SATURDAY), { userId: id });
+    await picks(id, "2026-12-14");
+    // The subscription ended (access over); the list held from December 14 goes out late.
+    plans.end("sub_a", PERIOD_END);
+    await query("update users set status = 'cancelled' where id = $1", [id]);
+    expect((await deliverWeek(query, id, "2026-12-14", 2, "06:00")).delivered).toBe(1);
   });
 });

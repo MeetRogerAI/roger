@@ -4,7 +4,7 @@ import { sendToUser } from "@/lib/mail/send";
 import { bookedSwitchDroppedEmail, planChangedEmail } from "@/lib/mail/templates/plan-changed";
 import { longDate } from "@/lib/mail/templates/welcome";
 import type { V3Settings } from "@/lib/v3-settings";
-import { adjustmentOnCancelScheduled, ANCHOR, ISO } from "./adjustment";
+import { adjustmentOnSwitchScheduled, ANCHOR, carryToFirstCharge, ISO } from "./adjustment";
 import { BUSY, isCancelling, loadPlanUser, undoCancel, unixIso, UNREACHABLE, type PlanDeps, type PlanResult, type PlanUser } from "./cancel";
 import { chargeInFlight } from "./claims";
 import { periodAt } from "./period";
@@ -169,13 +169,21 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
     } catch (e) {
       console.error("[billing] switch", u.id, e instanceof Error ? e.message : e);
       // The answer may have been lost after Stripe made the change: read it back before giving up.
-      const now = await d.plans.getSubscription(u.stripe_subscription).catch(() => null);
+      let now: SubscriptionInfo | null = null;
+      let unknown = false;
+      try {
+        now = await d.plans.getSubscription(u.stripe_subscription);
+      } catch {
+        unknown = true;
+      }
       if (now?.cancelAt) sub = now;
       else {
-        // Nothing changed: a booked switch keeps its booking (the next hourly pass tries again); a click is simply undone.
+        // Unknown (the read-back failed too): plan_change_to stays 'per_run' as an unconfirmed-switch marker, so a later
+        // webhook showing the end reads it as a switch. Known not made: a click is undone. Either way a booking keeps its
+        // time, so the next hourly pass tries again (repeating the Stripe call is harmless).
         await q(
           `update users set plan_change_to = $2, plan_change_at = $3 where id = $1 and plan_change_at is null and cancel_requested_at is null`,
-          [u.id, o.bookedAt ? "per_run" : null, o.bookedAt ?? null],
+          [u.id, unknown || o.bookedAt ? "per_run" : null, o.bookedAt ?? null],
         );
         return { ok: false, message: UNREACHABLE, busy: true };
       }
@@ -186,8 +194,9 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
        where id = $1 and stripe_subscription = $2 and status = 'active'`,
       [u.id, u.stripe_subscription, d.now.toISOString(), ends],
     );
-    // No renewal will carry the month's difference: deleted, and raised again if the switch is taken back.
-    await adjustmentOnCancelScheduled(q, d, u.id).catch((e) => console.error("[billing] switch adjustment", u.id, e instanceof Error ? e.message : e));
+    // No renewal will carry the month's difference: deleted ("switching"), raised again if the switch is taken back,
+    // and carried to the first charge if the member comes back to monthly after the switch.
+    await adjustmentOnSwitchScheduled(q, d, u.id).catch((e) => console.error("[billing] switch adjustment", u.id, e instanceof Error ? e.message : e));
     const end = torontoDate(new Date(ends));
     await sendToUser(
       { id: u.id, email: u.email },
@@ -232,6 +241,8 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
     [u.id, week, d.now.toISOString()],
   );
   if (!done) return { ok: false, message: BUSY, busy: true };
+  // A month's difference dropped by the switch away is owed with the first charge back (told in the quote below).
+  const carried = await carryToFirstCharge(q, u.id, d.now);
   const ref = `monthly:${d.now.toISOString()}`;
   const plain = () => sendToUser({ id: u.id, email: u.email }, "plan_changed", ref, planChangedEmail({ to, effect: switchEffect(u, d.settings, d.now) }), d);
   if (done.free_lists_used >= d.settings.freeRuns && d.gw) {
@@ -239,7 +250,7 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
     const told = await tellFirstCharge(q, { gw: d.gw, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }, u.id, "plan_changed", ref, (quote) =>
       planChangedEmail({
         to,
-        effect: `Monthly starts with your next list. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${moneyCents(quote.totalCents, quote.currency)}, tax included, for your first month, then the same every month.`,
+        effect: `Monthly starts with your next list. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${moneyCents(quote.totalCents, quote.currency)}, tax included, for your first month${carried ? `, with the higher-rate difference of ${moneyCents(carried, quote.currency)} still owed for the month you switched away from` : ""}, then the monthly price every month.`,
       }),
     ).catch((e) => {
       console.error("[billing] switch quote", u.id, e instanceof Error ? e.message : e);

@@ -37,18 +37,24 @@ export { differenceCents };
  *   is marked invoiced and admins are told once that a credit is due.
  */
 export type AdjustDeps = { settings: V3Settings; now: Date; adjust?: AdjustmentGateway } & MailDeps;
-export type DropReason = "cancel" | "switch" | "excused" | "ended" | "closed";
+/**
+ * Why a difference was dropped. "switching" is a switch to one at a time still
+ * waiting for the month's end (undoable, like "cancel"); it becomes "switch"
+ * when the switch happens. A "switch" difference is carried to the first
+ * charge if the member comes back to monthly within 62 days (plan Unit 15).
+ */
+export type DropReason = "cancel" | "switching" | "switch" | "excused" | "ended" | "closed";
 export type OweReason = "two_misses" | "not_sharing";
 
 export const ISO = (col: string) => `to_char(${col} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 /** Billing months count from the current subscription's anchor (first_charge_at for rows from before it was stored). */
 export const ANCHOR = (u = "u") => `coalesce(${u}.billing_anchor, ${u}.first_charge_at)`;
 
-export type RuleUser = { status: string; plan: string; cancel_requested_at: string | null; stripe_subscription: string | null };
+export type RuleUser = { status: string; plan: string; cancel_requested_at: string | null; stripe_subscription: string | null; plan_change_to?: string | null };
 
 /** Whether a month's difference can stand for this member: null (yes), a reason to drop it, or "wait" (held for an unpaid renewal). */
 export function dropReasonFor(u: RuleUser): DropReason | "wait" | null {
-  if (u.cancel_requested_at) return "cancel";
+  if (u.cancel_requested_at) return u.plan_change_to === "per_run" ? "switching" : "cancel";
   if (u.plan !== "monthly") return "switch";
   if (u.status === "closed") return "closed";
   if (u.status === "cancelled" || (u.status === "active" && !u.stripe_subscription)) return "ended";
@@ -119,7 +125,7 @@ export async function ensureAdjustment(q: Query, d: AdjustDeps, o: { userId: str
          and ${OWES_SQL("u.id", "$2::date", "$8")}
          and not exists (
            select 1 from pending_adjustments a where a.user_id = u.id and a.period_start = $2
-             and (a.status in ('pending', 'invoiced') or coalesce(a.deleted_reason, '') not in ('excused', 'cancel'))
+             and (a.status in ('pending', 'invoiced') or coalesce(a.deleted_reason, '') not in ('excused', 'cancel', 'switching'))
          )
        on conflict do nothing`,
       [
@@ -206,7 +212,44 @@ export async function retryDeletes(q: Query, d: AdjustDeps): Promise<number> {
 
 /** The plan's deletion points. Unit 15 calls the cancel and switch ones; the webhook calls "ended". */
 export const adjustmentOnCancelScheduled = (q: Query, d: AdjustDeps, userId: string) => dropAdjustments(q, d, userId, "cancel");
-export const adjustmentOnSwitchToPerRun = (q: Query, d: AdjustDeps, userId: string) => dropAdjustments(q, d, userId, "switch");
+export const adjustmentOnSwitchScheduled = (q: Query, d: AdjustDeps, userId: string) => dropAdjustments(q, d, userId, "switching");
+/** The switch happened (the subscription ended): what was dropped while switching is now final, and carried if the member comes back to monthly. */
+export async function adjustmentOnSwitchToPerRun(q: Query, d: AdjustDeps, userId: string): Promise<number> {
+  await q(`update pending_adjustments set deleted_reason = 'switch', updated_at = now() where user_id = $1 and status = 'deleted' and deleted_reason = 'switching'`, [userId]);
+  return dropAdjustments(q, d, userId, "switch");
+}
+
+/** How far back a switched-away month's difference is carried to a new first charge. */
+export const CARRY_DAYS = 62;
+
+/**
+ * A member switching (back) to monthly: each month's difference dropped by a
+ * switch to one at a time, never billed, whose invoice date is within the last
+ * 62 days, is carried to the first charge (as its extra, in the told quote
+ * too), so switching away and back never dodges it. A real cancellation keeps
+ * the difference forgiven. Returns the amount now carried.
+ */
+export async function carryToFirstCharge(q: Query, userId: string, now: Date): Promise<number> {
+  await q(`update pending_adjustments set carried_at = null where user_id = $1 and status = 'deleted' and carried_at is not null`, [userId]);
+  await q(
+    `update pending_adjustments set carried_at = $2, updated_at = now()
+     where user_id = $1 and status = 'deleted' and deleted_reason = 'switch' and (stripe_item is null or stripe_deleted_at is not null)
+       and invoice_at > $2::timestamptz - make_interval(days => $3)`,
+    [userId, now.toISOString(), CARRY_DAYS],
+  );
+  return carriedDifferenceCents(q, userId);
+}
+
+/** No longer going to a first charge (back to one at a time, or cancelled): nothing is carried. */
+export async function clearCarried(q: Query, userId: string): Promise<void> {
+  await q(`update pending_adjustments set carried_at = null where user_id = $1 and status = 'deleted' and carried_at is not null`, [userId]);
+}
+
+/** The differences carried to this member's first charge, in cents. */
+export async function carriedDifferenceCents(q: Query, userId: string): Promise<number> {
+  const [r] = await q<{ cents: number | string | null }>(`select sum(amount_cents) as cents from pending_adjustments where user_id = $1 and status = 'deleted' and carried_at is not null`, [userId]);
+  return Number(r?.cents ?? 0);
+}
 export const adjustmentOnSubscriptionEnded = (q: Query, d: AdjustDeps, userId: string) => dropAdjustments(q, d, userId, "ended");
 export const adjustmentOnAccountClosed = (q: Query, d: AdjustDeps, userId: string) => dropAdjustments(q, d, userId, "closed");
 
@@ -220,7 +263,7 @@ export async function adjustmentOnCancelUndone(q: Query, d: AdjustDeps, userId: 
     `select distinct on (a.period_start) to_char(a.period_start, 'YYYY-MM-DD') as period_start, to_char(a.week_of, 'YYYY-MM-DD') as week_of, a.currency,
             ${ISO(ANCHOR())} as anchor
      from pending_adjustments a join users u on u.id = a.user_id
-     where a.user_id = $1 and a.status = 'deleted' and a.deleted_reason = 'cancel' and a.invoice_at > $2
+     where a.user_id = $1 and a.status = 'deleted' and a.deleted_reason in ('cancel', 'switching') and a.invoice_at > $2
      order by a.period_start, a.updated_at desc`,
     [userId, d.now.toISOString()],
   );
@@ -276,7 +319,7 @@ export async function placeAdjustments(q: Query, d: AdjustDeps): Promise<number>
   const rows = await q<PlaceRow>(
     `select a.id, a.user_id, u.email, to_char(a.period_start, 'YYYY-MM-DD') as period_start, a.amount_cents, a.currency, a.reason,
             ${ISO("a.invoice_at")} as invoice_at, a.attempted_at is not null as attempted,
-            u.status, u.plan, u.cancel_requested_at::text, u.stripe_customer as customer, u.stripe_subscription, ${ISO(ANCHOR())} as anchor
+            u.status, u.plan, u.cancel_requested_at::text, u.plan_change_to, u.stripe_customer as customer, u.stripe_subscription, ${ISO(ANCHOR())} as anchor
      from pending_adjustments a join users u on u.id = a.user_id
      where a.status = 'pending' and a.stripe_item is null and a.create_after <= $1 and ${ANCHOR()} is not null
        -- Never a second item for a month while an earlier one is not confirmed deleted, or once the month is billed.

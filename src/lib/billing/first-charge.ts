@@ -5,6 +5,7 @@ import { amountChangedEmail, chargeFailedEmail, subscribedEmail, trialClosedEmai
 import { backToPerRunEmail } from "@/lib/mail/templates/plan-changed";
 import { longDate } from "@/lib/mail/templates/welcome";
 import type { V3Settings } from "@/lib/v3-settings";
+import { carriedDifferenceCents, clearCarried } from "./adjustment";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, stillChargeable, type Claim } from "./claims";
 import { firstChargePricing, type Currency } from "./prices";
 import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult, type FirstExtra, type OrderGateway, type PlanGateway } from "./subscriptions";
@@ -63,7 +64,7 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
   }
   const currency = u.currency ?? "USD";
   // The standard price; not sharing at the cutoff adds the month's difference to the first invoice (the contributor rule).
-  const { price, extraCents } = await firstChargePricing(d.settings, currency, await sharingAtCutoff(q, userId, week, d.settings), d.gw);
+  const { price, extraCents } = await firstChargePricing(d.settings, currency, await sharingAtCutoff(q, userId, week, d.settings), d.gw, await carriedDifferenceCents(q, userId));
   const extra = extraOf(extraCents, currency);
   if (!price) {
     await alert("charge_setup", `price:${currency}`, "A Stripe price is missing", [`No price id for monthly ${currency}. Set the STRIPE_PRICE_* variables.`], d);
@@ -131,14 +132,17 @@ export async function applyResult(q: Query, d: ChargeDeps, u: Pick<U, "id" | "em
        a as (
          -- The job's clock, not the database's: billing months are counted from the new subscription's anchor.
          update users set status = 'active', hold_reason = null, stripe_subscription = $2, first_charge_at = coalesce(first_charge_at, $5::timestamptz),
-           billing_anchor = coalesce($6::timestamptz, $5::timestamptz)
+           billing_anchor = coalesce($6::timestamptz, $5::timestamptz), switched_from_per_run_at = null
          where id in (select user_id from s) and status in ('trial', 'held') returning id, billing_anchor
        ),
-       -- The first invoice already carried the month's higher-rate difference: the first month owes nothing more.
+       -- Earlier months' differences carried to this charge (a switch away and back): billed now.
+       c as (select coalesce(sum(amount_cents), 0)::int as cents from pending_adjustments where user_id in (select user_id from s) and status = 'deleted' and carried_at is not null),
+       g as (update pending_adjustments set status = 'invoiced', updated_at = now() where user_id in (select id from a) and status = 'deleted' and carried_at is not null),
+       -- The rest of the extra is this month's higher-rate difference: the first month owes nothing more.
        f as (
          insert into pending_adjustments (user_id, period_start, amount_cents, currency, week_of, invoice_at, create_after, status, reason)
-         select a.id, (a.billing_anchor at time zone 'America/Toronto')::date, s.extra_cents, coalesce(s.currency, 'USD'), s.week_of, a.billing_anchor, a.billing_anchor, 'invoiced', 'not_sharing'
-         from a join s on s.user_id = a.id where s.extra_cents > 0
+         select a.id, (a.billing_anchor at time zone 'America/Toronto')::date, s.extra_cents - c.cents, coalesce(s.currency, 'USD'), s.week_of, a.billing_anchor, a.billing_anchor, 'invoiced', 'not_sharing'
+         from a join s on s.user_id = a.id cross join c where s.extra_cents - c.cents > 0
        )
        select exists (select 1 from s) as settled, exists (select 1 from a) as activated`,
       [claim.id, r.object, r.amountCents, r.currency, d.now.toISOString(), r.anchor ? new Date(r.anchor * 1000).toISOString() : null],
@@ -254,21 +258,25 @@ export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number
     if (d.now < closeTrialAt(r.week_of, d.settings.chargeAt)) continue;
     // A paying one-at-a-time member who switched to monthly goes back to one at a time: never "trial closed".
     const [done] = await q<{ restored: boolean }>(
-      `update users u set
+      `with b as (select id, switched_from_per_run_at is not null as restored from users where id = $1 for update)
+       update users u set
          status = case when u.switched_from_per_run_at is not null then 'active' else 'closed' end,
          plan = case when u.switched_from_per_run_at is not null then 'per_run' else u.plan end,
          hold_reason = case when u.switched_from_per_run_at is not null then null else u.hold_reason end,
          quote = case when u.switched_from_per_run_at is not null then null else u.quote end,
-         plan_switched_at = case when u.switched_from_per_run_at is not null then now() else u.plan_switched_at end
-       where u.id = $1 and u.status = 'held' and u.hold_reason = 'first_charge_failed'
+         plan_switched_at = case when u.switched_from_per_run_at is not null then now() else u.plan_switched_at end,
+         switched_from_per_run_at = null
+       from b
+       where u.id = b.id and u.id = $1 and u.status = 'held' and u.hold_reason = 'first_charge_failed'
          and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
          and (select id from charge_attempts x where x.user_id = u.id and x.purpose = 'first_charge' order by claimed_at desc limit 1) = $2
-       returning u.switched_from_per_run_at is not null as restored`,
+       returning b.restored`,
       [r.id, r.claim_id],
     );
     if (!done) continue;
     closed++;
     if (done.restored) {
+      await clearCarried(q, r.id);
       await sendToUser({ id: r.id, email: r.email }, "plan_changed", `restored:${r.week_of}`, backToPerRunEmail(), d).catch(() => {});
       continue;
     }
@@ -306,11 +314,13 @@ export async function repairPaidUsers(q: Query, d: ChargeDeps): Promise<number> 
        where c.user_id = u.id and c.outcome = 'succeeded' and u.status in ('trial', 'held') and u.stripe_subscription is null
        returning u.id, c.stripe_object, u.billing_anchor, c.week_of, c.extra_cents, c.currency
      ),
+     k as (select p.user_id, coalesce(sum(p.amount_cents), 0)::int as cents from pending_adjustments p where p.user_id in (select id from r) and p.status = 'deleted' and p.carried_at is not null group by p.user_id),
+     g as (update pending_adjustments p set status = 'invoiced', updated_at = now() where p.user_id in (select id from r) and p.status = 'deleted' and p.carried_at is not null),
      -- As in applyResult: a first invoice that carried the month's difference leaves that month billed.
      f as (
        insert into pending_adjustments (user_id, period_start, amount_cents, currency, week_of, invoice_at, create_after, status, reason)
-       select id, (billing_anchor at time zone 'America/Toronto')::date, extra_cents, coalesce(currency, 'USD'), week_of, billing_anchor, billing_anchor, 'invoiced', 'not_sharing'
-       from r where extra_cents > 0
+       select r.id, (r.billing_anchor at time zone 'America/Toronto')::date, r.extra_cents - coalesce(k.cents, 0), coalesce(r.currency, 'USD'), r.week_of, r.billing_anchor, r.billing_anchor, 'invoiced', 'not_sharing'
+       from r left join k on k.user_id = r.id where r.extra_cents - coalesce(k.cents, 0) > 0
        on conflict do nothing
      )
      select id, stripe_object from r`,

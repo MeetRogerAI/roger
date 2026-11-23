@@ -133,6 +133,8 @@ async function endNow(q: Query, d: PlanDeps, u: PlanUser, reason: string | null)
 
 /** A monthly subscriber: Stripe ends the subscription with the paid month; the account stays active ("cancelling") until then. */
 async function endAtPeriodEnd(q: Query, d: PlanDeps, u: PlanUser, reason: string | null): Promise<PlanResult> {
+  // A switch booked (or marked) and not yet made becomes this cancellation: cleared first, so the webhook reads a cancel.
+  await q(`update users set plan_change_to = null, plan_change_at = null where id = $1 and cancel_requested_at is null and plan_change_to is not null`, [u.id]);
   let sub: SubscriptionInfo;
   try {
     sub = await d.plans.cancelAtPeriodEnd(u.stripe_subscription!);
@@ -163,7 +165,7 @@ async function endUnpaid(q: Query, d: PlanDeps, u: PlanUser, reason: string | nu
   }
   await q(
     `update users set status = 'cancelled', hold_reason = null, cancel_requested_at = $3, access_ends_at = $3, cancel_reason = coalesce($4, cancel_reason),
-       plan_change_to = null, plan_change_at = null, renewal_failed_at = null
+       plan_change_to = null, plan_change_at = null, renewal_failed_at = null, renewal_invoice = null
      where id = $1 and stripe_subscription = $2 and status in ('held', 'active')`,
     [u.id, u.stripe_subscription, d.now.toISOString(), reason],
   );

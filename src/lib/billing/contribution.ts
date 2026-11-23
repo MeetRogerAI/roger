@@ -85,7 +85,7 @@ export async function recordWeek(q: Query, week: string, s: V3Settings): Promise
 
 type Member = RuleUser & { id: string; email: string; sharing: string; currency: Currency | null; anchor: string | null };
 
-const MEMBER_SQL = `select id, email, status, plan, sharing, currency, stripe_subscription, cancel_requested_at::text, ${ISO(ANCHOR("users"))} as anchor from users where id = $1`;
+const MEMBER_SQL = `select id, email, status, plan, sharing, currency, stripe_subscription, cancel_requested_at::text, plan_change_to, ${ISO(ANCHOR("users"))} as anchor from users where id = $1`;
 
 export type PeriodOutcome = "none" | "forgiven" | "second" | "dropped";
 

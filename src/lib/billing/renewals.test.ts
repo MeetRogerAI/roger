@@ -9,6 +9,7 @@ import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { fakePlans } from "@/test-helpers/fake-plans";
 import { testDb } from "@/test-helpers/pglite-db";
 import { completeCardUpdate, startCardUpdate } from "./card-setup";
+import { cancelPlan } from "./cancel";
 import { afterCardChange, type RenewalDeps } from "./renewals";
 import type { BillingGateway } from "./subscriptions";
 import { handleStripeEvent } from "./webhook";
@@ -34,7 +35,7 @@ const billing: BillingGateway = {
     return { kind: "succeeded", object: `sub_${claimId.slice(0, 4)}`, amountCents: 22600, currency: "USD" };
   },
 };
-const deps = (now: Date): RenewalDeps & { gw: BillingGateway } => ({ plans, gw: billing, settings, now, query, transport, sleep: async () => {} });
+const deps = (now: Date): RenewalDeps & { gw: BillingGateway; plans: ReturnType<typeof fakePlans> } => ({ plans, gw: billing, settings, now, query, transport, sleep: async () => {} });
 const subjects = () => sent.filter((m) => !m.subject.startsWith("[Roger]")).map((m) => m.subject);
 const user = async (id: string) =>
   (
@@ -94,7 +95,7 @@ describe("a renewal that fails", () => {
 
     // Monday's list is not delivered while held.
     await picksFor("2027-01-11");
-    expect((await deliverWeek(query, uid, "2027-01-11", 2, new Date("2027-01-11T12:05:00Z"))).delivered).toBe(0);
+    expect((await deliverWeek(query, uid, "2027-01-11", 2, "06:00")).delivered).toBe(0);
 
     // Paid (from Stripe's hosted page): released at once, and the waiting list goes out.
     plans.bills.find((i) => i.id === "in_r1")!.status = "paid";
@@ -255,5 +256,30 @@ describe("after review", () => {
     expect(await completeCardUpdate(query, card, id, { after: async () => ran++ })).toBe("address_invalid");
     expect(await completeCardUpdate(query, card, id, { after: async () => ran++ })).toBe("address_invalid");
     expect(ran).toBe(0);
+  });
+});
+
+describe("after the re-review", () => {
+  it("a card update that completes after an unpaid-renewal cancel pays nothing", async () => {
+    plans.openInvoice("in_r1", "cus_a", "sub_a");
+    await query("update users set status = 'held', hold_reason = 'renewal_unpaid', renewal_failed_at = now(), renewal_invoice = 'in_r1' where id = $1", [uid]);
+    expect(await cancelPlan(query, deps(new Date("2027-01-11T15:00:00Z")), { userId: uid })).toMatchObject({ ok: true });
+    expect(await user(uid)).toMatchObject({ status: "cancelled", renewal_invoice: null });
+    expect(await afterCardChange(query, deps(new Date("2027-01-11T15:05:00Z")), uid, "cs_late")).toBe("none");
+    expect(plans.calls.filter((c) => c.startsWith("pay:"))).toEqual([]);
+    expect(creates).toBe(0);
+  });
+
+  it("moves a cancelling member whose end event was lost to cancelled, once Stripe confirms the end", async () => {
+    await cancelPlan(query, deps(new Date("2026-12-12T15:00:00Z")), { userId: uid });
+    expect((await user(uid)).status).toBe("active");
+    // The month is over but Stripe still says live: nothing moves.
+    await runHourly(query, deps(new Date("2027-01-03T12:00:00Z")));
+    expect((await user(uid)).status).toBe("active");
+    // Stripe ended it; the deleted event never came.
+    plans.end("sub_a", RENEWAL);
+    await runHourly(query, deps(new Date("2027-01-03T13:00:00Z")));
+    expect(await user(uid)).toMatchObject({ status: "cancelled", access_ends_at: "2027-01-03T11:05Z" });
+    expect(sent.map((m) => m.subject)).not.toContain("[Roger] A subscription ended without a cancellation in Roger");
   });
 });

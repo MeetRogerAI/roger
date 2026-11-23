@@ -652,6 +652,7 @@ alter table card_updates add column if not exists done_at timestamptz;
 alter table card_updates add column if not exists outcome text;
 alter table users add column if not exists plan_switched_at timestamptz;
 alter table users add column if not exists switched_from_per_run_at timestamptz;
+
 -- 2026-11-23, Unit 17 (the admin): weeks an admin excused before they were
 -- recorded, for one member (user_id) or for everyone (user_id null). When
 -- recordWeek records the week, a result that would be "missed" becomes
@@ -670,3 +671,10 @@ create unique index if not exists week_excuses_one on week_excuses (week_of, coa
 -- 2026-11-23, Unit 17: the answer to the one optional question when a member
 -- cancels (the Interest page counts them). Unit 15's cancel writes it.
 alter table users add column if not exists cancel_reason text;
+
+-- 2026-11-23, Unit 15 re-review: a month's difference dropped by a switch to
+-- one at a time (deleted_reason switch) is carried to the first charge when
+-- the member comes back to monthly within 62 days (carried_at), so switching
+-- away and back never dodges it. The first charge bills it and marks it
+-- invoiced.
+alter table pending_adjustments add column if not exists carried_at timestamptz;

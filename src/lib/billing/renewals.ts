@@ -5,7 +5,7 @@ import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/s
 import { planChangedEmail } from "@/lib/mail/templates/plan-changed";
 import { renewalFailedEmail, renewalHeldEmail, renewalPaidEmail } from "@/lib/mail/templates/renewal";
 import type { V3Settings } from "@/lib/v3-settings";
-import { adjustmentOnCancelScheduled, adjustmentOnSubscriptionEnded, adjustmentOnSwitchToPerRun, ANCHOR, ISO } from "./adjustment";
+import { adjustmentOnCancelScheduled, adjustmentOnSubscriptionEnded, adjustmentOnSwitchScheduled, adjustmentOnSwitchToPerRun, ANCHOR, ISO } from "./adjustment";
 import { finishCancellation, resettleAfterUndo, unixIso } from "./cancel";
 import { retryNow } from "./first-charge";
 import { amount, money, type Currency } from "./prices";
@@ -134,14 +134,31 @@ export async function renewalPaid(q: Query, d: RenewalDeps, o: { subscription: s
  * the latest). An end nobody asked for in Roger is reported to admins.
  */
 export async function subscriptionEnded(q: Query, d: RenewalDeps, o: { subscription: string; endedAt: Date }): Promise<"switched" | "cancelled" | "none"> {
-  const [sw] = await q<{ id: string; email: string; currency: Currency | null }>(
-    `update users set plan = 'per_run', status = 'active', stripe_subscription = null, cancel_requested_at = null, access_ends_at = null,
+  // A switch (confirmed, or only marked when Stripe's answer was lost): one at a time from now. A hold for an unpaid
+  // renewal is lifted with the subscription (nothing more can renew); an invoice still open is left to admins.
+  const [sw] = await q<{ id: string; email: string; currency: Currency | null; was_held: boolean; invoice: string | null }>(
+    `with b as (
+       select id, status = 'held' as was_held, renewal_invoice from users
+       where stripe_subscription = $1 and status in ('active', 'held') and plan_change_to = 'per_run' for update
+     )
+     update users u set plan = 'per_run', status = 'active', stripe_subscription = null, cancel_requested_at = null, access_ends_at = null,
        plan_change_to = null, plan_change_at = null, quote = null, hold_reason = null, renewal_failed_at = null, renewal_invoice = null, plan_switched_at = now()
-     where stripe_subscription = $1 and status = 'active' and plan_change_to = 'per_run' and cancel_requested_at is not null
-     returning id, email, currency`,
+     from b where u.id = b.id
+     returning u.id, u.email, u.currency, b.was_held, b.renewal_invoice as invoice`,
     [o.subscription],
   );
   if (sw) {
+    if (sw.was_held || sw.invoice) {
+      const open = d.plans ? await d.plans.unpaidInvoice(o.subscription).catch(() => null) : null;
+      if (open || !d.plans) {
+        await alertAdmins(
+          "switch_ended_unpaid",
+          o.subscription,
+          adminAlert("A switch to one at a time ended with a renewal unpaid", [`User ${sw.id}, subscription ${o.subscription}, invoice ${open?.id ?? sw.invoice ?? "unknown"}. Void or collect it.`]),
+          d,
+        ).catch(() => {});
+      }
+    }
     await adjustmentOnSwitchToPerRun(q, d, sw.id).catch((e) => console.error("[renewal] switch adjustment", sw.id, e instanceof Error ? e.message : e));
     const cur = sw.currency ?? "USD";
     await sendToUser(
@@ -199,7 +216,7 @@ export async function syncSubscription(q: Query, d: RenewalDeps & { plans: PlanG
         [u.id, d.now.toISOString(), ends],
       );
       if (!rows.length) return "unchanged";
-      await adjustmentOnCancelScheduled(q, d, u.id).catch((e) => console.error("[renewal] sync adjustment", u.id, e instanceof Error ? e.message : e));
+      await (switching ? adjustmentOnSwitchScheduled : adjustmentOnCancelScheduled)(q, d, u.id).catch((e) => console.error("[renewal] sync adjustment", u.id, e instanceof Error ? e.message : e));
       if (!switching) await finishCancellation(q, { ...d, plans: d.plans }, u.id);
       return switching ? "switching" : "cancelled";
     }
@@ -223,11 +240,15 @@ export async function syncSubscription(q: Query, d: RenewalDeps & { plans: PlanG
   return "unchanged";
 }
 
-/** Hourly: a switch whose paid month is over but whose end event never came is finished from Stripe's state. */
+/**
+ * Hourly backstop: a member cancelling or switching whose paid month is over
+ * but whose end event never came is moved to the ended state, once Stripe
+ * confirms the subscription has ended.
+ */
 export async function endDueSubscriptions(q: Query, d: RenewalDeps & { plans: PlanGateway }): Promise<number> {
   const rows = await q<{ id: string; sub: string; ends: string }>(
     `select id, stripe_subscription as sub, ${ISO("access_ends_at")} as ends from users
-     where status = 'active' and plan_change_to = 'per_run' and cancel_requested_at is not null and stripe_subscription is not null and access_ends_at <= $1`,
+     where status = 'active' and cancel_requested_at is not null and stripe_subscription is not null and access_ends_at <= $1`,
     [d.now.toISOString()],
   );
   let n = 0;
@@ -259,6 +280,8 @@ export async function afterCardChange(q: Query, d: RenewalDeps, userId: string, 
   );
   if (!u) return "none";
   if (d.gw) await noticeQuoteChange(q, quoteDeps({ ...d, gw: d.gw }), userId).catch((e) => console.error("[card] quote", userId, e instanceof Error ? e.message : e));
+  // Only an account that can still be charged: never one cancelled meanwhile.
+  if (u.status !== "active" && u.status !== "held") return "none";
   if (u.status === "held" && u.hold_reason === "first_charge_failed" && d.gw) {
     return `first_charge:${await retryNow(q, { gw: d.gw, orders: d.orders, adjust: d.adjust, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }, userId)}`;
   }

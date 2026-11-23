@@ -11,6 +11,8 @@ import { testDb } from "@/test-helpers/pglite-db";
 import type { PlanDeps } from "./cancel";
 import { runChargeJob } from "./charge-job";
 import { repairPaidUsers } from "./first-charge";
+import { carryToFirstCharge } from "./adjustment";
+import { processContributions, recordWeek } from "./contribution";
 import { placeOrder, sendOrderPrompts } from "./orders";
 import type { BillingGateway, FoundSubscription, OrderGateway } from "./subscriptions";
 import { switchLockedUntil, switchOffer, switchPlan } from "./switch";
@@ -42,13 +44,17 @@ let plans: ReturnType<typeof fakePlans>;
 /** Stripe's subscriptions: every create is counted (a charge), and the same claim never makes two. */
 function fakeBilling() {
   const subs: FoundSubscription[] = [];
-  const g: BillingGateway & { created: () => number; subs: FoundSubscription[]; declining: boolean } = {
+  // Tax at 13% on the extra too, so a told total shows whether the extra was in it.
+  const total = (extra?: { amountCents: number } | null) => 22600 + Math.round((extra?.amountCents ?? 0) * 1.13);
+  const g: BillingGateway & { created: () => number; subs: FoundSubscription[]; declining: boolean; extras: number[] } = {
     created: () => subs.length,
     subs,
     declining: false,
-    preview: async () => ({ totalCents: 22600, currency: "USD" }),
+    extras: [],
+    preview: async ({ extra }) => ({ totalCents: total(extra), currency: "USD" }),
     subscriptions: async () => subs,
-    async createSubscription({ claimId }) {
+    async createSubscription({ claimId, extra }) {
+      g.extras.push(extra?.amountCents ?? 0);
       if (g.declining) return { kind: "declined", code: "stolen_card", hard: true };
       const s = subs.find((x) => x.claimId === claimId) ?? { id: `sub_${subs.length + 1}`, status: "active", claimId };
       if (!subs.includes(s)) subs.push(s);
@@ -152,7 +158,7 @@ describe("monthly to one list at a time", () => {
 
     // Monday lists continue inside the paid month.
     await ready(id);
-    expect((await deliverWeek(query, id, WEEK, 2, SIX_AM)).delivered).toBe(1);
+    expect((await deliverWeek(query, id, WEEK, 2, "06:00")).delivered).toBe(1);
 
     // The month ends: Stripe ends the subscription and the account orders one list at a time.
     plans.end("sub_a", PERIOD_END);
@@ -353,6 +359,7 @@ describe("after review", () => {
     expect(await user(id)).toMatchObject({ status: "active", plan: "per_run", quote: null });
     expect(subjects()).toContain("You’re back on one list at a time");
     expect(subjects()).not.toContain("Your Roger trial has closed");
+    expect((await query<{ s: boolean }>("select switched_from_per_run_at is not null as s from users where id = $1", [id]))[0].s).toBe(false);
   });
 
   it("the paid-user repair never reattaches a subscription from before a switch away and back", async () => {
@@ -380,5 +387,96 @@ describe("after review", () => {
     await query("update users set plan_switched_at = null where id = $1", [id]);
     billing.subs[0].status = "canceled";
     expect(await repairPaidUsers(query, chargeDeps(new Date("2027-01-09T16:00:00Z")))).toBe(0);
+  });
+});
+
+describe("after the re-review", () => {
+  const endEvent = (sub: string) =>
+    ({ id: `evt_end_${sub}`, type: "customer.subscription.deleted", data: { object: { id: sub, ended_at: Math.floor(PERIOD_END.getTime() / 1000) } } }) as unknown as Stripe.Event;
+  const hook = (e: Stripe.Event) => handleStripeEvent(query, fakeGateway(), e, { getSettings: async () => settings, plans, query, transport });
+  const adjustments = () => query<{ status: string; deleted_reason: string | null; carried: boolean }>("select status, deleted_reason, carried_at is not null as carried from pending_adjustments order by created_at");
+
+  it("switching away and back never dodges a month's difference: the first charge back carries it once, as told", async () => {
+    const id = await member({ status: "active", plan: "monthly", sub: "sub_a", first: FIRST });
+    // Sharing off at a December cutoff: December owes the difference.
+    await query("update users set sharing = 'off' where id = $1", [id]);
+    await query("insert into cora_weeks (week_of, status, phase) values ('2026-12-14', 'sent', 'ready')");
+    await recordWeek(query, "2026-12-14", settings);
+    await processContributions(query, deps(new Date("2026-12-14T13:00:00Z")));
+    expect(await adjustments()).toEqual([{ status: "pending", deleted_reason: null, carried: false }]);
+    // Switch to one at a time before the renewal: the difference is dropped, undoably.
+    await switchPlan(query, deps(new Date("2026-12-19T15:00:00Z")), { userId: id, to: "per_run" });
+    expect(await adjustments()).toEqual([{ status: "deleted", deleted_reason: "switching", carried: false }]);
+    // The month ends: the switch is made, and the drop is final.
+    plans.end("sub_a", PERIOD_END);
+    await hook(endEvent("sub_a"));
+    expect(await adjustments()).toEqual([{ status: "deleted", deleted_reason: "switch", carried: false }]);
+    // Straight back to monthly, sharing on again: the first charge carries December's difference, and the email says so.
+    await query("update users set sharing = 'share' where id = $1", [id]);
+    sent = [];
+    expect(await switchPlan(query, deps(new Date("2027-01-09T15:00:00Z")), { userId: id, to: "monthly" })).toMatchObject({ ok: true });
+    expect(await adjustments()).toEqual([{ status: "deleted", deleted_reason: "switch", carried: true }]);
+    const told = 22600 + Math.round(20000 * 1.13);
+    expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly", quote: { totalCents: told } });
+    expect(sent[0].text).toContain("higher-rate difference of US$200");
+    // The charge: once, with the difference, at the told amount; the month is then billed.
+    await ready(id, "2027-01-11");
+    await runChargeJob(query, chargeDeps(new Date("2027-01-11T11:05:00Z")), { week: "2027-01-11" });
+    await runChargeJob(query, chargeDeps(new Date("2027-01-11T11:20:00Z")), { week: "2027-01-11" });
+    expect(billing.extras).toEqual([20000]);
+    expect(await user(id)).toMatchObject({ status: "active", plan: "monthly" });
+    expect(await adjustments()).toEqual([{ status: "invoiced", deleted_reason: "switch", carried: true }]);
+    expect((await query<{ s: boolean }>("select switched_from_per_run_at is not null as s from users where id = $1", [id]))[0].s).toBe(false);
+  });
+
+  it("carries only a switch's drop from the last 62 days, never a real cancellation's", async () => {
+    const id = await member({ status: "trial", plan: "monthly" });
+    const row = (reason: string, invoiceAt: string) =>
+      query(`insert into pending_adjustments (user_id, period_start, amount_cents, currency, invoice_at, create_after, status, deleted_reason) values ($1, $2, 20000, 'USD', $3, $3, 'deleted', $4)`, [
+        id,
+        invoiceAt.slice(0, 10),
+        invoiceAt,
+        reason,
+      ]);
+    await row("cancel", "2026-12-03T11:05:00Z");
+    await row("switch", "2026-09-03T11:05:00Z");
+    expect(await carryToFirstCharge(query, id, new Date("2026-12-12T15:00:00Z"))).toBe(0);
+    await row("switch", "2026-11-03T11:05:00Z");
+    expect(await carryToFirstCharge(query, id, new Date("2026-12-12T15:00:00Z"))).toBe(20000);
+  });
+
+  it("a switch whose Stripe answer and read-back both failed stays marked, so the webhook reads a switch", async () => {
+    const id = await member({ status: "active", plan: "monthly", sub: "sub_a", first: FIRST });
+    plans.failNext(2);
+    expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "per_run" })).toMatchObject({ ok: false });
+    expect(await user(id)).toMatchObject({ status: "active", plan_change_to: "per_run", cancel_requested_at: null });
+    // Stripe had made it after all: the change event arrives.
+    plans.subs.set("sub_a", { ...plans.subs.get("sub_a")!, cancelAt: Math.floor(PERIOD_END.getTime() / 1000) });
+    await hook({ id: "evt_u", type: "customer.subscription.updated", data: { object: { id: "sub_a" } } } as unknown as Stripe.Event);
+    expect(await user(id)).toMatchObject({ status: "active", plan_change_to: "per_run" });
+    expect((await user(id)).cancel_requested_at).not.toBeNull();
+    expect(subjects()).not.toContain("Your Roger plan is cancelled");
+  });
+
+  it("a cancel replaces a booked switch, which then never happens", async () => {
+    const id = await member({ status: "active", plan: "monthly", sub: "sub_a", first: FIRST });
+    await switchPlan(query, deps(MONDAY_3AM), { userId: id, to: "per_run" });
+    const { cancelPlan } = await import("./cancel");
+    expect(await cancelPlan(query, deps(new Date("2026-12-14T09:00:00Z")), { userId: id })).toMatchObject({ ok: true });
+    expect(await user(id)).toMatchObject({ status: "active", plan_change_to: null });
+    await runHourly(query, chargeDeps(TUESDAY));
+    expect(await user(id)).toMatchObject({ status: "active", plan: "monthly", plan_change_to: null });
+    expect(plans.calls.filter((c) => c.startsWith("cancel_at_end"))).toHaveLength(1);
+  });
+
+  it("a switch that ends while held for an unpaid renewal lifts the hold and tells admins about the open invoice", async () => {
+    const id = await member({ status: "active", plan: "monthly", sub: "sub_a", first: FIRST });
+    await switchPlan(query, deps(SATURDAY), { userId: id, to: "per_run" });
+    await query("update users set status = 'held', hold_reason = 'renewal_unpaid', renewal_invoice = 'in_r1' where id = $1", [id]);
+    plans.openInvoice("in_r1", (await query<{ c: string }>("select stripe_customer as c from users where id = $1", [id]))[0].c, "sub_a");
+    plans.end("sub_a", PERIOD_END);
+    await hook(endEvent("sub_a"));
+    expect(await user(id)).toMatchObject({ status: "active", plan: "per_run", stripe_subscription: null });
+    expect(sent.map((m) => m.subject)).toContain("[Roger] A switch to one at a time ended with a renewal unpaid");
   });
 });

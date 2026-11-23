@@ -67,8 +67,10 @@ export async function firstChargePricing(
   currency: Currency,
   sharingAtCutoff: string,
   gw?: PriceReader | null,
+  /** Differences of earlier months carried to this first charge (a switch away and back, plan Unit 15). */
+  carriedCents = 0,
 ): Promise<{ price: string | null; extraCents: number }> {
-  return { price: priceId("monthly", currency, "standard"), extraCents: sharingAtCutoff === "share" ? 0 : await monthDifferenceCents(s, currency, gw) };
+  return { price: priceId("monthly", currency, "standard"), extraCents: (sharingAtCutoff === "share" ? 0 : await monthDifferenceCents(s, currency, gw)) + carriedCents };
 }
 
 /** "US$200" or "CA$280": the currency is always named, never a bare "$" (spec A.16 check 5). */

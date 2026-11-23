@@ -58,6 +58,7 @@ export function fakePlans() {
     },
     async getSubscription(id) {
       calls.push(`get:${id}`);
+      failIfAsked();
       const s = subs.get(id);
       return s ? { ...s } : null;
     },
