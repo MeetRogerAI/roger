@@ -679,7 +679,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 10: The Zack controls page**
+- [x] **Unit 10: The Zack controls page**
 
 **Goal:** `/app/zack` with status, sharing, the collection controls, extra rules, the exact instruction text, run history with delete, and the key.
 
@@ -715,6 +715,15 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 **Verification:** spec checks 5, 9 and 34 pass in the browser on preview.
 
 ### Phase 3: Cora
+
+**As built (2026-11-23, after review):**
+- Files differ from the list above: run history lives in `src/app/app/zack/page.tsx` (a card list that reads on a phone), the three emails (plus "key replaced") in `src/lib/mail/templates/zack-page.ts`, the price effect in `src/lib/zack/sharing-effect.ts`, the status lines in `src/lib/zack/status.ts`. Switches are native checkboxes, which expose their state without `aria-pressed`.
+- Extra rules must be written as things to leave out: a clause with a sending or reaching word ("send", "include", "read", "deliver"…) is refused unless it starts with "Never", "Don't", "Skip" and similar; links, bare domains, IPs and addresses are refused; a fixed sentence after the quoted rules tells Zack to ignore anything that widens them. Never-include entries must be names (at most five words, no instructions or addresses). Any change to either emails the member, as does a new key.
+- The page and the endpoint build the instructions with one function (`instructionsForUser`). "Connected" counts only reports sent by Zack after the current key was made (`users.zack_key_created_at`).
+- Accounts that are cancelled or closed see the page read-only. Deleting a run also deletes that week's private profile.
+- The sharing confirmation shows the first-charge date during the trial; after that it says "your next monthly charge" until the billing preview exists (Unit 12/14).
+
+---
 
 - [ ] **Unit 11: The pool, seed import, scoring, picks and the Cora job**
 

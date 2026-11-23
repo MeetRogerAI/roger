@@ -71,6 +71,15 @@ describe("GET /api/zack/instructions", () => {
     expect(text).toContain("/api/zack/runs?kind=profile");
   });
 
+  it("serves byte for byte what the Zack page shows for the same user (spec check 9)", async () => {
+    const { buildInstructions, coreText, zackUrls } = await import("@/lib/zack/instructions");
+    const { loadZackSettings } = await import("@/lib/zack/rules");
+    const { appUrl } = await import("@/lib/mail/layout");
+    await current("insert into zack_settings (user_id, never_words, extra_rules) values ($1, '{Acme}', 'No plays about my house.')", [userId]);
+    const page = buildInstructions(await coreText("duet"), await loadZackSettings(current, userId), "share", zackUrls(appUrl, "duet"));
+    expect(await (await fetchInstructions()).text()).toBe(page);
+  });
+
   it("reads the rules fresh: a change on the Zack page shows in the next fetch (spec check 5)", async () => {
     const first = await (await fetchInstructions()).text();
     await current("insert into zack_settings (user_id, plays_per_week, never_words, outline_categories, extra_rules) values ($1, 2, '{Acme}', '{Builds}', 'No real estate.')", [userId]);

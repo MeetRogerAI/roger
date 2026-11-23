@@ -525,3 +525,7 @@ alter table runs add column if not exists revision int not null default 0;
 -- 2026-11-23, Unit 9: each play records the run revision it was made from, so
 -- plays from a replaced text are removed even if a replacement races intake.
 alter table plays add column if not exists revision int not null default 0;
+
+-- 2026-11-23, Unit 10: when the current Zack key was made, so the Zack page
+-- says "connected" only for reports sent with this key.
+alter table users add column if not exists zack_key_created_at timestamptz;
