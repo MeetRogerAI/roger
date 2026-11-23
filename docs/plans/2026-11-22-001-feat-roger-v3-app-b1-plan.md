@@ -520,7 +520,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ### Phase 1: The card on file
 
-- [ ] **Unit 7: Stripe foundation, the plan and card steps, and the webhook**
+- [x] **Unit 7: Stripe foundation, the plan and card steps, and the webhook**
 
 **Goal:** A customer, a saved card with a billing address, the plan and consent step, the done step, the welcome email, and a webhook that never double-handles an event.
 
