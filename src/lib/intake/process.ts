@@ -267,7 +267,9 @@ async function finish(q: Query, run: RunRow, r: { status: string; reason: string
        select r.id, r.user_id, r.contributor_id, r.week_of, p.set_, p.position, p.title, p.category, p.body, p.shareable, p.flag, r.revision
        from r, jsonb_to_recordset($7::jsonb) as p(set_ text, position int, title text, category text, body jsonb, shareable boolean, flag jsonb)
        on conflict (run_id, set_, position) do update set title = excluded.title, category = excluded.category, body = excluded.body,
-         shareable = excluded.shareable, flag = excluded.flag, revision = excluded.revision, week_of = excluded.week_of
+         shareable = excluded.shareable, flag = excluded.flag, revision = excluded.revision, week_of = excluded.week_of,
+         -- New text is a new play for Cora: it is placed in the pool again, never left on the old one's pool play.
+         pool_play_id = null, merged_at = null
        returning id
      )
      select (select count(*) from r) as updated`,
