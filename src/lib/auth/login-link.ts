@@ -9,7 +9,8 @@ import { hashSecret, newSecret, normaliseEmail, safeNext } from "./tokens";
 export const LINK_MINUTES = 15;
 export const PILOT_LINK_DAYS = 7;
 
-export type LinkPurpose = "signin" | "pilot" | "email_change";
+/** email_approve: sent to the current address to approve a change. email_change: then sent to the new address to confirm it. */
+export type LinkPurpose = "signin" | "pilot" | "email_change" | "email_approve";
 
 /**
  * A new account's details, carried on the sign-up link and applied only when
@@ -38,6 +39,8 @@ export async function issueToken(
     createdBy?: string | null;
     ttlMs?: number;
     newAccount?: NewAccount;
+    /** Anything else the link needs when it is used (an email revert: the address it undoes). */
+    data?: Record<string, unknown>;
   },
   now = new Date(),
 ): Promise<string> {
@@ -52,7 +55,7 @@ export async function issueToken(
       o.purpose,
       o.userId ?? null,
       safeNext(o.nextPath),
-      o.newAccount ? JSON.stringify(o.newAccount) : null,
+      o.newAccount ? JSON.stringify(o.newAccount) : o.data ? JSON.stringify(o.data) : null,
       o.createdBy ?? null,
       new Date(now.getTime() + ttl).toISOString(),
       now.toISOString(),
@@ -61,29 +64,63 @@ export async function issueToken(
   return token;
 }
 
-export type UsedToken = { email: string; purpose: LinkPurpose; userId: string | null; nextPath: string; newAccount: NewAccount | null };
+export type UsedToken = {
+  email: string;
+  purpose: LinkPurpose;
+  userId: string | null;
+  nextPath: string;
+  newAccount: NewAccount | null;
+  data: Record<string, unknown> | null;
+  /** The stored hash of the token, never the token itself. */
+  hash: string;
+};
 
-/** Uses a token, once. Null if it is unknown, used, revoked or expired. */
+/**
+ * A token is usable when it is unused, not revoked and not expired. Both
+ * email-change links also belong to the newest change request on the
+ * account: any approval request made after one was issued supersedes it, so
+ * two requests racing, or an old link found later, can never complete.
+ */
+const LIVE = `used_at is null and revoked_at is null and expires_at > $2
+  and (purpose not in ('email_change', 'email_approve') or not exists (
+    select 1 from login_tokens n
+    where n.user_id = login_tokens.user_id and n.purpose = 'email_approve' and n.token_hash <> login_tokens.token_hash
+      and (n.created_at, n.token_hash) > (login_tokens.created_at, login_tokens.token_hash)))`;
+
+/** Uses a token, once. Null if it is unknown, used, revoked, expired or superseded. */
 export async function consumeToken(q: Query, token: string | undefined, now = new Date()): Promise<UsedToken | null> {
   if (!token || token.length > 100) return null;
-  const rows = await q<{ email: string; purpose: LinkPurpose; user_id: string | null; next_path: string; payload: NewAccount | null }>(
+  const hash = hashSecret(token);
+  const rows = await q<{ email: string; purpose: LinkPurpose; user_id: string | null; next_path: string; payload: Record<string, unknown> | null }>(
     `update login_tokens set used_at = $2
-     where token_hash = $1 and used_at is null and revoked_at is null and expires_at > $2
+     where token_hash = $1 and ${LIVE}
      returning email, purpose, user_id, next_path, payload`,
-    [hashSecret(token), now.toISOString()],
+    [hash, now.toISOString()],
   );
   const r = rows[0];
-  return r ? { email: r.email, purpose: r.purpose, userId: r.user_id, nextPath: safeNext(r.next_path), newAccount: r.payload ?? null } : null;
+  if (!r) return null;
+  const isAccount = r.purpose === "signin" || r.purpose === "pilot";
+  return {
+    email: r.email,
+    purpose: r.purpose,
+    userId: r.user_id,
+    nextPath: safeNext(r.next_path),
+    newAccount: isAccount ? ((r.payload as NewAccount | null) ?? null) : null,
+    data: isAccount ? null : (r.payload ?? null),
+    hash,
+  };
+}
+
+/** What a token is for, if it is still usable, without using it (for the confirm page's wording). */
+export async function livePurpose(q: Query, token: string | undefined, now = new Date()): Promise<LinkPurpose | null> {
+  if (!token || token.length > 100) return null;
+  const rows = await q<{ purpose: LinkPurpose }>(`select purpose from login_tokens where token_hash = $1 and ${LIVE}`, [hashSecret(token), now.toISOString()]);
+  return rows[0]?.purpose ?? null;
 }
 
 /** Whether a token is still usable, without using it (for the confirm page). */
 export async function tokenIsLive(q: Query, token: string | undefined, now = new Date()): Promise<boolean> {
-  if (!token || token.length > 100) return false;
-  const rows = await q(`select 1 from login_tokens where token_hash = $1 and used_at is null and revoked_at is null and expires_at > $2`, [
-    hashSecret(token),
-    now.toISOString(),
-  ]);
-  return rows.length > 0;
+  return (await livePurpose(q, token, now)) !== null;
 }
 
 export type SignedInUser = { id: string; email: string };
@@ -94,27 +131,13 @@ export type SignedInUser = { id: string; email: string };
  *   creates the account from its carried details if there is none yet; an
  *   account that already exists keeps its own details.
  * - Pilot: the named account, if the email still matches.
- * - Email change: the new address takes effect now that it has proved
- *   itself, unless another account has taken it in the meantime.
+ * - Anything else (email-change links, or a purpose this code doesn't know): nobody.
  */
 export async function userForToken(q: Query, t: UsedToken, now = new Date()): Promise<SignedInUser | null> {
   const at = now.toISOString();
-  if (t.purpose === "email_change") {
-    if (!t.userId) return null;
-    try {
-      const rows = await q<SignedInUser>(
-        `update users set email = $2, email_verified_at = $3
-         where id = $1 and not exists (select 1 from users where email = $2 and id <> $1)
-         returning id, email`,
-        [t.userId, t.email, at],
-      );
-      return rows[0] ?? null;
-    } catch (e) {
-      // Taken by someone else between the check and the update.
-      if (/unique|duplicate/i.test((e as Error).message)) return null;
-      throw e;
-    }
-  }
+  // An allow-list: only sign-in and pilot links ever make a session here.
+  // Email changes go only through src/lib/auth/email-change.ts.
+  if (t.purpose !== "signin" && t.purpose !== "pilot") return null;
   if (t.purpose === "pilot" && t.userId) {
     const rows = await q<SignedInUser>(`update users set email_verified_at = coalesce(email_verified_at, $2) where id = $1 and email = $3 returning id, email`, [
       t.userId,

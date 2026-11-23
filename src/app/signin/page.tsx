@@ -10,6 +10,8 @@ const notes: Record<string, string> = {
   expired: "That link has expired or was already used. Ask for a new one below.",
   noaccount: "There’s no Roger account for that address yet.",
   retry: "Something went wrong on our side while signing you in. Ask for a new link below.",
+  changed: "Your email address is changed. Sign in with the new address.",
+  approved: "Approved. If the change is still current, we’ve sent a link to the new address. Open it there to finish the change.",
 };
 
 async function Body({ searchParams }: { searchParams: PageProps<"/signin">["searchParams"] }) {

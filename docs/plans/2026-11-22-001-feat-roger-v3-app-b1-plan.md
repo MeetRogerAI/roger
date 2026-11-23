@@ -1070,6 +1070,15 @@ evidence weight by age: weeks 1-4 full, 5-12 half, older a quarter; none in 26 w
 
 **Verification:** a signed-out visitor and a signed-in user each see the right "Next" on `/getstarted`.
 
+**As built (2026-11-23, after review):**
+- The live setup file is one row per file in `setup_file_live` (publish is one upsert); `setup_files.published` is no longer read or written. The public read throws on a database error instead of caching "nothing published"; `/getstarted` moves the setup step to request time when that happens.
+- Checklist facts live in `users.onboarding`. Each step ticks only from its own fact; a delivered list ticks everything, so the checklist disappears.
+- Email change (`src/lib/auth/email-change.ts`) needs both addresses. A signed-in request emails an approval link (60 minutes) to the CURRENT address only. Approving (which signs nobody in) checks the account still has that address and that this is its newest request, then emails the confirm link to the new address; an address another account uses gets a "someone tried" note instead, and the approval's work runs after the response so neither reply nor timing differs. Confirming applies the change only if the account still has the address it had at the request, signs in only a browser already signed in as that user (otherwise every session ends), and tells the old address once. A newer request supersedes both links. If the approval email can't be sent, nothing happens and the user is asked to try again. `userForToken` makes sessions only for `signin` and `pilot` links.
+- A member who has lost their old address writes to support (the settings page says so); Unit 17's admin user page must offer "change this user's email address".
+- Stripe's customer email is synced on confirmation and retried hourly (`stripe_email_synced`), with an admin alert after three failures. Notification refs are token-hash prefixes, never addresses.
+- **Deploy order:** run `db/setup.mjs` on production before deploying this code: until it has run, the old purpose check rejects `email_approve` links (the request then fails closed with "try again").
+- **For Unit 15:** the settings page stores the "reminder to order" switch as `email_prefs.friday_prompt`. The Friday prompt job must send with kind `order_prompt` and pass the user's `emailPrefs` to `sendToUser`, or the switch does nothing (`optionalKinds` in `src/lib/mail/send.ts`).
+
 ---
 
 - [ ] **Unit 17: The admin**

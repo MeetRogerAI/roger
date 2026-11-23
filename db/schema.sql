@@ -589,3 +589,32 @@ alter table charge_attempts add column if not exists extra_cents int not null de
 -- for. After that the row's wording is frozen, and a row with no stored item
 -- looks for one carrying its id before anything else.
 alter table pending_adjustments add column if not exists attempted_at timestamptz;
+-- 2026-11-23, Unit 16: what the onboarding checklist has seen that no other
+-- table records (the startup page viewed, the setup file shown, the daily goal
+-- agreed, the Zack controls opened), each as the time it first happened.
+alter table users add column if not exists onboarding jsonb not null default '{}';
+
+-- 2026-11-23, Unit 16: the live setup file is one row per file, so publishing
+-- is a single upsert with no window where two versions (or none) are live.
+-- This replaces setup_files.published, which is no longer read or written.
+create table if not exists setup_file_live (
+  slug text primary key,
+  version int not null,
+  published_at timestamptz not null default now(),
+  foreign key (slug, version) references setup_files (slug, version)
+);
+insert into setup_file_live (slug, version) select slug, version from setup_files where published on conflict (slug) do nothing;
+
+-- 2026-11-23, Unit 16: email changes are approved from the current address
+-- first (email_approve), then confirmed from the new one (email_change). The
+-- purpose check is replaced whatever its name: every check on login_tokens
+-- that mentions purpose is dropped, then the new one is added. One line, so
+-- setup.mjs keeps it whole. Run setup.mjs on production BEFORE deploying the
+-- code that issues email_approve links.
+do $$ declare c record; begin for c in select conname from pg_constraint where conrelid = 'login_tokens'::regclass and contype = 'c' and pg_get_constraintdef(oid) ilike '%purpose%' loop execute format('alter table login_tokens drop constraint %I', c.conname); end loop; alter table login_tokens add constraint login_tokens_purpose_check check (purpose in ('signin', 'pilot', 'email_change', 'email_approve')); end $$;
+
+-- 2026-11-23, Unit 16: whether Stripe's customer has the user's current email.
+-- Set false when the address changes, true once Stripe has it; the hourly pass
+-- retries and tells admins after repeated failures.
+alter table users add column if not exists stripe_email_synced boolean not null default true;
+alter table users add column if not exists stripe_email_attempts int not null default 0;

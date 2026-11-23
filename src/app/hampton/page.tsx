@@ -18,10 +18,10 @@ export const metadata: Metadata = {
 };
 
 const agents = [
-  { name: "Claude", version: "1.9", file: "zack-the-collector-claude.md", download: "Zack The Collector (for Claude) v1.9.md" },
-  { name: "Duet", version: "1.9", file: "zack-the-collector-duet.md", download: "Zack The Collector (for Duet) v1.9.md" },
-  { name: "Grok Bot", version: "1.9", file: "zack-the-collector-grok-bot.md", download: "Zack The Collector (for Grok Bot) v1.9.md" },
-  { name: "Hark", version: "1.9", file: "zack-the-collector-hark.md", download: "Zack The Collector (for Hark) v1.9.md" },
+  { name: "Claude", version: "2.0", file: "zack-the-collector-claude.md", download: "Zack The Collector (for Claude) v2.0.md" },
+  { name: "Duet", version: "2.0", file: "zack-the-collector-duet.md", download: "Zack The Collector (for Duet) v2.0.md" },
+  { name: "Grok Bot", version: "2.0", file: "zack-the-collector-grok-bot.md", download: "Zack The Collector (for Grok Bot) v2.0.md" },
+  { name: "Hark", version: "2.0", file: "zack-the-collector-hark.md", download: "Zack The Collector (for Hark) v2.0.md" },
 ];
 
 const hark = agents.find((a) => a.name === "Hark")!;
@@ -95,12 +95,11 @@ export default async function HamptonPage() {
               </summary>
               <div className="pb-6">
                 <p className="max-w-[36rem] text-ink-2">
-                  Start from the Hark file. Give it to your agent with this prompt, and it will make a version that
-                  works for you.
+                  Start from this file.
                 </p>
                 <div className="mt-5">
                   <a className={ghost} href={`/zack/${hark.file}`} download={hark.download}>
-                    Download the Hark file
+                    Download the file
                   </a>
                 </div>
                 <OtherAgentPrompt />

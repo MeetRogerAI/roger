@@ -11,6 +11,9 @@ export function AppNav() {
         <Link href="/app/zack" className="tlink">
           Zack
         </Link>
+        <Link href="/app/settings" className="tlink">
+          Settings
+        </Link>
         <form action="/auth/signout" method="post" className="ml-auto">
           <button type="submit" className="tlink">
             Sign out

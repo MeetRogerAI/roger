@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { OrderBox, WeekIdeas } from "@/components/app/week-ideas";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
@@ -43,6 +44,7 @@ async function Home() {
           </p>
         </div>
       )}
+      <OnboardingChecklist userId={session.userId} />
 
       {home.ideas.length > 0 ? (
         <>

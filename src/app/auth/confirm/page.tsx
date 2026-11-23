@@ -2,12 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { tokenIsLive } from "@/lib/auth/login-link";
+import { livePurpose, type LinkPurpose } from "@/lib/auth/login-link";
 import { hasDb } from "@/lib/db";
 import { query } from "@/lib/db-query";
 import { confirmSignIn } from "./actions";
 
 export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false }, referrer: "no-referrer" };
+
+const WORDS: Record<"signin", { title: string; body: string; button: string }> & Partial<Record<LinkPurpose, { title: string; body: string; button: string }>> = {
+  signin: { title: "Sign in to Roger", body: "Press the button to finish signing in on this device.", button: "Sign in" },
+  email_change: { title: "Confirm your new email address", body: "Press the button to make this your Roger email address.", button: "Confirm this address" },
+  email_approve: {
+    title: "Approve the change to your email address",
+    body: "Press the button to approve it. We’ll then send a link to the new address, and the change happens only when that link is opened.",
+    button: "Approve the change",
+  },
+};
 
 /**
  * Where an emailed link lands. Opening it changes nothing: mail scanners open
@@ -17,8 +27,8 @@ async function Confirm({ searchParams }: { searchParams: PageProps<"/auth/confir
   const { t } = await searchParams;
   await connection(); // the token check reads the clock: always at request time
   const token = typeof t === "string" ? t : "";
-  const live = hasDb() && token ? await tokenIsLive(query, token) : false;
-  if (!live) {
+  const purpose = hasDb() && token ? await livePurpose(query, token) : null;
+  if (!purpose) {
     return (
       <>
         <h1 className="text-h2">That link has expired.</h1>
@@ -31,14 +41,15 @@ async function Confirm({ searchParams }: { searchParams: PageProps<"/auth/confir
       </>
     );
   }
+  const words = WORDS[purpose] ?? WORDS.signin;
   return (
     <>
-      <h1 className="text-h2">Sign in to Roger</h1>
-      <p className="mt-6 text-lead text-ink-2">Press the button to finish signing in on this device.</p>
+      <h1 className="text-h2">{words.title}</h1>
+      <p className="mt-6 text-lead text-ink-2">{words.body}</p>
       <form action={confirmSignIn} className="mt-8">
         <input type="hidden" name="t" value={token} />
         <button type="submit" className="btn btn-l">
-          Sign in
+          {words.button}
         </button>
       </form>
     </>

@@ -46,6 +46,7 @@ const tabs = [
   { href: "/admin/watches", label: "Watches" },
   { href: "/admin/connections", label: "Connections" },
   { href: "/admin/settings", label: "Settings" },
+  { href: "/admin/setup-file", label: "Setup file" },
 ];
 
 export function AdminTabs() {
