@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ZackAgent } from "./agents";
-import { memberRulesMarkdown, type ZackSettings } from "./rules";
+import type { Query } from "@/lib/db-query";
+import { isZackAgent, zackFileFor, type ZackAgent } from "./agents";
+import { loadZackSettings, memberRulesMarkdown, type ZackSettings } from "./rules";
 
 /**
  * What GET /api/zack/instructions serves (spec B.5): the Zack 2.0 text for
@@ -71,4 +72,19 @@ export async function connectorText(agent: ZackAgent, key: string, base: Base): 
 export function testPrompt(agent: ZackAgent, key: string, base: Base): string {
   const u = zackUrls(base, agent, true);
   return `Run Zack the Collector once now, as a test (do not schedule this): fetch your instructions from ${u.instructionsUrl} with the header "Authorization: Bearer ${key}" (or add &key=${key} to the end of that address if you cannot set headers), follow them exactly, and send the files where they say.`;
+}
+
+/**
+ * The instructions for one user, as GET /api/zack/instructions serves them
+ * and as the Zack page shows them (spec check 9): one function, one set of
+ * inputs, so the two cannot drift.
+ */
+export async function instructionsForUser(
+  q: Query,
+  user: { id: string; agent: string; sharing: "share" | "match_only" | "off" },
+  o: { base: Base; askedAgent?: string | null; test?: boolean },
+): Promise<string> {
+  const agent = o.askedAgent && isZackAgent(o.askedAgent) ? o.askedAgent : zackFileFor(user.agent);
+  const [core, rules] = await Promise.all([coreText(agent), loadZackSettings(q, user.id)]);
+  return buildInstructions(core, rules, user.sharing, zackUrls(o.base, agent, o.test), o.test);
 }

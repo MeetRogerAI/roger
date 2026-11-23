@@ -18,7 +18,7 @@ export function newZackKey(): { key: string; hash: string; prefix: string } {
 /** Makes (or replaces) a user's key and returns it. The only time the key itself is available. */
 export async function replaceZackKey(q: Query, userId: string): Promise<string> {
   const k = newZackKey();
-  await q(`update users set zack_key_hash = $2, zack_key_prefix = $3 where id = $1`, [userId, k.hash, k.prefix]);
+  await q(`update users set zack_key_hash = $2, zack_key_prefix = $3, zack_key_created_at = now() where id = $1`, [userId, k.hash, k.prefix]);
   return k.key;
 }
 

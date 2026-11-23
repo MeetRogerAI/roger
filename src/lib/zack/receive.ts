@@ -149,3 +149,17 @@ export async function claimFreeRun(q: Query, userId: string, cutoff: string, now
   );
   return rows.length > 0;
 }
+
+/** Another chance for a free-tool claim that failed at trial start (plan Unit 10). Never throws. */
+export async function retryPendingClaim(q: Query, userId: string, cutoff: () => Promise<string>): Promise<boolean> {
+  try {
+    const [u] = await q<{ waiting: boolean }>(
+      `select exists (select 1 from users u join free_runs f on f.token = u.pending_zack_token where u.id = $1 and f.claimed_by is null and f.report is not null) as waiting`,
+      [userId],
+    );
+    return u?.waiting ? await claimFreeRun(q, userId, await cutoff()) : false;
+  } catch (e) {
+    console.error("[zack] free-run retry", e instanceof Error ? e.message : e);
+    return false;
+  }
+}
