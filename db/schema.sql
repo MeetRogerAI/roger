@@ -166,6 +166,7 @@ create table if not exists users (
   referred_by uuid,
   ref text not null default '',
   utm text not null default '',
+  pending_zack_token text,
   admin_note text not null default '',
   created_by text,
   created_at timestamptz not null default now(),
