@@ -529,3 +529,15 @@ alter table plays add column if not exists revision int not null default 0;
 -- 2026-11-23, Unit 10: when the current Zack key was made, so the Zack page
 -- says "connected" only for reports sent with this key.
 alter table users add column if not exists zack_key_created_at timestamptz;
+
+-- 2026-11-23, Unit 11a: the job line of a pool play, which merging compares
+-- (Cora 2.0 change 3: same job, not same title).
+alter table pool_plays add column if not exists job text not null default '';
+
+-- 2026-11-23, Unit 11a: a short lease, so only one process places plays in
+-- the pool at a time (the Cora job, a seed import).
+create table if not exists leases (
+  name text primary key,
+  holder text not null,
+  until timestamptz not null
+);

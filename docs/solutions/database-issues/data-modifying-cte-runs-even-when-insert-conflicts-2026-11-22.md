@@ -12,6 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: medium
 tags: [postgres, cte, on-conflict, claim-first, neon-http, single-statement]
+last_updated: 2026-11-23
 ---
 
 # A data-modifying CTE always runs, even when the outer insert does nothing
@@ -55,6 +56,10 @@ All parts of the statement share one snapshot and commit together. Putting the c
 - Test the conflict path: create the conflicting row first, run the claim, assert the claim column is still null.
 - The same shape applies to later units (charge claims, notification claims).
 
+## A second trap: one row, two updates
+Placing a play in the pool first claimed it (`update plays set merged_at = now()`) and then, in a later CTE of the same statement, linked it (`update plays set pool_play_id = (select id from np)`). Postgres does not support modifying the same row twice in one statement: which change wins is not defined. Make one update do both. Here the new pool play's id is generated in code, so the claim sets `merged_at` and `pool_play_id` together and the insert uses the same id (`src/lib/cora/merge.ts`). A foreign key from the row to the inserted id is fine, because constraint checks run after the statement's CTEs.
+
 ## Related Issues
 - `src/lib/zack/receive.ts` (`claimFreeRun`), `src/lib/zack/receive.test.ts`
+- `src/lib/cora/merge.ts` (claim and create a pool play in one statement)
 - `docs/solutions/best-practices/test-claim-sql-on-pglite-2026-11-22.md`

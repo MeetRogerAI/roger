@@ -754,6 +754,13 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 **Execution note:** Implement scoring, eligibility and picking test-first, against a small hand-worked pool.
 
+**11a as built (2026-11-23, after review):** `src/lib/cora/merge.ts`, `seed-import.ts`, `scripts/seed-import.ts`; schema `pool_plays.job`, `leases`.
+- Merging holds a lease (`cora-merge`), so the job and a seed import never place plays at the same time. Each play is claimed before a pool play is made from it, and the binding sharing check (still shareable, unflagged, a shared non-test run, a user who still shares) is inside the statement that copies text into the pool. Flagged plays wait until cleared. A "matching only" play only attaches to an existing pool play. Retired pool plays are candidates and are revived by a match. A pool play no play points to is retired.
+- The model must say it is sure, and name a listed id, for a merge to happen; candidates are sent with their description; play text is clipped.
+- New text for a run (a replacement) resets its plays' placement, so they are placed again.
+- Seed import: one contributor per person (label matched without case), a second file for the same person, agent and week is refused unless `replace`; the command line names the database and needs `--yes`, checks every file before writing, and refuses `--date` with several files.
+- For 11c: (1) rebuild each changed pool play's title, playbook, heavy-use-for and job from its best shareable evidence (v1.1 Step 1.3) when scoring; (2) load evidence only from shareable, unflagged plays, so matching-only attachments count for "already runs" and never for Reach, Proof or medians.
+
 **11b as built (2026-11-23, after review):** `src/lib/cora/score.ts`, `eligible.ts`, `pick.ts`, `who-gets-a-list.ts`.
 - One person counts once in every figure (medians, Proof, Surprise, contributors), whatever the weeks or agents. Each person's figure is their recency-weighted median; the play's figure is the median across people, Actual counted twice for hours.
 - Old evidence keeps the "older" weight while the play is active; a play is retired when it has no evidence in 26 weeks. Surprise counts people without recency. Size counts only when steps and connections were both stated.
