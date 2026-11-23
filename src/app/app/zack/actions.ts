@@ -20,6 +20,8 @@ import { replaceZackKey } from "@/lib/zack/key";
 import { checkReport, MAX_REPORT_CHARS, storeReport } from "@/lib/zack/receive";
 import { deleteRun, saveZackSettings, setSharing, validateSettings, type SettingsErrors, type Sharing } from "@/lib/zack/settings";
 import { sharingEffect } from "@/lib/zack/sharing-effect";
+import { noticeQuoteChange } from "@/lib/billing/quote";
+import { stripeBilling } from "@/lib/billing/subscriptions";
 
 type Me = { id: string; email: string; plan: Plan; currency: Currency | null; sharing: Sharing; agent: string; status: string; trial_started_at: string | null };
 
@@ -78,6 +80,9 @@ export async function changeSharing(_prev: SharingState, fd: FormData): Promise<
   const effect = sharingEffect({ settings: await readV3Settings(), plan: u.plan, currency: u.currency, from: u.sharing, to: sharing, trialStartedAt: u.trial_started_at, status: u.status });
   if (field(fd, "confirm") !== "yes") return { status: "confirm", sharing, effect };
   await setSharing(query, u, sharing, { priceLine: effect });
+  // The first charge's stored amount follows the change, and the user is told if it moved (spec check 21).
+  const gw = stripeBilling();
+  if (gw) await noticeQuoteChange(query, { gw, settings: await readV3Settings(), now: new Date() }, u.id).catch((e) => console.error("[quote] after sharing", e instanceof Error ? e.message : e));
   refresh();
   return { status: "saved", sharing, message: "Saved. This applies to sharing straight away." };
 }

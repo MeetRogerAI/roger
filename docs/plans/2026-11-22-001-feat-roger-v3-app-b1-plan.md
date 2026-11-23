@@ -814,7 +814,7 @@ evidence weight by age: weeks 1-4 full, 5-12 half, older a quarter; none in 26 w
 
 ### Phase 4: Monday
 
-- [ ] **Unit 12: The charge job, first charges and orders**
+- [x] **Unit 12: The charge job, first charges and orders**
 
 **Goal:** At 6:00 AM, start subscriptions for monthly users whose third list is ready, charge one-list orders, hold on failure, retry on days 1, 3 and 7, and close trials that never pay.
 
@@ -851,6 +851,11 @@ evidence weight by age: weeks 1-4 full, 5-12 half, older a quarter; none in 26 w
 - A decline voids the invoice, fails the order and sends one email; a failed void is retried by the hourly sweep; an order invoice paid after its claim failed alerts admins.
 - A paid order ends a one-at-a-time user's trial. Orders and the monthly first charge exclude each other for the same Monday; an order is closed without a charge if the account has since subscribed, switched or cancelled. The actions take the Monday the page showed, so after Sunday's cutoff they refuse rather than move to a later week.
 - Leftover for Unit 13/17: an order week whose Cora run failed leaves its orders "ordered"; close them out with a note when the week fails.
+
+**12c as built (2026-11-23, after review):** `src/lib/billing/quote.ts`, `src/lib/mail/templates/quote.ts`, the reminder task in the hourly pass, the sharing hook in `src/app/app/zack/actions.ts`.
+- The stored quote is the amount the user was told: it changes only when an email stating it was sent (the second-list email, the 48-hour reminder, or a change notice). The charge compares Stripe's preview with it, and holds and tells first on any difference, including when no amount was ever told. So a change with no hook (a billing address entered on Stripe's page, a tax change) is never charged silently.
+- Quotes are priced as the charge prices them (sharing at the cutoff of the quoted Monday). A quote is frozen from its Monday's cutoff to the end of that Monday. Only monthly trial users are quoted; held users are left to the charge and its retries. Each change notice has its own reference, so switching back and forth tells the user each time. The reminder goes once per week, before the cutoff, and says "no earlier than".
+- For Unit 15: call `noticeQuoteChange` after a plan switch, a currency change and a card or address update (and from the `customer.updated` webhook), so the user is told before Saturday rather than held on Monday.
 
 - For later: the webhook settles from the event payload rather than re-reading the invoice (the daily reconcile in Unit 18 re-reads); delivering the held list on a settled charge is Unit 13; orders are 12b; stored quotes and the reminder and second-list emails are 12c.
 

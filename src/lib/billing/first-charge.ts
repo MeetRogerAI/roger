@@ -73,18 +73,18 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
   // The amount must be the one the user was told (spec check 21), checked before anything is claimed.
   const preview = await d.gw.preview({ customer: u.stripe_customer, price });
   const fresh: Quote = { totalCents: preview.totalCents, currency: preview.currency, price, at: d.now.toISOString(), week };
-  if (u.quote?.totalCents != null && (u.quote.totalCents !== preview.totalCents || u.quote.currency !== preview.currency || u.quote.price !== price)) {
+  // No amount was ever told (its email failed), or the amount moved: tell first, charge after 24 hours.
+  if (u.quote?.totalCents == null || u.quote.totalCents !== preview.totalCents || u.quote.currency !== preview.currency || u.quote.price !== price) {
     const held = await q(
       `update users set status = 'held', hold_reason = 'amount_changed', quote = $2 where id = $1 and status in ('trial', 'held') and stripe_subscription is null returning id`,
       [userId, JSON.stringify(fresh)],
     );
     if (held.length) {
       await sendToUser({ id: u.id, email: u.email }, "amount_changed", `${week}:${preview.totalCents}:${price}`, amountChangedEmail({ amountCents: preview.totalCents, currency: preview.currency as Currency }), d).catch(() => {});
-      await alert("amount_changed", `${userId}:${week}:${preview.totalCents}`, "A first charge amount changed", [`User ${userId}: quoted ${u.quote.totalCents} ${u.quote.currency}, now ${preview.totalCents} ${preview.currency}. Charged in 24 hours if unchanged.`], d);
+      await alert("amount_changed", `${userId}:${week}:${preview.totalCents}`, "A first charge amount changed", [`User ${userId}: told ${u.quote?.totalCents ?? "nothing"} ${u.quote?.currency ?? ""}, now ${preview.totalCents} ${preview.currency}. Charged in 24 hours if unchanged.`], d);
     }
     return "held_amount";
   }
-  if (u.quote?.totalCents == null) await q(`update users set quote = $2 where id = $1`, [userId, JSON.stringify(fresh)]);
 
   const claim = await claimCharge(q, { userId, purpose: "first_charge", weekOf: week, attempt, price, amountCents: preview.totalCents, currency: preview.currency, now: d.now });
   if (!claim) return "skipped";

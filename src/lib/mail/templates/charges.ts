@@ -61,7 +61,7 @@ export function amountChangedEmail(o: { amountCents: number; currency: Currency 
     preview: `It is now ${moneyCents(o.amountCents, o.currency)}.`,
     heading: "Your first charge amount changed.",
     paragraphs: [
-      `Your first charge is now ${moneyCents(o.amountCents, o.currency)}, tax included, not the amount we told you before.`,
+      `Your first charge will be ${moneyCents(o.amountCents, o.currency)}, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.`,
       "We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.",
     ],
     button: { label: "Billing", url: appUrl("/app/billing") },
