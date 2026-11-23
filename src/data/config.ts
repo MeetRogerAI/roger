@@ -110,3 +110,41 @@ export const flags = {
 } as const;
 
 export type SiteConfig = typeof siteConfig;
+
+/**
+ * Roger v3 settings (spec 0.9). Saved values in the `settings` table, under
+ * keys like "v3.priceUsd", override these. Times are Toronto wall clock,
+ * "HH:MM": the run cutoff is on Sunday, the three jobs on Monday, stats on
+ * Wednesday. Zack's schedule is Sunday in the user's own time zone.
+ *
+ * `signupOpen` and `cycleLive` default to off so production does nothing
+ * until an admin opens it (requirements R10).
+ */
+export const v3Defaults = {
+  priceUsd: 200,
+  priceCad: 280,
+  priceRunUsd: 100,
+  priceRunCad: 140,
+  priceHigherUsd: 400,
+  priceHigherCad: 560,
+  freeRuns: 2,
+  trialCloseDays: 21,
+  forgivenMissesPerMonth: 1,
+  runCutoff: "23:59",
+  coraAt: "01:00",
+  chargeAt: "06:00",
+  sendAt: "07:00",
+  statsAt: "09:00",
+  zackDefaultSchedule: "18:00",
+  playbookPreface:
+    "I want you to take this document, and update it so that it works for my agent system and then install the playbook, asking me questions as needed.",
+  retentionDays: 90,
+  signupOpen: false,
+  cycleLive: false,
+  sessionDay: "",
+  sessionTime: "",
+  sessionLink: "",
+  recencyWeights: { recentWeeks: 4, recent: 1, midWeeks: 12, mid: 0.5, old: 0.25, retireWeeks: 26 },
+} as const;
+
+export type V3Defaults = typeof v3Defaults;
