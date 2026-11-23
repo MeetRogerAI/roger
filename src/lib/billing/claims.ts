@@ -30,10 +30,14 @@ const GUARD: Record<Purpose, string> = {
   first_charge: `u.plan = 'monthly' and u.cancel_requested_at is null and u.stripe_subscription is null
                  and (u.status = 'trial'
                       or (u.status = 'held' and u.hold_reason = 'first_charge_failed')
-                      or (u.status = 'held' and u.hold_reason = 'amount_changed' and (u.quote->>'at')::timestamptz <= $8::timestamptz - interval '24 hours'))`,
+                      or (u.status = 'held' and u.hold_reason = 'amount_changed' and (u.quote->>'at')::timestamptz <= $8::timestamptz - interval '24 hours'))
+                 -- A list already bought by order that Monday is never charged again as the first month.
+                 and not exists (select 1 from orders o where o.user_id = u.id and o.week_of = $3 and o.status = 'charged')`,
   amount_changed: `u.status = 'held' and u.hold_reason = 'amount_changed' and u.cancel_requested_at is null and u.stripe_subscription is null`,
-  order: `u.status in ('active', 'trial') and u.plan = 'per_run' and u.cancel_requested_at is null
-          and exists (select 1 from orders o where o.user_id = u.id and o.week_of = $3 and o.status = 'ordered')`,
+  // An open order for that week, and no monthly first charge already made for it (a switch the same Monday, spec check 41).
+  order: `u.status in ('active', 'trial') and u.plan = 'per_run' and u.cancel_requested_at is null and u.stripe_subscription is null
+          and exists (select 1 from orders o where o.user_id = u.id and o.week_of = $3 and o.status = 'ordered')
+          and not exists (select 1 from charge_attempts f where f.user_id = u.id and f.week_of = $3 and f.purpose = 'first_charge' and f.outcome = 'succeeded')`,
 };
 
 type Row = { id: string; user_id: string; purpose: Purpose; week_of: string; attempt: number; claimed_at: string };
@@ -82,7 +86,11 @@ export async function stillChargeable(q: Query, claimId: string): Promise<boolea
   const [r] = await q<{ ok: boolean }>(
     `select exists (
        select 1 from charge_attempts c join users u on u.id = c.user_id
-       where c.id = $1 and u.plan = 'monthly' and u.cancel_requested_at is null and u.stripe_subscription is null and u.status in ('trial', 'held')
+       where c.id = $1 and u.cancel_requested_at is null and (
+         (c.purpose = 'first_charge' and u.plan = 'monthly' and u.stripe_subscription is null and u.status in ('trial', 'held'))
+         or (c.purpose = 'order' and u.plan = 'per_run' and u.status in ('trial', 'active') and u.stripe_subscription is null
+             and exists (select 1 from orders o where o.user_id = u.id and o.week_of = c.week_of and o.status = 'ordered'))
+       )
      ) as ok`,
     [claimId],
   );

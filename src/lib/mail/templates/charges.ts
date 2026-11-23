@@ -67,3 +67,44 @@ export function amountChangedEmail(o: { amountCents: number; currency: Currency 
     button: { label: "Billing", url: appUrl("/app/billing") },
   });
 }
+
+/** An order was placed (spec B.9, one list at a time). */
+export function listOrderedEmail(o: { week: string; price: string }): Rendered {
+  return renderEmail({
+    subject: "Your list is ordered",
+    preview: `For ${longDate(o.week)}.`,
+    heading: "Your list is ordered.",
+    paragraphs: [
+      `You’ll get your three ideas on ${longDate(o.week)}, charged ${o.price} that morning, once Zack’s report for the week has arrived.`,
+      "You can cancel until Sunday night.",
+    ],
+    button: { label: "Open Roger", url: appUrl("/app") },
+  });
+}
+
+/** An ordered week with no list: nothing charged, and why. */
+export function orderNoListEmail(o: { week: string; reason: "no_run" | "no_plays" }): Rendered {
+  return renderEmail({
+    subject: "No list this week, and no charge",
+    preview: `For ${longDate(o.week)}.`,
+    heading: "No list this week, and no charge.",
+    paragraphs: [
+      o.reason === "no_run"
+        ? `Zack’s report for ${longDate(o.week)} didn’t arrive by Sunday night, and your list is built from it, so nothing was charged.`
+        : `There weren’t enough new ideas for you this week, so nothing was charged.`,
+      "Your order doesn’t carry over. Order again for any Monday you want a list.",
+    ],
+    button: { label: "Open Roger", url: appUrl("/app") },
+  });
+}
+
+/** The order's payment failed: no list, the invoice is cancelled. */
+export function orderFailedEmail(o: { week: string }): Rendered {
+  return renderEmail({
+    subject: "Your card didn’t go through",
+    preview: `No list for ${longDate(o.week)}.`,
+    heading: "Your card didn’t go through.",
+    paragraphs: [`We couldn’t charge your card for the list on ${longDate(o.week)}, so it wasn’t sent and nothing is owed.`, "Update your card before ordering again."],
+    button: { label: "Update your card", url: appUrl("/app/billing") },
+  });
+}

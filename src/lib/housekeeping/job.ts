@@ -1,5 +1,6 @@
 import type { Query } from "@/lib/db-query";
 import { staleClaims, takeOver } from "@/lib/billing/claims";
+import { takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, takeOverFirstCharge, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -16,8 +17,15 @@ export const HOURLY_TASKS: HourlyTask[] = [
     run: async (q, d) => {
       const out: string[] = [];
       for (const c of await staleClaims(q)) {
-        if (c.purpose === "order") continue; // Unit 12b
-        if (await takeOver(q, c.id)) out.push(await takeOverFirstCharge(q, d, c));
+        if (c.purpose === "order" && !d.orders) continue;
+        if (!(await takeOver(q, c.id))) continue;
+        // One claim's failure never stops the others.
+        try {
+          out.push(c.purpose === "order" ? await takeOverOrder(q, { ...d, orders: d.orders! }, c) : await takeOverFirstCharge(q, d, c));
+        } catch (e) {
+          console.error("[hourly] takeover", c.id, e instanceof Error ? e.message : e);
+          out.push("failed");
+        }
       }
       return out;
     },
@@ -26,6 +34,8 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "charge_retries", run: (q, d) => dueRetries(q, d) },
   // After the retries, so a day-7 attempt runs before its trial closes.
   { name: "close_unpaid_trials", run: (q, d) => closeUnpaidTrials(q, d) },
+  // Order invoices left open after a failed void.
+  { name: "void_leftover_invoices", run: async (q, d) => (d.orders ? voidLeftoverInvoices(q, { ...d, orders: d.orders }) : 0) },
   // A paid user left held or in trial is made active.
   { name: "repair_paid_users", run: (q, d) => repairPaidUsers(q, d) },
 ];

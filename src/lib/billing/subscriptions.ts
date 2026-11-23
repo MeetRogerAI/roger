@@ -97,3 +97,97 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
     },
   };
 }
+
+/**
+ * One list at a time (plan Unit 12): an invoice made for the order, its one
+ * item attached to it directly (so nothing is left pending on the customer),
+ * finalized and paid off-session. Every step carries the claim id; a takeover
+ * finds the invoice by it and finishes from whatever state it is in.
+ */
+export type FoundInvoice = { id: string; status: string; amountPaid: number; currency: string };
+export type OrderCall = { customer: string; price: string; claimId: string; userId: string; week: string; idempotencyKey: string };
+
+export interface OrderGateway {
+  previewOrder(o: { customer: string; price: string }): Promise<{ totalCents: number; currency: string }>;
+  findOrderInvoice(customer: string, claimId: string): Promise<FoundInvoice | null>;
+  /** A draft invoice with its item; its id, or how Stripe refused (a definite refusal is never retried). */
+  createOrderInvoice(o: OrderCall): Promise<{ ok: true; invoice: string } | { ok: false; result: ChargeResult }>;
+  /** Makes sure the item is on the invoice, finalizes if needed, and pays; a decline leaves it open for the caller to void. */
+  payOrderInvoice(invoiceId: string, o: OrderCall): Promise<ChargeResult>;
+  voidInvoice(invoiceId: string): Promise<void>;
+}
+
+export function stripeOrders(s: Stripe | null = stripe()): OrderGateway | null {
+  if (!s) return null;
+  const addItem = (invoice: string, o: OrderCall) =>
+    s.invoiceItems.create({ customer: o.customer, invoice, pricing: { price: o.price }, metadata: { claim_id: o.claimId } }, { idempotencyKey: `${o.idempotencyKey}:item` });
+  const found = (i: Stripe.Invoice): FoundInvoice => ({ id: i.id!, status: i.status ?? "draft", amountPaid: i.amount_paid, currency: i.currency.toUpperCase() });
+  return {
+    async previewOrder({ customer, price }) {
+      const inv = await s.invoices.createPreview({ customer, automatic_tax: { enabled: true }, invoice_items: [{ price }] });
+      return { totalCents: inv.total, currency: inv.currency.toUpperCase() };
+    },
+
+    async findOrderInvoice(customer, claimId) {
+      const list = await s.invoices.list({ customer, limit: 30 });
+      const inv = list.data.find((i) => i.metadata?.claim_id === claimId);
+      return inv ? found(inv) : null;
+    },
+
+    async createOrderInvoice(o) {
+      const { customer, claimId, userId, week, idempotencyKey } = o;
+      try {
+      const inv = await s.invoices.create(
+        {
+          customer,
+          auto_advance: false,
+          automatic_tax: { enabled: true },
+          collection_method: "charge_automatically",
+          pending_invoice_items_behavior: "exclude",
+          description: `Roger list for the week of ${week}`,
+          metadata: { claim_id: claimId, user_id: userId, week },
+        },
+        { idempotencyKey: `${idempotencyKey}:invoice` },
+      );
+      await addItem(inv.id!, o);
+      return { ok: true, invoice: inv.id! };
+      } catch (e) {
+        const r = classify(e);
+        // A definite refusal: anything already made is removed, so nothing is left pending.
+        if (r.kind !== "unknown") {
+          const left = (await s.invoices.list({ customer, limit: 10 })).data.find((i) => i.metadata?.claim_id === claimId && i.status === "draft");
+          if (left?.id) await s.invoices.del(left.id).catch(() => {});
+        }
+        return { ok: false, result: r };
+      }
+    },
+
+    async payOrderInvoice(invoiceId, o) {
+      const { idempotencyKey } = o;
+      try {
+        let inv = await s.invoices.retrieve(invoiceId);
+        // The item may never have been added (a crash between the two calls): the same key adds it once.
+        if (inv.status === "draft") {
+          await addItem(invoiceId, o);
+          inv = await s.invoices.finalizeInvoice(invoiceId, { auto_advance: false }, { idempotencyKey: `${idempotencyKey}:finalize` });
+        }
+        // Never record an empty invoice as a paid list.
+        if (inv.total <= 0) return { kind: "error", error: `The invoice total is ${inv.total}; its item is missing.` };
+        if (inv.status === "paid") return { kind: "succeeded", object: invoiceId, amountCents: inv.amount_paid, currency: inv.currency.toUpperCase() };
+        if (inv.status !== "open") return { kind: "error", error: `The invoice is ${inv.status}.` };
+        const paid = await s.invoices.pay(invoiceId, { off_session: true }, { idempotencyKey: `${idempotencyKey}:pay` });
+        return paid.status === "paid"
+          ? { kind: "succeeded", object: invoiceId, amountCents: paid.amount_paid, currency: paid.currency.toUpperCase() }
+          : { kind: "unknown", error: `The invoice is ${paid.status} after paying.` };
+      } catch (e) {
+        return classify(e);
+      }
+    },
+
+    async voidInvoice(invoiceId) {
+      const inv = await s.invoices.retrieve(invoiceId);
+      if (inv.status === "draft") await s.invoices.del(invoiceId);
+      else if (inv.status === "open") await s.invoices.voidInvoice(invoiceId);
+    },
+  };
+}
