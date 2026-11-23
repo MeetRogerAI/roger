@@ -252,7 +252,7 @@ describe("tax and amount checks", () => {
   });
 
   it("charges the higher rate to a monthly member whose Zack doesn't share", async () => {
-    await query("update users set sharing = 'match_only', quote = null");
+    await query("update users set sharing = 'match_only', quote = $1", [JSON.stringify({ totalCents: 23000, currency: "USD", price: "price_monthly_higher_usd" })]);
     const calls: string[] = [];
     const spy = { ...gw, createSubscription: async (o: Parameters<BillingGateway["createSubscription"]>[0]) => (calls.push(o.price), gw.createSubscription(o)) };
     await chargeFirst(query, deps(SIX_AM, { gw: spy }), uid, WEEK);
@@ -320,5 +320,14 @@ describe("review follow-ups (12a)", () => {
     await query("update users set status = 'held', hold_reason = 'first_charge_failed', stripe_subscription = null");
     await runHourly(query, deps(at("2026-12-14T13:00:00Z")));
     expect(await user()).toMatchObject({ status: "active" });
+  });
+});
+
+describe("an amount never told", () => {
+  it("holds and tells, rather than charging, when no amount was ever sent to the user", async () => {
+    await query("update users set quote = null");
+    expect(await chargeFirst(query, deps(), uid, WEEK)).toBe("held_amount");
+    expect(gw.keys).toEqual([]);
+    expect(subjects()[0]).toBe("Your first charge amount changed");
   });
 });

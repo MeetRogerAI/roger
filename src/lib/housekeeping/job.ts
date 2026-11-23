@@ -1,6 +1,7 @@
 import type { Query } from "@/lib/db-query";
 import { staleClaims, takeOver } from "@/lib/billing/claims";
 import { takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { sendFirstChargeReminders } from "@/lib/billing/quote";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, takeOverFirstCharge, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -34,6 +35,8 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "charge_retries", run: (q, d) => dueRetries(q, d) },
   // After the retries, so a day-7 attempt runs before its trial closes.
   { name: "close_unpaid_trials", run: (q, d) => closeUnpaidTrials(q, d) },
+  // 48 hours before a first charge: the reminder with the stored date and amount.
+  { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, d) },
   // Order invoices left open after a failed void.
   { name: "void_leftover_invoices", run: async (q, d) => (d.orders ? voidLeftoverInvoices(q, { ...d, orders: d.orders }) : 0) },
   // A paid user left held or in trial is made active.
