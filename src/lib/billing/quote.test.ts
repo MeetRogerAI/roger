@@ -33,9 +33,12 @@ const prices: Record<string, number> = { price_monthly_usd: 22600, price_monthly
 let taxShift = 0;
 const created: string[] = [];
 const gw: BillingGateway = {
-  preview: async ({ price }) => ({ totalCents: prices[price] + taxShift, currency: "USD" }),
+  // Not sharing at the cutoff: the standard price plus the month's difference on the first invoice (US$200 + 13%).
+  preview: async ({ price, extra }) => ({ totalCents: prices[price] + (extra ? 22600 : 0) + taxShift, currency: "USD" }),
   subscriptions: async () => [],
-  createSubscription: async ({ price }) => (created.push(price), { kind: "succeeded", object: "sub_1", amountCents: prices[price] + taxShift, currency: "USD" }),
+  createSubscription: async ({ price, extra }) => (
+    created.push(extra ? `${price}+${extra.amountCents}` : price), { kind: "succeeded", object: "sub_1", amountCents: prices[price] + (extra ? 22600 : 0) + taxShift, currency: "USD" }
+  ),
 };
 const deps = (now: Date, s = settings) => ({ gw, settings: s, now, query, transport, sleep: async () => {} });
 let uid: string;
@@ -77,7 +80,8 @@ describe("the told amount (spec check 21)", () => {
     expect(await noticeQuoteChange(query, deps(new Date("2026-12-09T15:00:00Z")), uid)).toBe(true);
     expect(sent.map((m) => m.subject)).toContain("Your first charge amount changed");
     expect(await chargeFirst(query, deps(MONDAY_CHARGE), uid, WEEK)).toBe("charged");
-    expect(created).toEqual(["price_monthly_higher_usd"]);
+    // The standard price, with the month's difference on the first invoice only.
+    expect(created).toEqual(["price_monthly_usd+20000"]);
   });
 
   it("tells the user each time they switch back and forth", async () => {

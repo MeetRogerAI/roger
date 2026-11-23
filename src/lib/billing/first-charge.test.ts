@@ -5,7 +5,7 @@ import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import { runHourly } from "@/lib/housekeeping/job";
 import { runChargeJob } from "./charge-job";
-import { chargeFirst, retryNow, type ChargeDeps } from "./first-charge";
+import { chargeFirst, repairPaidUsers, retryNow, settleFromInvoice, type ChargeDeps } from "./first-charge";
 import type { BillingGateway, ChargeResult, FoundSubscription } from "./subscriptions";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -251,12 +251,22 @@ describe("tax and amount checks", () => {
     expect(await user()).toMatchObject({ status: "active" });
   });
 
-  it("charges the higher rate to a monthly member whose Zack doesn't share", async () => {
-    await query("update users set sharing = 'match_only', quote = $1", [JSON.stringify({ totalCents: 23000, currency: "USD", price: "price_monthly_higher_usd" })]);
-    const calls: string[] = [];
-    const spy = { ...gw, createSubscription: async (o: Parameters<BillingGateway["createSubscription"]>[0]) => (calls.push(o.price), gw.createSubscription(o)) };
-    await chargeFirst(query, deps(SIX_AM, { gw: spy }), uid, WEEK);
-    expect(calls).toEqual(["price_monthly_higher_usd"]);
+  it("charges a member not sharing at the cutoff the standard price plus one first-invoice item, and records that month as billed", async () => {
+    await query("update users set sharing = 'match_only', quote = $1", [JSON.stringify({ totalCents: 23000, currency: "USD", price: "price_monthly_usd", extraCents: 20000 })]);
+    const calls: { price: string; extra: unknown }[] = [];
+    const previews: unknown[] = [];
+    const spy = {
+      ...gw,
+      preview: async (o: Parameters<BillingGateway["preview"]>[0]) => (previews.push(o.extra), gw.preview(o)),
+      createSubscription: async (o: Parameters<BillingGateway["createSubscription"]>[0]) => (calls.push({ price: o.price, extra: o.extra }), gw.createSubscription(o)),
+    };
+    expect(await chargeFirst(query, deps(SIX_AM, { gw: spy }), uid, WEEK)).toBe("charged");
+    // The preview the told amount came from carries the same item.
+    expect(previews).toEqual([{ amountCents: 20000, currency: "USD" }]);
+    expect(calls).toEqual([{ price: "price_monthly_usd", extra: { amountCents: 20000, currency: "USD" } }]);
+    expect(await query("select status, reason, amount_cents, to_char(period_start, 'YYYY-MM-DD') as period_start from pending_adjustments")).toEqual([
+      { status: "invoiced", reason: "not_sharing", amount_cents: 20000, period_start: WEEK },
+    ]);
   });
 });
 
@@ -329,5 +339,24 @@ describe("an amount never told", () => {
     expect(await chargeFirst(query, deps(), uid, WEEK)).toBe("held_amount");
     expect(gw.keys).toEqual([]);
     expect(subjects()[0]).toBe("Your first charge amount changed");
+  });
+});
+
+describe("the billing anchor comes from Stripe", () => {
+  const anchorOf = async () => (await query<{ a: string }>("select billing_anchor::text as a from users where id = $1", [uid]))[0].a;
+  const claim = async () =>
+    (await query<{ id: string }>("insert into charge_attempts (user_id, purpose, week_of, attempt, outcome, stripe_object, settled_at) values ($1, 'first_charge', $2, 1, $3, 'sub_x', $4) returning id", [uid, WEEK, "claimed", null]))[0].id;
+
+  it("a charge settled by the webhook stores the anchor from the invoice's plan line", async () => {
+    const id = await claim();
+    await settleFromInvoice(query, { claimId: id, subscription: "sub_x", amountCents: 23000, currency: "usd", anchor: Date.parse("2026-12-14T11:04:30Z") / 1000 }, deps(at("2026-12-14T12:00:00Z")));
+    expect(await anchorOf()).toBe("2026-12-14 11:04:30+00");
+  });
+
+  it("the repair pass reads the subscription's anchor from Stripe", async () => {
+    await query("insert into charge_attempts (user_id, purpose, week_of, attempt, outcome, stripe_object, settled_at) values ($1, 'first_charge', $2, 1, 'succeeded', 'sub_x', '2026-12-14T12:30:00Z')", [uid, WEEK]);
+    gw.subs.set("cus_1", [{ id: "sub_x", status: "active", claimId: null, anchor: Date.parse("2026-12-14T11:04:30Z") / 1000 }]);
+    expect(await repairPaidUsers(query, deps())).toBe(1);
+    expect(await anchorOf()).toBe("2026-12-14 11:04:30+00");
   });
 });

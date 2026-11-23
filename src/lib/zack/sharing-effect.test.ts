@@ -6,9 +6,11 @@ const s = mergeV3([]);
 const o = { settings: s, plan: "monthly" as const, currency: "USD" as const, trialStartedAt: null, status: "active" };
 
 describe("sharingEffect", () => {
-  it("moves a monthly member to the higher rate when they stop sharing, and back", () => {
-    expect(sharingEffect({ ...o, from: "share", to: "match_only" })).toMatch(/^From your next monthly charge you will pay US\$\d+/);
-    expect(sharingEffect({ ...o, from: "off", to: "share" })).toMatch(/you will pay US\$\d+ a month\.$/);
+  it("says what sharing off at a Sunday cutoff costs a monthly member, and what sharing on gives back", () => {
+    expect(sharingEffect({ ...o, from: "share", to: "match_only" })).toBe(
+      "With sharing off at a Sunday cutoff, that month is billed at US$400; the difference is added to your next invoice.",
+    );
+    expect(sharingEffect({ ...o, from: "off", to: "share" })).toBe("A month with sharing on at every Sunday cutoff is US$200. A month that already had sharing off at a cutoff stays at US$400.");
   });
 
   it("says nothing changes between two choices on the same rate", () => {

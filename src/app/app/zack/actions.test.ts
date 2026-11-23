@@ -30,6 +30,14 @@ vi.mock("@/lib/mail/send", async (orig) => ({
     return "sent";
   },
 }));
+// Any Stripe call from a sharing change would fail the test: under the contributor rule only cutoffs count.
+vi.mock("@/lib/billing/subscriptions", async (orig) => ({
+  ...(await orig<typeof import("@/lib/billing/subscriptions")>()),
+  stripeBilling: () => null,
+  stripeAdjustments: () => {
+    throw new Error("A sharing change must not touch Stripe");
+  },
+}));
 
 const { saveSettings, changeSharing, newKey, removeRun, uploadReport } = await import("./actions");
 const form = (o: Record<string, string | string[]>) => {
@@ -80,6 +88,14 @@ describe("changeSharing", () => {
     expect((await current<{ sharing: string }>("select sharing from users"))[0].sharing).toBe("match_only");
     expect(mailed).toEqual(["sharing_changed"]);
     expect(refreshed).toBe(1);
+  });
+
+
+  it("leaves a monthly member's price and pending difference alone: only Sunday cutoffs count", async () => {
+    await current("update users set status = 'active', stripe_customer = 'cus_1', stripe_subscription = 'sub_1', first_charge_at = '2026-12-03T11:05:00Z'");
+    await current("insert into pending_adjustments (user_id, period_start, amount_cents, currency) select id, '2026-12-03', 28000, 'CAD' from users");
+    expect(await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "off", confirm: "yes" })))).toMatchObject({ value: { status: "saved" } });
+    expect(await current("select status from pending_adjustments")).toEqual([{ status: "pending" }]);
   });
 
   it("refuses a value that is not one of the three, and says when nothing changes", async () => {

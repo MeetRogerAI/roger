@@ -1,4 +1,8 @@
 import type { Query } from "@/lib/db-query";
+import { wallParts } from "@/lib/clock";
+import { retryDeletes, sendItemisedNotices } from "@/lib/billing/adjustment";
+import { processContributions } from "@/lib/billing/contribution";
+import { reconcilePendingItems } from "@/lib/billing/reconcile";
 import { syncStripeEmails } from "@/lib/auth/email-change";
 import { stripe } from "@/lib/billing/stripe";
 import { staleClaims, takeOver } from "@/lib/billing/claims";
@@ -43,7 +47,15 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Order invoices left open after a failed void.
   { name: "void_leftover_invoices", run: async (q, d) => (d.orders ? voidLeftoverInvoices(q, { ...d, orders: d.orders }) : 0) },
   // A list whose charge settled after Monday is delivered then.
-  { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, query: d.query, transport: d.transport, sleep: d.sleep }) },
+  { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, adjust: d.adjust, query: d.query, transport: d.transport, sleep: d.sleep }) },
+  // The contributor rule: misses settled (forgiven, or the adjustment), then any Stripe items due (a carried one after its renewal).
+  { name: "contributions", run: (q, d) => processContributions(q, d) },
+  // Stripe deletes of dropped adjustment items that failed, until Stripe confirms them.
+  { name: "adjustment_deletes", run: (q, d) => retryDeletes(q, d) },
+  // Three days before an invoice carrying an adjustment: the itemised email, from Stripe's preview.
+  { name: "invoice_itemised", run: (q, d) => sendItemisedNotices(q, d) },
+  // Once a day (4 AM Toronto): pending invoice items with no live adjustment are deleted.
+  { name: "reconcile_pending_items", run: async (q, d) => (wallParts(d.now).hour === 4 ? reconcilePendingItems(q, d) : "not this hour") },
   // A paid user left held or in trial is made active.
   { name: "repair_paid_users", run: (q, d) => repairPaidUsers(q, d) },
   // Stripe customers still holding an address the user has since changed (Unit 16).

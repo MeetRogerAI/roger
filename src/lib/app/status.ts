@@ -1,5 +1,8 @@
 import { addDays, torontoDate } from "@/lib/clock";
 import { amount, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
+import type { ContributionStatus } from "@/lib/billing/contribution";
+import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
+import { carriedMissText, notSharingText, secondMissText } from "@/lib/mail/templates/second-miss";
 import { longDate } from "@/lib/mail/templates/welcome";
 import type { V3Settings } from "@/lib/v3-settings";
 
@@ -23,6 +26,8 @@ export type StatusFacts = {
   orderCents: number | null;
   /** Cancelled: when access ends. */
   accessEndsAt?: string | null;
+  /** Monthly and sharing: the month's misses and any adjustment (contribution.ts). */
+  contribution?: ContributionStatus | null;
   now: Date;
 };
 
@@ -68,11 +73,37 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
     // Spec B.9: every email to a one-at-a-time user says what monthly costs.
     return `This list: ${paid}. Order next Monday’s whenever you want one. Monthly is ${money(amount(s, "monthly", cur), cur)} for every Monday.`;
   }
-  const rate = f.sharing === "share" ? "standard" : "higher";
-  const when = f.firstChargeAt ? `Next charge ${longDate(nextMonthly(f.firstChargeAt, f.now))}: ` : "Next charge: ";
-  const line = `${when}${money(amount(s, "monthly", cur, rate), cur)} ${tax}.`;
-  // The contribution line (spec B.9): Unit 14 adds the month's count.
-  return f.sharing === "share"
-    ? `${line} Zack’s report each week keeps you at this price.`
-    : `${line} With Zack not sharing, this is the rate for members who don’t contribute.`;
+  const c = f.contribution ?? null;
+  const higher = money(amount(s, "monthly", cur, "higher"), cur);
+  // The renewal ending this billing month (from the subscription's anchor), else the first charge's anniversary.
+  // The subscription is always at the standard price; a month's higher-rate difference is its own invoice line.
+  const next = c?.periodEnd ?? (f.firstChargeAt ? nextMonthly(f.firstChargeAt, f.now) : null);
+  const line = `${next ? `Next charge ${longDate(next)}: ` : "Next charge: "}${money(amount(s, "monthly", cur), cur)} ${tax}.`;
+  // A cancellation is scheduled: the contributor rule no longer applies.
+  if (c?.cancelling) return line;
+  // The contribution line (spec B.9 notices 2 to 4).
+  const adjustment = adjustmentLine(c, s, cur);
+  if (adjustment && c?.adjustment?.current) return adjustment;
+  const lead = adjustment ? `${adjustment} ` : "";
+  // This month was already billed at the higher rate (the first month, charged up front): nothing more can be added to it.
+  if (c?.alreadyBilled) return `${lead}This month is already billed at ${higher}. ${line}`;
+  if (f.sharing !== "share") return `${lead}${line} ${SHARING_OFF(higher)}`;
+  if (c?.missedThisWeek && c.missed > 0 && c.missed <= c.allowed) return `${lead}${forgivenText({ periodEnd: c.periodEnd, higher })} ${line}`;
+  return `${lead}Contributing. This month: ${c?.used ?? 0} of ${c?.allowed ?? s.forgivenMissesPerMonth} forgiven misses used. ${line}`;
+}
+
+/** What sharing off means under the contributor rule (the strip, and the sharing confirmation on /app/zack). */
+export const SHARING_OFF = (higher: string) => `With sharing off at a Sunday cutoff, that month is billed at ${higher}; the difference is added to your next invoice.`;
+
+/**
+ * Notice 4, or the not-sharing notice, for a month's difference still to be
+ * invoiced (the strip and the /app banner): this month's wording, or, once a
+ * new month has started, worded from the month it is owed for.
+ */
+export function adjustmentLine(c: ContributionStatus | null | undefined, s: V3Settings, cur: Currency): string | null {
+  if (!c?.adjustment || c.cancelling) return null;
+  const a = c.adjustment;
+  const o = { higher: money(amount(s, "monthly", cur, "higher"), cur), difference: moneyCents(a.amountCents, a.currency), invoiceDate: a.invoiceDate };
+  if (!a.current) return carriedMissText({ ...o, periodEnd: a.periodEnd, reason: a.reason });
+  return a.reason === "not_sharing" ? notSharingText(o) : secondMissText(o);
 }

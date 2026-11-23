@@ -5,8 +5,8 @@ import { amountChangedEmail, chargeFailedEmail, subscribedEmail, trialClosedEmai
 import { longDate } from "@/lib/mail/templates/welcome";
 import type { V3Settings } from "@/lib/v3-settings";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, stillChargeable, type Claim } from "./claims";
-import { priceId, type Currency } from "./prices";
-import { isLive, type BillingGateway, type ChargeResult, type OrderGateway } from "./subscriptions";
+import { firstChargePricing, type Currency } from "./prices";
+import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult, type FirstExtra, type OrderGateway } from "./subscriptions";
 
 /**
  * The first monthly charge, with the third list (spec B.9, plan Unit 12):
@@ -17,10 +17,10 @@ import { isLive, type BillingGateway, type ChargeResult, type OrderGateway } fro
  * a retry cannot fix holds the user for an admin; day 7 with nothing charged
  * closes the trial.
  */
-export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; settings: V3Settings; now: Date } & MailDeps;
+export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; adjust?: AdjustmentGateway; settings: V3Settings; now: Date } & MailDeps;
 export type FirstOutcome = "charged" | "declined" | "held_amount" | "unknown" | "error" | "skipped" | "open";
 
-type Quote = { totalCents?: number; currency?: string; price?: string; at?: string; week?: string };
+type Quote = { totalCents?: number; currency?: string; price?: string; extraCents?: number; at?: string; week?: string };
 type U = { id: string; email: string; currency: Currency | null; status: string; hold_reason: string | null; stripe_customer: string | null; quote: Quote | null };
 
 async function loadUser(q: Query, userId: string): Promise<U | null> {
@@ -45,14 +45,11 @@ export async function sharingAtCutoff(q: Query, userId: string, week: string, s:
   return r.before ?? (r.after_any ? "share" : r.now);
 }
 
-/** Monthly members whose Zack doesn't share pay the higher rate (the contributor rule; Unit 14 refines it). */
-function priceFor(currency: Currency, sharing: string): string | null {
-  return priceId("monthly", currency, sharing === "share" ? "standard" : "higher");
-}
-
 async function alert(kind: string, ref: string, subject: string, lines: string[], d: MailDeps) {
   await alertAdmins(kind, ref, adminAlert(subject, lines), d).catch(() => {});
 }
+
+const extraOf = (cents: number, currency: string): FirstExtra => (cents > 0 ? { amountCents: cents, currency } : null);
 
 export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week: string, o: { reset?: boolean } = {}): Promise<FirstOutcome> {
   const u = await loadUser(q, userId);
@@ -62,7 +59,9 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
     return "error";
   }
   const currency = u.currency ?? "USD";
-  const price = priceFor(currency, await sharingAtCutoff(q, userId, week, d.settings));
+  // The standard price; not sharing at the cutoff adds the month's difference to the first invoice (the contributor rule).
+  const { price, extraCents } = await firstChargePricing(d.settings, currency, await sharingAtCutoff(q, userId, week, d.settings), d.gw);
+  const extra = extraOf(extraCents, currency);
   if (!price) {
     await alert("charge_setup", `price:${currency}`, "A Stripe price is missing", [`No price id for monthly ${currency}. Set the STRIPE_PRICE_* variables.`], d);
     return "error";
@@ -71,10 +70,16 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
   if (attempt == null) return "open";
 
   // The amount must be the one the user was told (spec check 21), checked before anything is claimed.
-  const preview = await d.gw.preview({ customer: u.stripe_customer, price });
-  const fresh: Quote = { totalCents: preview.totalCents, currency: preview.currency, price, at: d.now.toISOString(), week };
+  const preview = await d.gw.preview({ customer: u.stripe_customer, price, extra });
+  const fresh: Quote = { totalCents: preview.totalCents, currency: preview.currency, price, extraCents, at: d.now.toISOString(), week };
   // No amount was ever told (its email failed), or the amount moved: tell first, charge after 24 hours.
-  if (u.quote?.totalCents == null || u.quote.totalCents !== preview.totalCents || u.quote.currency !== preview.currency || u.quote.price !== price) {
+  if (
+    u.quote?.totalCents == null ||
+    u.quote.totalCents !== preview.totalCents ||
+    u.quote.currency !== preview.currency ||
+    u.quote.price !== price ||
+    (u.quote.extraCents ?? 0) !== extraCents
+  ) {
     const held = await q(
       `update users set status = 'held', hold_reason = 'amount_changed', quote = $2 where id = $1 and status in ('trial', 'held') and stripe_subscription is null returning id`,
       [userId, JSON.stringify(fresh)],
@@ -86,14 +91,14 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
     return "held_amount";
   }
 
-  const claim = await claimCharge(q, { userId, purpose: "first_charge", weekOf: week, attempt, price, amountCents: preview.totalCents, currency: preview.currency, now: d.now });
+  const claim = await claimCharge(q, { userId, purpose: "first_charge", weekOf: week, attempt, price, amountCents: preview.totalCents, currency: preview.currency, extraCents, now: d.now });
   if (!claim) return "skipped";
 
   // Never a second subscription.
   const live = (await d.gw.subscriptions(u.stripe_customer)).find(isLive);
   if (live) return applyResult(q, d, u, claim, { kind: "error", error: `The customer already has a live subscription (${live.id}).` }, "charge_duplicate");
 
-  const result = await d.gw.createSubscription({ customer: u.stripe_customer, price, claimId: claim.id, userId, idempotencyKey: idempotencyKey(claim) });
+  const result = await d.gw.createSubscription({ customer: u.stripe_customer, price, extra, claimId: claim.id, userId, idempotencyKey: idempotencyKey(claim) });
   return applyResult(q, d, u, claim, result);
 }
 
@@ -118,14 +123,22 @@ export async function applyResult(q: Query, d: ChargeDeps, u: Pick<U, "id" | "em
       `with s as (
          update charge_attempts set outcome = 'succeeded', stripe_object = $2, amount_cents = coalesce($3, amount_cents), currency = coalesce($4, currency),
            settled_at = now(), error = null, next_attempt_at = null
-         where id = $1 and outcome in ('claimed', 'unknown') returning user_id
+         where id = $1 and outcome in ('claimed', 'unknown') returning user_id, week_of, extra_cents, currency
        ),
        a as (
-         update users set status = 'active', hold_reason = null, stripe_subscription = $2, first_charge_at = coalesce(first_charge_at, now())
-         where id in (select user_id from s) and status in ('trial', 'held') returning id
+         -- The job's clock, not the database's: billing months are counted from the new subscription's anchor.
+         update users set status = 'active', hold_reason = null, stripe_subscription = $2, first_charge_at = coalesce(first_charge_at, $5::timestamptz),
+           billing_anchor = coalesce($6::timestamptz, $5::timestamptz)
+         where id in (select user_id from s) and status in ('trial', 'held') returning id, billing_anchor
+       ),
+       -- The first invoice already carried the month's higher-rate difference: the first month owes nothing more.
+       f as (
+         insert into pending_adjustments (user_id, period_start, amount_cents, currency, week_of, invoice_at, create_after, status, reason)
+         select a.id, (a.billing_anchor at time zone 'America/Toronto')::date, s.extra_cents, coalesce(s.currency, 'USD'), s.week_of, a.billing_anchor, a.billing_anchor, 'invoiced', 'not_sharing'
+         from a join s on s.user_id = a.id where s.extra_cents > 0
        )
        select exists (select 1 from s) as settled, exists (select 1 from a) as activated`,
-      [claim.id, r.object, r.amountCents, r.currency],
+      [claim.id, r.object, r.amountCents, r.currency, d.now.toISOString(), r.anchor ? new Date(r.anchor * 1000).toISOString() : null],
     );
     if (!x?.settled) return "open";
     if (!x.activated) {
@@ -182,14 +195,14 @@ export async function takeOverFirstCharge(q: Query, d: ChargeDeps, claim: Claim)
   if (!u?.stripe_customer) return "error";
   const subs = await d.gw.subscriptions(u.stripe_customer);
   const mine = subs.find((s) => s.claimId === claim.id);
-  if (mine && isLive(mine)) return applyResult(q, d, u, claim, { kind: "succeeded", object: mine.id, amountCents: null, currency: null });
+  if (mine && isLive(mine)) return applyResult(q, d, u, claim, { kind: "succeeded", object: mine.id, amountCents: null, currency: null, anchor: mine.anchor ?? null });
   if (mine) return applyResult(q, d, u, claim, { kind: "error", error: `Subscription ${mine.id} made by this claim is ${mine.status}.` });
   const other = subs.find(isLive);
   if (other) return applyResult(q, d, u, claim, { kind: "error", error: `The customer already has a live subscription (${other.id}).` }, "charge_duplicate");
   if (!(await stillChargeable(q, claim.id))) return applyResult(q, d, u, claim, { kind: "error", error: "The user can no longer be charged (cancelled, closed or switched)." });
-  const { price } = await claimedPrice(q, claim.id);
+  const { price, extraCents, currency } = await claimedPrice(q, claim.id);
   if (!price) return applyResult(q, d, u, claim, { kind: "error", error: "The claim has no recorded price." });
-  const r = await d.gw.createSubscription({ customer: u.stripe_customer, price, claimId: claim.id, userId: u.id, idempotencyKey: idempotencyKey(claim) });
+  const r = await d.gw.createSubscription({ customer: u.stripe_customer, price, extra: extraOf(extraCents, currency ?? u.currency ?? "USD"), claimId: claim.id, userId: u.id, idempotencyKey: idempotencyKey(claim) });
   return applyResult(q, d, u, claim, r);
 }
 
@@ -253,13 +266,42 @@ export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number
 
 /** A repair: a succeeded first charge whose user is not active (a crash in an older version, or a manual change). */
 export async function repairPaidUsers(q: Query, d: ChargeDeps): Promise<number> {
-  const rows = await q<{ id: string; stripe_object: string }>(
-    `update users u set status = 'active', hold_reason = null, stripe_subscription = c.stripe_object, first_charge_at = coalesce(u.first_charge_at, c.settled_at)
-     from (select distinct on (user_id) user_id, stripe_object, settled_at from charge_attempts where purpose = 'first_charge' and outcome = 'succeeded' order by user_id, settled_at desc) c
-     where c.user_id = u.id and u.status in ('trial', 'held') and u.stripe_subscription is null
-     returning u.id, c.stripe_object`,
+  const candidates = await q<{ id: string; customer: string | null; stripe_object: string }>(
+    `select distinct on (c.user_id) c.user_id as id, u.stripe_customer as customer, c.stripe_object from charge_attempts c join users u on u.id = c.user_id
+     where c.purpose = 'first_charge' and c.outcome = 'succeeded' and u.status in ('trial', 'held') and u.stripe_subscription is null
+     order by c.user_id, c.settled_at desc`,
   );
-  for (const r of rows) await alert("charge_repaired", r.id, "A paid user was set active by the repair pass", [`User ${r.id}, subscription ${r.stripe_object}.`], d);
+  if (!candidates.length) return 0;
+  // Billing months count from the subscription's own anchor, read from Stripe; the settle time only if Stripe cannot say.
+  const anchors: { user_id: string; anchor: string | null }[] = [];
+  for (const c of candidates) {
+    const found = c.customer ? (await d.gw.subscriptions(c.customer).catch(() => [])).find((s) => s.id === c.stripe_object) : undefined;
+    anchors.push({ user_id: c.id, anchor: found?.anchor ? new Date(found.anchor * 1000).toISOString() : null });
+  }
+  const rows = await q<{ id: string; stripe_object: string }>(
+    `with x as (select * from jsonb_to_recordset($1::jsonb) as x(user_id uuid, anchor timestamptz)),
+     r as (
+       update users u set status = 'active', hold_reason = null, stripe_subscription = c.stripe_object, first_charge_at = coalesce(u.first_charge_at, c.settled_at),
+         billing_anchor = coalesce(x.anchor, c.settled_at)
+       from (select distinct on (user_id) user_id, stripe_object, settled_at, week_of, extra_cents, currency from charge_attempts
+             where purpose = 'first_charge' and outcome = 'succeeded' order by user_id, settled_at desc) c
+       join x on x.user_id = c.user_id
+       where c.user_id = u.id and u.status in ('trial', 'held') and u.stripe_subscription is null
+       returning u.id, c.stripe_object, u.billing_anchor, c.week_of, c.extra_cents, c.currency
+     ),
+     -- As in applyResult: a first invoice that carried the month's difference leaves that month billed.
+     f as (
+       insert into pending_adjustments (user_id, period_start, amount_cents, currency, week_of, invoice_at, create_after, status, reason)
+       select id, (billing_anchor at time zone 'America/Toronto')::date, extra_cents, coalesce(currency, 'USD'), week_of, billing_anchor, billing_anchor, 'invoiced', 'not_sharing'
+       from r where extra_cents > 0
+       on conflict do nothing
+     )
+     select id, stripe_object from r`,
+    [JSON.stringify(anchors)],
+  );
+  for (const r of rows) {
+    await alert("charge_repaired", r.id, "A paid user was set active by the repair pass", [`User ${r.id}, subscription ${r.stripe_object}.`], d);
+  }
   return rows.length;
 }
 
@@ -270,7 +312,7 @@ export async function repairPaidUsers(q: Query, d: ChargeDeps): Promise<number> 
  */
 export async function settleFromInvoice(
   q: Query,
-  o: { claimId: string; subscription: string; amountCents: number | null; currency: string | null },
+  o: { claimId: string; subscription: string; amountCents: number | null; currency: string | null; /** The subscription's billing cycle anchor (unix seconds), from the invoice's plan line. */ anchor?: number | null },
   d: Omit<ChargeDeps, "gw"> & { gw?: BillingGateway },
 ): Promise<FirstOutcome> {
   const [c] = await q<{ id: string; user_id: string; week_of: string; attempt: number; claimed_at: string }>(
@@ -282,7 +324,7 @@ export async function settleFromInvoice(
   const u = await loadUser(q, c.user_id);
   if (!u) return "skipped";
   const claim: Claim = { id: c.id, userId: c.user_id, purpose: "first_charge", weekOf: c.week_of, attempt: c.attempt, claimedAt: c.claimed_at };
-  return applyResult(q, { gw: d.gw as BillingGateway, ...d }, u, claim, { kind: "succeeded", object: o.subscription, amountCents: o.amountCents, currency: o.currency?.toUpperCase() ?? null });
+  return applyResult(q, { gw: d.gw as BillingGateway, ...d }, u, claim, { kind: "succeeded", object: o.subscription, amountCents: o.amountCents, currency: o.currency?.toUpperCase() ?? null, anchor: o.anchor ?? null });
 }
 
 /** The Monday a trial user's first charge would come next, for the "date moved" note. */
