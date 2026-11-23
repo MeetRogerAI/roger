@@ -1,11 +1,13 @@
 import type Stripe from "stripe";
 import type { Query } from "@/lib/db-query";
-import { completeCardSetup, type CompleteOptions } from "./card-setup";
+import { completeCardSetup, completeCardUpdate, type CompleteOptions } from "./card-setup";
 import { adminAlert, alertAdmins } from "@/lib/mail/send";
 import { settleFromInvoice } from "./first-charge";
 import type { CardGateway } from "./gateway";
 import { adjustmentOnSubscriptionEnded, markInvoiced } from "./adjustment";
-import type { AdjustmentGateway } from "./subscriptions";
+import { noticeQuoteChange } from "./quote";
+import { afterCardChange, renewalFailed, renewalPaid, subscriptionEnded, syncSubscription, type RenewalDeps } from "./renewals";
+import type { AdjustmentGateway, BillingGateway, OrderGateway, PlanGateway } from "./subscriptions";
 
 /**
  * Stripe webhooks: signals, not facts. Each event id is claimed once in
@@ -37,13 +39,33 @@ export async function handleStripeEvent(
   q: Query,
   gw: CardGateway,
   event: Stripe.Event,
-  o: Omit<CompleteOptions, "expectUserId"> & { adjust?: AdjustmentGateway },
+  o: Omit<CompleteOptions, "expectUserId"> & { adjust?: AdjustmentGateway; plans?: PlanGateway; billing?: BillingGateway; orders?: OrderGateway },
 ): Promise<EventOutcome> {
   if (!(await claimEvent(q, event.id, event.type))) return "duplicate";
+  // Unit 15's handlers: settings are read only when one of them runs.
+  const rdeps = async (): Promise<RenewalDeps> => ({
+    plans: o.plans,
+    gw: o.billing,
+    orders: o.orders,
+    adjust: o.adjust,
+    settings: await o.getSettings(),
+    now: o.now ?? new Date(),
+    query: o.query,
+    transport: o.transport,
+    sleep: o.sleep,
+  });
   try {
     let outcome: EventOutcome = "ignored";
     let note: string | null = null;
-    if (event.type === "checkout.session.completed" && event.data.object.mode === "setup") {
+    if (event.type === "checkout.session.completed" && event.data.object.mode === "setup" && event.data.object.metadata?.purpose === "card_update") {
+      // "Update card" on /app/billing: the new default card, then a held charge retried at once.
+      const id = event.data.object.id;
+      const d = await rdeps();
+      const result = await completeCardUpdate(q, gw, id, { after: (userId) => afterCardChange(q, d, userId, id) });
+      if (result === "pending") throw new NotReadyYet("Checkout reported complete but the session is not complete yet");
+      outcome = "handled";
+      if (result !== "done") note = result;
+    } else if (event.type === "checkout.session.completed" && event.data.object.mode === "setup") {
       const result = await completeCardSetup(q, gw, event.data.object.id, o);
       if (result === "pending") throw new NotReadyYet("Checkout reported complete but the session is not complete yet");
       outcome = "handled";
@@ -61,9 +83,35 @@ export async function handleStripeEvent(
     }
     // The subscription ended: an adjustment still pending can never be collected, so it is deleted.
     if (event.type === "customer.subscription.deleted") {
-      const [u] = await q<{ id: string }>(`select id from users where stripe_subscription = $1`, [event.data.object.id]);
+      const sub = event.data.object;
+      const [u] = await q<{ id: string }>(`select id from users where stripe_subscription = $1`, [sub.id]);
       if (u) {
         await adjustmentOnSubscriptionEnded(q, { settings: await o.getSettings(), now: new Date(), adjust: o.adjust, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
+        // The account follows: cancelled, or one list at a time after a switch (Unit 15).
+        const r = await subscriptionEnded(q, await rdeps(), { subscription: sub.id, endedAt: sub.ended_at ? new Date(sub.ended_at * 1000) : new Date() });
+        if (r === "none") note = "subscription ended: no account changed";
+        outcome = "handled";
+      }
+    }
+    // A cancellation scheduled or taken back (here or in Stripe): the subscription is re-read and its cancel date copied.
+    if (event.type === "customer.subscription.updated" && o.plans) {
+      const r = await syncSubscription(q, { ...(await rdeps()), plans: o.plans }, event.data.object.id);
+      if (r !== "unknown") outcome = "handled";
+    }
+    // A renewal Stripe could not collect: Roger's email, and the 7 days before lists are held.
+    if (event.type === "invoice.payment_failed") {
+      const inv = event.data.object;
+      const sub = inv.parent?.subscription_details?.subscription;
+      if (sub && inv.billing_reason === "subscription_cycle" && inv.id) {
+        if (await renewalFailed(q, await rdeps(), { subscription: typeof sub === "string" ? sub : sub.id, invoice: inv.id, attempt: inv.attempt_count })) outcome = "handled";
+      }
+    }
+    // The address (and so the tax) may have changed: the told first-charge amount is re-checked.
+    if (event.type === "customer.updated" && o.billing) {
+      const [u] = await q<{ id: string }>(`select id from users where stripe_customer = $1`, [event.data.object.id]);
+      if (u) {
+        const d = await rdeps();
+        await noticeQuoteChange(q, { gw: o.billing, settings: d.settings, now: d.now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
         outcome = "handled";
       }
     }
@@ -72,7 +120,9 @@ export async function handleStripeEvent(
       const inv = event.data.object;
       const sub = inv.parent?.subscription_details;
       const claimId = sub?.metadata?.claim_id;
-      if (claimId && sub) {
+      // A renewal's invoice carries the subscription's metadata too (claim id included): only the first invoice settles a claim.
+      const renewal = inv.billing_reason === "subscription_cycle";
+      if (claimId && sub && !renewal) {
         const r = await settleFromInvoice(
           q,
           { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, anchor: planLineStart(inv) },
@@ -80,6 +130,11 @@ export async function handleStripeEvent(
         );
         outcome = "handled";
         if (r !== "charged") note = `invoice.paid: ${r}`;
+      }
+      // Any other subscription invoice paid: a failed renewal is cleared, and a held account released.
+      if (sub && (renewal || !claimId)) {
+        const r = await renewalPaid(q, await rdeps(), { subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id });
+        if (r !== "none") outcome = "handled";
       }
       // An order invoice paid outside the charge job (for example from the hosted page) after its claim failed.
       const orderClaim = !sub ? inv.metadata?.claim_id : undefined;

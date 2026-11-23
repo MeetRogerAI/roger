@@ -337,3 +337,152 @@ export function stripeOrders(s: Stripe | null = stripe()): OrderGateway | null {
     },
   };
 }
+
+/**
+ * The billing page (plan Unit 15): cancelling, switching, renewals and the
+ * invoice list. A scheduled cancellation is read from the subscription's
+ * cancel date (`cancel_at`), which newer API versions set; the older
+ * period-end flag is only a fallback.
+ */
+export type SubscriptionInfo = {
+  id: string;
+  status: string;
+  customer: string;
+  /** When the subscription will end (unix seconds), or null when nothing is scheduled. */
+  cancelAt: number | null;
+  /** The end of the paid period (unix seconds). */
+  periodEnd: number | null;
+  endedAt: number | null;
+};
+export type InvoiceRow = { id: string; number: string | null; created: number; totalCents: number; currency: string; status: string; hostedUrl: string | null; subscription: string | null };
+
+export interface PlanGateway {
+  getSubscription(id: string): Promise<SubscriptionInfo | null>;
+  /** Ends the subscription when its paid period ends: no renewal, no proration, no refund. */
+  cancelAtPeriodEnd(id: string): Promise<SubscriptionInfo>;
+  /** Takes back a scheduled cancellation, so the subscription renews as before. */
+  keepSubscription(id: string): Promise<SubscriptionInfo>;
+  /** Ends it now (an unpaid renewal being cancelled). */
+  cancelNow(id: string): Promise<SubscriptionInfo>;
+  /** Detaches every saved card; returns how many were removed. */
+  removeCards(customer: string): Promise<number>;
+  /** The customer's invoices, newest first (drafts left out). */
+  invoices(customer: string): Promise<InvoiceRow[]>;
+  /** The subscription's oldest open (unpaid) invoice, if any. */
+  unpaidInvoice(subscription: string): Promise<InvoiceRow | null>;
+  /** Every open invoice of the subscription, oldest first. */
+  openInvoices(subscription: string): Promise<InvoiceRow[]>;
+  /** One invoice as Stripe has it now, or null when there is none. */
+  invoice(id: string): Promise<InvoiceRow | null>;
+  /** Pays an open invoice off-session with the default card. */
+  payInvoice(id: string, idempotencyKey: string): Promise<ChargeResult>;
+}
+
+export function subscriptionInfo(x: Stripe.Subscription): SubscriptionInfo {
+  const periodEnd = x.items?.data?.[0]?.current_period_end ?? null;
+  return {
+    id: x.id,
+    status: x.status,
+    customer: typeof x.customer === "string" ? x.customer : x.customer.id,
+    cancelAt: x.cancel_at ?? (x.cancel_at_period_end ? periodEnd : null),
+    periodEnd,
+    endedAt: x.ended_at ?? null,
+  };
+}
+
+const invoiceRow = (i: Stripe.Invoice): InvoiceRow => {
+  const sub = i.parent?.subscription_details?.subscription ?? null;
+  return {
+    id: i.id!,
+    number: i.number ?? null,
+    created: i.created,
+    totalCents: i.total,
+    currency: i.currency.toUpperCase(),
+    status: i.status ?? "draft",
+    hostedUrl: i.hosted_invoice_url ?? null,
+    subscription: typeof sub === "string" ? sub : (sub?.id ?? null),
+  };
+};
+
+export function stripePlans(s: Stripe | null = stripe()): PlanGateway | null {
+  if (!s) return null;
+  const openInvoices = async (subscription: string) => {
+    const list = await s.invoices.list({ subscription, status: "open", limit: 20 });
+    return list.data.map(invoiceRow).sort((a, b) => a.created - b.created);
+  };
+  return {
+    async getSubscription(id) {
+      try {
+        return subscriptionInfo(await s.subscriptions.retrieve(id));
+      } catch (e) {
+        if ((e as { code?: string } | null)?.code === "resource_missing") return null;
+        throw e;
+      }
+    },
+
+    async cancelAtPeriodEnd(id) {
+      return subscriptionInfo(await s.subscriptions.update(id, { cancel_at_period_end: true }));
+    },
+
+    async keepSubscription(id) {
+      const now = await s.subscriptions.retrieve(id);
+      // Whichever way the end was scheduled is the way it is taken back.
+      const params: Stripe.SubscriptionUpdateParams = now.cancel_at_period_end ? { cancel_at_period_end: false } : { cancel_at: "" };
+      return subscriptionInfo(await s.subscriptions.update(id, params));
+    },
+
+    async cancelNow(id) {
+      try {
+        return subscriptionInfo(await s.subscriptions.cancel(id));
+      } catch (e) {
+        // Already ended: report it as it stands.
+        const now = await s.subscriptions.retrieve(id).catch(() => null);
+        if (now && now.status === "canceled") return subscriptionInfo(now);
+        throw e;
+      }
+    },
+
+    async removeCards(customer) {
+      let n = 0;
+      for await (const pm of s.customers.listPaymentMethods(customer, { limit: 100 })) {
+        await s.paymentMethods.detach(pm.id);
+        n++;
+      }
+      return n;
+    },
+
+    async invoices(customer) {
+      const list = await s.invoices.list({ customer, limit: 24 });
+      return list.data.filter((i) => i.status !== "draft").map(invoiceRow);
+    },
+
+    async unpaidInvoice(subscription) {
+      return (await openInvoices(subscription))[0] ?? null;
+    },
+
+    openInvoices,
+
+    async invoice(id) {
+      try {
+        return invoiceRow(await s.invoices.retrieve(id));
+      } catch (e) {
+        if ((e as { code?: string } | null)?.code === "resource_missing") return null;
+        throw e;
+      }
+    },
+
+    async payInvoice(id, idempotencyKey) {
+      try {
+        const inv = await s.invoices.retrieve(id);
+        if (inv.status === "paid") return { kind: "succeeded", object: id, amountCents: inv.amount_paid, currency: inv.currency.toUpperCase(), receiptUrl: inv.hosted_invoice_url ?? null };
+        if (inv.status !== "open") return { kind: "error", error: `The invoice is ${inv.status}.` };
+        const paid = await s.invoices.pay(id, { off_session: true }, { idempotencyKey });
+        return paid.status === "paid"
+          ? { kind: "succeeded", object: id, amountCents: paid.amount_paid, currency: paid.currency.toUpperCase(), receiptUrl: paid.hosted_invoice_url ?? null }
+          : { kind: "unknown", error: `The invoice is ${paid.status} after paying.` };
+      } catch (e) {
+        return classify(e);
+      }
+    },
+  };
+}

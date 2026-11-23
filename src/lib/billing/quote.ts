@@ -5,6 +5,7 @@ import type { Rendered } from "@/lib/mail/layout";
 import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail } from "@/lib/mail/templates/quote";
 import type { V3Settings } from "@/lib/v3-settings";
 import { sharingAtCutoff } from "./first-charge";
+import { carriedDifferenceCents } from "./adjustment";
 import { firstChargePricing, type Currency } from "./prices";
 import type { BillingGateway } from "./subscriptions";
 
@@ -46,7 +47,7 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   const sharing = await sharingAtCutoff(q, u.id, week, d.settings);
   const currency = u.currency ?? "USD";
   // Exactly as the charge prices it: the standard price, plus the month's difference on the first invoice when not sharing at the cutoff.
-  const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw);
+  const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw, await carriedDifferenceCents(q, u.id));
   if (!price) return null;
   const p = await d.gw.preview({ customer: u.stripe_customer!, price, extra: extraCents > 0 ? { amountCents: extraCents, currency } : null });
   return { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week };
@@ -73,6 +74,28 @@ export async function noticeQuoteChange(q: Query, d: QuoteDeps, userId: string):
   // Unique per refresh: switching back and forth still tells the user each time.
   const res = await tell(q, d, u, "quote_changed", `${fresh.week}:${fresh.at}`, fresh, quoteChangedEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency }));
   return res === "sent";
+}
+
+/**
+ * After a switch to monthly with the free lists used (plan Unit 15): the
+ * plan-changed email states the first charge's date and amount, and that
+ * amount becomes the told one, so Monday's charge is not held for a
+ * difference. `build` gets the fresh quote; null when there is nothing to
+ * quote (free lists left, or no price or customer).
+ */
+export async function tellFirstCharge(
+  q: Query,
+  d: QuoteDeps,
+  userId: string,
+  kind: string,
+  ref: string,
+  build: (quote: Quote) => Rendered,
+): Promise<SendResult | null> {
+  const u = await load(q, userId);
+  if (!u || !quotable(u)) return null;
+  const fresh = await preview(q, d, u);
+  if (!fresh) return null;
+  return tell(q, d, u, kind, ref, fresh, build(fresh));
 }
 
 /** Spec B.13 email 7, sent when the second free list is delivered (Unit 13 calls this). */

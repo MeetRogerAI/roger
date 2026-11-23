@@ -1,11 +1,12 @@
-import { cutoffInstant, wallToInstant } from "@/lib/clock";
+import { cutoffInstant, wallParts, wallToInstant, weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { orderClosedRogerFailedEmail } from "@/lib/mail/templates/order-closed";
 import { listOrderedEmail, orderFailedEmail, orderNoListEmail } from "@/lib/mail/templates/charges";
+import { orderPromptEmail } from "@/lib/mail/templates/order-prompt";
 import type { V3Settings } from "@/lib/v3-settings";
 import { chargeInFlight, claimCharge, claimedPrice, idempotencyKey, nextAttempt, stillChargeable, type Claim } from "./claims";
-import { amount, money, priceId, type Currency } from "./prices";
+import { amount, money, priceId, taxPhrase, type Currency } from "./prices";
 import type { ChargeResult, OrderCall, OrderGateway } from "./subscriptions";
 
 /**
@@ -188,6 +189,47 @@ export async function takeOverOrder(q: Query, d: OrderDeps, claim: Claim): Promi
   const made = await d.orders.createOrderInvoice(call);
   if (!made.ok) return applyOrderResult(q, d, u, claim, null, made.result);
   return applyOrderResult(q, d, u, claim, made.invoice, await d.orders.payOrderInvoice(made.invoice, call));
+}
+
+/** The Friday prompt goes from this hour (Toronto) on. */
+export const ORDER_PROMPT_HOUR = 10;
+
+/**
+ * Spec B.13 email 23, "Want a list this Monday?" (spec B.9): on Fridays, to
+ * one-at-a-time users past their free lists with no order for the coming
+ * Monday and sharing on (with it off they can't order). Once per user and
+ * week; a user who switched it off in settings is skipped (kind order_prompt,
+ * preference friday_prompt).
+ */
+export async function sendOrderPrompts(q: Query, d: { settings: V3Settings; now: Date } & MailDeps): Promise<number> {
+  const p = wallParts(d.now);
+  if (p.dow !== 5 || p.hour < ORDER_PROMPT_HOUR) return 0;
+  const week = weekOf(d.now, d.settings.runCutoff);
+  const users = await q<{ id: string; email: string; email_prefs: Record<string, unknown> | null; currency: Currency | null }>(
+    `select u.id, u.email, u.email_prefs, u.currency from users u
+     where u.plan = 'per_run' and u.stripe_subscription is null and u.cancel_requested_at is null and u.sharing <> 'off' and u.sponsor_id is null
+       and (u.status = 'active' or (u.status = 'trial' and u.free_lists_used >= $2))
+       and not exists (select 1 from orders o where o.user_id = u.id and o.week_of = $1::date and o.status in ('ordered', 'charged', 'sent'))
+       and not exists (select 1 from notifications n where n.recipient = u.id::text and n.kind = 'order_prompt' and n.ref = $3 and n.status in ('sent', 'skipped'))`,
+    [week, d.settings.freeRuns, week],
+  );
+  let n = 0;
+  for (const u of users) {
+    const cur = u.currency ?? "USD";
+    const res = await sendToUser(
+      { id: u.id, email: u.email, emailPrefs: u.email_prefs },
+      "order_prompt",
+      week,
+      orderPromptEmail({
+        week,
+        price: `${money(amount(d.settings, "per_run", cur), cur)} ${taxPhrase(cur)}`,
+        monthlyLine: `Monthly is ${money(amount(d.settings, "monthly", cur), cur)} for every Monday.`,
+      }),
+      d,
+    ).catch(() => "failed" as const);
+    if (res === "sent") n++;
+  }
+  return n;
 }
 
 /** Hourly: voids any order invoice still open after its claim failed (a void that errored the first time). */

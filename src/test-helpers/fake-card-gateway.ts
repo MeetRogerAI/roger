@@ -16,9 +16,9 @@ export function fakeGateway(tax: TaxLocation = "ok") {
       if (!customers.has(userId)) customers.set(userId, `cus_${userId.slice(0, 8)}`);
       return customers.get(userId)!;
     },
-    async createSetupSession({ userId, customer, currency }) {
+    async createSetupSession({ userId, customer, currency, purpose }) {
       const id = `cs_${++n}`;
-      sessions.set(id, { id, status: "open", customer, paymentMethod: null, userId, currency, country: null });
+      sessions.set(id, { id, status: "open", customer, paymentMethod: null, userId, currency, country: null, purpose: purpose ?? null });
       return { id, url: `https://checkout.stripe.test/${id}` };
     },
     async getSetupSession(id) {

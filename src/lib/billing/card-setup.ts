@@ -147,6 +147,78 @@ async function sendWelcome(q: Query, u: SignupUser, o: CompleteOptions): Promise
   return "done";
 }
 
+/**
+ * "Update card" on /app/billing (spec B.9): Stripe's setup-mode Checkout
+ * again, on the user's own customer, marked as a card update. Only for an
+ * account that can still be charged.
+ */
+export async function startCardUpdate(
+  q: Query,
+  gw: CardGateway,
+  o: { userId: string; successUrl: string; cancelUrl: string },
+): Promise<{ ok: true; url: string } | { ok: false; reason: "not_found" | "no_card_yet" | "closed" }> {
+  const u = await loadUser(q, o.userId);
+  if (!u) return { ok: false, reason: "not_found" };
+  if (!["trial", "active", "held"].includes(u.status)) return { ok: false, reason: u.status === "signup" ? "no_card_yet" : "closed" };
+  if (!u.stripe_customer) return { ok: false, reason: "no_card_yet" };
+  const session = await gw.createSetupSession({ userId: u.id, customer: u.stripe_customer, currency: u.currency ?? "USD", successUrl: o.successUrl, cancelUrl: o.cancelUrl, purpose: "card_update" });
+  return { ok: true, url: session.url };
+}
+
+export type CardUpdateOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer";
+
+/** A claim on a card-update session left unfinished this long (a crash) can be taken again. */
+const CARD_UPDATE_TAKEOVER = "5 minutes";
+
+/**
+ * Finishes a card update, from the return page or the webhook (whichever is
+ * first). Only a session made by "Update card" counts. The session is claimed
+ * first, and only the caller that wins the claim sets the new card as the
+ * default for invoices, checks the address for tax and runs `after` (the held
+ * charge retried at once, the quote re-checked): one new card is one retry.
+ * The claim is marked done only after all of that, with its outcome, so a
+ * failure is released and runs again on the webhook's retry; a caller that
+ * finds it done reports the stored outcome, and one that finds it in progress
+ * reports "pending".
+ */
+export async function completeCardUpdate(
+  q: Query,
+  gw: CardGateway,
+  sessionId: string,
+  o: { expectUserId?: string; after: (userId: string) => Promise<unknown> },
+): Promise<CardUpdateOutcome> {
+  const s = await gw.getSetupSession(sessionId);
+  if (s.status !== "complete" || !s.customer || !s.paymentMethod) return "pending";
+  // A sign-up card step (or any other Checkout) is never treated as a card update.
+  if (s.purpose !== "card_update") return "not_yours";
+  const [u] = await q<{ id: string }>(`select id from users where stripe_customer = $1`, [s.customer]);
+  if (!u) return "unknown_customer";
+  if ((o.expectUserId && o.expectUserId !== u.id) || (s.userId && s.userId !== u.id)) return "not_yours";
+  const claimed = await q(
+    `insert into card_updates (session_id, user_id) values ($1, $2)
+     on conflict (session_id) do update set claimed_at = now()
+       where card_updates.done_at is null and card_updates.claimed_at < now() - interval '${CARD_UPDATE_TAKEOVER}'
+     returning session_id`,
+    [s.id, u.id],
+  );
+  if (!claimed.length) {
+    const [row] = await q<{ outcome: CardUpdateOutcome | null; done: boolean }>(`select outcome, done_at is not null as done from card_updates where session_id = $1`, [s.id]);
+    return row?.done ? (row.outcome ?? "done") : "pending";
+  }
+  let outcome: CardUpdateOutcome = "done";
+  try {
+    await gw.setDefaultCard(s.customer, s.paymentMethod);
+    if ((await gw.checkTaxLocation(s.customer)) === "invalid") outcome = "address_invalid";
+    else await o.after(u.id);
+  } catch (e) {
+    // Released at once, so the webhook's retry (or a reload) does it all again.
+    await q(`update card_updates set claimed_at = 'epoch' where session_id = $1 and done_at is null`, [s.id]).catch(() => {});
+    throw e;
+  }
+  await q(`update card_updates set done_at = now(), outcome = $2 where session_id = $1`, [s.id, outcome]);
+  return outcome;
+}
+
 export class WelcomeNotSent extends Error {
   constructor() {
     super("The trial started but the welcome email could not be sent yet.");

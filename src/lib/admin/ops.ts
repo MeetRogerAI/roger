@@ -129,6 +129,8 @@ export const STATUS_KEYS = ["signup", "trial", "monthly", "per_run", "held", "sp
 export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "cancelRequested">): (typeof STATUS_KEYS)[number] {
   if (r.status === "held") return "held";
   if (r.status === "cancelled" || r.status === "closed" || r.status === "signup") return r.status;
+  // A monthly subscriber who cancelled stays active until the paid month ends (Unit 15).
+  if (r.status === "active" && r.cancelRequested) return "cancelled";
   if (r.sponsored) return "sponsored";
   if (r.status === "trial") return "trial";
   return r.plan === "per_run" ? "per_run" : "monthly";

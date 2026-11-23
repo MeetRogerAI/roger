@@ -28,6 +28,14 @@ export type StatusFacts = {
   accessEndsAt?: string | null;
   /** Monthly and sharing: the month's misses and any adjustment (contribution.ts). */
   contribution?: ContributionStatus | null;
+  /** Held: why (a renewal unpaid reads differently from a first charge). */
+  holdReason?: string | null;
+  /** A monthly member switching to one at a time: when the paid month ends. */
+  switchingAt?: string | null;
+  /** A monthly member who cancelled (still active until the subscription ends): when the paid month ends. */
+  endingAt?: string | null;
+  /** A paying one-at-a-time member who switched to monthly and awaits the first charge (status trial, but not a trial). */
+  switchedFromPerRun?: boolean;
   now: Date;
 };
 
@@ -50,12 +58,27 @@ export function nextMonthly(firstChargeAt: string, now: Date): string {
 export function statusLine(f: StatusFacts, s: V3Settings): string {
   const cur = f.currency ?? "USD";
   const tax = taxPhrase(cur);
+  if (f.status === "held" && f.holdReason === "renewal_unpaid") {
+    return "Your monthly payment didn’t go through, so your lists are paused. Update your card on the billing page and they start again straight away.";
+  }
   if (f.status === "held") return "Your payment didn’t go through, so your list is waiting. Update your card on the billing page and it comes straight away.";
   if (f.status === "closed") return "Your account is closed. Nothing more will be charged.";
   if (f.status === "cancelled") {
-    return f.accessEndsAt
+    return f.accessEndsAt && new Date(f.accessEndsAt) > f.now
       ? `Your plan is cancelled. Your lists continue until ${longDate(torontoDate(new Date(f.accessEndsAt)))}, and nothing more will be charged.`
       : "Your plan is cancelled, and nothing more will be charged.";
+  }
+  if (f.status === "active" && f.endingAt) {
+    return new Date(f.endingAt) > f.now
+      ? `Your plan is cancelled. Your lists continue until ${longDate(torontoDate(new Date(f.endingAt)))}, and nothing more will be charged.`
+      : "Your plan is cancelled, and nothing more will be charged.";
+  }
+  if (f.status === "trial" && f.switchedFromPerRun) {
+    const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
+    return `Monthly starts with your next list: ${next}.`;
+  }
+  if (f.plan === "monthly" && f.switchingAt) {
+    return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a list every Monday. After that you order lists one at a time.`;
   }
   if (f.sponsored) return "Your lists are covered by your sponsor.";
   if (f.status === "trial") {
