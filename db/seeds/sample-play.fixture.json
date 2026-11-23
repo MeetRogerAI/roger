@@ -1,0 +1,28 @@
+{
+  "_note": "MADE UP. Loaded only on databases marked non-production, with --fixtures, so the public sample card can be built before a real pool exists. Never load on production.",
+  "title": "Morning showing brief from yesterday's inquiries",
+  "category": "Client follow-up",
+  "description": "Each morning the agent reads yesterday's buyer inquiries, groups them by property, and drafts one short brief per showing with the buyer's questions and what to bring. The person reviews the briefs over coffee and sends any follow-ups in one pass.",
+  "heavy_use_for": "agents with several showings a day",
+  "written_on": "grok-bot",
+  "figures": {
+    "current_hours_week": 3.5,
+    "range_low": 2.1,
+    "range_high": 4.9,
+    "basis": "Implied",
+    "confidence": "Medium",
+    "minutes_saved_each": 25,
+    "heavy_hours_week": 6,
+    "runners": 3
+  },
+  "f_hours": 7,
+  "f_reach": 8,
+  "f_ease": 6,
+  "f_proof": 5,
+  "f_surprise": 6,
+  "score": 68,
+  "playbook_md": "## Play\nA morning brief for every showing on today's calendar, built from yesterday's inquiries.\n\n## Trigger\nEvery weekday at 7:00 AM.\n\n## Setup first\n- Give the agent read access to the inbox folder where inquiries land.\n- Tell it where your showing calendar lives.\n\n## Steps\n1. Collect yesterday's inquiries and match each one to a property on today's calendar.\n2. For each showing, list the buyer's questions in plain words.\n3. Add what to bring or check before the showing.\n4. Put the briefs in one message, earliest showing first.\n\n## Guardrails\n- Never send anything to a client. Draft only.\n- Replace names you are unsure of with [a buyer].\n\n## Output\nOne message with a short brief per showing.\n\n## Pitfalls seen\n- Inquiries that mention two properties: list them under both.\n\n## Done when\nYou read the briefs before your first showing without opening the inbox.",
+  "paste_to_install": "Set up a daily 7:00 AM routine that builds a showing brief from yesterday's inquiries, following the playbook below. Ask me where my inquiries and calendar live before you start.",
+  "first_seen": "2026-11-16",
+  "last_seen": "2026-11-16"
+}
