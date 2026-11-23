@@ -100,6 +100,23 @@ describe("statusLine (spec B.8 item 3)", () => {
     expect(statusLine(f({ freeListsUsed: 0 }), s)).toBe("Your first 2 lists are free.");
   });
 
+  it("a member cancelling is told the end date, and a one-at-a-time member switched to monthly is not shown trial words (Unit 15 review)", () => {
+    expect(statusLine(f({ status: "active", firstChargeAt: "2026-12-03T11:05:00Z", endingAt: "2027-01-03T11:05:00Z" }), s)).toBe(
+      "Your plan is cancelled. Your lists continue until Sunday, January 3, and nothing more will be charged.",
+    );
+    expect(statusLine(f({ freeListsUsed: 2, switchedFromPerRun: true, quote: { totalCents: 22600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
+      "Monthly starts with your next list: Monday, December 21 at the earliest, US$226 with tax.",
+    );
+  });
+
+  it("a renewal hold, a cancellation that has ended, and a switch waiting for the month's end (Unit 15)", () => {
+    expect(statusLine(f({ status: "held", holdReason: "renewal_unpaid" }), s)).toMatch(/^Your monthly payment didn’t go through, so your lists are paused\./);
+    expect(statusLine(f({ status: "cancelled", accessEndsAt: "2026-12-12T15:00:00Z" }), s)).toBe("Your plan is cancelled, and nothing more will be charged.");
+    expect(statusLine(f({ status: "active", firstChargeAt: "2026-12-03T11:05:00Z", switchingAt: "2027-01-03T11:05:00Z" }), s)).toBe(
+      "Monthly continues until Sunday, January 3, with a list every Monday. After that you order lists one at a time.",
+    );
+  });
+
   it("finds the next monthly date, including short months", () => {
     expect(nextMonthly("2026-01-31T15:00:00Z", new Date("2026-02-10T15:00:00Z"))).toBe("2026-02-28");
     expect(nextMonthly("2026-11-30T15:00:00Z", now)).toBe("2026-12-30");

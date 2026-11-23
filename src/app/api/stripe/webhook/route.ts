@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import { stripeGateway } from "@/lib/billing/gateway";
 import { stripe } from "@/lib/billing/stripe";
-import { stripeAdjustments } from "@/lib/billing/subscriptions";
+import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { hasDb } from "@/lib/db";
 import { query } from "@/lib/db-query";
@@ -30,7 +30,13 @@ export async function POST(request: Request) {
 
   try {
     // Settings are read only if a welcome email is built, so a settings problem cannot block other events.
-    const outcome = await handleStripeEvent(query, gw, event, { getSettings: readV3Settings, adjust: stripeAdjustments(s) ?? undefined });
+    const outcome = await handleStripeEvent(query, gw, event, {
+      getSettings: readV3Settings,
+      adjust: stripeAdjustments(s) ?? undefined,
+      plans: stripePlans(s) ?? undefined,
+      billing: stripeBilling(s) ?? undefined,
+      orders: stripeOrders(s) ?? undefined,
+    });
     return Response.json({ received: true, outcome });
   } catch (e) {
     console.error(`[stripe] ${event.type} ${event.id} failed`, e);

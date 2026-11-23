@@ -2,11 +2,12 @@ import { addDays, cutoffInstant } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { amountChangedEmail, chargeFailedEmail, subscribedEmail, trialClosedEmail } from "@/lib/mail/templates/charges";
+import { backToPerRunEmail } from "@/lib/mail/templates/plan-changed";
 import { longDate } from "@/lib/mail/templates/welcome";
 import type { V3Settings } from "@/lib/v3-settings";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, stillChargeable, type Claim } from "./claims";
 import { firstChargePricing, type Currency } from "./prices";
-import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult, type FirstExtra, type OrderGateway } from "./subscriptions";
+import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult, type FirstExtra, type OrderGateway, type PlanGateway } from "./subscriptions";
 
 /**
  * The first monthly charge, with the third list (spec B.9, plan Unit 12):
@@ -17,7 +18,7 @@ import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult,
  * a retry cannot fix holds the user for an admin; day 7 with nothing charged
  * closes the trial.
  */
-export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; adjust?: AdjustmentGateway; settings: V3Settings; now: Date } & MailDeps;
+export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; adjust?: AdjustmentGateway; plans?: PlanGateway; settings: V3Settings; now: Date } & MailDeps;
 export type FirstOutcome = "charged" | "declined" | "held_amount" | "unknown" | "error" | "skipped" | "open";
 
 type Quote = { totalCents?: number; currency?: string; price?: string; extraCents?: number; at?: string; week?: string };
@@ -249,16 +250,26 @@ export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number
   let closed = 0;
   for (const r of rows) {
     if (d.now < closeTrialAt(r.week_of, d.settings.chargeAt)) continue;
-    const done = await q(
-      `update users u set status = 'closed'
+    // A paying one-at-a-time member who switched to monthly goes back to one at a time: never "trial closed".
+    const [done] = await q<{ restored: boolean }>(
+      `update users u set
+         status = case when u.switched_from_per_run_at is not null then 'active' else 'closed' end,
+         plan = case when u.switched_from_per_run_at is not null then 'per_run' else u.plan end,
+         hold_reason = case when u.switched_from_per_run_at is not null then null else u.hold_reason end,
+         quote = case when u.switched_from_per_run_at is not null then null else u.quote end,
+         plan_switched_at = case when u.switched_from_per_run_at is not null then now() else u.plan_switched_at end
        where u.id = $1 and u.status = 'held' and u.hold_reason = 'first_charge_failed'
          and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
          and (select id from charge_attempts x where x.user_id = u.id and x.purpose = 'first_charge' order by claimed_at desc limit 1) = $2
-       returning id`,
+       returning u.switched_from_per_run_at is not null as restored`,
       [r.id, r.claim_id],
     );
-    if (!done.length) continue;
+    if (!done) continue;
     closed++;
+    if (done.restored) {
+      await sendToUser({ id: r.id, email: r.email }, "plan_changed", `restored:${r.week_of}`, backToPerRunEmail(), d).catch(() => {});
+      continue;
+    }
     await sendToUser({ id: r.id, email: r.email }, "trial_closed", r.week_of, trialClosedEmail(), d).catch(() => {});
   }
   return closed;
@@ -266,27 +277,31 @@ export async function closeUnpaidTrials(q: Query, d: ChargeDeps): Promise<number
 
 /** A repair: a succeeded first charge whose user is not active (a crash in an older version, or a manual change). */
 export async function repairPaidUsers(q: Query, d: ChargeDeps): Promise<number> {
-  const candidates = await q<{ id: string; customer: string | null; stripe_object: string }>(
-    `select distinct on (c.user_id) c.user_id as id, u.stripe_customer as customer, c.stripe_object from charge_attempts c join users u on u.id = c.user_id
+  // Only the user's latest charge claim, and only one made after their last plan change: an old
+  // subscription from before a switch to one at a time and back is dead and is never reattached.
+  const candidates = await q<{ id: string; claim_id: string; customer: string | null; stripe_object: string }>(
+    `select c.user_id as id, c.id as claim_id, u.stripe_customer as customer, c.stripe_object from charge_attempts c join users u on u.id = c.user_id
      where c.purpose = 'first_charge' and c.outcome = 'succeeded' and u.status in ('trial', 'held') and u.stripe_subscription is null
-     order by c.user_id, c.settled_at desc`,
+       and c.id = (select x.id from charge_attempts x where x.user_id = c.user_id order by x.claimed_at desc limit 1)
+       and (u.plan_switched_at is null or c.claimed_at > u.plan_switched_at)`,
   );
   if (!candidates.length) return 0;
-  // Billing months count from the subscription's own anchor, read from Stripe; the settle time only if Stripe cannot say.
-  const anchors: { user_id: string; anchor: string | null }[] = [];
+  // The subscription must be live in Stripe; billing months count from its own anchor (the settle time only if Stripe gives none).
+  const anchors: { user_id: string; claim_id: string; anchor: string | null }[] = [];
   for (const c of candidates) {
     const found = c.customer ? (await d.gw.subscriptions(c.customer).catch(() => [])).find((s) => s.id === c.stripe_object) : undefined;
-    anchors.push({ user_id: c.id, anchor: found?.anchor ? new Date(found.anchor * 1000).toISOString() : null });
+    if (!found || !isLive(found)) continue;
+    anchors.push({ user_id: c.id, claim_id: c.claim_id, anchor: found.anchor ? new Date(found.anchor * 1000).toISOString() : null });
   }
+  if (!anchors.length) return 0;
   const rows = await q<{ id: string; stripe_object: string }>(
-    `with x as (select * from jsonb_to_recordset($1::jsonb) as x(user_id uuid, anchor timestamptz)),
+    `with x as (select * from jsonb_to_recordset($1::jsonb) as x(user_id uuid, claim_id uuid, anchor timestamptz)),
      r as (
        update users u set status = 'active', hold_reason = null, stripe_subscription = c.stripe_object, first_charge_at = coalesce(u.first_charge_at, c.settled_at),
          billing_anchor = coalesce(x.anchor, c.settled_at)
-       from (select distinct on (user_id) user_id, stripe_object, settled_at, week_of, extra_cents, currency from charge_attempts
-             where purpose = 'first_charge' and outcome = 'succeeded' order by user_id, settled_at desc) c
-       join x on x.user_id = c.user_id
-       where c.user_id = u.id and u.status in ('trial', 'held') and u.stripe_subscription is null
+       from charge_attempts c
+       join x on x.claim_id = c.id
+       where c.user_id = u.id and c.outcome = 'succeeded' and u.status in ('trial', 'held') and u.stripe_subscription is null
        returning u.id, c.stripe_object, u.billing_anchor, c.week_of, c.extra_cents, c.currency
      ),
      -- As in applyResult: a first invoice that carried the month's difference leaves that month billed.

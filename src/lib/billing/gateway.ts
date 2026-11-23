@@ -19,11 +19,20 @@ export type SetupSession = {
   userId: string | null;
   currency: "USD" | "CAD" | null;
   country: string | null;
+  /** "card_update" for a card replaced from /app/billing; null for the sign-up card step. */
+  purpose?: string | null;
 };
 
 export type CardGateway = {
   createCustomer(o: { userId: string; email: string; name: string }): Promise<string>;
-  createSetupSession(o: { userId: string; customer: string; currency: "USD" | "CAD"; successUrl: string; cancelUrl: string }): Promise<{ id: string; url: string }>;
+  createSetupSession(o: {
+    userId: string;
+    customer: string;
+    currency: "USD" | "CAD";
+    successUrl: string;
+    cancelUrl: string;
+    purpose?: "card_update";
+  }): Promise<{ id: string; url: string }>;
   getSetupSession(id: string): Promise<SetupSession>;
   setDefaultCard(customer: string, paymentMethod: string): Promise<void>;
   checkTaxLocation(customer: string): Promise<TaxLocation>;
@@ -37,7 +46,7 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
       return c.id;
     },
 
-    async createSetupSession({ userId, customer, currency, successUrl, cancelUrl }) {
+    async createSetupSession({ userId, customer, currency, successUrl, cancelUrl, purpose }) {
       const session = await s.checkout.sessions.create({
         mode: "setup",
         customer,
@@ -46,7 +55,7 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
         customer_update: { address: "auto", name: "auto" },
         success_url: successUrl,
         cancel_url: cancelUrl,
-        metadata: { user_id: userId, currency },
+        metadata: { user_id: userId, currency, ...(purpose ? { purpose } : {}) },
         setup_intent_data: { metadata: { user_id: userId } },
       });
       if (!session.url) throw new Error("Stripe returned no Checkout URL");
@@ -66,6 +75,7 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
         userId: session.metadata?.user_id ?? null,
         currency: cur === "USD" || cur === "CAD" ? cur : null,
         country: session.customer_details?.address?.country ?? null,
+        purpose: session.metadata?.purpose ?? null,
       };
     },
 

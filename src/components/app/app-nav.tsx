@@ -11,6 +11,9 @@ export function AppNav() {
         <Link href="/app/zack" className="tlink">
           Zack
         </Link>
+        <Link href="/app/billing" className="tlink">
+          Billing
+        </Link>
         <Link href="/app/settings" className="tlink">
           Settings
         </Link>

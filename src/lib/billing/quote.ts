@@ -75,6 +75,28 @@ export async function noticeQuoteChange(q: Query, d: QuoteDeps, userId: string):
   return res === "sent";
 }
 
+/**
+ * After a switch to monthly with the free lists used (plan Unit 15): the
+ * plan-changed email states the first charge's date and amount, and that
+ * amount becomes the told one, so Monday's charge is not held for a
+ * difference. `build` gets the fresh quote; null when there is nothing to
+ * quote (free lists left, or no price or customer).
+ */
+export async function tellFirstCharge(
+  q: Query,
+  d: QuoteDeps,
+  userId: string,
+  kind: string,
+  ref: string,
+  build: (quote: Quote) => Rendered,
+): Promise<SendResult | null> {
+  const u = await load(q, userId);
+  if (!u || !quotable(u)) return null;
+  const fresh = await preview(q, d, u);
+  if (!fresh) return null;
+  return tell(q, d, u, kind, ref, fresh, build(fresh));
+}
+
 /** Spec B.13 email 7, sent when the second free list is delivered (Unit 13 calls this). */
 export async function sendFirstPaidNext(q: Query, d: QuoteDeps, userId: string): Promise<boolean> {
   const u = await load(q, userId);

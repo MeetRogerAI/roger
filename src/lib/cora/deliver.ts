@@ -18,9 +18,13 @@ import type { Query } from "@/lib/db-query";
  */
 export const DELIVERABLE_SQL = `(
   (u.status = 'trial' and u.cancel_requested_at is null and (u.sponsor_id is not null or u.free_lists_used < $3))
-  or (u.status = 'active' and (u.plan = 'monthly' or u.sponsor_id is not null
+  -- A monthly member cancelling (or switching) stays active until the subscription ends, with lists until the paid month's end.
+  or (u.status = 'active' and ((u.plan = 'monthly' and (u.cancel_requested_at is null or u.access_ends_at is null or u.access_ends_at > $4::timestamptz))
+       or u.sponsor_id is not null
        or exists (select 1 from orders o where o.user_id = u.id and o.week_of = $2 and o.status in ('charged', 'sent'))))
   or (u.status = 'cancelled' and u.plan = 'monthly' and (u.access_ends_at is null or u.access_ends_at > $4::timestamptz))
+  -- A list already paid for that week is delivered even after the account was cancelled.
+  or (u.status = 'cancelled' and exists (select 1 from orders o where o.user_id = u.id and o.week_of = $2 and o.status in ('charged', 'sent')))
 )`;
 
 /** Delivers one user's list for a week; returns how many ideas were delivered now (0 if already delivered, none, or not deliverable). */

@@ -618,3 +618,37 @@ do $$ declare c record; begin for c in select conname from pg_constraint where c
 -- retries and tells admins after repeated failures.
 alter table users add column if not exists stripe_email_synced boolean not null default true;
 alter table users add column if not exists stripe_email_attempts int not null default 0;
+
+-- 2026-11-23, Unit 15 (the billing page): the answer to "Why are you leaving?",
+-- a plan switch still to happen (plan_change_to, from plan_change_at: the end
+-- of the paid month, or the Tuesday after a Monday whose cutoff had passed),
+-- when a renewal first failed and its invoice (held after 7 days unpaid), and
+-- when a cancelled account's saved cards were removed in Stripe.
+alter table users add column if not exists cancel_reason text;
+alter table users add column if not exists plan_change_to text check (plan_change_to in ('monthly', 'per_run'));
+alter table users add column if not exists plan_change_at timestamptz;
+alter table users add column if not exists renewal_failed_at timestamptz;
+alter table users add column if not exists renewal_invoice text;
+alter table users add column if not exists cards_removed_at timestamptz;
+
+-- 2026-11-23, Unit 15: each "Update card" Checkout session acts once (the
+-- return page and the webhook both see it), so a held charge is retried once
+-- per new card, not once per caller.
+create table if not exists card_updates (
+  session_id text primary key,
+  user_id uuid not null references users (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+-- 2026-11-23, Unit 15 review: a card update is claimed before anything is
+-- done with it (claimed_at), and done only once its follow-up ran (done_at,
+-- with the outcome shown to the member), so a failed follow-up runs again on
+-- Stripe's retry. When the plan last changed (a first-charge repair never
+-- reaches back past it), and when a paying one-at-a-time member switched to
+-- monthly (if that first charge fails for good they go back to one at a
+-- time, not "trial closed").
+alter table card_updates add column if not exists claimed_at timestamptz not null default now();
+alter table card_updates add column if not exists done_at timestamptz;
+alter table card_updates add column if not exists outcome text;
+alter table users add column if not exists plan_switched_at timestamptz;
+alter table users add column if not exists switched_from_per_run_at timestamptz;

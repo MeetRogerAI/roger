@@ -6,7 +6,10 @@ import { reconcilePendingItems } from "@/lib/billing/reconcile";
 import { syncStripeEmails } from "@/lib/auth/email-change";
 import { stripe } from "@/lib/billing/stripe";
 import { staleClaims, takeOver } from "@/lib/billing/claims";
-import { takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { sendOrderPrompts, takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { finishCancellations } from "@/lib/billing/cancel";
+import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
+import { applyDueSwitches } from "@/lib/billing/switch";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
 import { deliverLate } from "@/lib/cora/send-job";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, takeOverFirstCharge, type ChargeDeps } from "@/lib/billing/first-charge";
@@ -58,6 +61,16 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "reconcile_pending_items", run: async (q, d) => (wallParts(d.now).hour === 4 ? reconcilePendingItems(q, d) : "not this hour") },
   // A paid user left held or in trial is made active.
   { name: "repair_paid_users", run: (q, d) => repairPaidUsers(q, d) },
+  // Unit 15. A plan switch booked after a Monday cutoff, from the Tuesday.
+  { name: "booked_switches", run: async (q, d) => (d.plans ? applyDueSwitches(q, { ...d, plans: d.plans }) : "Stripe is not set up.") },
+  // A switch to one at a time whose paid month ended without its webhook.
+  { name: "ended_subscriptions", run: async (q, d) => (d.plans ? endDueSubscriptions(q, { ...d, plans: d.plans }) : "Stripe is not set up.") },
+  // A renewal still unpaid on day 7: lists are held until it is paid.
+  { name: "renewal_holds", run: (q, d) => holdUnpaidRenewals(q, d) },
+  // A cancellation whose card removal or confirmation email failed.
+  { name: "finish_cancellations", run: async (q, d) => (d.plans ? finishCancellations(q, { ...d, plans: d.plans }) : "Stripe is not set up.") },
+  // Fridays: "Want a list this Monday?" to one-at-a-time users without an order (switchable in settings).
+  { name: "order_prompts", run: (q, d) => sendOrderPrompts(q, d) },
   // Stripe customers still holding an address the user has since changed (Unit 16).
   {
     name: "stripe_email_sync",

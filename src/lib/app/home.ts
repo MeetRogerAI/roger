@@ -31,11 +31,18 @@ type U = {
   first_charge_at: string | null;
   stripe_subscription: string | null;
   access_ends_at: string | null;
+  hold_reason: string | null;
+  switching_at: string | null;
+  ending_at: string | null;
+  switched: boolean;
 };
 
 export async function loadHome(q: Query, userId: string, s: V3Settings, now: Date, week?: string): Promise<Home | null> {
   const [u] = await q<U>(
-    `select status, plan, (sponsor_id is not null) as sponsored, sharing, currency, free_lists_used, quote, first_charge_at::text, stripe_subscription, access_ends_at::text from users where id = $1`,
+    `select status, plan, (sponsor_id is not null) as sponsored, sharing, currency, free_lists_used, quote, first_charge_at::text, stripe_subscription, access_ends_at::text,
+            hold_reason, case when plan_change_to = 'per_run' and cancel_requested_at is not null then access_ends_at::text end as switching_at,
+            case when status = 'active' and cancel_requested_at is not null and plan_change_to is distinct from 'per_run' then access_ends_at::text end as ending_at, switched_from_per_run_at is not null as switched
+     from users where id = $1`,
     [userId],
   );
   if (!u) return null;
@@ -57,6 +64,10 @@ export async function loadHome(q: Query, userId: string, s: V3Settings, now: Dat
       firstChargeAt: u.first_charge_at,
       orderCents: order?.amount_cents ?? null,
       accessEndsAt: u.access_ends_at,
+      holdReason: u.hold_reason,
+      switchingAt: u.switching_at,
+      endingAt: u.ending_at,
+      switchedFromPerRun: u.switched,
       now,
     },
     s,

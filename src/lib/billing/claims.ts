@@ -51,12 +51,18 @@ export async function claimCharge(
   q: Query,
   o: { userId: string; purpose: Purpose; weekOf: string; attempt: number; price?: string | null; amountCents?: number | null; currency?: string | null; extraCents?: number; now?: Date },
 ): Promise<Claim | null> {
-  // One charge in flight per user, whatever its purpose.
+  // One charge in flight per user, whatever its purpose. The user's row is locked while the guard is read,
+  // so a cancel or a switch writing that row at the same moment is serialized with the claim: whichever
+  // lands second sees the other (the guard is re-checked on the row as the cancel left it).
   const [r] = await q<Row>(
-    `insert into charge_attempts (user_id, purpose, week_of, attempt, price, amount_cents, currency, extra_cents)
+    `with u as (
+       select u.id from users u where u.id = $1 and $8::timestamptz is not null and ${GUARD[o.purpose]}
+         and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
+       for update
+     )
+     insert into charge_attempts (user_id, purpose, week_of, attempt, price, amount_cents, currency, extra_cents)
      -- $8 is the job's clock, used by the guard that waits 24 hours after a changed amount.
-     select u.id, $2, $3, $4, $5, $6, $7, $9 from users u where u.id = $1 and $8::timestamptz is not null and ${GUARD[o.purpose]}
-       and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
+     select u.id, $2, $3, $4, $5, $6, $7, $9 from u
      on conflict (user_id, purpose, week_of, attempt) do nothing
      returning id, user_id, purpose, to_char(week_of, 'YYYY-MM-DD') as week_of, attempt, claimed_at::text`,
     [o.userId, o.purpose, o.weekOf, o.attempt, o.price ?? null, o.amountCents ?? null, o.currency ?? null, (o.now ?? new Date()).toISOString(), o.extraCents ?? 0],
