@@ -25,7 +25,7 @@ export const optionalKinds: Record<string, "monday" | "friday_prompt"> = {
 };
 
 /** Emails sent once per request, with a fresh ref each time: a failure is never retried by a later trigger. */
-export const oneShotKinds = new Set(["signin_link", "signin_no_account", "signup_confirm", "email_change"]);
+export const oneShotKinds = new Set(["signin_link", "signin_no_account", "signup_confirm", "email_change", "email_change_approve", "email_change_taken", "email_changed"]);
 
 export type Recipient = { id: string; email: string; emailPrefs?: Record<string, unknown> | null };
 export type SendResult = "sent" | "already" | "skipped" | "failed";

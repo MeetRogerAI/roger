@@ -9,7 +9,7 @@ const statements: string[] = splitSchema(schema);
 describe("schema.sql", () => {
   it("splits into whole statements", () => {
     for (const s of statements) {
-      expect(s, s.slice(0, 80)).toMatch(/^(create|alter|drop|insert|update)\b/i);
+      expect(s, s.slice(0, 80)).toMatch(/^(create|alter|drop|insert|update|do)\b/i);
       // Balanced parentheses: a split inside a statement would break this.
       const open = (s.match(/\(/g) ?? []).length;
       const close = (s.match(/\)/g) ?? []).length;
@@ -25,6 +25,8 @@ describe("schema.sql", () => {
     for (const s of statements) {
       if (/^create (unique )?(table|index)/i.test(s)) expect(s, s.slice(0, 80)).toMatch(/if not exists/i);
       if (/^alter table/i.test(s)) expect(s, s.slice(0, 80)).toMatch(/if (not )?exists/i);
+      // A do block must be one line (the splitter cuts at a semicolon that ends a line).
+      if (/^do\b/i.test(s)) expect(s.includes("\n"), s.slice(0, 80)).toBe(false);
     }
   });
 
