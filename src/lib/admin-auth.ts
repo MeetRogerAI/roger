@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { isEmailAdmin } from "./auth/access";
 
 const COOKIE = "roger-admin";
 const DAYS = 14;
@@ -20,8 +21,18 @@ function same(a: string, b: string) {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/** True when the visitor holds a valid, unexpired admin session cookie. */
+/**
+ * True for an admin: someone signed in by email link whose address is in
+ * ADMIN_EMAILS (spec B.3), or, until that is confirmed on production and the
+ * password login is removed, someone holding the shared-password cookie.
+ */
 export async function isAdmin() {
+  if (await isEmailAdmin()) return true;
+  return passwordAdmin();
+}
+
+/** The shared-password cookie (to be removed once email admin works on production). */
+async function passwordAdmin() {
   const raw = (await cookies()).get(COOKIE)?.value;
   if (!raw) return false;
   const [exp, mac] = raw.split(".");

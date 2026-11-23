@@ -76,7 +76,7 @@ export function mergeV3(rows: { key: string; value: unknown }[]): V3Settings {
   for (const r of rows) {
     if (!r.key.startsWith(V3_PREFIX)) continue;
     const name = r.key.slice(V3_PREFIX.length);
-    if (name in v3Defaults) out[name] = r.value;
+    if (Object.hasOwn(v3Defaults, name)) out[name] = r.value;
   }
   return v3Schema.parse(out);
 }
@@ -103,8 +103,15 @@ export async function readV3Settings(): Promise<V3Settings> {
 export async function saveV3Settings(patch: Partial<V3Settings>): Promise<void> {
   const current = await readV3Settings();
   const next = v3Schema.parse({ ...current, ...patch });
-  for (const k of Object.keys(patch) as V3Key[]) {
-    await sql`insert into settings (key, value, updated_at) values (${V3_PREFIX + k}, ${JSON.stringify(next[k])}::jsonb, now())
-              on conflict (key) do update set value = excluded.value, updated_at = now()`;
-  }
+  const keys = (Object.keys(patch) as V3Key[]).filter((k) => patch[k] !== undefined);
+  if (!keys.length) return;
+  // One statement: either every key is saved or none is, so a half-saved set can never
+  // break a rule that spans keys (such as Cora before charge before send).
+  await sql`insert into settings (key, value, updated_at)
+            select k, v::jsonb, now() from unnest(${keys.map((k) => V3_PREFIX + k)}::text[], ${keys.map((k) => JSON.stringify(next[k]))}::text[]) as t(k, v)
+            on conflict (key) do update set value = excluded.value, updated_at = now()`;
 }
+
+// The defaults must satisfy the type; a mistake here fails the build, not a page.
+const _defaultsFit: V3Settings = { ...v3Defaults, recencyWeights: { ...v3Defaults.recencyWeights } };
+void _defaultsFit;

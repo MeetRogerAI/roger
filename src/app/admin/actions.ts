@@ -3,6 +3,7 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, signIn, signOut } from "@/lib/admin-auth";
+import { endCurrentSession } from "@/lib/auth/cookies";
 import { sql } from "@/lib/db";
 import { CATEGORIES, PERSONAS } from "@/lib/ingest/extract";
 import { ingest } from "@/lib/ingest/run";
@@ -24,6 +25,8 @@ export async function signInAction(_p: AdminState, fd: FormData): Promise<AdminS
 
 export async function signOutAction() {
   await signOut();
+  // Also end an email-link session, if that is how this admin signed in.
+  await endCurrentSession();
   redirect("/admin");
 }
 

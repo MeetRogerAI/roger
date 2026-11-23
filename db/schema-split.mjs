@@ -8,6 +8,3 @@ export function splitSchema(text) {
     .map((s) => s.replace(/--.*$/gm, "").trim())
     .filter(Boolean);
 }
-
-/** The marker value that says a database is not production. */
-export const NON_PRODUCTION = ["preview", "local", "test"];

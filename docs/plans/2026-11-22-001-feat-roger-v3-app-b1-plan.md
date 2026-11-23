@@ -272,7 +272,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ### Phase 0: Ground work and the marketing builder's pieces
 
-- [ ] **Unit 1: Tooling, environments and the clock**
+- [x] **Unit 1: Tooling, environments and the clock**
 
 **Goal:** A test runner, a separate preview database, the new environment names, and one overridable clock that every later unit uses.
 
@@ -307,7 +307,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 2: Schema, settings and seeds**
+- [x] **Unit 2: Schema, settings and seeds**
 
 **Goal:** Every B1 table, the `v3.*` settings with defaults, the seeded testimonials, the unpublished setup file slot, and a made-up sample play on preview and local.
 
@@ -345,7 +345,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 2b: The marketing builder's contracts**
+- [x] **Unit 2b: The marketing builder's contracts**
 
 **Goal:** Ship the three small interfaces the other builder codes against, before the machinery behind them exists.
 
@@ -373,7 +373,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 3: The mail layer**
+- [x] **Unit 3: The mail layer**
 
 **Goal:** One way to send an automatic email at most once per trigger, with a shared plain layout and a sender address for "Roger support".
 
@@ -407,7 +407,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 4: Accounts, sessions and the signed-in helper**
+- [x] **Unit 4: Accounts, sessions and the signed-in helper**
 
 **Goal:** Email-link sign-in, sessions, sign-out, the one access check, the header helper, and admin access by `ADMIN_EMAILS` alongside the existing password.
 
@@ -452,7 +452,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 5: `/start`, the quiz and the account step**
+- [x] **Unit 5: `/start`, the quiz and the account step**
 
 **Goal:** `/start` reads its query string, runs the quiz, routes people, takes an email when sign-up is off, and creates the account.
 
@@ -486,7 +486,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 
 ---
 
-- [ ] **Unit 6: Data palette, the idea card and the sample play**
+- [x] **Unit 6: Data palette, the idea card and the sample play**
 
 **Goal:** The colour tokens, the one idea card with its pull-out sheet, and the way the public site finds the sample play.
 
