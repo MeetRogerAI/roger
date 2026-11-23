@@ -65,7 +65,7 @@ export function checkReport(body: string, asked?: string | null): Checked {
   return { ok: true, text, kind };
 }
 
-export type Stored = { week_of: string; replaced: boolean; kind: ReportKind };
+export type Stored = { id: string; week_of: string; replaced: boolean; kind: ReportKind };
 
 /** How long after a run its profile still counts for the run's week, when the two land either side of the cutoff. */
 const PROFILE_FOLLOWS_RUN_MINUTES = 60;
@@ -75,7 +75,7 @@ export async function storeReport(q: Query, user: Sender, c: { text: string; kin
   let week = weekOf(now, o.cutoff);
   if (c.kind === "run") {
     // A replacement gets a new revision and drops plays made from the old text, in one statement.
-    const rows = await q<{ replaced: boolean }>(
+    const rows = await q<{ id: string; replaced: boolean }>(
       `with old as (
          delete from plays where run_id in (select id from runs where user_id = $1 and week_of = $2 and is_test = $7 and status <> 'deleted')
        )
@@ -85,10 +85,10 @@ export async function storeReport(q: Query, user: Sender, c: { text: string; kin
        do update set route = excluded.route, agent = excluded.agent, sharing = excluded.sharing, raw_text = excluded.raw_text,
          zack_version = excluded.zack_version, received_at = excluded.received_at, revision = runs.revision + 1,
          parsed = null, parsed_by = null, status = 'received', reason = '', attempts = 0, processed_at = null
-       returning (revision > 0) as replaced`,
+       returning id, (revision > 0) as replaced`,
       [user.id, week, o.route, user.agent, user.sharing, c.text, o.test, zackVersion(c.text), now.toISOString()],
     );
-    return { week_of: week, replaced: Boolean(rows[0]?.replaced), kind: "run" };
+    return { id: rows[0].id, week_of: week, replaced: Boolean(rows[0]?.replaced), kind: "run" };
   }
   // A profile sent just after the run belongs to the run's week, even across the cutoff.
   const [recent] = await q<{ week_of: string }>(
@@ -98,16 +98,16 @@ export async function storeReport(q: Query, user: Sender, c: { text: string; kin
     [user.id, o.test, new Date(now.getTime() - PROFILE_FOLLOWS_RUN_MINUTES * 60_000).toISOString()],
   );
   if (recent) week = recent.week_of;
-  const rows = await q<{ replaced: boolean }>(
+  const rows = await q<{ id: string; replaced: boolean }>(
     `insert into zack_profiles (user_id, week_of, route, raw_text, is_test, received_at)
      values ($1, $2, $3, $4, $5, $6)
      on conflict (user_id, week_of, is_test) where status <> 'deleted'
      do update set route = excluded.route, raw_text = excluded.raw_text, received_at = excluded.received_at,
        revision = zack_profiles.revision + 1, parsed = null, status = 'received', reason = '', processed_at = null
-     returning (revision > 0) as replaced`,
+     returning id, (revision > 0) as replaced`,
     [user.id, week, o.route, c.text, o.test, now.toISOString()],
   );
-  return { week_of: week, replaced: Boolean(rows[0]?.replaced), kind: "profile" };
+  return { id: rows[0].id, week_of: week, replaced: Boolean(rows[0]?.replaced), kind: "profile" };
 }
 
 /** The first run, and the first test, each tell the user Zack is connected (the claim keeps each to once). */
