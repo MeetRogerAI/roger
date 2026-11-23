@@ -20,6 +20,14 @@
     {
       "path": "/api/cron/cora",
       "schedule": "*/10 5-17 * * 1"
+    },
+    {
+      "path": "/api/cron/charge",
+      "schedule": "*/10 10-17 * * 1"
+    },
+    {
+      "path": "/api/cron/housekeeping",
+      "schedule": "5 * * * *"
     }
   ]
 }
