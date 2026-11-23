@@ -1,6 +1,6 @@
 # Roger v3: design and build spec for meetroger.ai
 
-Version 1.1 · November 21, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
+Version 1.2 · November 23, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
 
 **What this is.** A spec to hand to Claude Code. It replaces the Circles spec (`artifacts/Circles/Roger (CTA Circles) - design spec.md`, version 0.6) and turns meetroger.ai into the v3 product: a free trial, two ways to pay (monthly, or one list at a time), and a weekly cycle that sends each user three ideas every Monday. Strategy source: `artifacts/v3/strategy/Roger-Strategy-v3.1.md`. Decisions source: the design interview with Peter on November 21, 2026.
 
@@ -23,6 +23,21 @@ Version 1.1 · November 21, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/
 - The à la carte demand link is gone, because single lists are now a real product.
 - A one-at-a-time list is ordered, never charged automatically (B.9).
 - On the other eight differences with the strategy, this spec stands. The strategy file has been updated to match (0.3).
+
+**What changed in 1.2** (written back from the B1 build, November 23, 2026; source: `docs/brainstorms/2026-11-22-roger-v3-app-b1-requirements.md` R9 to R25 and the as-built notes in `docs/plans/2026-11-22-001-feat-roger-v3-app-b1-plan.md`). Every changed passage below carries the mark *(1.2)* so it can be found by searching for it.
+
+- Sign-up and the weekly cycle have separate off switches, `v3.signupOpen` and `v3.cycleLive`, both off on production until the go-live gate (0.9, B.4, B.7).
+- `/start` works on production for anyone with the link from the day B1 ships, behind `v3.signupOpen` (B.4).
+- Live Stripe on production; test keys and a separate database on preview and local; one overridable clock and "run as of a date" off production (B.7, B.9).
+- Short lists, empty weeks and the eligible-plays count (B.7, B.8, B.12).
+- The pool is seeded from the 13 pilot runs under nine hidden contributor records, which an admin links to real accounts (B.7).
+- The weekly jobs run on a wider schedule (every 10 minutes on Mondays from 05:00 UTC) and act from the settings' times; a week not ready by noon fails (B.7).
+- After the whole-system review: a trial past its free lists whose first paid list never comes closes like the 21-day trial; a day-7 failed charge sends only the closing email; closing emails say "Want to come back? Write to us"; every member with no eligible plays alerts both admins (B.7, B.9).
+- Intake has a fourth pass, for playbooks that could harm whoever pastes them (B.6).
+- The public site may read one `pool_plays` row, the chosen sample (0.6).
+- The higher rate is billed as one labelled difference line per billing month; the subscription always stays at the standard price (B.9).
+- Cancelling a monthly plan keeps it active until the paid month ends; switching back to monthly carries an unbilled difference into the first charge (B.9).
+- A changed email is approved from the current address, then confirmed from the new one (B.10); Google sign-in is accepted only for addresses Google is the authority for (B.3).
 
 ---
 
@@ -133,7 +148,7 @@ The two builders work in the same repo. Ownership is by path so they rarely touc
 | `zack` | token | A free Zack report made on `/zack` to carry into the account |
 | `utm` | string | Campaign tags, stored on the user |
 
-**What the public site reads from the database.** Only these: `use_cases` (library count and cards), `testimonials` where `cleared` is true, the `v3.*` settings, and the published `setup_files` row. It writes only to `leads` and `free_runs`. Everything else belongs to the app.
+**What the public site reads from the database.** Only these: `use_cases` (library count and cards), `testimonials` where `cleared` is true, the `v3.*` settings, the published `setup_files` row, and one `pool_plays` row, the sample idea (`is_public_sample`), read through the app's sample helper and never any other pool row. It writes only to `leads` and `free_runs`. Everything else belongs to the app. *(1.2)*
 
 **The switch.** Add `siteConfig.flags.v3Mode = true`. With it on, the header, footer, homepage, sitemap, and robots serve v3. With it off, the site returns to the Circles preview. `circlesMode` stays in the code and is ignored while `v3Mode` is on.
 
@@ -196,12 +211,13 @@ Admin-editable values live in the `settings` table with defaults in `src/data/co
 | `v3.trialCloseDays` | 21 |
 | `v3.forgivenMissesPerMonth` | 1 |
 | `v3.runCutoff` | Sunday 11:59 PM, America/Toronto |
-| `v3.coraAt`, `v3.chargeAt`, `v3.sendAt` | Monday 1:00 AM, 6:00 AM, 7:00 AM |
+| `v3.coraAt`, `v3.chargeAt`, `v3.sendAt` | Monday 1:00 AM, 6:00 AM, 7:00 AM. Each may be set between 1:00 AM and 11:00 AM, in that order. *(1.2)* |
 | `v3.statsAt` | Wednesday 9:00 AM (B2) |
 | `v3.zackDefaultSchedule` | Sunday 6:00 PM in the user's own time zone |
 | `v3.playbookPreface` | "I want you to take this document, and update it so that it works for my agent system and then install the playbook, asking me questions as needed." |
 | `v3.retentionDays` | 90 |
-| `v3.signupOpen` | true |
+| `v3.signupOpen` | false. Off switch for new sign-ups only; on production an admin turns it on at the go-live gate (B.4). *(1.2)* |
+| `v3.cycleLive` | false. Whether the Cora, charge, send and hourly jobs act on production. Turned on once at go-live, before `v3.signupOpen`, and left on if sign-up later closes, so paying users keep their lists. The trial's 21-day clock starts no earlier than the moment it first goes live (recorded once as `v3.cycleLiveSince`). *(1.2)* |
 | `v3.sessionDay`, `v3.sessionTime`, `v3.sessionLink` | empty until set (B2) |
 | `v3.recencyWeights` | Seen in the last 4 weeks: 1. Weeks 5 to 12: 0.5. Older: 0.25. (Default; see B.7.) |
 
@@ -520,17 +536,19 @@ Every `/app/*` and `/admin/*` page carries noindex and requires a session.
 
 ## B.3 Accounts and sign-in
 
-- **Email link.** The user enters an email and receives a link that is valid for 15 minutes and works once. The sign-in page offers "send it again" after 30 seconds.
-- **Google.** "Sign in with Google" using the verified email from Google. An account is identified by its email, so the same person can use either method.
+- **Email link.** The user enters an email and receives a link that is valid for 15 minutes and works once. The sign-in page offers "send it again" after 30 seconds. The link opens a confirm page, and a button press signs in, so a mail scanner that fetches the link cannot use it up. *(1.2)*
+- **Google.** "Sign in with Google" using the verified email from Google. Google's own account id is stored at first use and matched on afterwards. Google is trusted for an address only where it is the authority for it: a `@gmail.com` or `@googlemail.com` address, or a Google Workspace account whose domain is the address's domain. For any other address, an existing account must first sign in with an email link and then link Google from `/app/settings`; a new sign-up with such an address is sent the ordinary email sign-up link. Linking Google to an existing account sends a notice to that account's address. Changing the account's email unlinks Google. A Google sign-in never grants admin access, and admin addresses are never linked to Google. The button is hidden until the Google keys exist. *(1.2)*
 - **No passwords** are stored anywhere.
 - **Session:** an httpOnly, secure cookie lasting 30 days, renewed on use. Sign-out clears it.
-- **Admins:** Peter and Ehab. An admin is a signed-in user whose email is listed in the `ADMIN_EMAILS` environment variable. Both have identical access. The existing `/admin` pages move to this check, and the shared `ADMIN_PASSWORD` login is removed once it works.
+- **Admins:** Peter and Ehab. An admin is a signed-in user whose email is listed in the `ADMIN_EMAILS` environment variable. Both have identical access. The existing `/admin` pages move to this check, and the shared `ADMIN_PASSWORD` login is removed once it works. Until then it stays, switched by the variable itself: unset, the password login is off and every password cookie stops working. Admin pages need an email-link sign-in from the last 14 days, and the address is checked against `ADMIN_EMAILS` on every request. *(1.2)*
 - **Rate limits** on sign-in requests by email and by IP.
 - The choice of auth library is the builder's. The existing HMAC cookie in `src/lib/admin-auth.ts` shows the house style.
 
 ## B.4 Sign-up
 
 Five short screens. Progress is saved after each, so a person who leaves can return by signing in.
+
+**When sign-up is open.** *(1.2)* `/start` works on production for anyone who has the link from the day B1 ships; it does not wait for the new marketing pages, and nothing on the Circles pages links to it. The privacy and terms pages, draft or final, are live and linked from `/start` that day. With `v3.signupOpen` off, `/start` shows a short, honest "not open yet" note and an email field that saves a `leads` row and sends nothing; existing accounts keep working, and every sign-up action checks the switch again. On production it stays off until the go-live gate in the launch list is met (Zack 2.0 and Cora 2.0 approved, live Stripe keys and prices, the seed runs imported, privacy and terms linked), and an admin turns it on after `v3.cycleLive`.
 
 **1. The quiz (`/start`).** Six questions, one screen. The answers are saved as the user's profile, which Cora uses for matching (B.7).
 
@@ -576,7 +594,7 @@ The currency shown is the one passed in `cur`, changeable here, and fixed for th
 
 **Sign-up with a free Zack report.** If `zack` is present, the report in `free_runs` for that token is attached as the user's first run and goes through intake (B.6).
 
-**Existing pilot users.** The admin can create an account for a person and send them a link that opens at the plan step, so the five current users add a card and start their two free lists like everyone else.
+**Existing pilot users.** The admin can create an account for a person and send them a link that opens at the plan step, so the five current users add a card and start their two free lists like everyone else. The link works once, expires after 7 days, can be revoked, opens through the same confirm page as a sign-in link, and is never made for an admin address. *(1.2)*
 
 ## B.5 Zack
 
@@ -673,6 +691,8 @@ Each run goes through these steps as it arrives, and again as a batch before Cor
    - Patterns: email addresses, phone numbers, links, street addresses, postal codes, long digit strings.
    - The user's own "never include" list.
    - A model pass for names of people, companies, and specific places.
+
+   **A fourth pass, for harm to whoever pastes the playbook.** *(1.2)* One user's agent writes text that other users paste into agents holding their own tools and accounts. A play is flagged for an admin when its playbook contains a link or bare web address, tells the agent to send data anywhere, asks for or about credentials, tells the agent to ignore its rules, or hides text. Patterns run first, then the same model review. Guardrails ("never send anything outside") do not flag. Nothing is replaced automatically in this pass; an admin decides on `/admin/flags`. Every copied playbook has, after the preface, a short caution saying the text came from another Roger user and should be read before it is followed.
 5. **Result.**
    - Nothing found: `accepted`.
    - Found and plainly replaceable: replaced with a placeholder ("[a client]", "[a phone number]"), recorded, and `accepted`.
@@ -708,6 +728,9 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 2. **Fit, 0 to 5:** 5 when the play's "Heavy use for" matches the role or kind of work the user's runs or profile show; 3 when they run, or asked for help with, a play in the same category; 1 otherwise.
 3. **Personal score** = network score × 0.75 + Fit × 5.
 4. **Pick** the three highest personal scores with Fit 3 or more. If fewer than three qualify, fill with the highest network scores at Fit 1. Cora always sends the best three available.
+   - **Short lists.** *(1.2)* If only one or two eligible plays are left for a user, Cora sends those, and the email and `/app` say so in one plain line. An eligible play is one that passes rule 1, whatever its Fit. A list of one or two is still a delivered list: it uses a free list in the trial, triggers the third-list charge, and a one-at-a-time order for that Monday is charged the full list price.
+   - **No eligible plays.** *(1.2)* No list is sent, nothing is charged, no free list is used, and a one-at-a-time order is not charged and does not carry over. The user gets a short note that there is no list this week; for a trial user it adds that no free list was used, and if the week was their announced first-charge Monday, the note gives the new earliest date. A paying monthly user's note does not mention charges; it says the list is missing because of Roger, not them, and the week never counts as a missed week. Every other user's note says nothing was charged. Both admins are alerted for every user with no eligible plays, whatever their plan.
+   - **Warning before a short Monday.** *(1.2)* The operations screen shows each user's eligible plays remaining, from the same rules Cora picks by (one definition, `eligible.ts`), and "Needs attention" includes anyone with fewer than three (B.12).
 5. **The reason line** says only which role or category matched. It never mentions the user's own plays or anyone else's identity.
 6. A play is described as "run by 3 users", never by name.
 7. Every playbook starts with `v3.playbookPreface`.
@@ -724,24 +747,28 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 
 ### The job
 
-- `/api/cron/cora` is scheduled at 05:00 and 06:00 UTC on Mondays and runs only when it is 1:00 AM in Toronto, so it survives the clock change. This is the pattern in the Circles spec, section 8.
-- Steps: close intake for the week; finish parsing and checking any waiting runs; merge new plays into the pool; rescore the pool; pick for every eligible user; mark the week `ready`.
-- It must be safe to run twice, able to resume, and finished before 6:00 AM. Work through users in batches. There is exactly one set of picks per user per week.
+- ~~`/api/cron/cora` is scheduled at 05:00 and 06:00 UTC on Mondays and runs only when it is 1:00 AM in Toronto.~~ *(1.2)* **The schedule is wider.** Each job means "do everything that is due and not yet done". `/api/cron/cora`, `/api/cron/charge` and `/api/cron/send` each run every 10 minutes on Mondays from 05:00 to 17:50 UTC (1:00 AM Toronto in summer time), covering every allowed job time, and `/api/cron/housekeeping` at five past every hour. Each run reads its Toronto time from the settings (`v3.coraAt`, `v3.chargeAt`, `v3.sendAt`), uncached, and returns at once if it is early or the work is done. A late, repeated or missed run is harmless, Cora resumes across runs until the week is ready, and the times work across the clock change. Order is kept by state, not by the clock: the charge acts only on a week Cora marked ready, and the send only to a user whose charge for the week has settled.
+- Steps: close intake for the week (and run the fourth intake pass on anything still waiting); record each monthly user's contribution result at the cutoff; merge new plays into the pool; rescore the pool; pick for every eligible user; mark the week `ready`. *(1.2)*
+- It must be safe to run twice and able to resume. Work through users in batches. There is exactly one set of picks per user per week. One run works on a week at a time, under a lease, and records its phase (intake closed, merged, scored, picked, ready). *(1.2)*
+- **The noon deadline.** *(1.2)* A week fails only on a real error (three in a row, or the model refusing for lack of credits, named in the alert) or at noon Toronto. A week that becomes ready late is still charged and sent that morning. At noon a week that is not ready is failed for good, nothing is sent, and both admins are alerted.
+- **`v3.cycleLive`.** *(1.2)* On production the Cora, charge, send and hourly jobs act only while it is on. Before go-live an admin can run Cora as a dry run: it stores picks nobody can receive, which are cleared when the first real week runs.
+- **One clock.** *(1.2)* Every job and date rule takes the moment to act as an input. On preview and local builds (not production, a test Stripe key, and a database marked non-production, all three) an admin can run Cora, the charge, the send and the hourly pass "as of" a chosen date. Sessions, links and rate limits always use the real time.
 - Model calls go through the existing AI Gateway setup. A model decides: whether two plays do the same job, which category and role a play fits, Fit, the reason line, and the second privacy check. Code computes everything numeric.
 - **Seed data.** All existing test runs count. An admin tool imports a run file as seed data under a seed user; seed plays are shareable and are never attributed to a real account.
-- **When it fails:** nothing is sent, the week is marked `failed`, and both admins get an alert email. `/admin/cora` has "Run Cora now" and "Send now".
+  *(1.2)* The pool is seeded before the first real Cora run from the 13 pilot runs in `artifacts/v3/Zack Runs/`, which come from nine people (three ran Zack in more than one agent the same week). Each person gets one hidden seed contributor record, and all of their runs sit under it, whatever the agent; a second file for the same person, agent and week is refused unless it replaces the first. The runs go through intake like any run (the model reads them, since none has a `roger-run` block) and are merged at once. An admin links a contributor record to the person's real account when they join. The link is used for two things only: Cora leaves a user's own seed plays out of their lists, and evidence and "run by N users" count distinct people, so one person's runs from three agents count once. It is never shown, never used to say who a play came from, and is removed with the account. This refines "never attributed to a real account": never shown as theirs, but known to Cora for leaving out.
+- **When it fails:** nothing is sent, the week is marked `failed`, and both admins get an alert email. `/admin/cora` has "Run Cora now", "Dry run" and "Charge and send now" (the charge first, then the send, each still waiting for its own time). Orders for a failed week are closed with no charge and an apology. *(1.2)*
 
 ## B.8 Monday
 
 1. **6:00 AM, charge.** For each monthly trial user whose third list is ready, start their subscription and charge the card. For each one-at-a-time order whose list is ready, charge the card for that list (B.9). Users whose charge fails are held.
-2. **7:00 AM, send.** Each user with picks and no hold gets one email and sees the same three ideas at `/app`. For a trial user, this delivery counts as a free list.
+2. **7:00 AM, send.** Each user with picks and no hold gets one email and sees the same three ideas at `/app`. For a trial user, this delivery counts as a free list. *(1.2)* A user is sent to only when nothing is owed: a trial user on a free list, an active monthly user (or one cancelling, while the paid month covers that Monday), a third-list user whose charge succeeded, or a paid order. Delivering a list and emailing it are separate: a user who switched the Monday email off still has the list delivered and counted. A list held for its charge is delivered by the hourly pass the moment the charge settles, later in the week, even though the week is already marked sent.
 3. **The email.** Subject: "Your three ideas for the week of {date}". The three ideas, each with its title, the reason it fits, the time line, and one button, "Open and install". Then one status line that is always present:
    - Trial: "Free list 1 of 2." or "Free list 2 of 2. Your next list is your first paid one: {date}, {amount} plus {tax}."
    - Monthly: "Next charge {date}: {amount}." plus the contribution line from B.9.
    - One at a time: "This list: {amount}. Order next Monday's whenever you want one." For their second free list the line reads: "Free list 2 of 2. Order your next list whenever you want one: {amount} plus {tax}."
 4. **The view (`/app`).** Three idea cards (0.7). Opening one shows the sheet with "Copy prompt and playbook", which copies the preface, the prompt, and the playbook together. Under the sheet's title, one button: "I set this up".
 5. **"I set this up"** places a brick at once. The user's next Zack run confirms it when the play shows up in their own activity. Both states are stored. The north-star number, ideas adopted, is reported two ways: marked by the user, and confirmed by Zack.
-6. **No list this week.** A trial user with Zack on and no run gets a short note instead: "Zack hasn't sent a report yet, so there is no list this week and no free list was used. Here is how to connect him." No other user ever gets an empty Monday.
+6. **No list this week.** A trial user with Zack on and no run gets a short note instead: "Zack hasn't sent a report yet, so there is no list this week and no free list was used. Here is how to connect him." ~~No other user ever gets an empty Monday.~~ *(1.2)* The other empty Monday is a week with no eligible plays (B.7, "No eligible plays"), which gets its own note.
 
 ## B.9 Billing
 
@@ -751,6 +778,10 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 - **Products:** a monthly price at the standard rate and at the higher rate, and a one-list price, each in USD and CAD.
 - **Tax:** Stripe Tax is on from the first charge. Prices are before tax. The billing address is collected with the card. Invoices show the tax line. This needs Peter's tax registration entered in Stripe before launch.
 - **Events handled:** card saved, invoice paid, invoice payment failed, subscription changed, subscription ended, dispute opened (alerts both admins).
+- *(1.2)* **Live and test.** Production takes real cards and makes real charges from the day B1 ships, with live keys and live prices. Preview and local builds use test keys and their own database, never production's, and the admin shows which mode is in use. Six prices: monthly standard, monthly higher and one list, each in USD and CAD.
+- *(1.2)* **The webhook endpoint** subscribes to `checkout.session.completed`, `invoice.paid`, `invoice.finalized`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted` and `customer.updated`. Events are signals: each is claimed once, the object is read again where it matters, and a daily reconcile catches anything missed.
+- *(1.2)* **In the Stripe dashboard:** Stripe's own failed-payment and renewal emails are off, so Roger's emails are the only voice; failed renewals leave the subscription unpaid rather than cancelling it, so there is still something to pay.
+- *(1.2)* **The first charge is made by the app,** not by a Stripe trial: at the charge time on the Monday of the third list the app creates the subscription off-session, set so that a failed payment creates nothing. The amount told to the user is Stripe's invoice preview, stored when the email stating it is sent; just before charging the app previews again, and if the total differs the user is held ("amount changed"), told the new amount, and charged 24 hours later. Every charge carries a claim id, so a crash or a repeated run never charges twice.
 
 ### The trial and the first charge
 
@@ -762,9 +793,12 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 | 48 hours before the third list | Nothing changes | A reminder email with the same date and amount |
 | Third list ready, Monday 6:00 AM | The subscription starts and the card is charged | A receipt, and "You're subscribed" on `/app` |
 | The charge fails | The list is held. The card is retried on days 1, 3 and 7. | An email each time with a link to update the card. The list is sent the moment a charge succeeds. |
-| Still failing after day 7 | The trial closes. No charge. | A closing email with a link to restart |
-| 21 days after sign-up with no first list | The trial closes. No charge. | Nudges on days 3, 10 and 17; a closing email |
-| The user cancels during the trial | The trial ends at once. The saved card is removed. | A confirmation: "You have not been charged." |
+| *(1.2)* The card needs the bank's confirmation, or is declined as lost or stolen | Confirmation counts as a failed charge (nobody is there at 6:00 AM). A hard decline is not retried until the card changes; the trial still closes on day 7. A new card is tried at once. A refusal that is not about the card (the tax address, a setup problem) holds the user and alerts admins, with no update-card email. | The same email; for a hard decline, "we won't try it again" |
+| Still failing after day 7 | The trial closes. No charge. | A closing email *(1.2)* (the day-7 attempt that fails sends no "card didn't go through" email; the closing email stands alone), ending "Want to come back? Write to us" with the support address |
+| 21 days after sign-up with no first list | The trial closes. No charge. *(1.2)* The 21 days start when the card is saved or when `v3.cycleLive` first went on, whichever is later; a Monday with no list because of Roger (Cora's week failed, or no eligible plays) moves the close a week. | Nudges on days 3, 10 and 17; a closing email, ending "Want to come back? Write to us" *(1.2)* |
+| *(1.2)* Free lists used, but the first paid list never comes (no run, or no eligible plays) | No charge. Each such Monday moves the first charge a week. The trial closes `v3.trialCloseDays` (21) days after its last delivered list, or after the cycle first went live if that is later, with each Monday Roger failed to give a list moving the close a week; never while a run, a picked list or a charge is on its way, and not for a member mid-switch, sponsored or cancelling | Each such Monday, "Your first charge moved" with the next date; a closing email, ending "Want to come back? Write to us" |
+| *(1.2)* The amount differs from the one told | No charge that Monday. The user is held ("amount changed"), told the new amount, and charged 24 hours later as a fresh attempt; if that fails and the day-7 close is due, the trial closes | "Your first charge amount changed", with the amount |
+| The user cancels during the trial | The trial ends at once. The saved card is removed. | A confirmation: "You have not been charged." *(1.2)* The card is removed only if the user was never charged. |
 
 ### One list at a time
 
@@ -785,7 +819,10 @@ This applies to monthly users only.
 - A week counts as **not contributed** when no such run arrived, or the user was in "matching only" or "Zack off" mode at the cutoff.
 - A week is **excused** when Roger caused the miss: the send endpoint was failing, or an admin marks the week excused for one user or for everyone. Excused weeks never count.
 - For a monthly user, the first week not contributed in a month is forgiven. At the second, that month is billed at the higher rate: the difference is added as a labelled line to the next invoice. If the user cancels before that invoice, it is not collected.
-- A monthly user who switches sharing off pays the higher rate from their next invoice, and no adjustment applies. This is never offered as a plan; it exists only as the effect of that switch, and the confirmation states the new price before it is saved.
+- ~~A monthly user who switches sharing off pays the higher rate from their next invoice, and no adjustment applies.~~ *(1.2)* **How the higher rate is billed (same totals, one mechanism).** The subscription always stays at the standard price. The higher rate for a billing month is billed as one labelled difference line (higher minus standard, in the user's currency, taxed like the plan line) on the invoice after that month. A month owes the difference if any of its Sunday cutoffs found sharing off ("matching only" or "Zack off"), or if more weeks were missed than are forgiven; either way it is one line per user and month, never two (when both apply, the line says "Zack not sharing"). Sharing counts as it stood at each cutoff: switching it back on does not remove a difference a cutoff already caused, and switching off and on again between two cutoffs owes nothing. This is never offered as a plan; it exists only as the effect of that switch or of the misses, and the sharing confirmation states the new price before it is saved.
+- *(1.2)* **A member not sharing at their first charge** is subscribed at the standard price with the month's difference added to the first invoice, and the amount they were told already includes it. On that first invoice the line carries the plan product's name, not the "Higher-rate adjustment" label, because Stripe takes no description for it there. That month is then billed and never gets a second line.
+- *(1.2)* **Billing months** run from the subscription's own anchor, one calendar month at a time. A week belongs to the month that contains its Sunday cutoff, so a Monday renewal's week belongs to the month that is ending. A second miss found less than three days before a renewal goes on the invoice after it, with notices dated to match, so the user always has the three-day itemised email first.
+- *(1.2)* **The line is deleted** (never left for Stripe to decide) when a cancellation is scheduled (and raised again if it is undone), on a switch to one list at a time, when an admin excuses the week, when the subscription ends, and when the account closes. A line already on a finalized invoice is billed; admins are told to credit it if the week was excused. A daily reconcile deletes any pending Stripe item the app did not make. A Roger-caused week (Cora's week failed, or no eligible plays) is excused automatically.
 - Nothing is counted during the trial.
 
 **Telling the user, at every step.** All six are required.
@@ -797,14 +834,18 @@ This applies to monthly users only.
 | 3 | First miss | Email and status strip | "Zack didn't send a report this week. This one is forgiven. A second miss before {date} makes this month {amount}." With the fix. |
 | 4 | Second miss | Email, status strip, and a banner on `/app` | "This is your second missed week this month, so this month is billed at {amount}. The difference of {amount} will be on your invoice of {date}." With the fix and the option to switch plans. |
 | 5 | Three days before any invoice that carries an adjustment | Email | The full amount, itemised |
-| 6 | The invoice | Invoice line | "Higher-rate adjustment for {period}: two missed weeks" |
+| 6 | The invoice | Invoice line | "Higher-rate adjustment for {period}: two missed weeks", or *(1.2)* "Higher-rate adjustment for {period}: Zack not sharing". On a first invoice, the plan's product name (see above). |
 
 ### Changing and cancelling
 
 - **Switch between monthly and one at a time** on `/app/billing`, in one click. Moving to one at a time takes effect when the paid month ends. Moving to monthly starts the subscription with the next list. A confirmation shows the effect before it is saved, and an email follows.
-- **Change sharing** on `/app/zack`. Sharing changes at once; a monthly price changes from the next invoice.
+  - *(1.2)* Monthly to one at a time: the subscription is set to end with the paid month; lists continue every Monday until then; switching back before then simply keeps it. A month's difference that would have gone on the renewal is dropped by the switch.
+  - *(1.2)* One at a time to monthly: the account goes back to the first-charge path ("trial" until charged), and an order already placed for the coming Monday is cancelled in the same step, so that Monday is charged once. The email states the first charge's date and amount, which becomes the told amount. A difference dropped when the user switched away, still unbilled and from the last 62 days, is carried into that first charge (and said in the email), so switching away and back never dodges a month. If that first charge fails out on day 7, the user goes back to one at a time, not "trial closed".
+  - *(1.2)* Monday uses the plan as it stood at the Sunday cutoff: a switch made between the cutoff and the end of Monday is booked for Tuesday. A switch or cancel is refused for a few minutes while a charge for the week is going through.
+- **Change sharing** on `/app/zack`. Sharing changes at once; a monthly price changes from the next invoice. *(1.2)* (As the month's difference line; see the contributor rule.)
 - **Cancel** in one click on `/app/billing`. No retention screen. One optional question, "Why are you leaving?". Under the cancel button, one plain text link: "Or switch to one list at a time." Access continues to the end of the paid month. No refund.
-- **A renewal that fails** is retried by Stripe. After 7 days unpaid, lists are held until it is paid; the user is emailed at each step.
+  - *(1.2)* A monthly subscriber who cancels stays active ("cancelling") until the paid month actually ends: lists continue, Zack runs are taken and the weeks are still recorded, and the account becomes cancelled only when Stripe ends the subscription. Undo is possible until then and keeps the same subscription, with no second charge; the month is settled again from its cutoffs. Nothing subscribed (the trial, a held first charge, one at a time) ends at once, with open orders cancelled. A list already charged for the week is still delivered.
+- **A renewal that fails** is retried by Stripe. After 7 days unpaid, lists are held until it is paid; the user is emailed at each step. *(1.2)* The seventh day is counted in Toronto calendar days from the first failure; a new card pays every open invoice at once, oldest first, and the hold lifts only when Stripe has nothing open. Cancelling with a renewal unpaid ends the subscription at once and leaves the open invoice to admins. While held for an unpaid renewal, Cora still picks the member's list each Monday; it is delivered when the payment goes through. A cancelled account's list is delivered only for a Monday its paid month still covers, compared by Toronto date. A cancellation that ends at once says "Want to come back? Write to us".
 - **Invoices** are listed on `/app/billing` with links to Stripe's hosted copies. "Update card" opens Stripe's own page.
 
 ## B.10 The dashboard
@@ -815,7 +856,7 @@ This applies to monthly users only.
 | `/app/history` | Every idea ever sent, newest first, each marked "set up", "confirmed by Zack", or not yet. A count of bricks. (The compounding graph arrives in B2.) |
 | `/app/zack` | B.5 |
 | `/app/billing` | Plan, price, next charge with tax, the status strip, invoices, update card, switch plan, cancel |
-| `/app/settings` | Name, display name, email, time zone, and which emails to receive. The Monday list can be switched off; billing emails cannot. |
+| `/app/settings` | Name, display name, email, time zone, and which emails to receive. The Monday list can be switched off; billing emails cannot. *(1.2)* Changing the email takes two links: an approval link goes to the current address (valid 60 minutes, signs nobody in), and only then a confirm link goes to the new address. The change applies when that is confirmed, then the Stripe customer is updated, other sessions end, the old address is told once, and Google is unlinked. A newer request replaces both links. Someone who has lost the old address writes to support, and an admin changes it from the user page. Also here: "Link Google" or "Unlink Google", and the Friday order reminder switch. |
 
 **Onboarding checklist,** shown at the top of `/app` until done. Each step ticks itself when the app sees it happen.
 
@@ -862,16 +903,17 @@ Both admins see everything. New tabs are added to `src/components/admin-ui.tsx`;
 | Money | Date and amount of the next charge; misses used this month |
 | Last seen | Last sign-in; last time an idea was opened |
 | Note | A private note either admin can edit |
+| *(1.2)* Eligible plays | How many plays are still eligible for this user, from the same rules Cora picks by |
 
-Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run, a held payment, a trial closing within five days), by status, and by path. Row actions, each one logged with who did it: add a run for this user, excuse a missed week, give one extra free list, send a template nudge, open in Stripe.
+Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run, a held payment, a trial closing within five days, *(1.2)* fewer than three eligible plays), by status, and by path. Row actions, each one logged with who did it: add a run for this user, excuse a missed week, give one extra free list, send a template nudge, open in Stripe.
 
-**Users.** A list and a detail page with everything about one person: profile, plan, runs, ideas sent and set up, emails sent, and the log of admin actions.
+**Users.** A list and a detail page with everything about one person: profile, plan, runs, ideas sent and set up, emails sent, and the log of admin actions. *(1.2)* Also: create an account and a pilot link; link a seed contributor record to the account (B.7); change the account's email for someone who lost the old one; close and, on request, delete an account. Admin accounts cannot be changed, closed or deleted here.
 
 **Runs.** Every run with its status. Open any to read it.
 
 **Flags.** The queue from B.6. For each flagged play: the text, what was flagged, and approve, edit, or reject.
 
-**Cora.** This week's status, counts (runs read, plays merged, pool size, users picked for), the times of the next charge and send, and "Run Cora now" and "Send now". The seed-import tool. A read-only view of any user's picks.
+**Cora.** This week's status, counts (runs read, plays merged, pool size, users picked for), the times of the next charge and send, and "Run Cora now" and "Send now". The seed-import tool. A read-only view of any user's picks. *(1.2)* "Send now" is "Charge and send now" (the charge first, then the send). Also "Dry run" (B.7), and, on preview and local only, "run as of a date" for Cora, the charge, the send and the hourly pass. Every button is logged before it runs and again with its outcome.
 
 **Testimonials.** Add and edit: name, attribution, quote, date, audience, order, and the **cleared** switch. The public site shows only cleared rows. Seeded with these, word for word from the testimonials document, cleared, since all four people have agreed:
 
@@ -920,10 +962,16 @@ Plain and short, sent through the existing `sendEmail`. Automatic emails come fr
 | 24 | Your list is ordered | Order placed or cancelled | B1 |
 | 25 | Your list, and your receipt | Order charged and sent | B1 |
 | 26 | No list this Monday, and you were not charged | An order with no Zack run by the cutoff | B1 |
+| 27 | *(1.2)* No new ideas for you this week | No eligible plays (B.7) | B1 |
+| 28 | *(1.2)* Your first charge moved, or its amount changed | The first-charge Monday passed with no eligible plays; or the amount differs from the one told | B1 |
+| 29 | *(1.2)* Approve, then confirm, an email change; a Google account was linked | On request | B1 |
+| 30 | *(1.2)* Your Monday lists are paused; your payment went through | A renewal unpaid on day 7; paid | B1 |
 
 ## B.14 Data
 
 New tables for B1. Column lists show intent; the builder settles types and indexes. Add them to `db/schema.sql` and `db/setup.mjs`.
+
+*(1.2)* As built, `db/schema.sql` is the source of truth. It adds, among others: `sessions`, `seed_contributors` (a run belongs to a user or to a seed contributor), `charge_attempts` (the claim row for every charge), `stripe_events`, `pending_adjustments` (one row per member and billing month owing the difference), `contribution_weeks`, `week_excuses`, `card_updates`, `oauth_states`, `rate_events`, `zack_settings_history`, `zack_profiles`, `pool_play_contributors`, `leases` and `setup_file_live`, plus a lease and phase on `cora_weeks`, and the stored quote, hold reason and billing anchor on `users`. A marker row in `settings` says a database is not production; only such a database accepts "as of" runs and test fixtures. Once a table has been applied its text is frozen and changes are appended.
 
 ```sql
 create table if not exists users (

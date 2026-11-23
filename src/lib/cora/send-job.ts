@@ -98,7 +98,7 @@ async function sentAlready(q: Query, userId: string, kind: string, sinceRef: str
 /** Delivers one user's list if nothing is owed, then makes sure its emails went. Returns whether anything was delivered now. */
 export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string): Promise<boolean> {
   if (u.outcome !== "picked" && u.outcome !== "short") return false;
-  const { delivered } = await deliverWeek(q, u.id, week, d.settings.freeRuns);
+  const { delivered } = await deliverWeek(q, u.id, week, d.settings.freeRuns, d.now);
   const [now] = await usersFor(q, week, [u.id]);
   if (!now?.has_delivered) return false;
 
