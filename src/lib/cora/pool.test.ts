@@ -78,8 +78,11 @@ describe("mergePending", () => {
     await mergePending(query, keyModel().m);
     const b = await user("b@example.com");
     await runWith(b, [play("Inbox sorter", "inbox again"), play("Calendar prep", "calendar briefs", { set: "B" })]);
-    const t = await mergePending(query, keyModel(new Set(["Inbox sorter"])).m);
-    expect(t).toMatchObject({ failed: 1, created: 2 });
+    const failing = keyModel(new Set(["Inbox sorter"])).m;
+    expect(await mergePending(query, failing)).toMatchObject({ failed: 1, created: 1 });
+    await mergePending(query, failing);
+    // The third failure keeps it separate, so one play never holds up the week.
+    expect(await mergePending(query, failing)).toMatchObject({ failed: 1, created: 1 });
     expect((await pool()).map((p) => p.title)).toEqual(["Calendar prep", "Inbox sorter", "Inbox triage"]);
   });
 

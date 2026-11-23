@@ -1,3 +1,4 @@
+import { isModelUnavailable, rethrowIfUnavailable } from "@/lib/ai/errors";
 import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { runNeedsALookEmail } from "@/lib/mail/templates/run-needs-a-look";
@@ -55,6 +56,11 @@ export async function processRun(q: Query, runId: string, deps: IntakeDeps): Pro
   try {
     return await processClaimed(q, run, deps);
   } catch (e) {
+    // No credits or no key: retrying cannot help, so stop and say so (the attempt is not counted).
+    if (isModelUnavailable(e)) {
+      await q(`update runs set attempts = greatest(attempts - 1, 0) where id = $1 and status = 'received'`, [run.id]).catch(() => {});
+      rethrowIfUnavailable(e);
+    }
     console.error("[intake] run", run.id, e instanceof Error ? e.message : e);
     return giveUpIfLast(q, run);
   }
@@ -319,16 +325,24 @@ export async function processProfile(q: Query, id: string): Promise<Outcome> {
  * missed). Stops starting new runs once `until` is near, so it never runs past
  * the function's time limit; what is left waits for the next pass.
  */
-export async function processPending(q: Query, deps: IntakeDeps, o: { limit?: number; until?: Date; perRunMs?: number } = {}): Promise<Record<Outcome, number>> {
+export async function processPending(
+  q: Query,
+  deps: IntakeDeps,
+  o: { limit?: number; until?: Date; perRunMs?: number; week?: string } = {},
+): Promise<Record<Outcome, number>> {
   const tally: Record<Outcome, number> = { accepted: 0, flagged: 0, rejected: 0, retry: 0, skipped: 0 };
   const timeLeft = () => (o.until ? o.until.getTime() - Date.now() : Infinity);
   const perRun = o.perRunMs ?? 110_000;
-  const runs = await q<{ id: string }>(`select id from runs where status = 'received' order by attempts, received_at limit $1`, [o.limit ?? 200]);
+  const runs = await q<{ id: string }>(
+    `select id from runs where status = 'received' and ($2::date is null or week_of <= $2::date) order by attempts, received_at limit $1`,
+    [o.limit ?? 200, o.week ?? null],
+  );
   for (const r of runs) {
     if (timeLeft() < perRun) break;
     try {
       tally[await processRun(q, r.id, deps)]++;
     } catch (e) {
+      rethrowIfUnavailable(e);
       console.error("[intake] run failed", r.id, e instanceof Error ? e.message : e);
       tally.retry++;
     }

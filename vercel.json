@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/sheet",
       "schedule": "20 * * * *"
+    },
+    {
+      "path": "/api/cron/cora",
+      "schedule": "*/10 5-17 * * 1"
     }
   ]
 }
