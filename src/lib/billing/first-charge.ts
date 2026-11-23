@@ -6,7 +6,7 @@ import { longDate } from "@/lib/mail/templates/welcome";
 import type { V3Settings } from "@/lib/v3-settings";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, stillChargeable, type Claim } from "./claims";
 import { priceId, type Currency } from "./prices";
-import { isLive, type BillingGateway, type ChargeResult } from "./subscriptions";
+import { isLive, type BillingGateway, type ChargeResult, type OrderGateway } from "./subscriptions";
 
 /**
  * The first monthly charge, with the third list (spec B.9, plan Unit 12):
@@ -17,7 +17,7 @@ import { isLive, type BillingGateway, type ChargeResult } from "./subscriptions"
  * a retry cannot fix holds the user for an admin; day 7 with nothing charged
  * closes the trial.
  */
-export type ChargeDeps = { gw: BillingGateway; settings: V3Settings; now: Date } & MailDeps;
+export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; settings: V3Settings; now: Date } & MailDeps;
 export type FirstOutcome = "charged" | "declined" | "held_amount" | "unknown" | "error" | "skipped" | "open";
 
 type Quote = { totalCents?: number; currency?: string; price?: string; at?: string; week?: string };

@@ -3,6 +3,7 @@ import type { Query } from "@/lib/db-query";
 import { sendToUser } from "@/lib/mail/send";
 import { chargeDateMovedEmail } from "@/lib/mail/templates/charges";
 import { chargeFirst, nextChargeMonday, type ChargeDeps, type FirstOutcome } from "./first-charge";
+import { chargeOrders, type OrderOutcome } from "./orders";
 
 /**
  * The Monday charge job (spec B.8 step 1): at or after the charge time, on a
@@ -10,7 +11,14 @@ import { chargeFirst, nextChargeMonday, type ChargeDeps, type FirstOutcome } fro
  * whose third list is ready. Safe to run twice: each charge is a claim. Orders
  * (one list at a time) are charged by Unit 12b.
  */
-export type ChargeJobResult = { week: string; status: "skipped" | "done"; note?: string; first?: Record<FirstOutcome, number>; dateMoved?: number };
+export type ChargeJobResult = {
+  week: string;
+  status: "skipped" | "done";
+  note?: string;
+  first?: Record<FirstOutcome, number>;
+  orders?: Record<OrderOutcome, number>;
+  dateMoved?: number;
+};
 
 export async function runChargeJob(q: Query, d: ChargeDeps, o: { week: string }): Promise<ChargeJobResult> {
   const { week } = o;
@@ -48,5 +56,6 @@ export async function runChargeJob(q: Query, d: ChargeDeps, o: { week: string })
   for (const u of moved) {
     await sendToUser({ id: u.id, email: u.email }, "charge_date_moved", week, chargeDateMovedEmail({ nextMonday: nextChargeMonday(week) }), d).catch(() => {});
   }
-  return { week, status: "done", first, dateMoved: moved.length };
+  const orders = d.orders ? await chargeOrders(q, { ...d, orders: d.orders }, week) : undefined;
+  return { week, status: "done", first, orders, dateMoved: moved.length };
 }

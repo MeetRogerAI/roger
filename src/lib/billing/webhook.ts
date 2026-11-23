@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import type { Query } from "@/lib/db-query";
 import { completeCardSetup, type CompleteOptions } from "./card-setup";
+import { adminAlert, alertAdmins } from "@/lib/mail/send";
 import { settleFromInvoice } from "./first-charge";
 import type { CardGateway } from "./gateway";
 
@@ -63,6 +64,19 @@ export async function handleStripeEvent(
         );
         outcome = "handled";
         if (r !== "charged") note = `invoice.paid: ${r}`;
+      }
+      // An order invoice paid outside the charge job (for example from the hosted page) after its claim failed.
+      const orderClaim = !sub ? inv.metadata?.claim_id : undefined;
+      if (orderClaim) {
+        const [c] = await q<{ outcome: string; user_id: string }>(`select outcome, user_id from charge_attempts where id = $1 and purpose = 'order'`, [orderClaim]);
+        if (c && c.outcome !== "succeeded" && c.outcome !== "claimed" && c.outcome !== "unknown") {
+          await alertAdmins("order_paid_after_failure", orderClaim, adminAlert("An order invoice was paid after its charge failed", [`User ${c.user_id}, invoice ${inv.id}. Send the list or refund.`]), {
+            query: o.query,
+            transport: o.transport,
+          }).catch(() => {});
+          note = "order invoice paid after its claim failed";
+        }
+        outcome = "handled";
       }
     }
     await q(`update stripe_events set status = 'done', done_at = now(), error = $2 where id = $1`, [event.id, note]);
