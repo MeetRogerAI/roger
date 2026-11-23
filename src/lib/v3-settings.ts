@@ -69,6 +69,8 @@ export type V3Settings = z.infer<typeof v3Schema>;
 export type V3Key = keyof V3Settings;
 
 export const V3_PREFIX = "v3.";
+/** When v3.cycleLive was first switched on (not a setting: mergeV3 ignores it). */
+export const CYCLE_LIVE_SINCE = "v3.cycleLiveSince";
 
 /** Overlay saved rows on the defaults and validate the result. Throws on an invalid value. */
 export function mergeV3(rows: { key: string; value: unknown }[]): V3Settings {
@@ -110,6 +112,9 @@ export async function saveV3Settings(patch: Partial<V3Settings>): Promise<void> 
   await sql`insert into settings (key, value, updated_at)
             select k, v::jsonb, now() from unnest(${keys.map((k) => V3_PREFIX + k)}::text[], ${keys.map((k) => JSON.stringify(next[k]))}::text[]) as t(k, v)
             on conflict (key) do update set value = excluded.value, updated_at = now()`;
+  // The first time the cycle goes live is recorded once and never moved (the trial clock starts
+  // there at the earliest, src/lib/housekeeping/trial.ts). Turning it off and on again changes nothing.
+  if (next.cycleLive) await sql`insert into settings (key, value) values (${CYCLE_LIVE_SINCE}, to_jsonb(now())) on conflict (key) do nothing`;
 }
 
 // The defaults must satisfy the type; a mistake here fails the build, not a page.

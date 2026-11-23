@@ -6,6 +6,7 @@ import { loadUsers } from "@/lib/cora/context";
 import { eligiblePlays } from "@/lib/cora/eligible";
 import type { Query } from "@/lib/db-query";
 import { nextMonthly } from "@/lib/app/status";
+import { trialClocks } from "@/lib/housekeeping/trial";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -31,8 +32,6 @@ export const ATTENTION_LABELS: Record<Attention, string> = {
 export const CLOSING_SOON_DAYS = 5;
 /** Fewer eligible plays than this needs attention (R16). */
 export const FEW_ELIGIBLE = 3;
-/** Days with no list before an unpaid trial closes (Unit 18 builds the close itself). */
-export const TRIAL_CLOSE_DAYS = 21;
 
 /**
  * The week the screen is about: the coming Monday's list (all of Sunday
@@ -207,11 +206,10 @@ function coraState(r: Row, weekStatus: string | null): CoraState {
   return r.status === "held" ? "held" : "ready";
 }
 
-function closesAt(r: Row, s: V3Settings): string | null {
+function closesAt(r: Row, s: V3Settings, noListCloses: Map<string, Date>): string | null {
   if (r.status === "held" && r.hold_reason === "first_charge_failed" && r.last_first_week) return closeTrialAt(r.last_first_week, s.chargeAt).toISOString();
-  // A trial with no list yet closes 21 days after it started (Unit 18); a delivered list stops that.
-  if (r.status === "trial" && r.free_lists_used === 0 && r.trial_started_at) return new Date(Date.parse(r.trial_started_at) + TRIAL_CLOSE_DAYS * 86_400_000).toISOString();
-  return null;
+  // A trial with no list yet: the 21-day close housekeeping applies (src/lib/housekeeping/trial.ts).
+  return noListCloses.get(r.id)?.toISOString() ?? null;
 }
 
 async function moneyOf(q: Query, r: Row, s: V3Settings, now: Date): Promise<{ text: string; missesUsed: number | null }> {
@@ -240,6 +238,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
   const [w] = await q<{ status: string }>(`select status from cora_weeks where week_of = $1 and not dry_run`, [week]);
   const rows = await q<Row>(ROW_SQL, [week, o.userId ?? null]);
   const eligible = await eligibleCounts(q, week, o.userId ? [o.userId] : undefined);
+  const noListCloses = new Map((await trialClocks(q, o.settings, o.now, o.userId ? [o.userId] : undefined)).map((t) => [t.id, t.closesAt]));
   const out: OpsRow[] = [];
   for (const r of rows) {
     const m = await moneyOf(q, r, o.settings, o.now);
@@ -251,7 +250,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       order: r.order_status,
       run: r.run_status ? { status: r.run_status, route: r.run_route ?? "", receivedAt: r.run_at ?? "" } : null,
       eligible: eligible.has(r.id) ? eligible.get(r.id)! : null,
-      closesAt: closesAt(r, o.settings),
+      closesAt: closesAt(r, o.settings, noListCloses),
       freeListsUsed: r.free_lists_used,
     };
     out.push({

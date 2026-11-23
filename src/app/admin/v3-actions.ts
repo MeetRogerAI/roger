@@ -4,7 +4,7 @@ import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { closeFailedWeekOrders } from "@/lib/billing/orders";
-import { stripeAdjustments, stripeBilling, stripeOrders } from "@/lib/billing/subscriptions";
+import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { requireAdmin } from "@/lib/admin-auth";
 import { chooseSample, clearSample, moveTestimonial, saveTestimonial, setTestimonialCleared, TESTIMONIALS_TAG } from "@/lib/admin/content";
 import { chargeAndSendNow } from "@/lib/admin/cora";
@@ -307,7 +307,7 @@ export async function runJobAction(_p: V3State, fd: FormData): Promise<V3State> 
     }
     if (job === "send") return runSendJob(query, { settings, now, gw: gw ?? undefined, adjust: stripeAdjustments() ?? undefined }, { week });
     if (job === "charge") return runChargeJob(query, { gw: gw!, orders: stripeOrders() ?? undefined, settings, now }, { week });
-    return runHourly(query, { gw: gw!, orders: stripeOrders() ?? undefined, adjust: stripeAdjustments() ?? undefined, settings, now });
+    return runHourly(query, { gw: gw!, orders: stripeOrders() ?? undefined, adjust: stripeAdjustments() ?? undefined, plans: stripePlans() ?? undefined, settings, now });
   });
   refresh();
   return { status: "ok", message: `${job} for the week of ${week}: ${summary(result)}`, at: Date.now() };

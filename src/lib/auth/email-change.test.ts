@@ -107,6 +107,13 @@ describe("step 3: confirmation from the new address", () => {
     expect(await consumeToken(q, lastLinkTo("new@example.com"))).toBeNull();
   });
 
+  it("unlinks a Google sign-in that came with the old address", async () => {
+    await q(`update users set google_sub = 'g-1', google_email = 'ana@example.com' where id = $1`, [ana.id]);
+    await requestAndApprove("new@example.com");
+    expect(await confirmEmailChange(q, (await consumeToken(q, lastLinkTo("new@example.com")))!)).not.toBeNull();
+    expect(await q(`select google_sub, google_email from users where id = $1`, [ana.id])).toEqual([{ google_sub: null, google_email: null }]);
+  });
+
   it("does nothing if the account's address changed after approval", async () => {
     await requestAndApprove("new@example.com");
     await q(`update users set email = 'moved@example.com' where id = $1`, [ana.id]);

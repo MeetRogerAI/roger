@@ -2,49 +2,64 @@ import type { Query } from "@/lib/db-query";
 import { wallParts } from "@/lib/clock";
 import { retryDeletes, sendItemisedNotices } from "@/lib/billing/adjustment";
 import { processContributions } from "@/lib/billing/contribution";
-import { reconcilePendingItems } from "@/lib/billing/reconcile";
+import {
+  cursorPending,
+  EVENTS_CURSOR,
+  finishReconcilePass,
+  reconcileEvents,
+  reconcilePassUnderway,
+  reconcilePendingItems,
+  reconcileUsers,
+  settleOpenClaims,
+  stripeEventSource,
+  USERS_CURSOR,
+  type EventSource,
+} from "@/lib/billing/reconcile";
+import type Stripe from "stripe";
 import { syncStripeEmails } from "@/lib/auth/email-change";
 import { stripe } from "@/lib/billing/stripe";
-import { staleClaims, takeOver } from "@/lib/billing/claims";
-import { closeFailedWeekOrders, sendOrderPrompts, takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { stripeGateway } from "@/lib/billing/gateway";
+import { handleStripeEvent } from "@/lib/billing/webhook";
+import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { applyRetention, cleanUpExpired } from "./retention";
+import { closeTrialsWithNoList, sendTrialNudges, sendUploadReminders } from "./trial";
 import { finishCancellations } from "@/lib/billing/cancel";
 import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
 import { applyDueSwitches } from "@/lib/billing/switch";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
 import { deliverLate } from "@/lib/cora/send-job";
-import { closeUnpaidTrials, dueRetries, repairPaidUsers, takeOverFirstCharge, type ChargeDeps } from "@/lib/billing/first-charge";
+import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
  * The hourly pass (plan Unit 12): a list of due tasks that later units add
  * to. Each task is safe to run twice and works only on what is due now. One
  * failing task never stops the others.
+ *
+ * The pass has one deadline (PASS_SECONDS after it starts, inside the route's
+ * 300 seconds): every time-budgeted step stops at it, and a task not started
+ * by then is left to the next pass. Cheap database-only tasks run first.
  */
-export type HourlyTask = { name: string; run: (q: Query, d: ChargeDeps) => Promise<unknown> };
+export const PASS_SECONDS = 240;
+export type PassContext = { /** Epoch ms. */ deadline: number };
+export type HourlyTask = { name: string; run: (q: Query, d: ChargeDeps, ctx: PassContext) => Promise<unknown> };
 
 export const HOURLY_TASKS: HourlyTask[] = [
-  {
-    // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key.
-    name: "charge_takeover",
-    run: async (q, d) => {
-      const out: string[] = [];
-      for (const c of await staleClaims(q)) {
-        if (c.purpose === "order" && !d.orders) continue;
-        if (!(await takeOver(q, c.id))) continue;
-        // One claim's failure never stops the others.
-        try {
-          out.push(c.purpose === "order" ? await takeOverOrder(q, { ...d, orders: d.orders! }, c) : await takeOverFirstCharge(q, d, c));
-        } catch (e) {
-          console.error("[hourly] takeover", c.id, e instanceof Error ? e.message : e);
-          out.push("failed");
-        }
-      }
-      return out;
-    },
-  },
+  // Expired links, sessions, Google sign-in states and rate counters (the database's clock, never "as of").
+  { name: "expired_cleanup", run: (q) => cleanUpExpired(q) },
+  // Runs and unshared plays, the set number of days after access ends. Never ahead of the real clock.
+  { name: "retention", run: (q, d) => applyRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())), retentionDays: d.settings.retentionDays }) },
+  // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
+  { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.
   { name: "charge_retries", run: (q, d) => dueRetries(q, d) },
   // After the retries, so a day-7 attempt runs before its trial closes.
   { name: "close_unpaid_trials", run: (q, d) => closeUnpaidTrials(q, d) },
+  // Unit 18. A trial with no run: "Zack hasn't sent a report yet" on days 3, 10 and 17.
+  { name: "trial_nudges", run: (q, d, c) => sendTrialNudges(q, { ...d, deadline: c.deadline }) },
+  // Day 21 with no first list (weeks with no list because of Roger not counted): closed, no charge, one email.
+  { name: "trial_no_list_close", run: (q, d, c) => closeTrialsWithNoList(q, { ...d, deadline: c.deadline }) },
+  // Sunday 6:00 PM in the member's time zone: upload-route members with no run yet.
+  { name: "upload_reminders", run: (q, d, c) => sendUploadReminders(q, { ...d, deadline: c.deadline }) },
   // 48 hours before a first charge: the reminder with the stored date and amount.
   { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, d) },
   // Order invoices left open after a failed void.
@@ -60,7 +75,7 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Three days before an invoice carrying an adjustment: the itemised email, from Stripe's preview.
   { name: "invoice_itemised", run: (q, d) => sendItemisedNotices(q, d) },
   // Once a day (4 AM Toronto): pending invoice items with no live adjustment are deleted.
-  { name: "reconcile_pending_items", run: async (q, d) => (wallParts(d.now).hour === 4 ? reconcilePendingItems(q, d) : "not this hour") },
+  { name: "reconcile_pending_items", run: async (q, d, c) => (wallParts(d.now).hour === 4 ? reconcilePendingItems(q, d, { deadline: c.deadline }) : "not this hour") },
   // A paid user left held or in trial is made active.
   { name: "repair_paid_users", run: (q, d) => repairPaidUsers(q, d) },
   // Unit 15. A plan switch booked after a Monday cutoff, from the Tuesday.
@@ -82,14 +97,58 @@ export const HOURLY_TASKS: HourlyTask[] = [
       return syncStripeEmails(q, async (customer, email) => void (await s.customers.update(customer, { email })), { query: d.query, transport: d.transport, sleep: d.sleep });
     },
   },
+  // Unit 18. A daily pass, started once the last finished over 24 hours ago and carried on hourly until done: Stripe
+  // events never handled here, then every account whose state depends on Stripe read back. Each step is time-budgeted,
+  // continues from a saved cursor, and one failing never skips the other.
+  { name: "reconcile_stripe", run: (q, d, c) => reconcileStripe(q, d, c) },
 ];
 
-export async function runHourly(q: Query, d: ChargeDeps, tasks: HourlyTask[] = HOURLY_TASKS): Promise<Record<string, unknown>> {
+/** Stripe's events and the webhook's handler (tests pass their own). */
+export type EventIo = { source: EventSource; handle: (e: Stripe.Event) => Promise<unknown> };
+
+export async function reconcileStripe(q: Query, d: ChargeDeps, c: PassContext, given?: EventIo): Promise<unknown> {
+  let io = given;
+  if (!io) {
+    const s = stripe();
+    const card = stripeGateway(s);
+    if (!s || !card) return { skipped: "Stripe is not set up." };
+    const mail = { query: d.query, transport: d.transport, sleep: d.sleep };
+    io = {
+      source: stripeEventSource(s),
+      handle: (e) => handleStripeEvent(q, card, e, { getSettings: async () => d.settings, now: d.now, adjust: d.adjust, plans: d.plans, billing: d.gw, orders: d.orders, ...mail }),
+    };
+  }
+  if (!(await reconcilePassUnderway(q, d.now))) return "not due";
+  const out: Record<string, unknown> = {};
+  try {
+    out.events = (await cursorPending(q, EVENTS_CURSOR)) ? await reconcileEvents(q, io.source, io.handle, { now: d.now, deadline: c.deadline }) : "done";
+  } catch (e) {
+    console.error("[hourly] reconcile events", e instanceof Error ? e.message : e);
+    out.events = { error: e instanceof Error ? e.message : String(e) };
+  }
+  try {
+    if (!(await cursorPending(q, USERS_CURSOR))) out.users = "done";
+    else if (!d.plans) out.users = "Stripe is not set up.";
+    else out.users = await reconcileUsers(q, { ...d, plans: d.plans }, { deadline: c.deadline });
+  } catch (e) {
+    console.error("[hourly] reconcile users", e instanceof Error ? e.message : e);
+    out.users = { error: e instanceof Error ? e.message : String(e) };
+  }
+  out.finished = await finishReconcilePass(q, d.now);
+  return out;
+}
+
+export async function runHourly(q: Query, d: ChargeDeps, tasks: HourlyTask[] = HOURLY_TASKS, o: { deadline?: number } = {}): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   if (!d.settings.cycleLive) return { skipped: "The cycle is not live." };
+  const ctx: PassContext = { deadline: o.deadline ?? Date.now() + PASS_SECONDS * 1000 };
   for (const t of tasks) {
+    if (Date.now() >= ctx.deadline) {
+      out[t.name] = "out of time: next pass";
+      continue;
+    }
     try {
-      out[t.name] = await t.run(q, d);
+      out[t.name] = await t.run(q, d, ctx);
     } catch (e) {
       console.error(`[hourly] ${t.name}`, e instanceof Error ? e.message : e);
       out[t.name] = { error: e instanceof Error ? e.message : String(e) };

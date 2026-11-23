@@ -105,6 +105,17 @@ describe("a renewal that fails", () => {
     expect(await query("select 1 from picks where user_id = $1 and delivered_at is not null", [uid])).toHaveLength(1);
   });
 
+  it("replayed late and newest first, keeps Stripe's time for the failure and emails only the newest attempt", async () => {
+    plans.openInvoice("in_r1", "cus_a", "sub_a");
+    const at = (iso: string) => Math.floor(Date.parse(iso) / 1000);
+    const late = new Date("2027-01-08T09:00:00Z");
+    await handle({ ...event("evt_f2", "invoice.payment_failed", renewalInvoice(2)), created: at("2027-01-06T12:00:00Z") } as Stripe.Event, late);
+    await handle({ ...event("evt_f1", "invoice.payment_failed", renewalInvoice(1)), created: at("2027-01-03T12:00:00Z") } as Stripe.Event, late);
+    expect(subjects()).toEqual(["Your monthly payment didn’t go through"]);
+    const [r] = await query<{ failed: string }>("select to_char(renewal_failed_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI\"Z\"') as failed from users where id = $1", [uid]);
+    expect(r.failed).toBe("2027-01-03T12:00Z");
+  });
+
   it("is not held when the hold pass finds it was paid after all", async () => {
     plans.openInvoice("in_r1", "cus_a", "sub_a");
     await handle(event("evt_f1", "invoice.payment_failed", renewalInvoice(1)), new Date("2027-01-03T12:00:00Z"));
@@ -178,6 +189,20 @@ describe("the subscription as Stripe has it", () => {
     plans.subs.set("sub_a", { ...plans.subs.get("sub_a")!, cancelAt: null });
     await handle(event("evt_u2", "customer.subscription.updated", { id: "sub_a" }), new Date("2026-12-13T15:00:00Z"));
     expect(await user(uid)).toMatchObject({ status: "active", access_ends_at: null, cancel_requested_at: null });
+  });
+
+  it("does not cancel again when an undo lands between the read and the write", async () => {
+    const DEC_20 = Math.floor(new Date("2026-12-20T17:00:00Z").getTime() / 1000);
+    const read = plans.getSubscription.bind(plans);
+    let reads = 0;
+    // The first read is from before the undo (cancel date set); by the second, Stripe has none.
+    plans.getSubscription = async (id) => {
+      const s = await read(id);
+      return reads++ === 0 && s ? { ...s, cancelAt: DEC_20 } : s;
+    };
+    await handle(event("evt_u1", "customer.subscription.updated", { id: "sub_a" }), new Date("2026-12-12T15:00:00Z"));
+    expect(await user(uid)).toMatchObject({ status: "active", access_ends_at: null, cancel_requested_at: null });
+    expect(subjects()).toEqual([]);
   });
 
   it("keeps a switch in progress a switch, not a cancellation", async () => {

@@ -103,7 +103,7 @@ export async function handleStripeEvent(
       const inv = event.data.object;
       const sub = inv.parent?.subscription_details?.subscription;
       if (sub && inv.billing_reason === "subscription_cycle" && inv.id) {
-        if (await renewalFailed(q, await rdeps(), { subscription: typeof sub === "string" ? sub : sub.id, invoice: inv.id, attempt: inv.attempt_count })) outcome = "handled";
+        if (await renewalFailed(q, await rdeps(), { subscription: typeof sub === "string" ? sub : sub.id, invoice: inv.id, attempt: inv.attempt_count, at: event.created ? new Date(event.created * 1000) : undefined })) outcome = "handled";
       }
     }
     // The address (and so the tax) may have changed: the told first-charge amount is re-checked.

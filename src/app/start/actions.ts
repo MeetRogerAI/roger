@@ -7,7 +7,8 @@ import { hasDb } from "@/lib/db";
 import { query } from "@/lib/db-query";
 import { field, honeypotTripped, isEmail } from "@/lib/form";
 import { clientIp, hit, limits } from "@/lib/rate-limit";
-import { startAccount } from "@/lib/signup/account";
+import { beginGoogle, GOOGLE_STATE_COOKIE, googleConfig, googleStateCookie } from "@/lib/auth/google";
+import { newAccountFrom, startAccount } from "@/lib/signup/account";
 import { decodeDraft, DRAFT_COOKIE, DRAFT_DAYS, encodeDraft, type SignupDraft } from "@/lib/signup/draft";
 import { parseStartParams } from "@/lib/signup/params";
 import { parseQuiz, routeFor } from "@/lib/signup/quiz";
@@ -92,6 +93,33 @@ export async function startAnyway() {
   if (!d) redirect("/start");
   await saveDraft({ ...d, continuedAnyway: true });
   redirect("/start/account");
+}
+
+/**
+ * Step 2 with Google (plan Unit 18): the sign-up's details travel on the
+ * Google sign-in, as they do on the email link, and the account is made only
+ * once Google has confirmed a verified address. The name is optional here:
+ * Google's name is used when none was typed.
+ */
+export async function startGoogleSignup(fd: FormData) {
+  if (!(await signupOpen())) redirect("/start");
+  const cfg = googleConfig();
+  if (!cfg || !hasDb() || honeypotTripped(fd)) redirect("/start/account");
+  const d = await readDraft();
+  if (!d) redirect("/start");
+  let url = "/signin?e=google";
+  try {
+    if (!(await hit(`google:ip:${clientIp(await headers())}`, limits.googleStartPerIp))) {
+      url = "/signin?e=limited";
+    } else {
+      const started = await beginGoogle(query, cfg, { next: "/start/plan", newAccount: newAccountFrom(d, field(fd, "name", 80)) });
+      (await cookies()).set(GOOGLE_STATE_COOKIE, started.state, googleStateCookie());
+      url = started.url;
+    }
+  } catch (e) {
+    console.error("[start] google start failed", e instanceof Error ? e.message : e);
+  }
+  redirect(url);
 }
 
 /** Step 2: name and email. Ends at "check your email" for a valid address. */
