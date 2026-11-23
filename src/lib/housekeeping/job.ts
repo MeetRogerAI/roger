@@ -6,7 +6,7 @@ import { reconcilePendingItems } from "@/lib/billing/reconcile";
 import { syncStripeEmails } from "@/lib/auth/email-change";
 import { stripe } from "@/lib/billing/stripe";
 import { staleClaims, takeOver } from "@/lib/billing/claims";
-import { sendOrderPrompts, takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { closeFailedWeekOrders, sendOrderPrompts, takeOverOrder, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { finishCancellations } from "@/lib/billing/cancel";
 import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
 import { applyDueSwitches } from "@/lib/billing/switch";
@@ -49,6 +49,8 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, d) },
   // Order invoices left open after a failed void.
   { name: "void_leftover_invoices", run: async (q, d) => (d.orders ? voidLeftoverInvoices(q, { ...d, orders: d.orders }) : 0) },
+  // Orders for a week Cora failed: closed with no list and no charge, the member told (Unit 17).
+  { name: "close_failed_week_orders", run: (q, d) => closeFailedWeekOrders(q, { query: d.query, transport: d.transport, sleep: d.sleep }) },
   // A list whose charge settled after Monday is delivered then.
   { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, adjust: d.adjust, query: d.query, transport: d.transport, sleep: d.sleep }) },
   // The contributor rule: misses settled (forgiven, or the adjustment), then any Stripe items due (a carried one after its renewal).

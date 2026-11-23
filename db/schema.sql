@@ -652,3 +652,21 @@ alter table card_updates add column if not exists done_at timestamptz;
 alter table card_updates add column if not exists outcome text;
 alter table users add column if not exists plan_switched_at timestamptz;
 alter table users add column if not exists switched_from_per_run_at timestamptz;
+-- 2026-11-23, Unit 17 (the admin): weeks an admin excused before they were
+-- recorded, for one member (user_id) or for everyone (user_id null). When
+-- recordWeek records the week, a result that would be "missed" becomes
+-- "excused"; by choice and contributed are never overridden. An excuse for
+-- everyone also excuses the weeks already recorded, and its row is what an
+-- undo removes.
+create table if not exists week_excuses (
+  id bigserial primary key,
+  week_of date not null,
+  user_id uuid references users (id) on delete cascade,
+  excused_by text not null,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists week_excuses_one on week_excuses (week_of, coalesce(user_id, '00000000-0000-0000-0000-000000000000'::uuid));
+
+-- 2026-11-23, Unit 17: the answer to the one optional question when a member
+-- cancels (the Interest page counts them). Unit 15's cancel writes it.
+alter table users add column if not exists cancel_reason text;

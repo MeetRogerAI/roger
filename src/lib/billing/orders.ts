@@ -1,6 +1,7 @@
 import { cutoffInstant, wallParts, wallToInstant, weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
+import { orderClosedRogerFailedEmail } from "@/lib/mail/templates/order-closed";
 import { listOrderedEmail, orderFailedEmail, orderNoListEmail } from "@/lib/mail/templates/charges";
 import { orderPromptEmail } from "@/lib/mail/templates/order-prompt";
 import type { V3Settings } from "@/lib/v3-settings";
@@ -247,4 +248,24 @@ export async function voidLeftoverInvoices(q: Query, d: OrderDeps): Promise<numb
     }
   }
   return n;
+}
+
+/**
+ * Orders for a week Cora failed are never charged (the charge job acts only
+ * on a ready week), so they would stay "ordered" for good. This closes each
+ * one with no list and no charge, and tells the member once (plan Unit 12b
+ * leftover). A week still being worked is left alone; a dry run never
+ * counts. Run hourly and from the admin's Cora page.
+ */
+export async function closeFailedWeekOrders(q: Query, d: MailDeps): Promise<number> {
+  const rows = await q<{ user_id: string; email: string; week_of: string }>(
+    `update orders o set status = 'no_run', updated_at = now() from users u
+     where u.id = o.user_id and o.status = 'ordered'
+       and exists (select 1 from cora_weeks w where w.week_of = o.week_of and not w.dry_run and w.status = 'failed')
+     returning o.user_id, u.email, to_char(o.week_of, 'YYYY-MM-DD') as week_of`,
+  );
+  for (const r of rows) {
+    await sendToUser({ id: r.user_id, email: r.email }, "order_no_list", r.week_of, orderClosedRogerFailedEmail({ week: r.week_of }), { ...d, query: d.query ?? q }).catch(() => {});
+  }
+  return rows.length;
 }

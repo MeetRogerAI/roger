@@ -1,3 +1,4 @@
+import { logAdminAction } from "@/lib/admin/log";
 import { adminEmails } from "@/lib/auth/admin-emails";
 import { issueToken } from "@/lib/auth/login-link";
 import { normaliseEmail } from "@/lib/auth/tokens";
@@ -37,11 +38,7 @@ export async function createPilotLink(
   if (user.status !== "signup") return { ok: false, reason: "already_signed_up" };
 
   const token = await issueToken(q, { email, purpose: "pilot", userId: user.id, nextPath: "/start/plan", createdBy: o.createdBy }, now);
-  await q(`insert into admin_actions (admin_email, user_id, action, detail) values ($1, $2, 'pilot_link', $3::jsonb)`, [
-    o.createdBy,
-    user.id,
-    JSON.stringify({ email }),
-  ]);
+  await logAdminAction(q, { by: o.createdBy, userId: user.id, action: "pilot_link", detail: { email } });
   return { ok: true, link: appUrl(`/auth/confirm?t=${encodeURIComponent(token)}`), userId: user.id };
 }
 

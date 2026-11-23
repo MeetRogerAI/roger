@@ -1,8 +1,10 @@
 import { connection } from "next/server";
+import { isAdmin } from "@/lib/admin-auth";
 import { sql } from "@/lib/db";
 
 export default async function AdminWatches() {
   await connection();
+  if (!(await isAdmin())) return null;
   const rows = (await sql`
     select w.email, w.query, w.confirmed_at, w.unsubscribed_at, w.created_at, count(h.use_case_id)::int hits
     from watches w left join watch_hits h on h.watch_id = w.id
