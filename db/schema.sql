@@ -554,3 +554,7 @@ create table if not exists pool_play_contributors (
   primary key (pool_play_id, contributor)
 );
 create index if not exists pool_play_contributors_who on pool_play_contributors (contributor);
+
+-- 2026-11-23, Unit 12a: the price a claim was made with, so a takeover repeats
+-- exactly the call that was claimed.
+alter table charge_attempts add column if not exists price text;

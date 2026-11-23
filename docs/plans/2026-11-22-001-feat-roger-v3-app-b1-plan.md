@@ -841,6 +841,13 @@ evidence weight by age: weeks 1-4 full, 5-12 half, older a quarter; none in 26 w
 
 **Execution note:** Test-first for the claim rows and the retry schedule. This is the unit where a bug charges a real card twice.
 
+**12a as built (2026-11-23, after an adversarial money-safety review):** `src/lib/billing/claims.ts`, `subscriptions.ts`, `first-charge.ts`, `charge-job.ts`, `src/lib/housekeeping/job.ts`, `src/lib/cron.ts`, cron routes `charge` (every 10 minutes, Monday 10:00 to 17:50 UTC) and `housekeeping` (hourly); schema `charge_attempts.price`.
+- One charge in flight per user. The claim stores the price and amount; a takeover repeats exactly that call, only after looking the subscription up by claim id (whatever its status) and re-checking that the user may still be charged.
+- The amount is checked against the quote before anything is claimed; a difference holds the user ("amount changed"), emails the new amount, and charges after 24 hours under the normal first-charge attempts (the `amount_changed` purpose is unused). The price comes from sharing as it stood at the Sunday cutoff (`zack_settings_history`).
+- Subscriptions are created off-session with `error_if_incomplete`; a bank-confirmation response is a soft decline. A refusal a retry cannot fix (tax address, setup, idempotency conflict) is terminal for the week: the user is held, admins are alerted, nothing repeats until a new card or an admin retry (`retryNow` with reset); it closes on day 7 if unfixed.
+- Each outcome and the user's state are written in one statement. A charge that succeeds for a user closed meanwhile alerts admins (refund decision). An hourly repair activates a paid user left held. A trial never closes while a charge is in flight.
+- For later: the webhook settles from the event payload rather than re-reading the invoice (the daily reconcile in Unit 18 re-reads); delivering the held list on a settled charge is Unit 13; orders are 12b; stored quotes and the reminder and second-list emails are 12c.
+
 **Patterns to follow:** the claim-first shape in High-Level Technical Design; the cron route shape in `src/app/api/cron/sheet/route.ts`.
 
 **Test scenarios:**

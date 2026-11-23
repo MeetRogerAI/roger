@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import type { Query } from "@/lib/db-query";
 import { completeCardSetup, type CompleteOptions } from "./card-setup";
+import { settleFromInvoice } from "./first-charge";
 import type { CardGateway } from "./gateway";
 
 /**
@@ -47,6 +48,21 @@ export async function handleStripeEvent(
       if (result !== "done") {
         note = result;
         console.warn(`[stripe] ${event.id}: card step ended as ${result}`);
+      }
+    }
+    if (event.type === "invoice.paid") {
+      // A first charge whose recording was interrupted: the invoice names its claim.
+      const inv = event.data.object;
+      const sub = inv.parent?.subscription_details;
+      const claimId = sub?.metadata?.claim_id;
+      if (claimId && sub) {
+        const r = await settleFromInvoice(
+          q,
+          { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency },
+          { settings: await o.getSettings(), now: new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
+        );
+        outcome = "handled";
+        if (r !== "charged") note = `invoice.paid: ${r}`;
       }
     }
     await q(`update stripe_events set status = 'done', done_at = now(), error = $2 where id = $1`, [event.id, note]);
