@@ -498,3 +498,26 @@ create unique index if not exists setup_files_one_published on setup_files (slug
 -- ===========================================================================
 -- Changes after first application go below this line, newest last.
 -- ===========================================================================
+
+-- 2026-11-22, Unit 8 (Zack 2.0): the private matching profile Zack sends after
+-- each run. Matching only for every user, whatever their sharing mode: never
+-- pooled, never shown to anyone else.
+create table if not exists zack_profiles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users (id) on delete cascade,
+  week_of date not null,
+  route text not null check (route in ('connector', 'upload', 'admin')),
+  raw_text text not null,
+  parsed jsonb,
+  status text not null default 'received' check (status in ('received', 'accepted', 'rejected', 'deleted')),
+  reason text not null default '',
+  is_test boolean not null default false,
+  revision int not null default 0,
+  received_at timestamptz not null default now(),
+  processed_at timestamptz
+);
+create unique index if not exists zack_profiles_user_week on zack_profiles (user_id, week_of, is_test) where status <> 'deleted';
+
+-- 2026-11-22, Unit 8: a replaced run gets a new revision, so intake writes its
+-- result only for the text it read (where id = $1 and revision = $read).
+alter table runs add column if not exists revision int not null default 0;

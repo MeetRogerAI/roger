@@ -151,3 +151,36 @@ describe("claimEvent", () => {
     expect(await claimEvent(query, "evt_stuck", "x")).toBe(false);
   });
 });
+
+describe("a free-tool report brought to sign-up", () => {
+  beforeEach(async () => {
+    await query("insert into free_runs (token, email, agent, report, report_at) values ('tok1', 'ana@example.com', 'hark', '# free report', now())");
+    await query("update users set pending_zack_token = 'tok1'");
+  });
+
+  it("becomes the user's run when the trial starts, once, even when Stripe retries", async () => {
+    const gw = fakeGateway();
+    const id = await opened(gw);
+    gw.complete(id);
+    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("done");
+    expect(await handleStripeEvent(query, gw, setupEvent("evt_free", id), { getSettings, query, transport })).toBe("handled");
+    const runs = await query<{ route: string }>("select route from runs");
+    expect(runs).toEqual([{ route: "free_tool" }]);
+  });
+
+  it("never blocks the trial or the welcome email when the claim fails", async () => {
+    const gw = fakeGateway();
+    const id = await opened(gw);
+    gw.complete(id);
+    const failing: typeof query = async (t, p) => {
+      if (/free_runs/.test(t)) throw new Error("db blip");
+      return query(t, p);
+    };
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await completeCardSetup(failing, gw, id, { getSettings, query, transport })).toBe("done");
+    errors.mockRestore();
+    expect(sent.map((m) => m.subject)).toEqual(["Welcome to Roger"]);
+    const [u] = await query<{ status: string }>("select status from users");
+    expect(u.status).toBe("trial");
+  });
+});
