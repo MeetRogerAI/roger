@@ -4,6 +4,8 @@ import { completeCardSetup, type CompleteOptions } from "./card-setup";
 import { adminAlert, alertAdmins } from "@/lib/mail/send";
 import { settleFromInvoice } from "./first-charge";
 import type { CardGateway } from "./gateway";
+import { adjustmentOnSubscriptionEnded, markInvoiced } from "./adjustment";
+import type { AdjustmentGateway } from "./subscriptions";
 
 /**
  * Stripe webhooks: signals, not facts. Each event id is claimed once in
@@ -35,7 +37,7 @@ export async function handleStripeEvent(
   q: Query,
   gw: CardGateway,
   event: Stripe.Event,
-  o: Omit<CompleteOptions, "expectUserId">,
+  o: Omit<CompleteOptions, "expectUserId"> & { adjust?: AdjustmentGateway },
 ): Promise<EventOutcome> {
   if (!(await claimEvent(q, event.id, event.type))) return "duplicate";
   try {
@@ -51,6 +53,20 @@ export async function handleStripeEvent(
         console.warn(`[stripe] ${event.id}: card step ended as ${result}`);
       }
     }
+    // The renewal's invoice carrying the second-miss adjustment was finalized: it is invoiced, no longer pending. A draft can still change, so it is not enough.
+    if (event.type === "invoice.finalized" || event.type === "invoice.paid") {
+      const inv = event.data.object;
+      const items = (inv.lines?.data ?? []).map((l) => l.parent?.invoice_item_details?.invoice_item).filter((x): x is string => Boolean(x));
+      if (items.length && (await markInvoiced(q, o, inv.id ?? "", items))) outcome = "handled";
+    }
+    // The subscription ended: an adjustment still pending can never be collected, so it is deleted.
+    if (event.type === "customer.subscription.deleted") {
+      const [u] = await q<{ id: string }>(`select id from users where stripe_subscription = $1`, [event.data.object.id]);
+      if (u) {
+        await adjustmentOnSubscriptionEnded(q, { settings: await o.getSettings(), now: new Date(), adjust: o.adjust, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
+        outcome = "handled";
+      }
+    }
     if (event.type === "invoice.paid") {
       // A first charge whose recording was interrupted: the invoice names its claim.
       const inv = event.data.object;
@@ -59,7 +75,7 @@ export async function handleStripeEvent(
       if (claimId && sub) {
         const r = await settleFromInvoice(
           q,
-          { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency },
+          { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, anchor: planLineStart(inv) },
           { settings: await o.getSettings(), now: new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
         );
         outcome = "handled";
@@ -85,4 +101,9 @@ export async function handleStripeEvent(
     await q(`update stripe_events set status = 'failed', error = $2 where id = $1`, [event.id, String((e as Error).message).slice(0, 500)]).catch(() => {});
     throw e;
   }
+}
+
+/** The start of the plan line's period on a subscription's first invoice: the subscription's billing cycle anchor. */
+function planLineStart(inv: Stripe.Invoice): number | null {
+  return (inv.lines?.data ?? []).find((l) => l.parent?.subscription_item_details)?.period?.start ?? null;
 }

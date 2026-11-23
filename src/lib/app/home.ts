@@ -1,8 +1,9 @@
 import { weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
+import { contributionStatus } from "@/lib/billing/contribution";
 import { amount, money, type Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
-import { statusLine, type StatusFacts } from "./status";
+import { adjustmentLine, statusLine, type StatusFacts } from "./status";
 import { bricks, latestWeek, weekIdeas, type WeekIdea } from "./week";
 
 /** What the signed-in pages need about one user, read once per request. */
@@ -10,6 +11,8 @@ export type Home = {
   status: string;
   plan: "monthly" | "per_run";
   statusLine: string;
+  /** The second-miss banner (spec B.9 notice 4), with the fix and the option to switch plans. */
+  missBanner: string | null;
   week: string | null;
   ideas: WeekIdea[];
   bricks: { marked: number; confirmed: number };
@@ -39,8 +42,10 @@ export async function loadHome(q: Query, userId: string, s: V3Settings, now: Dat
   const shown = week ?? (await latestWeek(q, userId));
   const ideas = shown ? await weekIdeas(q, userId, shown, s.playbookPreface) : [];
   const [order] = shown ? await q<{ amount_cents: number | null }>(`select amount_cents from orders where user_id = $1 and week_of = $2`, [userId, shown]) : [];
+  const contribution = u.status === "active" && u.plan === "monthly" ? await contributionStatus(q, userId, s, now) : null;
   const line = statusLine(
     {
+      contribution,
       status: u.status,
       plan: u.plan,
       sponsored: u.sponsored,
@@ -64,5 +69,7 @@ export async function loadHome(q: Query, userId: string, s: V3Settings, now: Dat
     const cur = u.currency ?? "USD";
     orderBox = { week: next, ordered: o?.status === "ordered", price: money(amount(s, "per_run", cur), cur) };
   }
-  return { status: u.status, plan: u.plan, statusLine: line, week: shown, ideas, bricks: await bricks(q, userId), order: orderBox };
+  // Spec B.9 notice 4: after a second miss, a banner on /app as well as the strip.
+  const banner = adjustmentLine(contribution, s, u.currency ?? "USD");
+  return { status: u.status, plan: u.plan, statusLine: line, missBanner: banner, week: shown, ideas, bricks: await bricks(q, userId), order: orderBox };
 }

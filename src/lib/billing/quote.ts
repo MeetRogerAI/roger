@@ -5,7 +5,7 @@ import type { Rendered } from "@/lib/mail/layout";
 import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail } from "@/lib/mail/templates/quote";
 import type { V3Settings } from "@/lib/v3-settings";
 import { sharingAtCutoff } from "./first-charge";
-import { priceId, type Currency } from "./prices";
+import { firstChargePricing, type Currency } from "./prices";
 import type { BillingGateway } from "./subscriptions";
 
 /**
@@ -18,7 +18,7 @@ import type { BillingGateway } from "./subscriptions";
  * Amounts are priced the way the charge prices them: from the user's sharing
  * at the cutoff of the Monday being quoted.
  */
-export type Quote = { totalCents: number; currency: Currency; price: string; at: string; week: string };
+export type Quote = { totalCents: number; currency: Currency; price: string; extraCents?: number; at: string; week: string };
 export type QuoteDeps = { gw: BillingGateway; settings: V3Settings; now: Date } & MailDeps;
 
 type U = { id: string; email: string; status: string; plan: string; currency: Currency | null; stripe_customer: string | null; quote: Quote | null };
@@ -45,13 +45,15 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   const week = weekOf(d.now, d.settings.runCutoff);
   const sharing = await sharingAtCutoff(q, u.id, week, d.settings);
   const currency = u.currency ?? "USD";
-  const price = priceId("monthly", currency, sharing === "share" ? "standard" : "higher");
+  // Exactly as the charge prices it: the standard price, plus the month's difference on the first invoice when not sharing at the cutoff.
+  const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw);
   if (!price) return null;
-  const p = await d.gw.preview({ customer: u.stripe_customer!, price });
-  return { totalCents: p.totalCents, currency: p.currency as Currency, price, at: d.now.toISOString(), week };
+  const p = await d.gw.preview({ customer: u.stripe_customer!, price, extra: extraCents > 0 ? { amountCents: extraCents, currency } : null });
+  return { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week };
 }
 
-const same = (a: Quote | null, b: Quote) => Boolean(a && a.totalCents === b.totalCents && a.currency === b.currency && a.price === b.price && a.week === b.week);
+const same = (a: Quote | null, b: Quote) =>
+  Boolean(a && a.totalCents === b.totalCents && a.currency === b.currency && a.price === b.price && (a.extraCents ?? 0) === b.extraCents && a.week === b.week);
 
 /** Sends an email stating an amount, and stores that amount as told only if it was sent. */
 async function tell(q: Query, d: QuoteDeps, u: U, kind: string, ref: string, quote: Quote, message: Rendered): Promise<SendResult> {

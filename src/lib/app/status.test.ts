@@ -34,10 +34,56 @@ describe("statusLine (spec B.8 item 3)", () => {
     expect(statusLine(f({ plan: "per_run", freeListsUsed: 2 }), s)).toMatch(/^Free list 2 of 2\. Order your next list whenever you want one: US\$\d+ plus tax where it applies\.$/);
   });
 
-  it("monthly: the next charge date and amount, and the contribution line", () => {
+  it("monthly: contributing, the month's forgiven misses, and the next charge (spec B.9 notice 2)", () => {
     const line = statusLine(f({ status: "active", firstChargeAt: "2026-11-30T11:05:00Z" }), s);
-    expect(line).toMatch(/^Next charge Wednesday, December 30: US\$\d+ plus tax where it applies\. Zack’s report each week keeps you at this price\.$/);
+    expect(line).toBe("Contributing. This month: 0 of 1 forgiven misses used. Next charge Wednesday, December 30: US$200 plus tax where it applies.");
   });
+
+  const contribution = { used: 1, missed: 1, allowed: 1, periodEnd: "2026-12-30", missedThisWeek: true, cancelling: false, alreadyBilled: false, adjustment: null };
+  const active = { status: "active", firstChargeAt: "2026-11-30T11:05:00Z" };
+
+  it("monthly, first miss this week: forgiven, and what a second would cost (notice 3)", () => {
+    expect(statusLine(f({ ...active, contribution }), s)).toBe(
+      "Zack didn’t send a report this week. This one is forgiven. A second miss before Wednesday, December 30 makes this month US$400. Next charge Wednesday, December 30: US$200 plus tax where it applies.",
+    );
+    expect(statusLine(f({ ...active, contribution: { ...contribution, missedThisWeek: false } }), s)).toMatch(/^Contributing\. This month: 1 of 1 forgiven misses used\. Next charge/);
+  });
+
+  it("never calls a miss forgiven when the month is already past its forgiven misses", () => {
+    expect(statusLine(f({ ...active, contribution: { ...contribution, missed: 3 } }), s)).toMatch(/^Contributing\. This month: 1 of 1 forgiven misses used\./);
+  });
+
+  it("drops the contribution words once a cancellation is scheduled", () => {
+    expect(statusLine(f({ ...active, contribution: { ...contribution, cancelling: true } }), s)).toBe("Next charge Wednesday, December 30: US$200 plus tax where it applies.");
+  });
+
+  it("monthly, second miss: the higher month and the invoice it is on (notice 4)", () => {
+    const adjustment = { invoiceDate: "2026-12-30", amountCents: 20000, currency: "USD" as const, periodEnd: "2026-12-30", current: true, reason: "two_misses" as const };
+    expect(statusLine(f({ ...active, contribution: { ...contribution, adjustment } }), s)).toBe(
+      "This is your second missed week this month, so this month is billed at US$400. The difference of US$200 will be on your invoice of Wednesday, December 30.",
+    );
+  });
+
+  it("monthly with sharing off: the standard next charge and what a cutoff with sharing off does", () => {
+    expect(statusLine(f({ ...active, sharing: "off", contribution: { ...contribution, missed: 0, used: 0, missedThisWeek: false } }), s)).toBe(
+      "Next charge Wednesday, December 30: US$200 plus tax where it applies. With sharing off at a Sunday cutoff, that month is billed at US$400; the difference is added to your next invoice.",
+    );
+  });
+
+  it("a month owing the difference for not sharing says so, whatever sharing is now", () => {
+    const adjustment = { invoiceDate: "2026-12-30", amountCents: 20000, currency: "USD" as const, periodEnd: "2026-12-30", current: true, reason: "not_sharing" as const };
+    expect(statusLine(f({ ...active, contribution: { ...contribution, adjustment } }), s)).toBe(
+      "Zack wasn’t sharing at a Sunday cutoff this month, so this month is billed at US$400. The difference of US$200 will be on your invoice of Wednesday, December 30.",
+    );
+  });
+
+  it("words a carried adjustment from its own month and still shows the new month's count", () => {
+    const adjustment = { invoiceDate: "2027-01-30", amountCents: 20000, currency: "USD" as const, periodEnd: "2026-12-30", current: false, reason: "two_misses" as const };
+    expect(statusLine(f({ ...active, contribution: { ...contribution, used: 0, missed: 0, missedThisWeek: false, periodEnd: "2027-01-30", adjustment } }), s)).toBe(
+      "Your billing month to Wednesday, December 30 had two missed weeks, so it is billed at US$400. The difference of US$200 will be on your invoice of Saturday, January 30. Contributing. This month: 0 of 1 forgiven misses used. Next charge Saturday, January 30: US$200 plus tax where it applies.",
+    );
+  });
+
 
   it("one at a time: what this list cost", () => {
     expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toMatch(

@@ -561,3 +561,31 @@ alter table charge_attempts add column if not exists price text;
 
 -- 2026-11-23, Unit 13: the link to an order's receipt (Stripe's hosted invoice page).
 alter table orders add column if not exists receipt_url text;
+
+-- 2026-11-23, Unit 14 (the contributor rule): the missed week that raised an
+-- adjustment, the invoice it goes on, when its Stripe item may be made (a
+-- carried one waits for the renewal), and why it was deleted. A deletion
+-- for an excuse or a cancellation does not stop the period's adjustment being
+-- raised again, every other reason does.
+alter table pending_adjustments add column if not exists week_of date;
+alter table pending_adjustments add column if not exists invoice_at timestamptz;
+alter table pending_adjustments add column if not exists create_after timestamptz;
+alter table pending_adjustments add column if not exists deleted_reason text;
+
+-- 2026-11-23, Unit 14 review: when a deleted adjustment's Stripe item was
+-- confirmed gone (a failed delete is retried hourly), and the billing cycle
+-- anchor of the member's current subscription, which billing months are
+-- counted from (overwritten on every new subscription).
+alter table pending_adjustments add column if not exists stripe_deleted_at timestamptz;
+alter table users add column if not exists billing_anchor timestamptz;
+
+-- 2026-11-23, Unit 14 (one mechanism): why a month owes the higher rate's
+-- difference (two_misses, or not_sharing when any of its cutoffs found
+-- sharing off), and the difference a first charge added to its first invoice.
+alter table pending_adjustments add column if not exists reason text not null default 'two_misses';
+alter table charge_attempts add column if not exists extra_cents int not null default 0;
+
+-- 2026-11-23, Unit 14 final review: when the Stripe item was first asked
+-- for. After that the row's wording is frozen, and a row with no stored item
+-- looks for one carrying its id before anything else.
+alter table pending_adjustments add column if not exists attempted_at timestamptz;

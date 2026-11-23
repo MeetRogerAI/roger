@@ -34,6 +34,43 @@ export function amount(s: V3Settings, plan: Plan, currency: Currency, rate: Rate
   return currency === "CAD" ? s.priceCad : s.priceUsd;
 }
 
+/** The difference between the higher and the standard monthly price, in cents of the currency (the contributor rule's month difference). */
+export function differenceCents(s: V3Settings, currency: Currency): number {
+  return Math.round((amount(s, "monthly", currency, "higher") - amount(s, "monthly", currency)) * 100);
+}
+
+/** A gateway that can read a Stripe price's unit amount (cents), or null when it cannot. */
+export type PriceReader = { unitAmount?(price: string): Promise<number | null> };
+
+/**
+ * The month's difference as Stripe will bill it: the higher minus the
+ * standard monthly price's unit amounts, read from Stripe where a gateway is
+ * given; the settings' display amounts otherwise.
+ */
+export async function monthDifferenceCents(s: V3Settings, currency: Currency, gw?: PriceReader | null): Promise<number> {
+  const standard = priceId("monthly", currency, "standard");
+  const higher = priceId("monthly", currency, "higher");
+  if (gw?.unitAmount && standard && higher) {
+    const [h, st] = await Promise.all([gw.unitAmount(higher), gw.unitAmount(standard)]);
+    if (h != null && st != null && h > st) return h - st;
+  }
+  return differenceCents(s, currency);
+}
+
+/**
+ * The first monthly charge (plan Unit 14): the subscription is always at the
+ * standard price; a member not sharing at the cutoff of their first paid
+ * Monday has the month's difference added to the first invoice.
+ */
+export async function firstChargePricing(
+  s: V3Settings,
+  currency: Currency,
+  sharingAtCutoff: string,
+  gw?: PriceReader | null,
+): Promise<{ price: string | null; extraCents: number }> {
+  return { price: priceId("monthly", currency, "standard"), extraCents: sharingAtCutoff === "share" ? 0 : await monthDifferenceCents(s, currency, gw) };
+}
+
 /** "US$200" or "CA$280": the currency is always named, never a bare "$" (spec A.16 check 5). */
 export function money(value: number, currency: Currency): string {
   const v = Number.isInteger(value) ? String(value) : value.toFixed(2);

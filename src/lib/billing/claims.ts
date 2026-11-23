@@ -49,17 +49,17 @@ const toClaim = (r: Row): Claim => ({ id: r.id, userId: r.user_id, purpose: r.pu
  */
 export async function claimCharge(
   q: Query,
-  o: { userId: string; purpose: Purpose; weekOf: string; attempt: number; price?: string | null; amountCents?: number | null; currency?: string | null; now?: Date },
+  o: { userId: string; purpose: Purpose; weekOf: string; attempt: number; price?: string | null; amountCents?: number | null; currency?: string | null; extraCents?: number; now?: Date },
 ): Promise<Claim | null> {
   // One charge in flight per user, whatever its purpose.
   const [r] = await q<Row>(
-    `insert into charge_attempts (user_id, purpose, week_of, attempt, price, amount_cents, currency)
+    `insert into charge_attempts (user_id, purpose, week_of, attempt, price, amount_cents, currency, extra_cents)
      -- $8 is the job's clock, used by the guard that waits 24 hours after a changed amount.
-     select u.id, $2, $3, $4, $5, $6, $7 from users u where u.id = $1 and $8::timestamptz is not null and ${GUARD[o.purpose]}
+     select u.id, $2, $3, $4, $5, $6, $7, $9 from users u where u.id = $1 and $8::timestamptz is not null and ${GUARD[o.purpose]}
        and not exists (select 1 from charge_attempts x where x.user_id = u.id and x.outcome in ('claimed', 'unknown'))
      on conflict (user_id, purpose, week_of, attempt) do nothing
      returning id, user_id, purpose, to_char(week_of, 'YYYY-MM-DD') as week_of, attempt, claimed_at::text`,
-    [o.userId, o.purpose, o.weekOf, o.attempt, o.price ?? null, o.amountCents ?? null, o.currency ?? null, (o.now ?? new Date()).toISOString()],
+    [o.userId, o.purpose, o.weekOf, o.attempt, o.price ?? null, o.amountCents ?? null, o.currency ?? null, (o.now ?? new Date()).toISOString(), o.extraCents ?? 0],
   );
   return r ? toClaim(r) : null;
 }
@@ -98,9 +98,12 @@ export async function stillChargeable(q: Query, claimId: string): Promise<boolea
 }
 
 /** The price and amount a claim was made with: a takeover repeats exactly that call. */
-export async function claimedPrice(q: Query, claimId: string): Promise<{ price: string | null; amountCents: number | null; currency: string | null }> {
-  const [r] = await q<{ price: string | null; amount_cents: number | null; currency: string | null }>(`select price, amount_cents, currency from charge_attempts where id = $1`, [claimId]);
-  return { price: r?.price ?? null, amountCents: r?.amount_cents ?? null, currency: r?.currency ?? null };
+export async function claimedPrice(q: Query, claimId: string): Promise<{ price: string | null; amountCents: number | null; currency: string | null; extraCents: number }> {
+  const [r] = await q<{ price: string | null; amount_cents: number | null; currency: string | null; extra_cents: number }>(
+    `select price, amount_cents, currency, extra_cents from charge_attempts where id = $1`,
+    [claimId],
+  );
+  return { price: r?.price ?? null, amountCents: r?.amount_cents ?? null, currency: r?.currency ?? null, extraCents: r?.extra_cents ?? 0 };
 }
 
 /** Records how a claim ended. Only an open claim (claimed or unknown) can be settled; returns whether it was. */

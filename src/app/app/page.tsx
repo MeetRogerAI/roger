@@ -24,8 +24,25 @@ async function Home() {
     <div className="space-y-10">
       <header>
         <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : "Your first list is on its way"}</h1>
-        <p className="mt-3 text-small text-ink-2">{home.statusLine}</p>
+        {home.statusLine !== home.missBanner && <p className="mt-3 text-small text-ink-2">{home.statusLine}</p>}
       </header>
+
+      {home.missBanner && (
+        <div role="status" className="rounded-[8px] border border-rule bg-surface p-6">
+          <p className="text-title">{home.missBanner}</p>
+          <p className="mt-2 text-small text-ink-2">
+            To fix it, check that Zack still runs each week and can reach Roger.{" "}
+            <Link href="/app/zack" className="tlink">
+              Check Zack
+            </Link>{" "}
+            or{" "}
+            <Link href="/app/billing" className="tlink">
+              switch to one list at a time
+            </Link>
+            .
+          </p>
+        </div>
+      )}
 
       {home.ideas.length > 0 ? (
         <>

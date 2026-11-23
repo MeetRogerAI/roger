@@ -9,7 +9,7 @@ import { stripe } from "./stripe";
  * call is repeated, the subscription is looked up by its claim id.
  */
 export type ChargeResult =
-  | { kind: "succeeded"; object: string; amountCents: number | null; currency: string | null; receiptUrl?: string | null }
+  | { kind: "succeeded"; object: string; amountCents: number | null; currency: string | null; receiptUrl?: string | null; /** A new subscription's billing cycle anchor (unix seconds). */ anchor?: number | null }
   | { kind: "declined"; code: string | null; hard: boolean }
   /** Stripe could not work out the tax for the address: an admin looks, the user is not asked for a new card. */
   | { kind: "tax_address"; error: string }
@@ -18,14 +18,40 @@ export type ChargeResult =
   /** Refused for a reason a retry cannot fix (our setup, a bad request). */
   | { kind: "error"; error: string };
 
-export type FoundSubscription = { id: string; status: string; claimId: string | null };
+export type FoundSubscription = { id: string; status: string; claimId: string | null; anchor?: number | null };
+
+/**
+ * The higher rate's difference on the first invoice (plan Unit 14): a member
+ * not sharing at the cutoff of their first paid Monday is subscribed at the
+ * standard price, with the difference added to the first invoice only, taxed
+ * like the plan line. The preview carries the same item, so the told total is
+ * the charged total.
+ */
+export type FirstExtra = { amountCents: number; currency: string } | null;
 
 export interface BillingGateway {
   /** The first invoice's total with tax, from Stripe's preview. */
-  preview(o: { customer: string; price: string }): Promise<{ totalCents: number; currency: string }>;
+  preview(o: { customer: string; price: string; extra?: FirstExtra }): Promise<{ totalCents: number; currency: string }>;
   /** The customer's subscriptions that are live (or were made by a claim). */
   subscriptions(customer: string): Promise<FoundSubscription[]>;
-  createSubscription(o: { customer: string; price: string; claimId: string; userId: string; idempotencyKey: string }): Promise<ChargeResult>;
+  createSubscription(o: { customer: string; price: string; extra?: FirstExtra; claimId: string; userId: string; idempotencyKey: string }): Promise<ChargeResult>;
+  /** A price's unit amount in cents (to bill the month's difference as Stripe prices it). */
+  unitAmount?(price: string): Promise<number | null>;
+}
+
+/** A one-off line for `price`'s product, with its tax behaviour: taxed exactly like the plan line. */
+/** Stripe's tax behaviour copied as it is, or left out when the price leaves it to the account. */
+const sameTax = (t: Stripe.Price.TaxBehavior | null) => (t === "inclusive" || t === "exclusive" ? { tax_behavior: t } : {});
+
+async function sameProduct(s: Stripe, price: string, extra: NonNullable<FirstExtra>) {
+  const p = await s.prices.retrieve(price);
+  return {
+    currency: extra.currency.toLowerCase(),
+    product: typeof p.product === "string" ? p.product : p.product.id,
+    unit_amount: extra.amountCents,
+    // Exactly the plan's tax behaviour; "unspecified" is left out so the account default applies to both lines alike.
+    ...sameTax(p.tax_behavior),
+  };
 }
 
 const LIVE = new Set(["active", "trialing", "past_due", "unpaid"]);
@@ -59,22 +85,33 @@ export function classify(e: unknown): ChargeResult {
 export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | null {
   if (!s) return null;
   return {
-    async preview({ customer, price }) {
-      const inv = await s.invoices.createPreview({ customer, automatic_tax: { enabled: true }, subscription_details: { items: [{ price }] } });
+    async unitAmount(price) {
+      return (await s.prices.retrieve(price)).unit_amount;
+    },
+
+    async preview({ customer, price, extra }) {
+      const inv = await s.invoices.createPreview({
+        customer,
+        automatic_tax: { enabled: true },
+        subscription_details: { items: [{ price }] },
+        ...(extra?.amountCents ? { invoice_items: [{ price_data: await sameProduct(s, price, extra) }] } : {}),
+      });
       return { totalCents: inv.total, currency: inv.currency.toUpperCase() };
     },
 
     async subscriptions(customer) {
       const list = await s.subscriptions.list({ customer, status: "all", limit: 20 });
-      return list.data.map((x) => ({ id: x.id, status: x.status, claimId: x.metadata?.claim_id ?? null }));
+      return list.data.map((x) => ({ id: x.id, status: x.status, claimId: x.metadata?.claim_id ?? null, anchor: x.billing_cycle_anchor }));
     },
 
-    async createSubscription({ customer, price, claimId, userId, idempotencyKey }) {
+    async createSubscription({ customer, price, extra, claimId, userId, idempotencyKey }) {
       try {
         const sub = await s.subscriptions.create(
           {
             customer,
             items: [{ price }],
+            // The first month's higher-rate difference, on the first invoice only.
+            ...(extra?.amountCents ? { add_invoice_items: [{ price_data: await sameProduct(s, price, extra), metadata: { kind: "first_month_higher_rate" } }] } : {}),
             automatic_tax: { enabled: true },
             payment_behavior: "error_if_incomplete",
             // A merchant-initiated charge on the card saved for later use: no one is there to confirm it.
@@ -88,12 +125,121 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
         return {
           kind: "succeeded",
           object: sub.id,
+          anchor: sub.billing_cycle_anchor,
           amountCents: inv && typeof inv !== "string" ? inv.amount_paid : null,
           currency: inv && typeof inv !== "string" ? inv.currency.toUpperCase() : null,
         };
       } catch (e) {
         return classify(e);
       }
+    },
+  };
+}
+
+/**
+ * The contributor rule (plan Unit 14): a month's higher-rate difference is a
+ * pending invoice item on the subscription, made with a key from its stored
+ * id (the subscription itself always stays at the standard price); the
+ * itemised email reads Stripe's preview of the coming renewal invoice.
+ */
+export type PendingItem = { id: string; adjustmentId: string | null; subscription: string | null };
+export type RenewalPreview = {
+  totalCents: number;
+  taxCents: number;
+  currency: string;
+  lines: { description: string; amountCents: number; invoiceItem: string | null }[];
+};
+
+export interface AdjustmentGateway {
+  /** A price's unit amount in cents. */
+  unitAmount?(price: string): Promise<number | null>;
+  createInvoiceItem(o: {
+    customer: string;
+    subscription: string;
+    amountCents: number;
+    currency: string;
+    description: string;
+    metadata: Record<string, string>;
+    idempotencyKey: string;
+  }): Promise<string>;
+  /**
+   * Removes an item; one already gone counts as removed. "locked" when it is on
+   * an invoice that is no longer a draft: it has been billed and can never be
+   * deleted (a retry cannot help). Other failures throw.
+   */
+  deleteInvoiceItem(id: string): Promise<"deleted" | "locked">;
+  /** The customer's invoice items not yet on any invoice. */
+  pendingInvoiceItems(customer: string): Promise<PendingItem[]>;
+  /** The subscription's next invoice as it stands, pending items included. */
+  previewRenewal(o: { customer: string; subscription: string }): Promise<RenewalPreview>;
+}
+
+export function stripeAdjustments(s: Stripe | null = stripe()): AdjustmentGateway | null {
+  if (!s) return null;
+  return {
+    async unitAmount(price) {
+      return (await s.prices.retrieve(price)).unit_amount;
+    },
+
+    async createInvoiceItem({ customer, subscription, amountCents, currency, description, metadata, idempotencyKey }) {
+      // Taxed exactly like the plan line: the same product (so the same tax code) and the same tax behaviour, under the subscription's automatic tax.
+      const sub = await s.subscriptions.retrieve(subscription);
+      const plan = sub.items.data[0]?.price;
+      if (!plan) throw new Error(`Subscription ${subscription} has no price.`);
+      const product = typeof plan.product === "string" ? plan.product : plan.product.id;
+      const item = await s.invoiceItems.create(
+        {
+          customer,
+          subscription,
+          description,
+          metadata,
+          price_data: {
+            currency: currency.toLowerCase(),
+            product,
+            unit_amount: amountCents,
+            ...sameTax(plan.tax_behavior),
+          },
+        },
+        { idempotencyKey },
+      );
+      return item.id;
+    },
+
+    async deleteInvoiceItem(id) {
+      try {
+        await s.invoiceItems.del(id);
+        return "deleted";
+      } catch (e) {
+        if ((e as { code?: string } | null)?.code === "resource_missing") return "deleted";
+        // Refused: if the item sits on an invoice that is no longer a draft, it is billed for good.
+        const item = await s.invoiceItems.retrieve(id, { expand: ["invoice"] }).catch(() => null);
+        const inv = item?.invoice;
+        if (inv && typeof inv !== "string" && inv.status !== "draft") return "locked";
+        throw e;
+      }
+    },
+
+    async pendingInvoiceItems(customer) {
+      const out: PendingItem[] = [];
+      for await (const i of s.invoiceItems.list({ customer, pending: true, limit: 100 })) {
+        const sub = i.parent?.subscription_details?.subscription ?? null;
+        out.push({ id: i.id, adjustmentId: i.metadata?.adjustment_id ?? null, subscription: typeof sub === "string" ? sub : null });
+      }
+      return out;
+    },
+
+    async previewRenewal({ customer, subscription }) {
+      const inv = await s.invoices.createPreview({ customer, subscription });
+      return {
+        totalCents: inv.total,
+        taxCents: (inv.total_taxes ?? []).reduce((n, t) => n + t.amount, 0),
+        currency: inv.currency.toUpperCase(),
+        lines: inv.lines.data.map((l) => ({
+          description: l.description ?? "",
+          amountCents: l.amount,
+          invoiceItem: l.parent?.invoice_item_details?.invoice_item ?? null,
+        })),
+      };
     },
   };
 }

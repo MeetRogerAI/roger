@@ -1,4 +1,5 @@
 import { isModelUnavailable, ModelUnavailable, rethrowIfUnavailable } from "@/lib/ai/errors";
+import { recordWeek } from "@/lib/billing/contribution";
 import { currentMonday, isAtOrPast } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import type { IntakeModel } from "@/lib/intake/model";
@@ -136,19 +137,8 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
     await processPending(q, { model: deps.intake, ...mail(deps) }, { until: o.until, limit: 100, week: o.week });
     const [left] = await q<{ n: number | string }>(`select count(*) as n from runs where status = 'received' and week_of <= $1`, [o.week]);
     if (Number(left.n) > 0) return phase;
-    if (!o.dry) {
-      // The week's contribution (Unit 14 adds the rules; here: shared run arrived, by choice, or missed).
-      await q(
-        `insert into contribution_weeks (user_id, week_of, result)
-         select u.id, $1,
-           case when u.sharing <> 'share' then 'by_choice'
-                when exists (select 1 from runs r where r.user_id = u.id and r.week_of = $1 and not r.is_test and r.sharing = 'share' and r.status in ('accepted', 'flagged')) then 'contributed'
-                else 'missed' end
-         from users u where u.status = 'active' and u.plan = 'monthly'
-         on conflict (user_id, week_of) do nothing`,
-        [o.week],
-      );
-    }
+    // The week's contribution, at the cutoff, in its billing period (the contributor rule). Notices and adjustments follow once the week is settled.
+    if (!o.dry) await recordWeek(q, o.week, o.settings);
     // The binding sharing check (Unit 9 review): plays not yet in the pool from a test run, a run not shared, or a user who stopped sharing.
     await q(
       `update plays p set shareable = false from runs r left join users u on u.id = r.user_id

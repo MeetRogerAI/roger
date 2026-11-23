@@ -4,7 +4,8 @@ import { statusLine, type StatusFacts } from "@/lib/app/status";
 import { weekIdeas } from "@/lib/app/week";
 import { amount, money, type Currency } from "@/lib/billing/prices";
 import { sendFirstPaidNext } from "@/lib/billing/quote";
-import type { BillingGateway } from "@/lib/billing/subscriptions";
+import { contributionStatus, processContributions } from "@/lib/billing/contribution";
+import type { AdjustmentGateway, BillingGateway } from "@/lib/billing/subscriptions";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { mondayListEmail, noIdeasThisWeekEmail, noRunThisWeekEmail, orderNextEmail } from "@/lib/mail/templates/monday";
 import type { V3Settings } from "@/lib/v3-settings";
@@ -17,7 +18,13 @@ import { deliverWeek } from "./deliver";
  * pass, so a failed send is tried again by the next pass (the Monday cron, or
  * the hourly late pass for the rest of the week). Safe to run twice.
  */
-export type SendDeps = { settings: V3Settings; now: Date; gw?: BillingGateway } & MailDeps;
+export type SendDeps = { settings: V3Settings; now: Date; gw?: BillingGateway; adjust?: AdjustmentGateway } & MailDeps;
+
+/** The status line with the month's contribution count for an active monthly member (spec B.9 notice 2). */
+async function statusFor(q: Query, d: SendDeps, u: U): Promise<string> {
+  const contribution = u.status === "active" && u.plan === "monthly" ? await contributionStatus(q, u.id, d.settings, d.now) : null;
+  return statusLine({ ...facts(u, d.settings, d.now), contribution }, d.settings);
+}
 
 type U = {
   id: string;
@@ -100,7 +107,7 @@ export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string):
   const message = mondayListEmail({
     week,
     ideas: ideas.map((i) => ({ id: i.id, title: i.title, reason: i.personal?.reason ?? "", timeLine: i.timeLine })),
-    status: statusLine(facts(after, d.settings, d.now), d.settings),
+    status: await statusFor(q, d, after),
     receipt: orderCharged ? { url: after.receipt_url } : null,
   });
   // A one-list order gets "Your list, and your receipt", which cannot be switched off.
@@ -121,12 +128,19 @@ export async function runSendJob(q: Query, d: SendDeps, o: { week: string }): Pr
   const [w] = await q<{ status: string; dry_run: boolean }>(`select status, dry_run from cora_weeks where week_of = $1`, [week]);
   if (!w || w.dry_run || (w.status !== "ready" && w.status !== "sent")) return { week, status: "skipped", note: "Cora's week is not ready." };
 
+  // The week's misses are settled first (forgiven, or the difference), so the status line in each email already says so.
+  // Once per week: on the run that finds it ready, before it is marked sent; the hourly pass does the rest.
+  if (w.status === "ready") {
+    await processContributions(q, { settings: d.settings, now: d.now, adjust: d.adjust, ...mailOf(d) }).catch((e) =>
+      console.error("[send] contributions", e instanceof Error ? e.message : e),
+    );
+  }
   let delivered = 0;
   let notes = 0;
   for (const u of await usersFor(q, week)) {
     try {
       if (await deliverAndTell(q, d, u, week)) delivered++;
-      const status = statusLine(facts(u, d.settings, d.now), d.settings);
+      const status = await statusFor(q, d, u);
       const onFreeLists = u.status === "trial" && !u.sponsored && u.free_lists_used < d.settings.freeRuns;
       if (u.outcome === "not_eligible" && onFreeLists && u.sharing !== "off" && !u.run_arrived) {
         // Spec B.8 item 6 (spec check 20): no report, no list, and no free list used.

@@ -114,25 +114,27 @@ export async function saveZackSettings(q: Query, user: { id: string; email: stri
   }
 }
 
-/** Sharing takes effect for sharing at once (spec B.5); the price effect follows the contributor rule (Unit 14). */
+/** Sharing takes effect for sharing at once (spec B.5); the price effect follows the contributor rule (only sharing at each Sunday cutoff counts: billing/contribution.ts). */
 export async function setSharing(
   q: Query,
   user: { id: string; email: string },
   sharing: Sharing,
   note: { priceLine: string | null },
   deps: MailDeps = {},
+  /** The clock the change is recorded at; the cutoff reads it, so tests on a simulated week pass their own. */
+  now: Date = new Date(),
 ): Promise<boolean> {
   const rows = await q<{ changed_at: string }>(
     `with u as (update users set sharing = $2 where id = $1 and sharing <> $2 returning id),
      hist as (
-       insert into zack_settings_history (user_id, sharing, skip_categories, skip_sensitive, never_words, outline_categories, plays_per_week, extra_rules)
+       insert into zack_settings_history (user_id, sharing, skip_categories, skip_sensitive, never_words, outline_categories, plays_per_week, extra_rules, changed_at)
        select $1, $2, coalesce(z.skip_categories, '{}'), coalesce(z.skip_sensitive, '{}'), coalesce(z.never_words, '{}'),
-              coalesce(z.outline_categories, '{}'), coalesce(z.plays_per_week, 4), coalesce(z.extra_rules, '')
+              coalesce(z.outline_categories, '{}'), coalesce(z.plays_per_week, 4), coalesce(z.extra_rules, ''), $3::timestamptz
        from u left join zack_settings z on z.user_id = u.id
        returning changed_at
      )
      select changed_at::text from hist`,
-    [user.id, sharing],
+    [user.id, sharing, now.toISOString()],
   );
   if (!rows.length) return false;
   await sendToUser({ id: user.id, email: user.email }, "sharing_changed", rows[0].changed_at, sharingChangedEmail({ sharing, priceLine: note.priceLine }), deps).catch((e) =>

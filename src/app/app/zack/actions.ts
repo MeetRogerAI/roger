@@ -81,6 +81,7 @@ export async function changeSharing(_prev: SharingState, fd: FormData): Promise<
   if (field(fd, "confirm") !== "yes") return { status: "confirm", sharing, effect };
   await setSharing(query, u, sharing, { priceLine: effect });
   // The first charge's stored amount follows the change, and the user is told if it moved (spec check 21).
+  // A monthly member's price is never changed here: what counts is sharing at each Sunday cutoff (the contributor rule).
   const gw = stripeBilling();
   if (gw) await noticeQuoteChange(query, { gw, settings: await readV3Settings(), now: new Date() }, u.id).catch((e) => console.error("[quote] after sharing", e instanceof Error ? e.message : e));
   refresh();
