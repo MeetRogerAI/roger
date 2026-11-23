@@ -6,5 +6,6 @@ import { defineConfig } from "vitest/config";
 // vitest.scenarios.config.ts and run only with `npm run test:scenarios`.
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  test: { environment: "node", include: ["src/**/*.test.ts", "src/**/*.test.tsx", "db/**/*.test.ts"] },
+  // Tests that start an in-process Postgres get more time to set up when every file runs at once.
+  test: { environment: "node", include: ["src/**/*.test.ts", "src/**/*.test.tsx", "db/**/*.test.ts"], hookTimeout: 30_000, testTimeout: 20_000 },
 });
