@@ -186,7 +186,7 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
        where pp.id = s.id`,
       [
         JSON.stringify(
-          scored.map((x) => ({ id: x.id, f_hours: x.f.hours, f_reach: x.f.reach, f_ease: x.f.ease, f_proof: x.f.proof, f_surprise: x.f.surprise, score: Math.round(x.score), figures: x.figures })),
+          scored.map((x) => ({ id: x.id, f_hours: x.f.hours, f_reach: x.f.reach, f_ease: x.f.ease, f_proof: x.f.proof, f_surprise: x.f.surprise, score: Math.round(x.score), figures: cardFigures(x.figures) })),
         ),
       ],
     );
@@ -232,14 +232,32 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
 const mail = (d: CoraDeps): MailDeps => ({ query: d.query, transport: d.transport, sleep: d.sleep });
 
 /** The scores the "merged" phase stored: the week's one snapshot. The network score is rebuilt exactly from the factor scores. */
+/**
+ * What the idea card reads (src/lib/cora/idea-view.ts), plus Cora's own
+ * merged figures under "cora" for picking.
+ */
+export function cardFigures(f: Figures): Record<string, unknown> {
+  return {
+    current_hours_week: f.currentHours,
+    range_low: f.rangeLow,
+    range_high: f.rangeHigh,
+    basis: f.actualContributors > 0 ? "Actual" : f.currentHours != null ? "Implied" : null,
+    confidence: f.confidence,
+    minutes_saved_each: f.minutes,
+    heavy_hours_week: f.heavyHours,
+    runners: f.contributors,
+    cora: f,
+  };
+}
+
 async function storedScores(q: Query): Promise<Scored[]> {
-  const rows = await q<{ id: string; title: string; f_hours: number; f_reach: number; f_ease: number; f_proof: number; f_surprise: number; figures: Figures }>(
+  const rows = await q<{ id: string; title: string; f_hours: number; f_reach: number; f_ease: number; f_proof: number; f_surprise: number; figures: { cora: Figures } }>(
     `select id, title, f_hours, f_reach, f_ease, f_proof, f_surprise, figures from pool_plays where active and score is not null`,
   );
   return rows.map((r) => {
     const f = { hours: r.f_hours, reach: r.f_reach, ease: r.f_ease, proof: r.f_proof, surprise: r.f_surprise };
     const raw = f.hours * WEIGHTS.hours + f.reach * WEIGHTS.reach + f.ease * WEIGHTS.ease + f.proof * WEIGHTS.proof + f.surprise * WEIGHTS.surprise;
-    return { id: r.id, title: r.title, figures: r.figures, reachShare: 0, f, score: raw / 10 };
+    return { id: r.id, title: r.title, figures: r.figures.cora, reachShare: 0, f, score: raw / 10 };
   });
 }
 

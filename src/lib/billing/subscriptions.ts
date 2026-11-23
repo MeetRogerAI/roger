@@ -9,7 +9,7 @@ import { stripe } from "./stripe";
  * call is repeated, the subscription is looked up by its claim id.
  */
 export type ChargeResult =
-  | { kind: "succeeded"; object: string; amountCents: number | null; currency: string | null }
+  | { kind: "succeeded"; object: string; amountCents: number | null; currency: string | null; receiptUrl?: string | null }
   | { kind: "declined"; code: string | null; hard: boolean }
   /** Stripe could not work out the tax for the address: an admin looks, the user is not asked for a new card. */
   | { kind: "tax_address"; error: string }
@@ -173,11 +173,11 @@ export function stripeOrders(s: Stripe | null = stripe()): OrderGateway | null {
         }
         // Never record an empty invoice as a paid list.
         if (inv.total <= 0) return { kind: "error", error: `The invoice total is ${inv.total}; its item is missing.` };
-        if (inv.status === "paid") return { kind: "succeeded", object: invoiceId, amountCents: inv.amount_paid, currency: inv.currency.toUpperCase() };
+        if (inv.status === "paid") return { kind: "succeeded", object: invoiceId, amountCents: inv.amount_paid, currency: inv.currency.toUpperCase(), receiptUrl: inv.hosted_invoice_url ?? null };
         if (inv.status !== "open") return { kind: "error", error: `The invoice is ${inv.status}.` };
         const paid = await s.invoices.pay(invoiceId, { off_session: true }, { idempotencyKey: `${idempotencyKey}:pay` });
         return paid.status === "paid"
-          ? { kind: "succeeded", object: invoiceId, amountCents: paid.amount_paid, currency: paid.currency.toUpperCase() }
+          ? { kind: "succeeded", object: invoiceId, amountCents: paid.amount_paid, currency: paid.currency.toUpperCase(), receiptUrl: paid.hosted_invoice_url ?? null }
           : { kind: "unknown", error: `The invoice is ${paid.status} after paying.` };
       } catch (e) {
         return classify(e);

@@ -21,6 +21,7 @@ const play = (id: string, score: number, title = id): Scored => ({
     surprise: 0,
     contributors: 1,
     actualContributors: 0,
+    confidence: null,
     newestWeek: null,
     retired: false,
   },

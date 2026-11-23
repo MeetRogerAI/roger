@@ -1,0 +1,68 @@
+import { weekOf } from "@/lib/clock";
+import type { Query } from "@/lib/db-query";
+import { amount, money, type Currency } from "@/lib/billing/prices";
+import type { V3Settings } from "@/lib/v3-settings";
+import { statusLine, type StatusFacts } from "./status";
+import { bricks, latestWeek, weekIdeas, type WeekIdea } from "./week";
+
+/** What the signed-in pages need about one user, read once per request. */
+export type Home = {
+  status: string;
+  plan: "monthly" | "per_run";
+  statusLine: string;
+  week: string | null;
+  ideas: WeekIdea[];
+  bricks: { marked: number; confirmed: number };
+  /** One at a time, past the free lists: the coming Monday and whether it is ordered. */
+  order: { week: string; ordered: boolean; price: string } | null;
+};
+
+type U = {
+  status: string;
+  plan: "monthly" | "per_run";
+  sponsored: boolean;
+  sharing: StatusFacts["sharing"];
+  currency: Currency | null;
+  free_lists_used: number;
+  quote: StatusFacts["quote"];
+  first_charge_at: string | null;
+  stripe_subscription: string | null;
+  access_ends_at: string | null;
+};
+
+export async function loadHome(q: Query, userId: string, s: V3Settings, now: Date, week?: string): Promise<Home | null> {
+  const [u] = await q<U>(
+    `select status, plan, (sponsor_id is not null) as sponsored, sharing, currency, free_lists_used, quote, first_charge_at::text, stripe_subscription, access_ends_at::text from users where id = $1`,
+    [userId],
+  );
+  if (!u) return null;
+  const shown = week ?? (await latestWeek(q, userId));
+  const ideas = shown ? await weekIdeas(q, userId, shown, s.playbookPreface) : [];
+  const [order] = shown ? await q<{ amount_cents: number | null }>(`select amount_cents from orders where user_id = $1 and week_of = $2`, [userId, shown]) : [];
+  const line = statusLine(
+    {
+      status: u.status,
+      plan: u.plan,
+      sponsored: u.sponsored,
+      sharing: u.sharing,
+      currency: u.currency,
+      freeListsUsed: u.free_lists_used,
+      freeRuns: s.freeRuns,
+      quote: u.quote,
+      firstChargeAt: u.first_charge_at,
+      orderCents: order?.amount_cents ?? null,
+      accessEndsAt: u.access_ends_at,
+      now,
+    },
+    s,
+  );
+  let orderBox: Home["order"] = null;
+  const canOrder = u.plan === "per_run" && !u.stripe_subscription && (u.status === "active" || (u.status === "trial" && u.free_lists_used >= s.freeRuns));
+  if (canOrder) {
+    const next = weekOf(now, s.runCutoff);
+    const [o] = await q<{ status: string }>(`select status from orders where user_id = $1 and week_of = $2`, [userId, next]);
+    const cur = u.currency ?? "USD";
+    orderBox = { week: next, ordered: o?.status === "ordered", price: money(amount(s, "per_run", cur), cur) };
+  }
+  return { status: u.status, plan: u.plan, statusLine: line, week: shown, ideas, bricks: await bricks(q, userId), order: orderBox };
+}

@@ -96,6 +96,8 @@ export type Figures = {
   surprise: number;
   contributors: number;
   actualContributors: number;
+  /** The highest confidence any person's live evidence gave (v1.1 "Confidence: the highest"). */
+  confidence: Confidence | null;
   newestWeek: string | null;
   retired: boolean;
 };
@@ -163,6 +165,7 @@ export function mergedFigures(p: PoolPlay, asOf: string, w: Weights): Figures {
     surprise,
     contributors: byPerson.size,
     actualContributors,
+    confidence: (["High", "Medium", "Low"] as const).find((c) => live.some(({ e }) => e.confidence === c)) ?? null,
     newestWeek,
     retired: isRetired(p.evidence, asOf, w),
   };
