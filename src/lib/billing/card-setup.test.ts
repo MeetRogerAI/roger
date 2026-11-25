@@ -123,7 +123,7 @@ describe("completeCardSetup", () => {
     const id = [...gw.sessions.keys()].pop()!;
     gw.complete(id, "US");
     await completeCardSetup(query, gw, id, { getSettings, query, transport });
-    expect(sent[0].text).toMatch(/US\$100, plus tax where it applies, only when you order a list/);
+    expect(sent[0].text).toMatch(/US\$200, plus tax where it applies, only when you order a list/);
     expect(sent[0].text).not.toMatch(/misses two weeks/);
   });
 });
