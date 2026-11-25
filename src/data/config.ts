@@ -123,8 +123,8 @@ export type SiteConfig = typeof siteConfig;
 export const v3Defaults = {
   priceUsd: 200,
   priceCad: 280,
-  priceRunUsd: 100,
-  priceRunCad: 140,
+  priceRunUsd: 200,
+  priceRunCad: 280,
   priceHigherUsd: 400,
   priceHigherCad: 560,
   freeRuns: 2,
