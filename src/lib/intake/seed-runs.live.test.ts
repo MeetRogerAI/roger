@@ -5,11 +5,11 @@ import { slicePlaybook, gatewayModel } from "./model";
 import { validateRun } from "./validate";
 
 /**
- * Plan Unit 9: each seed run in artifacts/v3/Zack Runs parses to at least one
+ * Plan Unit 9: each seed run in artifacts/Zack Runs parses to at least one
  * valid play with no invented figure. Calls the real model through the AI
  * Gateway, so it runs only with INTAKE_LIVE=1 (and gateway credentials).
  */
-const dir = path.join(process.cwd(), "artifacts/v3/Zack Runs");
+const dir = path.join(process.cwd(), "artifacts/Zack Runs");
 const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
 
 describe.skipIf(!process.env.INTAKE_LIVE)("seed runs through the model path", () => {

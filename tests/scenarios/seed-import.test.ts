@@ -8,7 +8,7 @@ vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 /**
  * After the seed import (R23, R25; spec B.7 "Seed data"): the pilot runs are
  * imported under nine hidden contributor records, three of the people with
- * runs from more than one agent (13 files in all, as in artifacts/v3/Zack
+ * runs from more than one agent (13 files in all, as in artifacts/Zack
  * Runs/). Pilot accounts are linked to their records, and over several Mondays
  * no pilot is ever picked a play from their own seed files; one person's runs
  * from three agents count as one contributor.

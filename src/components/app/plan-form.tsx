@@ -30,7 +30,10 @@ export function PlanForm({ monthly, perRun, higher, zackLink }: { monthly: strin
             <input type="radio" name="plan" value="per_run" className="mt-1 size-4 accent-accent" />
             <span>
               <span className="block text-title">One list at a time, {perRun} each</span>
-              <span className="mt-1 block text-small text-ink-2">Order a list for any Monday you want one, after your two free lists.</span>
+              <span className="mt-1 block text-small text-ink-2">
+                Order a list for any Monday you want one, after your two free lists. Monthly costs the same and brings a list every
+                Monday.
+              </span>
             </span>
           </label>
         </div>
