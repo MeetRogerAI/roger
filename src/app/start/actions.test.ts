@@ -31,7 +31,7 @@ function quiz(over: Record<string, string> = {}) {
   return fd;
 }
 const draft = encodeDraft({
-  answers: { work: "real_estate", role: "Broker", uses: "most_weeks", agent: "grok-bot", agentOther: "", count: "1-2", help: [], software: "if_shown" },
+  answers: { work: "real_estate", role: "Broker", uses: "most_weeks", agents: ["grok-bot"], agentOther: "", count: "1-2", help: [], software: "if_shown" },
   path: "new",
   continuedAnyway: false,
   source: null,

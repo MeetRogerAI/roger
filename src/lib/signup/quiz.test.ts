@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseQuiz, routeFor } from "./quiz";
+import { parseQuiz, primaryAgent, routeFor } from "./quiz";
 
 const slugs = ["claude", "grok-bot", "duet", "hark"];
 
@@ -63,6 +63,37 @@ describe("parseQuiz", () => {
 
   it("refuses an agent or category that is not offered", () => {
     expect(parseQuiz(form({ agent: "evil" }), slugs).ok).toBe(false);
+    expect(parseQuiz(form({ agent: ["claude", "evil"] }), slugs).ok).toBe(false);
     expect(parseQuiz(form({ help: ["Crypto"] }), slugs).ok).toBe(false);
+  });
+
+  it("accepts several agents, in the order the quiz lists them, once each", () => {
+    const r = parseQuiz(form({ agent: ["hark", "claude", "hark"] }), slugs);
+    expect(r.ok && r.answers.agents).toEqual(["claude", "hark"]);
+  });
+
+  it("drops 'Not sure yet' when an agent is also named", () => {
+    const r = parseQuiz(form({ agent: ["not_sure", "duet"] }), slugs);
+    expect(r.ok && r.answers.agents).toEqual(["duet"]);
+    const alone = parseQuiz(form({ agent: "not_sure" }), slugs);
+    expect(alone.ok && alone.answers.agents).toEqual(["not_sure"]);
+  });
+
+  it("asks which agent when 'Another one' is ticked with others but has no name", () => {
+    const r = parseQuiz(form({ agent: ["claude", "other"] }), slugs);
+    expect(!r.ok && r.errors.agentOther).toBe("Which AI agent?");
+  });
+});
+
+describe("primaryAgent", () => {
+  it("sets the account up for the first chosen agent that has a Zack file", () => {
+    expect(primaryAgent({ agents: ["other", "hark"], agentOther: "Lindy" })).toBe("hark");
+    expect(primaryAgent({ agents: ["claude", "hark"], agentOther: "" })).toBe("claude");
+  });
+
+  it("falls back to the typed name, then 'not_sure'", () => {
+    expect(primaryAgent({ agents: ["other"], agentOther: "Lindy" })).toBe("Lindy");
+    expect(primaryAgent({ agents: ["instinct"], agentOther: "" })).toBe("instinct");
+    expect(primaryAgent({ agents: ["not_sure"], agentOther: "" })).toBe("not_sure");
   });
 });

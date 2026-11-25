@@ -32,7 +32,11 @@ const company: NavSet = {
   cta: { kind: "companyCall", label: "Book an intro call", short: "Book a call" },
 };
 
-function navFor(path: string): NavSet {
+/** Sign-up, sign-in and the member app (spec A.3): no header button, and nothing pointing back at the Circles pages. */
+const accountPages = ["/start", "/signin", "/auth", "/app"];
+
+export function navFor(path: string): NavSet {
+  if (accountPages.some((p) => path === p || path.startsWith(`${p}/`))) return { links: [], cta: null };
   if (siteConfig.flags.circlesMode && !(path.startsWith("/for/") || ["/rlpsignature", "/hampton", "/zack", "/founders", "/rlp"].includes(path))) {
     return {
       links: [
