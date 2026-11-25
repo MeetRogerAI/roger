@@ -20,6 +20,10 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // Previews are public (no Vercel login, so sign-in works like production) but never indexed.
+  async headers() {
+    return process.env.VERCEL_ENV === "preview" ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }] : [];
+  },
   async redirects() {
     return [
       // The home setup lived at /home, then at /; it now lives at /families.
