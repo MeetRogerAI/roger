@@ -15,7 +15,7 @@ type Option = { value: string; label: string };
  */
 export function QuizForm({ params, agents, categories }: { params: StartParams; agents: Option[]; categories: readonly string[] }) {
   const [state, action, pending] = useActionState(submitQuiz, idle);
-  const [agent, setAgent] = useState("");
+  const [otherAgent, setOtherAgent] = useState(false);
   const e = state.errors ?? {};
   const id = useId();
 
@@ -51,13 +51,22 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         />
       </Question>
 
-      <Question n={3} legend="Which AI agent do you use, or plan to?" error={e.agent ?? e.agentOther}>
-        <Radios
-          name="agent"
-          onChange={setAgent}
-          options={[...agents, { value: "other", label: "Another one" }, { value: "not_sure", label: "Not sure yet" }]}
-        />
-        {agent === "other" && (
+      <Question n={3} legend="Which AI agents do you use, or plan to?" hint="Choose any." error={e.agent ?? e.agentOther}>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[...agents, { value: "other", label: "Another one" }, { value: "not_sure", label: "Not sure yet" }].map((o) => (
+            <label key={o.value} className={choice}>
+              <input
+                type="checkbox"
+                name="agent"
+                value={o.value}
+                onChange={o.value === "other" ? (ev) => setOtherAgent(ev.currentTarget.checked) : undefined}
+                className="size-4 accent-accent"
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+        {otherAgent && (
           <>
             <label htmlFor={`${id}-other`} className="mt-4 block text-small font-[560]">
               Which one?
@@ -136,7 +145,7 @@ function Question({ n, legend, hint, error, children }: { n: number; legend: str
   );
 }
 
-function Radios({ name, options, defaultValue, onChange }: { name: string; options: Option[]; defaultValue?: string; onChange?: (v: string) => void }) {
+function Radios({ name, options, defaultValue }: { name: string; options: Option[]; defaultValue?: string }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {options.map((o) => (
@@ -146,7 +155,6 @@ function Radios({ name, options, defaultValue, onChange }: { name: string; optio
             name={name}
             value={o.value}
             defaultChecked={o.value === defaultValue}
-            onChange={() => onChange?.(o.value)}
             className="size-4 accent-accent"
           />
           {o.label}

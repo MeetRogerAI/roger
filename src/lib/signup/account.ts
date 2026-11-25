@@ -6,6 +6,7 @@ import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { signInLinkEmail, startConfirmEmail } from "@/lib/mail/templates/sign-in";
 import { hit, limits, type Counter } from "@/lib/rate-limit";
 import { accountPath, type SignupDraft } from "./draft";
+import { primaryAgent } from "./quiz";
 
 /**
  * Sign-up step 2 (spec B.4): name and email. Emails a link; confirming it
@@ -38,7 +39,7 @@ export function newAccountFrom(d: SignupDraft, name: string): NewAccount {
     path,
     notReady,
     profile: { ...d.answers, source: d.source },
-    agent: d.answers.agent === "other" ? d.answers.agentOther : d.answers.agent,
+    agent: primaryAgent(d.answers),
     currency: d.cur,
     ref: d.ref ?? "",
     utm: d.utm,

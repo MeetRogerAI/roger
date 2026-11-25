@@ -559,7 +559,7 @@ Five short screens. Progress is saved after each, so a person who leaves can ret
 |---|---|---|
 | 1 | What do you do? | "I work in real estate" or "Something else", then one line: role and kind of business |
 | 2 | Do you use AI agents for work today? | Not yet / Most weeks / Every day |
-| 3 | Which AI agent do you use, or plan to? | The list in `src/data/zack.ts`, "Another one" (with a text field), "Not sure yet" |
+| 3 | Which AI agents do you use, or plan to? | Choose any *(1.3)*: the list in `src/data/zack.ts`, "Another one" (with a text field), "Not sure yet". The account is set up first for the first chosen agent that has a Zack file; members can switch on `/app/zack`. |
 | 4 | How many agents, bots or scheduled routines do you run? | None / 1–2 / 3–5 / 6 or more |
 | 5 | What do you most want help with? | Choose any, from the fixed category list (B.5) |
 | 6 | How do you feel about trying new software for work? | I avoid it / I'll try it if someone shows me / I try new tools often |
