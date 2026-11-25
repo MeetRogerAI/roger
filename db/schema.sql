@@ -116,7 +116,7 @@ create table if not exists sheet_posts (
 create index if not exists sheet_posts_state on sheet_posts (state);
 
 -- ===========================================================================
--- Roger v3 app (B1). Spec: artifacts/v3/Roger v3 - design spec.md, B.14.
+-- Roger v3 app (B1). Spec: artifacts/Roger v3 - design spec.md, B.14.
 -- Plan: docs/plans/2026-11-22-001-feat-roger-v3-app-b1-plan.md, Unit 2.
 --
 -- FREEZE RULE. Once a table below has been applied to a database, do not edit

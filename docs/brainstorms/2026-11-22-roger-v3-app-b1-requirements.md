@@ -7,7 +7,7 @@ status: active
 
 # Roger v3 app, version B1: the paid weekly cycle
 
-Source spec: `artifacts/v3/Roger v3 - design spec.md` (version 1.1, November 21, 2026). Live checklist: `artifacts/v3/launch-list.html`.
+Source spec: `artifacts/Roger v3 - design spec.md` (version 1.1, November 21, 2026). Live checklist: `artifacts/launch-list.html`.
 
 ## Problem frame
 
@@ -56,17 +56,17 @@ The spec already defines B1's behaviour in detail. This document does not restat
 **Content the build needs**
 
 - R18. Draft Zack version 2.0 for Claude, Duet, Grok Bot and Hark, and the connector text for each, from the 1.9 files in `artifacts/Zack/` and the seven changes in spec B.5. Peter approves them before any real user connects. The public 1.9 files in `public/zack/` are not touched.
-- R19. Draft Cora version 2.0 from `artifacts/Circles/Cora The Curator v1.1.md` and the nine changes in spec B.7, amended for R13 to R15. Peter approves it before the first real Cora run.
+- R19. Draft Cora version 2.0 from `artifacts/Archives/Circles/Cora The Curator v1.1.md` and the nine changes in spec B.7, amended for R13 to R15. Peter approves it before the first real Cora run.
 - R20. Seed the starter setup file as version 1, unpublished, with the two edits in spec B.11. The startup page shows no setup block until Peter publishes a version. The source file, `Real estate Grok Bot Setup.md`, is not in the repo (checked 2026-11-22); Peter supplies it.
 
 **The launch list**
 
-- R21. Follow the rules at the top of `artifacts/v3/launch-list.html`. Build each unconfirmed default as written. Where a supply item has a fallback, build with the fallback (hide the Google button while its keys are missing; use the default category list; seed testimonials with "Real estate, Toronto"). Never invent content for an item without one.
+- R21. Follow the rules at the top of `artifacts/launch-list.html`. Build each unconfirmed default as written. Where a supply item has a fallback, build with the fallback (hide the Google button while its keys are missing; use the default category list; seed testimonials with "Real estate, Toronto"). Never invent content for an item without one.
 - R22. When Peter supplies an item or confirms or changes a default, update the launch list, and for a change, the spec and the code, in the same change.
 
 **Seeding the pool**
 
-- R23. The pool is seeded from the existing pilot Zack runs before the first real Cora run. The 13 files are in `artifacts/v3/Zack Runs/` (launch list S14; added by Peter on 2026-11-22, dated November 12 to 15). They come from nine people: three people have more than one run for the same week, from different agents (seven of the 13 files). They are imported with the seed tool (spec B.7), and the contributor's name in each file name is never shown or carried into the pool. The runs are Zack 1.8 and 1.9 and none has a `roger-run` block, so they depend on the model fallback kept in R2 and go through the same privacy check as any run. A pattern scan found no email addresses, phone numbers or links in them, and Peter confirmed on 2026-11-22 that they are cleared to sit in the public repo.
+- R23. The pool is seeded from the existing pilot Zack runs before the first real Cora run. The 13 files are in `artifacts/Zack Runs/` (launch list S14; added by Peter on 2026-11-22, dated November 12 to 15). They come from nine people: three people have more than one run for the same week, from different agents (seven of the 13 files). They are imported with the seed tool (spec B.7), and the contributor's name in each file name is never shown or carried into the pool. The runs are Zack 1.8 and 1.9 and none has a `roger-run` block, so they depend on the model fallback kept in R2 and go through the same privacy check as any run. A pattern scan found no email addresses, phone numbers or links in them, and Peter confirmed on 2026-11-22 that they are cleared to sit in the public repo.
 - R25. Each of the nine seed contributors gets one hidden contributor record, and all of that person's seed runs sit under it, whichever agent they came from. An admin links a contributor record to the person's real account when they join. The link is used for two things only: Cora leaves a user's own seed plays out of their lists (R17), and evidence and "run by N users" count distinct people, so one person's runs from three agents count once. It is never shown, never used to say who a play came from, and is removed with the account. This refines "never attributed to a real account" in spec B.7: never shown as theirs, but known to Cora for leaving out. Decided by Peter on 2026-11-22. The count in R16 is worked out after this leave-out.
 
 **Testing over time**

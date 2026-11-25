@@ -1,8 +1,8 @@
 # Roger v3: design and build spec for meetroger.ai
 
-Version 1.2 · November 23, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
+Version 1.3 · November 25, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
 
-**What this is.** A spec to hand to Claude Code. It replaces the Circles spec (`artifacts/Circles/Roger (CTA Circles) - design spec.md`, version 0.6) and turns meetroger.ai into the v3 product: a free trial, two ways to pay (monthly, or one list at a time), and a weekly cycle that sends each user three ideas every Monday. Strategy source: `artifacts/v3/strategy/Roger-Strategy-v3.1.md`. Decisions source: the design interview with Peter on November 21, 2026.
+**What this is.** A spec to hand to Claude Code. It replaces the Circles spec (`artifacts/Archives/Circles/Roger (CTA Circles) - design spec.md`, version 0.6) and turns meetroger.ai into the v3 product: a free trial, two ways to pay (monthly, or one list at a time), and a weekly cycle that sends each user three ideas every Monday. Strategy source: `artifacts/Strategy/Roger-Strategy-v3.1.md`. Decisions source: the design interview with Peter on November 21, 2026.
 
 **Two builders, two parts.**
 
@@ -26,6 +26,8 @@ Version 1.2 · November 23, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/
 
 **What changed in 1.2** (written back from the B1 build, November 23, 2026; source: `docs/brainstorms/2026-11-22-roger-v3-app-b1-requirements.md` R9 to R25 and the as-built notes in `docs/plans/2026-11-22-001-feat-roger-v3-app-b1-plan.md`). Every changed passage below carries the mark *(1.2)* so it can be found by searching for it.
 
+**What changed in 1.3** (Peter, November 25, 2026, while setting up Stripe): one list at a time now costs **US$200 or CA$280**, double the old price, so a single list costs more per list than even the higher monthly rate. Monthly stays US$200 / CA$280 and the higher rate stays US$400 / CA$560. Every comparison between the plans now says plainly that monthly is much cheaper: it costs the same as one list and brings a list every Monday, so each list costs about a quarter as much (price block, `/pricing`, the FAQ, the plan screen, the referral script). Every changed passage carries the mark *(1.3)*. The 1.1 note above keeps the old price as history.
+
 - Sign-up and the weekly cycle have separate off switches, `v3.signupOpen` and `v3.cycleLive`, both off on production until the go-live gate (0.9, B.4, B.7).
 - `/start` works on production for anyone with the link from the day B1 ships, behind `v3.signupOpen` (B.4).
 - Live Stripe on production; test keys and a separate database on preview and local; one overridable clock and "run as of a date" off production (B.7, B.9).
@@ -45,14 +47,14 @@ Version 1.2 · November 23, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/
 
 ## 0.1 The product in one paragraph
 
-Roger makes each user's AI agents better every week. An agent called Zack runs inside the user's own agent account each Sunday and writes up the week's most useful work as "plays", with private details removed. Roger pools the plays from every contributing user. Early Monday, an agent called Cora picks the three plays most worth adopting for each user and sends them, each with a playbook the user pastes into their own agent to install. New users get two free Monday lists and add a card when they start. After that they choose US$200 a month, which is presented as the clear pick, or US$100 for one list at a time.
+Roger makes each user's AI agents better every week. An agent called Zack runs inside the user's own agent account each Sunday and writes up the week's most useful work as "plays", with private details removed. Roger pools the plays from every contributing user. Early Monday, an agent called Cora picks the three plays most worth adopting for each user and sends them, each with a playbook the user pastes into their own agent to install. New users get two free Monday lists and add a card when they start. After that they choose US$200 a month, which is presented as the clear pick, or US$200 for one list at a time *(1.3)*.
 
 ## 0.2 Decisions
 
 | Topic | Decision |
 |---|---|
-| What is sold | Two ways to buy after the trial: US$200 a month, presented as the clear pick, or US$100 for one list at a time, ordered when wanted. |
-| Prices | US$200 a month or US$100 a list. CA$280 a month or CA$140 a list. Set prices, not live conversion. |
+| What is sold | Two ways to buy after the trial: US$200 a month, presented as the clear pick, or US$200 for one list at a time, ordered when wanted *(1.3)*. |
+| Prices | US$200 a month or US$200 a list. CA$280 a month or CA$280 a list *(1.3)*. Set prices, not live conversion. |
 | The higher rate | No non-contributor plan is offered on the site or at sign-up; everyone starts as a contributor. A monthly rate of US$400 (CA$560) applies only after two missed weeks in a month, or when a user switches sharing off in the dashboard. |
 | Sales tax | HST and other applicable tax is charged from this build onward. Prices are shown before tax. |
 | Free trial | Two delivered Cora lists are free. A card is collected at sign-up. Monthly users are charged with the third list. One-at-a-time users are charged only when they order a list. |
@@ -84,8 +86,8 @@ Version 1.0 of this spec differed from the strategy in ten places. Peter settled
 
 | # | Topic | Settled as |
 |---|---|---|
-| 1 | Single runs | The strategy stands, simplified: two free lists, then US$200 a month or US$100 a run, with monthly as the clear pick. No non-contributor plan is offered. |
-| 2 | Referral script | The strategy stands: "$200 a month or $100 a run". |
+| 1 | Single runs | The strategy stands, simplified: two free lists, then US$200 a month or US$200 a run *(1.3)*, with monthly as the clear pick. No non-contributor plan is offered. |
+| 2 | Referral script | The strategy stands: "$200 a month for a list every Monday, or $200 for a single run" *(1.3)*. |
 | 3 | Time-saved claims | This spec: Roger makes no income claims and no time-saved promises in its own voice. A named user's own words are their testimonial and may include time saved. |
 | 4 | Zack's sharing rule | This spec: standing consent at sign-up, an automatic weekly send, and controls in the dashboard. |
 | 5 | Users with sharing off | This spec: matched from a private Zack run, or from their sign-up profile when Zack is off. |
@@ -125,7 +127,7 @@ Read from the repo on November 21, 2026 (`main` at the merge of pull request 20)
 - **Form pattern:** server actions in `src/app/library-actions.ts` (`saveLead`, `saveWatch`): honeypot field, trimmed inputs, a clear message when the database is not configured. Follow it.
 - **Cron pattern:** `src/app/api/cron/sheet/route.ts`: bearer check against `CRON_SECRET`, `maxDuration = 300`.
 - **Zack files:** four live files at `public/zack/zack-the-collector-{claude,duet,grok-bot,hark}.md`, version 1.9, listed by `src/data/zack.ts`. Sources are in `artifacts/Zack/`.
-- **Earlier design work worth reusing:** `artifacts/Circles/design/` (frames for the homepage, Zack tool, FAQ, About, admin), `artifacts/Circles/Cora The Curator v1.1.md`, and `artifacts/v3/Monday Morning Playbooks/Monday Morning Playbooks v1.0 Nov 14.html` (the idea card and its pull-out sheet).
+- **Earlier design work worth reusing:** `artifacts/Archives/Circles/design/` (frames for the homepage, Zack tool, FAQ, About, admin), `artifacts/Archives/Circles/Cora The Curator v1.1.md`, and `artifacts/Monday Morning Playbooks/Monday Morning Playbooks v1.0 Nov 14.html` (the idea card and its pull-out sheet).
 - **Unlisted pages that must keep working untouched:** `/rlpsignature`, `/rlp`, `/hampton`, `/founders`, `/for/[slug]`.
 
 ## 0.6 Who owns what
@@ -205,7 +207,7 @@ Admin-editable values live in the `settings` table with defaults in `src/data/co
 | Key | Default |
 |---|---|
 | `v3.priceUsd`, `v3.priceCad` | 200, 280 (monthly) |
-| `v3.priceRunUsd`, `v3.priceRunCad` | 100, 140 (one list) |
+| `v3.priceRunUsd`, `v3.priceRunCad` | 200, 280 (one list) *(1.3)* |
 | `v3.priceHigherUsd`, `v3.priceHigherCad` | 400, 560 (monthly, after two missed weeks or with sharing off) |
 | `v3.freeRuns` | 2 |
 | `v3.trialCloseDays` | 21 |
@@ -274,7 +276,8 @@ Build these once in `src/components/v3/` and reuse them across pages.
 
 1. **Brick stack.** The recurring visual (0.7). Takes a week count and a level.
 2. **Price block (night).** USD and CAD toggle, reusing the behaviour in `src/components/circles/price.tsx`: default from the `x-vercel-ip-country` header, the choice kept for the tab, the currency code always shown after the amount. Two ways to buy, side by side: monthly, marked "Most people choose this" and visually the larger of the two, and one list at a time. Under them: the trial line and the tax line. No non-contributor plan is shown anywhere on the public site.
-   - Display: "US$200 / month USD" and "US$100 / list USD", or "CA$280 / month CAD" and "CA$140 / list CAD". With CAD showing, add "plus HST". With USD showing, add "plus tax where it applies".
+   - Display: "US$200 / month USD" and "US$200 / list USD", or "CA$280 / month CAD" and "CA$280 / list CAD" *(1.3)*. With CAD showing, add "plus HST". With USD showing, add "plus tax where it applies".
+   - *(1.3)* Under the monthly price, one short line: "A new list every Monday, so about US$50 a list." (CAD: "about CA$70 a list"). Under the one-list price: "One list, for one Monday." The two plans cost the same, so the block must make plain that monthly is much cheaper per list.
    - Trial line, always directly under the prices: "Your first two Monday lists are free. We ask for a card when you start. On monthly it is charged with your third list. On one at a time it is charged only when you order a list. Cancel before then and you pay nothing."
 3. **Testimonials.** Reads `testimonials` where `cleared` is true, ordered by `position`, filtered by audience. Each shows the quote word for word, then the attribution. The whole section is absent when no row is cleared. No carousel; a simple column or grid.
 4. **Sample idea card.** One real pool play, chosen in the admin, rendered with the idea card (0.7) and opened to show the sheet. Until a play is chosen, the section is absent.
@@ -324,7 +327,7 @@ Every start button here links to `/start?path=agents`.
 3. **Monthly or one at a time, explained.** Two short columns.
    - Monthly: "Three ideas every Monday. Charged once a month, starting with your third list."
    - One at a time: "Order a list for any Monday you want one. You are charged only for the lists you order."
-   - One line under both: "Two lists one at a time cost the same as a whole month."
+   - One line under both: "One list on its own costs the same as a whole month. Monthly brings a list every Monday, so it is much cheaper: about a quarter of the price per list." *(1.3)*
 4. **How contributing works.** A short paragraph, set as an explanation and not as a plan: "Roger works because everyone's Zack contributes. On monthly, if Zack misses a week, the first miss each month is forgiven. A second miss makes that month US$400. We email you both times, and the difference appears on your next invoice. If you switch sharing off in your dashboard, the monthly price is US$400. One-at-a-time lists need that week's Zack report."
 5. **No refunds, stated plainly.** "There are no refunds. You get two free lists before any charge, and you can cancel in one click."
 6. Primary button.
@@ -423,7 +426,7 @@ Draft copy for the builder to place. Peter edits before launch.
   3. "Each idea comes with a full playbook. Paste it into your agent and it adapts itself to your setup."
 - **Closing band:** "Find out what other heavy users know."
 
-**Referral script (for Ehab and referrers; not on the site).** "I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two weeks are free, then it's $200 a month or $100 a run, and you can cancel any time. You add a card to start and it isn't charged until the third week. They run a short group call to get you set up. Want me to connect you?"
+**Referral script (for Ehab and referrers; not on the site).** "I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two weeks are free, then it's $200 a month for a list every Monday, or $200 for a single run, and you can cancel any time *(1.3)*. You add a card to start and it isn't charged until the third week. They run a short group call to get you set up. Want me to connect you?"
 
 **Questions**
 
@@ -450,12 +453,12 @@ Draft copy for the builder to place. Peter edits before launch.
 
 *Price and billing*
 
-- *What does it cost?* "US$200 a month, or US$100 for one list at a time, plus tax where it applies. In Canada it is CA$280 a month or CA$140 a list, plus HST."
+- *What does it cost?* "US$200 a month, or US$200 for one list at a time, plus tax where it applies. In Canada it is CA$280 a month or CA$280 a list, plus HST." *(1.3)*
 - *When is my card charged?* "On monthly, with your third Monday list and not before. On one at a time, only when you order a list. Your first two lists are free either way, and we email you after your second list with what happens next."
 - *Why do you need a card for a free trial?* "So that nothing changes on your third Monday. If you don't want to continue, cancel in one click before then and you pay nothing."
 - *What if Zack misses a week?* "On monthly, the first miss each month is forgiven. A second miss makes that month US$400. We email you both times."
 - *Can I get a refund?* "No. You get two free lists before any charge, and you can cancel any time."
-- *Can I buy one list at a time?* "Yes. It is US$100 a list, ordered whenever you want one. Monthly costs less if you want a list most weeks."
+- *Can I buy one list at a time?* "Yes. One list costs US$200, and you order it for any Monday you want. Monthly is much cheaper: for the same US$200 you get a new list every Monday, so each list works out to about US$50." *(1.3)*
 
 ## A.15 Versions and sizes
 
@@ -574,7 +577,7 @@ Five short screens. Progress is saved after each, so a person who leaves can ret
 **3. Plan (`/start/plan`).** Two choices, with monthly selected and marked "Most people choose this".
 
 - **Monthly, US$200 a month.** "Three ideas every Monday. Charged once a month, starting with your third list."
-- **One list at a time, US$100 each.** "Order a list for any Monday you want one, after your two free lists."
+- **One list at a time, US$200 each** *(1.3)*. "Order a list for any Monday you want one, after your two free lists. Monthly costs the same and brings a list every Monday." *(1.3)*
 - No non-contributor plan is offered. Everyone starts with sharing on. Sharing can be changed later on the Zack page (B.5).
 - **Consent,** required, as a checkbox the user ticks themselves: "I agree that Zack will run in my agent account each week and send his report to Roger. I can read exactly what Zack does, change what he collects, and turn this off at any time."
 - A link, "Read what Zack does first", opens the full instruction text.
@@ -702,7 +705,7 @@ Each run goes through these steps as it arrives, and again as a batch before Cor
 
 ## B.7 Cora
 
-Cora's method is `artifacts/Circles/Cora The Curator v1.1.md`. It was written for one Circle of eight. Version 2.0, at `content/cora/cora.md`, applies the same scoring to one network-wide pool.
+Cora's method is `artifacts/Archives/Circles/Cora The Curator v1.1.md`. It was written for one Circle of eight. Version 2.0, at `content/cora/cora.md`, applies the same scoring to one network-wide pool.
 
 ### What stays from v1.1
 
@@ -755,7 +758,7 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 - **One clock.** *(1.2)* Every job and date rule takes the moment to act as an input. On preview and local builds (not production, a test Stripe key, and a database marked non-production, all three) an admin can run Cora, the charge, the send and the hourly pass "as of" a chosen date. Sessions, links and rate limits always use the real time.
 - Model calls go through the existing AI Gateway setup. A model decides: whether two plays do the same job, which category and role a play fits, Fit, the reason line, and the second privacy check. Code computes everything numeric.
 - **Seed data.** All existing test runs count. An admin tool imports a run file as seed data under a seed user; seed plays are shareable and are never attributed to a real account.
-  *(1.2)* The pool is seeded before the first real Cora run from the 13 pilot runs in `artifacts/v3/Zack Runs/`, which come from nine people (three ran Zack in more than one agent the same week). Each person gets one hidden seed contributor record, and all of their runs sit under it, whatever the agent; a second file for the same person, agent and week is refused unless it replaces the first. The runs go through intake like any run (the model reads them, since none has a `roger-run` block) and are merged at once. An admin links a contributor record to the person's real account when they join. The link is used for two things only: Cora leaves a user's own seed plays out of their lists, and evidence and "run by N users" count distinct people, so one person's runs from three agents count once. It is never shown, never used to say who a play came from, and is removed with the account. This refines "never attributed to a real account": never shown as theirs, but known to Cora for leaving out.
+  *(1.2)* The pool is seeded before the first real Cora run from the 13 pilot runs in `artifacts/Zack Runs/`, which come from nine people (three ran Zack in more than one agent the same week). Each person gets one hidden seed contributor record, and all of their runs sit under it, whatever the agent; a second file for the same person, agent and week is refused unless it replaces the first. The runs go through intake like any run (the model reads them, since none has a `roger-run` block) and are merged at once. An admin links a contributor record to the person's real account when they join. The link is used for two things only: Cora leaves a user's own seed plays out of their lists, and evidence and "run by N users" count distinct people, so one person's runs from three agents count once. It is never shown, never used to say who a play came from, and is removed with the account. This refines "never attributed to a real account": never shown as theirs, but known to Cora for leaving out.
 - **When it fails:** nothing is sent, the week is marked `failed`, and both admins get an alert email. `/admin/cora` has "Run Cora now", "Dry run" and "Charge and send now" (the charge first, then the send, each still waiting for its own time). Orders for a failed week are closed with no charge and an apology. *(1.2)*
 
 ## B.8 Monday
@@ -1326,7 +1329,7 @@ That is about 3 half-days. Nothing else in B1 can go without breaking the trial,
 
 Items 1 and 2 are documents, not code. They can be drafted from this spec and the existing 1.9 and 1.1 files.
 
-The live checklist for these items and for the defaults below is `artifacts/v3/launch-list.html`. Check it before starting any version.
+The live checklist for these items and for the defaults below is `artifacts/launch-list.html`. Check it before starting any version.
 
 # Defaults to confirm
 
@@ -1340,7 +1343,7 @@ These were chosen to fill gaps. Each is easy to change before it is built.
 6. A sponsor is invoiced from each sponsored user's third list, as an individual would be.
 7. Testimonials are seeded with their switches on.
 8. The "not ready" route applies only to people who answer both "not yet" and "I avoid it".
-9. Retired on November 21, 2026: single lists are sold at US$100 or CA$140, so there is no demand link.
+9. Retired on November 21, 2026: single lists are sold (US$200 or CA$280 since 1.3), so there is no demand link.
 10. The category list: Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands.
 11. A one-at-a-time order is charged on Monday at 6:00 AM only if that week's Zack run arrived. If not, there is no charge and no list, and the order does not carry over.
 12. One-at-a-time lists need sharing switched on.

@@ -2,7 +2,7 @@
 
 ## Supersedes "Roger Strategy v3 (final, Nov 21 2026)". Second interview completed November 21, 2026.
 
-**Revised November 21, 2026, after the design interview.** Pricing is now two free runs, then $200 a month or $100 a run, with no non-contributor plan offered. Eight further points were settled in the design spec and are carried into this document. Section 15 lists every revision. The build spec is `Roger v3 - design spec.md`; where it gives more detail, it governs.
+**Revised November 21, 2026, after the design interview.** Pricing is now two free runs, then $200 a month or $200 a run, with no non-contributor plan offered. Eight further points were settled in the design spec and are carried into this document. Section 15 lists every revision. **Revised again November 25, 2026:** a single run went from $100 to $200 (CA$140 to CA$280); monthly brings a list every week for the same price, so it is much cheaper per list (section 15). The build spec is `Roger v3 - design spec.md`; where it gives more detail, it governs.
 
 # About this document
 
@@ -23,7 +23,7 @@ This document sets out how Roger gets from 5 unpaid users to $30,000 billed in a
 ## The strategy in five lines
 
 1. Every user gets two free Cora runs, with a card on file that is charged only on the third.
-2. After the trial a user chooses $200 a month, the clear pick, or $100 a run. Everyone contributes their Zack runs; no non-contributor plan is offered.
+2. After the trial a user chooses $200 a month, the clear pick, or $200 a run. Monthly brings a list every week for the price of one run, so it is much cheaper per list. Everyone contributes their Zack runs; no non-contributor plan is offered.
 3. Growth runs through a referral loop that Ehab operates by hand each week until the product takes it over. Referrers earn credit equal to their referral's first payment.
 4. The referral loop builds proof. Reaching $30,000 billed also needs office-level deals through brokerages and partner offices.
 5. Everything is measured weekly, so real rates replace the assumptions in this document as soon as they exist.
@@ -63,7 +63,7 @@ Dates are America/Toronto. "Agents" means AI agents (Grok Bot, Claude, Hark, Due
 | Topic | v3 | v3.1 |
 |---|---|---|
 | Free period | Free 2-week white-glove setup, no stated end | **2 free Cora runs, then pay.** A card is collected at the start and charged only on the third run. Applies to everyone, including the current 5. |
-| Prices | $100 single run, $200/month | **$200 a month or $100 a run**, monthly as the clear pick, after two free runs. No non-contributor plan is offered. A $400 monthly rate applies only after two missed weeks in a month or when a user switches sharing off. |
+| Prices | $100 single run, $200/month | **$200 a month or $200 a run**, monthly as the clear pick (a list every week for the price of one run), after two free runs. No non-contributor plan is offered. A $400 monthly rate applies only after two missed weeks in a month or when a user switches sharing off. |
 | Refund | Refund within 30 days | **No refund.** The two free runs replace it. Cancel any time stays. |
 | Referral reward | Leaderboard points only | **Credit equal to the referred user's first payment**, no cap. A rule for now. |
 | Who runs the user loop | Peter, manually | **Ehab**, 20 hours a week, on a 7-day cycle, until automation is built. |
@@ -90,12 +90,12 @@ Growth runs through a referral loop that Ehab operates by hand each week: every 
 
 ## Pricing (Decided)
 
-Two free Cora runs, then $200 a month or $100 a run, with monthly presented as the clear pick. A payment card is collected when the trial starts. Month-to-month, cancel any time, no refund.
+Two free Cora runs, then $200 a month or $200 a run, with monthly presented as the clear pick. Monthly brings a list every Monday, about four a month, for the price of one run, so it is much cheaper than buying runs one at a time: about $50 a list instead of $200. A payment card is collected when the trial starts. Month-to-month, cancel any time, no refund.
 
 | | US dollars | Canadian dollars |
 |---|---|---|
 | Monthly (the clear pick) | $200 a month | $280 a month |
-| One run at a time | $100 a run | $140 a run |
+| One run at a time | $200 a run | $280 a run |
 
 HST and other applicable tax is added. No non-contributor plan is offered on the site or at sign-up. A monthly rate of $400 (CA$560) applies only after two missed weeks in a month, or when a user switches sharing off in the dashboard.
 
@@ -193,7 +193,7 @@ One office-level deal changes the picture more than any referral rate. At the li
 
 ## The two prices (Decided, revised November 21)
 
-One product, two ways of buying (table in section 2). Monthly is $200 and is presented as the clear pick. A single run is $100 and is ordered when wanted; nothing is charged automatically for it. Every buyer gets the full product: Cora ideas, dashboard, Lego bricks, leaderboard, stats email. Users can switch between the two or cancel at any time from the dashboard.
+One product, two ways of buying (table in section 2). Monthly is $200 and is presented as the clear pick. A single run is $200 and is ordered when wanted; nothing is charged automatically for it. Monthly costs the same as one run and brings a list every week, so per list it is about a quarter of the price. Every buyer gets the full product: Cora ideas, dashboard, Lego bricks, leaderboard, stats email. Users can switch between the two or cancel at any time from the dashboard.
 
 No non-contributor plan is offered on the site or at sign-up. Everyone starts as a contributor.
 
@@ -219,7 +219,7 @@ In the product this is a sponsor code. An admin creates the sponsor with its neg
 
 ## Referral credit (Decided, "a rule for now")
 
-- A referrer earns a credit equal to the referred user's first payment at list price ($200 for a month, $100 for a run), in the referrer's own currency.
+- A referrer earns a credit equal to the referred user's first payment at list price ($200 for a month, $200 for a run), in the referrer's own currency.
 - The credit is earned when that first charge clears, not at sign-up.
 - No cap. Unused credit carries forward.
 - Champions pay like everyone else and earn their free months this way.
@@ -268,7 +268,7 @@ When a user gives a name, Ehab or Peter contacts that person, brings them to a 1
 
 In the referrer's voice, with the price in the message:
 
-> I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two weeks are free, then it's $200 a month or $100 a run, and you can cancel any time. They run a short group call to get you set up. Want me to connect you?
+> I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two weeks are free, then it's $200 a month for a list every Monday, or $200 for a single run, and you can cancel any time. They run a short group call to get you set up. Want me to connect you?
 
 The price is included so the colleague is never surprised, the referrer's credibility is protected, and onboarding time is not spent on people who would not pay.
 
@@ -387,7 +387,7 @@ Peter has 60 hours a week for Roger (15 half-days). Ehab has 20 (5 half-days). P
 
 ## Website
 
-meetroger.ai must reflect v3.1 only: two free runs with a card collected at the start, then $200 a month or $100 a run with monthly as the clear pick, no non-contributor plan, no refund, every agent platform, and the group session for subscribers. The Circles pitch and the 45-day guarantee come off. The homepage speaks to people in real estate; a second page speaks to people who already run AI agents.
+meetroger.ai must reflect v3.1 only: two free runs with a card collected at the start, then $200 a month or $200 a run with monthly as the clear pick (a list every week for the price of one run), no non-contributor plan, no refund, every agent platform, and the group session for subscribers. The Circles pitch and the 45-day guarantee come off. The homepage speaks to people in real estate; a second page speaks to people who already run AI agents.
 
 ## Testimonials and demo
 
@@ -460,7 +460,7 @@ R1–R13 are carried from v3 with the changes marked. R14–R22 are new. Each is
 
 **R14. Free trial and gate (new).** A payment card is collected when the user starts, on a page that states clearly that they get two free Cora curations and that the card is charged only on the third. Every new user receives exactly 2 free Cora runs. The card is charged with the third run; a user who cancels first is not charged and gets no third run. The second Cora email restates the date and amount of the first charge.
 
-**R15. Two prices and the contributor rule (new, revised).** Monthly is $200 and a single run is $100, in US dollars, with set Canadian prices of $280 and $140, plus tax. The system knows each week whether a user contributed a Zack run, applies one forgiven miss per month on the monthly plan, puts the extra $200 for a second miss on the next invoice after telling the user, and never counts a Roger-side miss. A single run is ordered by the user and needs that week's Zack run. No non-contributor plan is offered; a monthly user who switches sharing off pays $400.
+**R15. Two prices and the contributor rule (new, revised).** Monthly is $200 and a single run is $200, in US dollars, with set Canadian prices of $280 and $280, plus tax. The system knows each week whether a user contributed a Zack run, applies one forgiven miss per month on the monthly plan, puts the extra $200 for a second miss on the next invoice after telling the user, and never counts a Roger-side miss. A single run is ordered by the user and needs that week's Zack run. No non-contributor plan is offered; a monthly user who switches sharing off pays $400.
 
 **R16. Referral credit ledger (new).** Each user has a personal referral link. When a referred user's first charge clears, the referrer is credited that amount at list price, in the referrer's own currency. No cap; unused credit carries forward; the balance is visible in the dashboard and in emails.
 
@@ -533,8 +533,8 @@ The design spec first differed from this document in ten places. Peter settled a
 
 | # | Topic | Settled as |
 |---|---|---|
-| 1 | Single runs | Kept and simplified: two free runs, then $200 a month or $100 a run, monthly as the clear pick. No non-contributor plan is offered. |
-| 2 | Referral script | Kept: "$200 a month or $100 a run". |
+| 1 | Single runs | Kept and simplified: two free runs, then $200 a month or $200 a run (the run was $100 until November 25, 2026), monthly as the clear pick. No non-contributor plan is offered. |
+| 2 | Referral script | Kept: "$200 a month for a list every Monday, or $200 for a single run" (was "$200 a month or $100 a run" until November 25, 2026). |
 | 3 | Time-saved claims | None in Roger's own voice. A named user's own words may include time saved. |
 | 4 | Zack's sharing rule | Standing consent at sign-up, an automatic weekly send, and controls in the dashboard. |
 | 5 | Users with sharing off | Matched from a private Zack run, or from their sign-up profile when Zack is off. |
@@ -553,6 +553,8 @@ Other decisions from the design interview that affect this document:
 - The sign-up quiz routes people and never blocks them.
 - Sign-in is by emailed link or Google.
 - All four pilot users agreed to their testimonials being used.
+
+**Revision, November 25, 2026 (Peter, while setting up Stripe).** A single run now costs $200 (CA$280), up from $100 (CA$140). Monthly stays $200 (CA$280) and the higher monthly rate stays $400 (CA$560). The framing, in Peter's words: "Monthly brings you weekly lists so it is much cheaper than doing a one-time run." Every comparison between the two plans says so: monthly costs the same as one run and brings a list every Monday, about four a month, so per list it is roughly a quarter of the price. The referral credit for a run rises with it, to $200. Current-price references in this document were updated; decision 33 in Appendix A stays as history. Design spec version 1.3 carries the same change.
 
 # Appendix A. Decision log, second interview (November 21, 2026)
 
