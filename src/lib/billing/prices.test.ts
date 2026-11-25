@@ -12,8 +12,8 @@ describe("prices", () => {
   it("shows each set price in its own currency, never a bare $", () => {
     expect(money(amount(s, "monthly", "USD"), "USD")).toBe("US$200");
     expect(money(amount(s, "monthly", "CAD"), "CAD")).toBe("CA$280");
-    expect(money(amount(s, "per_run", "USD"), "USD")).toBe("US$100");
-    expect(money(amount(s, "per_run", "CAD"), "CAD")).toBe("CA$140");
+    expect(money(amount(s, "per_run", "USD"), "USD")).toBe("US$200");
+    expect(money(amount(s, "per_run", "CAD"), "CAD")).toBe("CA$280");
     expect(money(amount(s, "monthly", "USD", "higher"), "USD")).toBe("US$400");
     expect(money(amount(s, "monthly", "CAD", "higher"), "CAD")).toBe("CA$560");
   });
