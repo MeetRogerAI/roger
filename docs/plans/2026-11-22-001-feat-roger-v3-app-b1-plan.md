@@ -12,7 +12,7 @@ origin: docs/brainstorms/2026-11-22-roger-v3-app-b1-requirements.md
 
 Build the app half of Roger v3: sign-up, accounts, billing, the Zack connection, run intake, Cora, the Monday charge and send, the dashboard, the startup page, and the admin. A person goes from a link to a working weekly cycle without talking to anyone, and is charged for the first time with their third delivered list.
 
-Behaviour is defined by `artifacts/v3/Roger v3 - design spec.md` (Part 0 and Part B) and by the requirements doc (see origin). This plan says how to build it: the technical decisions, the order, the files, and what to test. Where this plan is silent on behaviour, the spec applies.
+Behaviour is defined by `artifacts/Roger v3 - design spec.md` (Part 0 and Part B) and by the requirements doc (see origin). This plan says how to build it: the technical decisions, the order, the files, and what to test. Where this plan is silent on behaviour, the spec applies.
 
 ## Problem Frame
 
@@ -74,7 +74,7 @@ From the origin document. Each unit below names the ones it advances.
 - **Currency by country:** `CountryPrice` in `src/components/circles/home.tsx` reads `x-vercel-ip-country` behind Suspense; `src/components/circles/price.tsx` keeps the visitor's choice in session storage.
 - **Copy buttons:** `src/app/hampton/copy-button.tsx`.
 - **Secrets:** `src/lib/secrets.ts` (AES-256-GCM keyed from `ADMIN_SECRET`; that variable must stay stable).
-- **Design sources:** `artifacts/v3/Monday Morning Playbooks/Monday Morning Playbooks v1.0 Nov 14.html` (idea card and sheet), `artifacts/Circles/Cora The Curator v1.1.md`, `artifacts/Zack/` (1.9 sources), `artifacts/v3/Zack Runs/` (13 seed runs).
+- **Design sources:** `artifacts/Monday Morning Playbooks/Monday Morning Playbooks v1.0 Nov 14.html` (idea card and sheet), `artifacts/Archives/Circles/Cora The Curator v1.1.md`, `artifacts/Zack/` (1.9 sources), `artifacts/Zack Runs/` (13 seed runs).
 
 ### Institutional Learnings
 
@@ -506,7 +506,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 - The sample helper returns the chosen play or nothing, cached and tagged so choosing a new one in the admin shows at once.
 - The prototype's tier trays, purple accent and typefaces are not used.
 
-**Patterns to follow:** `src/app/hampton/copy-button.tsx`; token layout in `src/app/globals.css`; the prototype at `artifacts/v3/Monday Morning Playbooks/Monday Morning Playbooks v1.0 Nov 14.html` for structure only.
+**Patterns to follow:** `src/app/hampton/copy-button.tsx`; token layout in `src/app/globals.css`; the prototype at `artifacts/Monday Morning Playbooks/Monday Morning Playbooks v1.0 Nov 14.html` for structure only.
 
 **Test scenarios:**
 - Happy path: a pool play with full figures maps to a view with all four tiles and five bars.
@@ -663,7 +663,7 @@ a claim left unfinished past a time limit can be taken over, by looking the obje
 - Error path: the model's answer is cut off for length; the run is retried once with a smaller scope, then flagged for an admin.
 - Edge case: processing the same run twice produces one set of plays.
 - Integration: a "matching only" run produces plays that are never shareable, even after an admin clears a flag.
-- Integration: each of the 13 files in `artifacts/v3/Zack Runs/` parses to at least one valid play with no invented figure.
+- Integration: each of the 13 files in `artifacts/Zack Runs/` parses to at least one valid play with no invented figure.
 
 **Verification:** spec checks 10 and 11 pass; the 13 seed files parse on preview.
 
@@ -1229,7 +1229,7 @@ evidence weight by age: weeks 1-4 full, 5-12 half, older a quarter; none in 26 w
 
 **Files:**
 - Create: `tests/scenarios/trial-to-paid.test.ts`, `tests/scenarios/failed-first-charge.test.ts`, `tests/scenarios/missed-weeks.test.ts`, `tests/scenarios/one-at-a-time.test.ts`, `tests/scenarios/thin-weeks.test.ts`, `tests/scenarios/switch-and-cancel.test.ts`, `tests/scenarios/full-cycle.test.ts`, `tests/scenarios/helpers.ts`, `docs/v3-app-b1-first-pass.md`
-- Modify: `artifacts/v3/Roger v3 - design spec.md`, `artifacts/v3/launch-list.html`
+- Modify: `artifacts/Roger v3 - design spec.md`, `artifacts/launch-list.html`
 
 **Approach:**
 - Scenario tests run from a developer's machine against the separate test database and a Stripe sandbox, as Key Technical Decisions describes. Each starts from a clean baseline, so a rerun never finds a week already finished.
@@ -1302,7 +1302,7 @@ evidence weight by age: weeks 1-4 full, 5-12 half, older a quarter; none in 26 w
 ## Sources & References
 
 - **Origin document:** [docs/brainstorms/2026-11-22-roger-v3-app-b1-requirements.md](../brainstorms/2026-11-22-roger-v3-app-b1-requirements.md)
-- **Behavioural spec:** `artifacts/v3/Roger v3 - design spec.md` (Part 0, Part B)
-- **Launch list:** `artifacts/v3/launch-list.html`
+- **Behavioural spec:** `artifacts/Roger v3 - design spec.md` (Part 0, Part B)
+- **Launch list:** `artifacts/launch-list.html`
 - **Related code:** `src/lib/db.ts`, `src/lib/settings.ts`, `src/lib/email.ts`, `src/lib/watches.ts`, `src/lib/sheet/sync.ts`, `src/lib/sheet/read.ts`, `src/lib/ingest/extract.ts`, `src/lib/admin-auth.ts`, `src/app/api/push/route.ts`, `src/app/api/cron/sheet/route.ts`, `src/app/admin/layout.tsx`, `src/components/admin-ui.tsx`
 - **External docs:** listed under External References above

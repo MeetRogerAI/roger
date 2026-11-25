@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { headers } from "next/headers";
-// Layout and wording adapted from artifacts/Circles/design/Main.dc.html.
+// Layout and wording adapted from artifacts/Archives/Circles/design/Main.dc.html.
 // Canvas runtime and sample data are intentionally not shipped.
 import { CirclesPrice } from "./price";
 import { CirclesAgents } from "./agents";

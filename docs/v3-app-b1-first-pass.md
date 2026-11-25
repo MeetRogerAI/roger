@@ -6,7 +6,7 @@ November 23, 2026. Branch `feat/v3-e2e` off `main` (Units 1 to 18 merged), updat
 
 - Scenario tests in `tests/scenarios/`, driving the real job functions (`runCoraJob`, `runChargeJob`, `runSendJob`, `runHourly`, `handleStripeEvent`) week by week on a simulated clock, each from a fresh database (`testDb()`), with one fake Stripe that implements every gateway the app has and sends the webhook events Stripe would, a recording mail transport, and fake intake, merge and Fit models. `helpers.ts` documents the `SCENARIO_TARGET` switch: `fakes` (default) or `sandbox` (the Stripe sandbox and the scenario Neon branch; a seam only, it throws today). They run in `npx vitest run` and alone with `npm run test:scenarios`.
 - All 41 checks of spec B.18 walked below.
-- The spec write-back (marked *(1.2)* in `artifacts/v3/Roger v3 - design spec.md`) and the launch list update (`artifacts/v3/launch-list.html`).
+- The spec write-back (marked *(1.2)* in `artifacts/Roger v3 - design spec.md`) and the launch list update (`artifacts/launch-list.html`).
 
 | Scenario file | What it proves | Result |
 |---|---|---|

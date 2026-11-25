@@ -56,3 +56,5 @@ skills-lock.json
 /dist/
 /src/generated/
 /.context/
+.gstack/
+artifacts/Zack/Zack Runs/

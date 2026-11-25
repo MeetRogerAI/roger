@@ -2,7 +2,7 @@
  * Imports seed runs into the pool before the admin page exists (plan Unit 11).
  *
  *   node --env-file=.env.local node_modules/vite-node/vite-node.mjs --config vitest.config.ts scripts/seed-import.ts -- \
- *     --label "Rob" --agent hark [--date YYYY-MM-DD] [--replace] --yes "artifacts/v3/Zack Runs/Zack Run - Rob - 2026-11-12.md"
+ *     --label "Rob" --agent hark [--date YYYY-MM-DD] [--replace] --yes "artifacts/Zack Runs/Zack Run - Rob - 2026-11-12.md"
  *
  * Writes to whatever database DATABASE_URL names: it says which, and does
  * nothing without --yes. Needs AI Gateway credentials for intake and merging.
