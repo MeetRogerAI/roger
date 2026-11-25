@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { categories } from "@/data/categories";
+import { isZackAgent } from "@/lib/zack/agents";
 
 /**
  * The sign-up quiz (spec B.4): six questions on one screen. The answers become
@@ -16,13 +17,14 @@ export const quizSchema = z
     work: z.enum(["real_estate", "other"]),
     role: z.string().trim().min(2, "Tell us your role and kind of business, in a few words.").max(120),
     uses: z.enum(usesAgents),
-    agent: z.string().trim().min(1).max(40),
+    // Question 3 is "choose any": people often run more than one agent.
+    agents: z.array(z.string().trim().min(1).max(40)).min(1).max(12),
     agentOther: z.string().trim().max(60).default(""),
     count: z.enum(agentCounts),
     help: z.array(z.enum(categories)).max(categories.length).default([]),
     software: z.enum(newSoftware),
   })
-  .refine((a) => a.agent !== "other" || a.agentOther.length > 0, { message: "Which AI agent?", path: ["agentOther"] });
+  .refine((a) => !a.agents.includes("other") || a.agentOther.length > 0, { message: "Which AI agent?", path: ["agentOther"] });
 
 export type QuizAnswers = z.infer<typeof quizSchema>;
 
@@ -47,7 +49,7 @@ export function parseQuiz(fd: FormData, agentSlugs: readonly string[]):
     work: fd.get("work") ?? undefined,
     role: fd.get("role") ?? "",
     uses: fd.get("uses") ?? undefined,
-    agent: fd.get("agent") ?? undefined,
+    agents: [...new Set(fd.getAll("agent"))],
     agentOther: fd.get("agentOther") ?? "",
     count: fd.get("count") ?? undefined,
     help: fd.getAll("help"),
@@ -57,20 +59,35 @@ export function parseQuiz(fd: FormData, agentSlugs: readonly string[]):
   const errors: Record<string, string> = {};
   if (!r.success) {
     for (const issue of r.error.issues) {
-      const k = String(issue.path[0] ?? "form");
+      // The checkboxes are all named "agent"; the form shows their error under that name.
+      const k = issue.path[0] === "agents" ? "agent" : String(issue.path[0] ?? "form");
       errors[k] ??= messages[k] ?? issue.message;
     }
     return { ok: false, errors };
   }
-  if (![...agentSlugs, "other", "not_sure"].includes(r.data.agent)) return { ok: false, errors: { agent: messages.agent } };
-  return { ok: true, answers: r.data };
+  const offered = [...agentSlugs, "other", "not_sure"];
+  if (!r.data.agents.every((a) => offered.includes(a))) return { ok: false, errors: { agent: messages.agent } };
+  // Kept in the order the quiz lists them; "Not sure yet" alongside a named agent adds nothing.
+  const named = offered.filter((a) => a !== "not_sure" && r.data.agents.includes(a));
+  return { ok: true, answers: { ...r.data, agents: named.length ? named : ["not_sure"] } };
+}
+
+/**
+ * The one agent the account is set up for first (users.agent, which picks the
+ * Zack file): the first chosen agent that has its own Zack file, else the
+ * first chosen, with "Another one" standing for the name typed. Members can
+ * switch agent on /app/zack.
+ */
+export function primaryAgent(a: Pick<QuizAnswers, "agents" | "agentOther">): string {
+  const first = a.agents.find(isZackAgent) ?? a.agents[0] ?? "not_sure";
+  return first === "other" ? a.agentOther : first;
 }
 
 const messages: Record<string, string> = {
   work: "Choose one.",
   role: "Tell us your role and kind of business, in a few words.",
   uses: "Choose one.",
-  agent: "Choose one.",
+  agent: "Choose at least one.",
   agentOther: "Which AI agent?",
   count: "Choose one.",
   software: "Choose one.",
