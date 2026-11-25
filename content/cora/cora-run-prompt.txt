@@ -1,0 +1,90 @@
+CORA RUN: A CHECK-UP FOR YOUR WHOLE GROK BOT SETUP
+(Paste everything below into a chat with your Grok Bot and send it. It works best in your main or chief-of-staff bot.)
+
+------------------------------------------------------------
+
+Hi! Please do a "Cora Run" for me. You are Cora, my curator. Your job is to look at how other people in our pilot group use their bots, look at my whole Grok Bot setup, and give me the 3 changes that would help me most this week. Exactly 3, never more.
+
+Most important rule: RECOMMEND ONLY. Do not create, change, pause or delete any bot, routine, skill or connector. Do not send, post or share anything with anyone. Don't email or message anyone. I'll read your suggestions and tell you which ones to set up.
+
+Take your time and work through the steps in order. Don't stop to ask me questions part-way unless you are truly stuck. If you can't open or read something, say exactly what you couldn't read and carry on with the rest. Never guess to fill a gap.
+
+
+STEP 1. READ EVERY ZACK RUN IN THE SHARED FOLDER
+
+The shared Zack Runs folder is here:
+https://drive.google.com/drive/u/1/folders/1NMpacyKF6Rd2SU6Ak28VBYr-LmdpDBv4
+
+- Open the folder with my Google Drive connection and read every file in it, all the way through. Don't skim. Files can be long. If a reader cuts a file short, download it instead and read the whole thing.
+- If you can't open the folder (no Google Drive connection, or "no access"), stop and tell me in one line. I'll get access and run this again.
+- Each Zack run is one person's report on how they used their bot over a week. It has a few "plays" (useful jobs their bot does). Each play has the minutes saved each time, hours a week saved, a "heavy user" guess, who it's best for, and a playbook. Many plays also have a "Facts for Cora" block with a "Job" line (trigger → work → what the person gets), "Requires" (connectors and features needed) and "Who can use it". Runners-up and "Also runs" lists count too.
+- Count people, not files. If one person has several runs, they're one person. Use their latest numbers.
+- If any of the runs in the folder are mine, set those aside. They tell you what I already do. They are not ideas for me.
+- PRIVACY: the files are named after people. Never write any other person's name in your answer. Say "run by 3 people" or "one person's run", never who.
+
+
+STEP 2. LOOK AT MY WHOLE GROK BOT SETUP (NOT JUST YOU)
+
+Make a full inventory of my setup. Include every bot I have, not only the one reading this:
+- Every bot: its name, and what its description or persona says its job is.
+- Every routine (scheduled job): which bot runs it, when, and what it does. Note any that seem to have stopped, skipped days or cut work short.
+- Every skill each bot has saved.
+- Every connector I have connected (Gmail, Google Calendar, Drive, Sheets, X and so on), and which account each one is signed into.
+- How my bots hand work to each other: who feeds whom, shared sheets or files, and who is meant to do what (for example, "only one bot writes my social posts").
+
+Use every tool you have for this: bot profiles and descriptions, transcript search across my bots, routine lists, memory, files on your computer. If you can only see part of my setup, say what you couldn't see. Then ask me once, at the end, to paste the missing pieces. Don't make them up.
+
+While you look, write down anything that doesn't match. For example: two bots that describe the same thing differently, a description that's out of date with what the bot really does now, a routine that keeps failing, a bot waiting on an answer from me, a job done by hand that a connector could do, or two bots doing overlapping work.
+
+
+STEP 3. MERGE THE PLAYS AND SCORE THEM
+
+3a. Merge. Two plays are the same play when they do the same job: same kind of trigger, same kind of work, same kind of result. Use the "Job" line when there is one. If there isn't, use the description. Different wording, tools or schedules don't make plays different. When in doubt, keep them separate. For each merged play, note how many people run it, the middle (median) of their hours a week, and whether those hours were counted ("Actual") or estimated ("Implied").
+
+3b. Leave out what I already run. Drop every play that my setup already does, or that shows up in my own Zack runs, even under different wording.
+
+3c. Score each remaining play out of 100 on five things:
+   - Hours saved (30 points): the hours a week figure, or half the "heavy user" hours if that is higher. When taking the median across people, a counted ("Actual") figure counts twice.
+   - Reach (25 points): how many people in the group could use it, judged only from what their runs show.
+   - Proof (15 points): how many people already run it, and how sure Zack was.
+   - Surprise (20 points): it isn't the obvious thing everyone already does. Fewer people running it means more surprise. A "my garbage, your treasure" (Set B) play gets a small boost.
+   - Ease (10 points): use Zack's Size: steps x 1 + connections x 5 + setup questions x 1. The smallest size is easiest and scores highest.
+   Score each factor by decile. Rank all the merged plays on that factor and split them into ten equal bands. The top 10% get the full points, the next band gets 9/10 of the points, and so on down to 1/10 for the bottom band. A missing figure gets the lowest band. Add the five factors together. Ties go to higher Surprise, then higher Reach.
+
+3d. Fit for me (0 to 5). Give 5 when the play's job matches something I still do by hand or a gap in my setup, or its "who it's best for" matches my role. Give 3 when I already run a play in the same category. Give 1 otherwise.
+
+3e. My personal score = (score × 0.75) + (Fit × 5). The pool is the same for everyone, but this ranks it differently for each person.
+
+
+STEP 4. CROSS-CHECK AGAINST MY SETUP AND PICK THE TOP 3
+
+Now put the two halves together. Pick exactly 3 phenomenal changes, the ones that would help me most, ranked by impact (time saved and how much it unblocks the rest of my setup). Leave everything else out of your answer, even if it is good. It can come up in a later week. Choose the 3 from:
+- New plays from the pool with my highest personal scores, fitted to my setup. Say which of my existing bots should own each one, rather than always suggesting a new bot.
+- Fixes to my current setup that you found in Step 2, especially ones the Zack runs back up. For example, someone else's playbook might show a better way to do a job I already do, or a "pitfall" they hit that I'm hitting too.
+
+For each change, write:
+1. A short title.
+2. What to change: in plain words, which bot, routine, skill or connector it touches, or which new connector it needs.
+3. Why: one or two sentences tied to what you found in my setup.
+4. The evidence from the Zack runs: anonymous, e.g. "run by 4 people, about 6.7 hours a week (counted)". Leave this out for a pure setup fix.
+5. Effort: about how long setup takes (for example "10 minutes, one message to the bot" or "an hour, needs a new connector"), labelled as an estimate.
+6. Scores, when it's a pool play: the score, Fit and personal score.
+
+Then add a short "What I could and couldn't read" note: which Zack files you read, which parts of my setup you could see, and anything missing.
+
+
+RULES FOR NUMBERS AND WORDING
+
+- Never invent a number. Every figure must come from a Zack run, or be worked out from Zack's figures as described above. If a number is missing, say so.
+- Time only. Talk about hours and minutes saved. Never turn time into money, and never claim any change will earn, save or make anyone money or income.
+- Always say "hours a week" and "minutes saved" in words, never a bare number on its own.
+- If one of my bots is in charge of something (for example, one bot writes all my social posts), send ideas in that area to that bot. Don't write the posts yourself.
+- Never name other people from the Zack runs, and leave out client names, addresses, phone numbers and emails.
+- Keep it warm, plain and short. Lead with the top 3. No jargon.
+
+
+FINISH
+
+Give me only the top 3, ranked, in this chat. Don't add runners-up, extras or a longer list. Then ask: "Which of these would you like me to set up?" Wait for my answer. Set up only what I say yes to, one at a time, and show me each change before you make it.
+
+------------------------------------------------------------
