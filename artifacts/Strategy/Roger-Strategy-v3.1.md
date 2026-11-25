@@ -151,11 +151,10 @@ A user's path is: onboarded, first free run on a Monday, second free run the nex
 
 | Average billed per paying user | No credits | 30% of payers referred | 50% of payers referred |
 |---|---|---|---|
-| $150 (many single runs) | 200 | 244 | 286 |
-| $200 | 150 | 183 | 214 |
+| $200 (monthly, or one single run in the month) | 150 | 183 | 214 |
 | $250 (some at $400) | 120 | 146 | 171 |
 
-Planning figure: **about 180–215 paying users**, not 150. The mix between monthly and single runs is unknown until users start choosing.
+Planning figure: **about 180–215 paying users**, not 150. Since November 25, 2026 a single run costs the same as a month ($200), so a paying user bills at least $200 in any month they pay, whichever way they buy; the earlier "$150 (many single runs)" row assumed a $100 run and was removed.
 
 ## Referral loop scenarios
 
