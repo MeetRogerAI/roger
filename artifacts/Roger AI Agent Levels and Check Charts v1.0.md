@@ -122,7 +122,7 @@ Cora reads, in this order: core gaps, then next-level core items, then elective 
 
 ### 2.5 Prospects with no Zack run yet (Recommendation)
 
-The sign-up quiz (R6a) asks up to 12 questions, drawn from the core items of Levels 1 to 7, and assigns a **provisional level**. The provisional level is shown as "about Level N" and is replaced by the first Zack run's result. It never blocks sign-up (consistent with the design spec's "the quiz routes, never blocks"). A prospect who self-reports Level 7 or above is flagged to Ehab or Peter for a call: they are both the best-value Cora users and the most likely Multipliers.
+The sign-up quiz (R6a) asks up to 12 questions, drawn from the core items of Levels 1 to 7, and assigns a **provisional level**. The provisional level is shown as "about Level N" and is replaced by the first Zack run's result. It never blocks sign-up (consistent with the design spec's "the quiz routes, never blocks"). A prospect who self-reports Level 7 or above is flagged to the Roger team for a call: they are both the best-value Cora users and the most likely Multipliers.
 
 ### 2.6 More than one agent platform
 

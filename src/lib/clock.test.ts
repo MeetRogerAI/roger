@@ -93,9 +93,17 @@ describe("Toronto wall times", () => {
     expect(wallToInstant("2027-03-14", "02:30").toISOString()).toBe("2027-03-14T07:30:00.000Z");
   });
 
+  // A summer date on purpose. British Columbia stopped changing its clocks in
+  // 2026, so Vancouver's winter offset depends on how new the runtime's time
+  // zone data is; in July it is seven hours behind UTC under old and new rules.
   it("resolves Sunday 6:00 PM in Vancouver to the right instant", () => {
-    expect(wallToInstant("2026-11-22", "18:00", "America/Vancouver").toISOString()).toBe("2026-11-23T02:00:00.000Z");
-    expect(wallParts(at("2026-11-23T02:00:00Z"), "America/Vancouver")).toMatchObject({ hour: 18, dow: 0 });
+    expect(wallToInstant("2026-07-12", "18:00", "America/Vancouver").toISOString()).toBe("2026-07-13T01:00:00.000Z");
+    expect(wallParts(at("2026-07-13T01:00:00Z"), "America/Vancouver")).toMatchObject({ hour: 18, dow: 0 });
+  });
+
+  it("agrees with itself in a Vancouver winter, whatever the runtime's time zone data says", () => {
+    const sixPm = wallToInstant("2026-12-13", "18:00", "America/Vancouver");
+    expect(wallParts(sixPm, "America/Vancouver")).toMatchObject({ year: 2026, month: 12, day: 13, hour: 18, minute: 0, dow: 0 });
   });
 
   it("closes intake one minute after the cutoff minute begins", () => {
