@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { linkContributor } from "@/lib/admin/users";
 import { addDays } from "@/lib/clock";
-import { afterFreeLists, delivered, monday, newWorld, order, outcome, play, seedPool, sendRun, signUp, subscribed, toronto, userRow, type Member, type World } from "./helpers";
+import { afterFreeLists, delivered, leftoverPerRun, monday, newWorld, order, outcome, play, seedPool, sendRun, subscribed, toronto, userRow, withCard, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -28,11 +28,12 @@ beforeEach(async () => {
   const [seed] = await seedPool(w, { contributors: 1, playsEach: 2, ranOn: "2026-11-26" });
   await w.at("2026-12-02T16:00:00Z");
   const us = { currency: "USD" as const, country: "US" as const };
-  trial = await signUp(w, { email: "tia@example.com", ...us });
-  third = await signUp(w, { email: "theo@example.com", ...us });
-  movedOn = await signUp(w, { email: "max@example.com", ...us });
-  paying = await signUp(w, { email: "pat@example.com", ...us });
-  single = await signUp(w, { email: "sol@example.com", ...us, plan: "per_run" });
+  // Baseline shortcuts (this scenario is about a later state): cards saved before any list was held.
+  trial = await withCard(w, { email: "tia@example.com", ...us });
+  third = await withCard(w, { email: "theo@example.com", ...us });
+  movedOn = await withCard(w, { email: "max@example.com", ...us });
+  paying = await withCard(w, { email: "pat@example.com", ...us });
+  single = await leftoverPerRun(w, { email: "sol@example.com", ...us });
   await afterFreeLists(w, third, { told: true });
   await afterFreeLists(w, movedOn, { told: true });
   await afterFreeLists(w, single);

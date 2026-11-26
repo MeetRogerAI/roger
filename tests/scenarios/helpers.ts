@@ -31,8 +31,10 @@ import type Stripe from "stripe";
 import { vi } from "vitest";
 import { addDays, currentMonday, isAtOrPast, wallParts, wallToInstant } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
-import { startCardSetup } from "@/lib/billing/card-setup";
-import { sendSignupWelcome } from "@/lib/signup/finish";
+import { finishCardSave, openEmbeddedSetup } from "@/lib/billing/card-setup";
+import type { CardSaveResult } from "@/lib/billing/card-saved";
+import { choosePromoCode } from "@/lib/billing/promo";
+import { finishSignup, sendSignupWelcome } from "@/lib/signup/finish";
 import { placeOrder } from "@/lib/billing/orders";
 import { runChargeJob, type ChargeJobResult } from "@/lib/billing/charge-job";
 import type { ChargeDeps } from "@/lib/billing/first-charge";
@@ -52,7 +54,8 @@ import { handleStripeEvent, type EventOutcome } from "@/lib/billing/webhook";
 import { runCoraJob, type CoraDeps, type JobResult } from "@/lib/cora/job";
 import { importSeedRun } from "@/lib/cora/seed-import";
 import { runSendJob, type SendResult } from "@/lib/cora/send-job";
-import { runHourly } from "@/lib/housekeeping/job";
+import { HOURLY_TASKS, runHourly, type HourlyTask } from "@/lib/housekeeping/job";
+import { closeNoCardTrials } from "@/lib/housekeeping/trial";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3, type V3Settings } from "@/lib/v3-settings";
 import { storeReport } from "@/lib/zack/receive";
@@ -663,8 +666,17 @@ export async function vercelCron(w: World, until: Date): Promise<CronCall[]> {
   return log;
 }
 
+/**
+ * The hourly tasks as the route runs them, except that the no-card close is
+ * given this world's fake Stripe as its card gateway: the job itself asks
+ * `stripeGateway()` (the real one, null without a key), so without this the
+ * close could never see a card confirmed on the stored Payment session.
+ */
+const scenarioTasks = (w: World): HourlyTask[] =>
+  HOURLY_TASKS.map((t) => (t.name === "no_card_close" ? { ...t, run: (q, d, c) => closeNoCardTrials(q, { ...d, deadline: c.deadline, card: w.stripe }) } : t));
+
 export async function hourly(w: World): Promise<Record<string, unknown>> {
-  return runHourly(w.query, w.charge());
+  return runHourly(w.query, w.charge(), scenarioTasks(w));
 }
 
 /** A Monday as the jobs see it: Cora from 1:00 AM, the charge at 6:00, the send at 7:00, with hourly passes between. */
@@ -705,37 +717,132 @@ export async function passHours(w: World, until: Date, stepHours = 1): Promise<v
 // ---------------------------------------------------------------------------
 // People and runs.
 
-export type Member = { id: string; email: string; customer: string };
+/**
+ * A member. `customer` is their Stripe customer: empty until the Payment page
+ * first opens for them (it creates the customer), filled in by `saveCard`.
+ */
+export type Member = { id: string; email: string; customer: string; country: "CA" | "US" };
+
+const PAYMENT_RETURN = "https://roger.test/start/payment/done?session_id={CHECKOUT_SESSION_ID}";
+/** The address the Payment page's requests come from (the rate limits count by it). */
+const MEMBER_IP = "203.0.113.7";
 
 /**
- * Sign-up with the card saved straight away: the plan and consent are saved,
- * the welcome email is sent (as Step 3 does), Stripe's hosted card page opens
- * on a new customer, the person finishes it, and Stripe's
- * `checkout.session.completed` reaches the webhook, which starts the trial.
- * (Unit 10 of plan 2026-11-26-001 rewrites this for the held-list flow.)
+ * Sign-up as it is now (plan 2026-11-26-001, Units 2 and 10): Steps 1 and 2
+ * (the quiz and a verified account) leave the account at Step 3; Step 3,
+ * Product and Pricing, records the consent and ends sign-up with exactly the
+ * two calls `savePlan` makes (`finishSignup`, then `sendSignupWelcome` with
+ * the action's clock). The account is a monthly trial with no card
+ * (`trial_started_at` null) and no Stripe customer: the card is asked for when
+ * the first list is ready (`saveCard`). `sponsored` sets `sponsor_id` (R29:
+ * lists from the first Monday, never asked for a card).
  */
 export async function signUp(
   w: World,
-  o: { email: string; currency: "USD" | "CAD"; country: "CA" | "US"; plan?: "monthly" | "per_run"; sharing?: "share" | "match_only" | "off" },
+  o: { email: string; currency: "USD" | "CAD"; country: "CA" | "US"; sharing?: "share" | "match_only" | "off"; sponsored?: boolean },
 ): Promise<Member> {
   const [{ id }] = await w.query<{ id: string }>(
-    `insert into users (email, name, status, plan, sharing, currency, consent_at, signup_step, email_verified_at)
-     values ($1, 'Test', 'signup', $2, $3, $4, $5, 'card', $5) returning id`,
-    [o.email, o.plan ?? "monthly", o.sharing ?? "share", o.currency, w.now.toISOString()],
+    `insert into users (email, name, status, plan, sharing, currency, signup_step, email_verified_at, sponsor_id)
+     values ($1, 'Test', 'signup', 'monthly', $2, $3, 'plan', $4, $5) returning id`,
+    [o.email, o.sharing ?? "share", o.currency, w.now.toISOString(), o.sponsored ? crypto.randomUUID() : null],
   );
-  // The welcome is sent when sign-up ends at Step 3 (plan 2026-11-26-001, Unit 2), no longer by the card step.
-  // Until Unit 10 rewrites this helper for the held-list flow, the card is still saved here, at sign-up.
   const c = w.charge();
+  if (!(await finishSignup(w.query, id, c.now))) throw new Error("Step 3 did not end sign-up");
   await sendSignupWelcome(w.query, id, { settings: c.settings, now: c.now, query: c.query, transport: c.transport, sleep: c.sleep });
-  const started = await startCardSetup(w.query, w.stripe, { userId: id, currency: o.currency, successUrl: "https://roger.test/start/done", cancelUrl: "https://roger.test/start/card" });
-  if (!started.ok) throw new Error(`The card step did not open: ${started.reason}`);
-  const session = started.url.split("/").pop()!;
-  w.stripe.completeSession(session, o.country);
-  const outcome = await w.webhook(event("checkout.session.completed", { id: session, object: "checkout.session", mode: "setup", metadata: {} }));
-  if (outcome !== "handled") throw new Error(`The card step webhook was ${outcome}`);
-  const [u] = await w.query<{ status: string; stripe_customer: string }>(`select status, stripe_customer from users where id = $1`, [id]);
-  if (u.status !== "trial") throw new Error(`Sign-up ended in ${u.status}, not trial`);
-  return { id, email: o.email, customer: u.stripe_customer };
+  const [u] = await w.query<{ status: string; signup_step: string; trial_started_at: string | null; stripe_customer: string | null }>(
+    `select status, signup_step, trial_started_at, stripe_customer from users where id = $1`,
+    [id],
+  );
+  if (u.status !== "trial" || u.signup_step !== "done" || u.trial_started_at !== null || u.stripe_customer !== null) {
+    throw new Error(`Sign-up ended in ${JSON.stringify(u)}, not a trial with no card`);
+  }
+  return { id, email: o.email, customer: "", country: o.country };
+}
+
+/**
+ * The Payment page (Step 4), driven as its server code is: the embedded setup
+ * session is opened (or the open one reused) by `openEmbeddedSetup`, the
+ * member confirms the card in Stripe's Payment Element (the fake completes the
+ * session with the billing country), then the return page runs
+ * `finishCardSave` and Stripe's `checkout.session.completed` reaches the
+ * webhook (both are the same idempotent completion). `via: "webhook"` is a
+ * member who closed the tab before the return page loaded. Fills in
+ * `m.customer`.
+ */
+export async function saveCard(w: World, m: Member, o: { via?: "return_page" | "webhook"; country?: "CA" | "US" } = {}): Promise<CardSaveResult> {
+  const sid = await openPayment(w, m);
+  w.stripe.completeSession(sid, o.country ?? m.country);
+  const c = w.charge();
+  let result: CardSaveResult = { outcome: "pending" };
+  if ((o.via ?? "return_page") === "return_page") {
+    result = await finishCardSave(w.query, w.stripe, sid, { expectUserId: m.id, getSettings: async () => w.settings, now: c.now, query: c.query, transport: c.transport, sleep: c.sleep });
+  }
+  const outcome = await w.webhook(event("checkout.session.completed", { id: sid, object: "checkout.session", mode: "setup", metadata: { user_id: m.id } }));
+  if (outcome !== "handled") throw new Error(`The card-save webhook was ${outcome}`);
+  const [u] = await w.query<{ stripe_customer: string; trial_started_at: string | null }>(`select stripe_customer, trial_started_at from users where id = $1`, [m.id]);
+  if (u.trial_started_at == null) throw new Error("The card was not saved");
+  m.customer = u.stripe_customer;
+  return result;
+}
+
+/** The Payment page opened (the member has not confirmed a card): the stored session's id. Fills in `m.customer`. */
+export async function openPayment(w: World, m: Member): Promise<string> {
+  const opened = await openEmbeddedSetup(w.query, w.stripe, { userId: m.id, ip: MEMBER_IP, returnUrl: PAYMENT_RETURN, now: w.now });
+  if (!opened.ok) throw new Error(`Payment did not open: ${opened.reason}`);
+  const [u] = await w.query<{ stripe_customer: string }>(`select stripe_customer from users where id = $1`, [m.id]);
+  m.customer = u.stripe_customer;
+  return opened.sessionId;
+}
+
+/** "Have a promo code?" → Apply on the Payment page (`applyPromo` → `choosePromoCode`), before the card is saved. */
+export async function applyPromo(w: World, m: Member, code: string) {
+  const [u] = await w.query<{ currency: "USD" | "CAD" }>(`select currency from users where id = $1`, [m.id]);
+  return choosePromoCode(w.query, w.stripe, { userId: m.id, ip: MEMBER_IP, code, currency: u.currency }, { now: w.now });
+}
+
+/**
+ * The new order's first list: Zack's run on the Sunday afternoon, the Monday
+ * (the list is held: a titles-only teaser, nothing delivered, no free list
+ * used), then the card saved on Payment at `cardAt` (default the Wednesday
+ * after, at noon), which delivers that held list as free list 1.
+ */
+export async function firstList(w: World, members: Member[], week: string, o: { cardAt?: Date } = {}) {
+  await w.at(wallToInstant(addDays(week, -1), "15:00"));
+  for (const m of members) await sendRun(w, m);
+  const r = await monday(w, week);
+  for (const m of members) {
+    if ((await delivered(w, m.id, week)).length) throw new Error(`${m.email}: the first list was delivered before a card was saved`);
+  }
+  await w.at(o.cardAt ?? toronto(addDays(week, 2), "12:00"));
+  for (const m of members) {
+    await saveCard(w, m);
+    if (!(await delivered(w, m.id, week)).length) throw new Error(`${m.email}: the held list was not unlocked by the card`);
+  }
+  return r;
+}
+
+/**
+ * Baseline shortcut for scenarios about a later state: a member who signed up
+ * and saved a card before any list was held (Payment opened from a link). The
+ * completion has nothing to unlock, and the next Monday delivers as usual.
+ */
+export async function withCard(w: World, o: Parameters<typeof signUp>[1]): Promise<Member> {
+  const m = await signUp(w, o);
+  await saveCard(w, m);
+  return m;
+}
+
+/**
+ * A leftover one-at-a-time account (preview data from before monthly became
+ * the only plan): no sign-up path makes one now, so the account is moved to
+ * `per_run` by hand after sign-up and its card saved. Only the dormant per-run
+ * code (orders, switches) is exercised through it (plan Scope Boundaries).
+ */
+export async function leftoverPerRun(w: World, o: Parameters<typeof signUp>[1]): Promise<Member> {
+  const m = await signUp(w, o);
+  await w.query(`update users set plan = 'per_run' where id = $1`, [m.id]);
+  await saveCard(w, m);
+  return m;
 }
 
 /**

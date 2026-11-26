@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { delivered, newWorld, order, seedPool, sendRun, signUp, toronto, userRow, vercelCron, weeksWithRuns, type CronCall, type Member, type World } from "./helpers";
+import { delivered, firstList, leftoverPerRun, newWorld, order, saveCard, seedPool, sendRun, signUp, toronto, userRow, vercelCron, weeksWithRuns, type CronCall, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -10,12 +10,16 @@ vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
  * and an order), the send at 7:00, and the hourly pass throughout, each route
  * called at the UTC minutes vercel.json schedules it and gated as the route
  * gates it. Nobody signs in and nobody presses anything.
+ *
+ * Since plan 2026-11-26-001 the card is asked for at the first list: the new
+ * member's first list that Monday is held (a titles-only teaser), and only the
+ * card saved afterwards delivers it.
  */
 let w: World;
-let trial: Member; // first free list this Monday
+let fresh: Member; // signed up last week, no card: this Monday's first list is held
 let third: Member; // third list: the first charge
 let paying: Member; // monthly subscriber
-let single: Member; // one at a time, with an order
+let single: Member; // a leftover one-at-a-time account (dormant per-run code), with an order
 const WEEK = "2026-12-28";
 
 beforeEach(async () => {
@@ -23,13 +27,17 @@ beforeEach(async () => {
   await seedPool(w, { contributors: 10, playsEach: 4, ranOn: "2026-11-26" });
   await w.at("2026-12-02T16:00:00Z");
   paying = await signUp(w, { email: "pia@example.ca", currency: "CAD", country: "CA" });
-  await weeksWithRuns(w, [paying], ["2026-12-07"]);
-  await w.at("2026-12-09T16:00:00Z");
+  await firstList(w, [paying], "2026-12-07");
+  await w.at("2026-12-09T18:00:00Z");
   third = await signUp(w, { email: "tess@example.com", currency: "USD", country: "US" });
-  single = await signUp(w, { email: "sid@example.ca", currency: "CAD", country: "CA", plan: "per_run" });
-  await weeksWithRuns(w, [paying, third, single], ["2026-12-14", "2026-12-21"]);
+  single = await leftoverPerRun(w, { email: "sid@example.ca", currency: "CAD", country: "CA" });
+  // December 14: paying's second free list and single's first; third's first list is held until the card on the 16th.
+  await weeksWithRuns(w, [paying, third, single], ["2026-12-14"]);
+  await w.at(toronto("2026-12-16", "12:00"));
+  await saveCard(w, third);
+  await weeksWithRuns(w, [paying, third, single], ["2026-12-21"]);
   await w.at("2026-12-23T16:00:00Z");
-  trial = await signUp(w, { email: "tim@example.com", currency: "USD", country: "US" });
+  fresh = await signUp(w, { email: "tim@example.com", currency: "USD", country: "US" });
   await w.at(toronto("2026-12-26", "11:00"));
   expect(await order(w, single, WEEK)).toEqual({ ok: true });
 });
@@ -40,7 +48,7 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
   it("runs intake, Cora, the charges, the send and the hourly pass on the job clock alone, once each", async () => {
     // Sunday 6:00 PM, each member's own time: Zack sends the week's run.
     await w.at(toronto("2026-12-27", "18:00"));
-    for (const m of [trial, third, paying, single]) await sendRun(w, m);
+    for (const m of [fresh, third, paying, single]) await sendRun(w, m);
     const sentBefore = w.sent.length;
 
     const log = await vercelCron(w, toronto(WEEK, "12:30"));
@@ -57,17 +65,22 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
     expect(charged.reduce((n, r) => n + (r.first?.charged ?? 0), 0)).toBe(1);
     expect(charged.reduce((n, r) => n + (r.orders?.charged ?? 0), 0)).toBe(1);
     expect(w.stripe.callsTo("subscriptions.create").filter((c) => c.args.customer === third.customer)).toHaveLength(1);
-    // The send from 7:00 AM: every member delivered and emailed exactly once.
+    // The send from 7:00 AM: every member with a card delivered and emailed exactly once; the new member's list is
+    // held, with one titles-only teaser and nothing delivered.
     expect(first(log, "send", "done")).toBe("2026-12-28T12:00:00.000Z");
-    for (const m of [trial, third, paying, single]) {
+    // This Monday's list email (or the teaser, which names no week), counted from the Sunday runs on.
+    const mondayMail = (m: Member) =>
+      w.sent.slice(sentBefore).filter((x) => x.to === m.email && (x.subject === "Your list, and your receipt" || x.subject.includes("December 28") || x.subject === "Your first 3 ideas are ready"));
+    for (const m of [third, paying, single]) {
       expect(await delivered(w, m.id, WEEK)).toHaveLength(3);
-      const monday = w.mail(m.email).filter((x) => x.subject === "Your list, and your receipt" || x.subject.includes("December 28"));
-      expect(monday).toHaveLength(1);
+      expect(mondayMail(m)).toHaveLength(1);
     }
+    expect(await delivered(w, fresh.id, WEEK)).toEqual([]);
+    expect(mondayMail(fresh).map((x) => x.subject)).toEqual(["Your first 3 ideas are ready"]);
     expect(await w.query(`select status from cora_weeks where week_of = $1`, [WEEK])).toEqual([{ status: "sent" }]);
 
     // State after the cycle.
-    expect(await userRow(w, trial.id)).toMatchObject({ status: "trial", free_lists_used: 1 });
+    expect(await userRow(w, fresh.id)).toMatchObject({ status: "trial", free_lists_used: 0 });
     expect(await userRow(w, third.id)).toMatchObject({ status: "active", free_lists_used: 2 });
     expect(await userRow(w, single.id)).toMatchObject({ status: "active", plan: "per_run" });
     expect(await w.query(`select status from orders where user_id = $1 and week_of = $2`, [single.id, WEEK])).toEqual([{ status: "sent" }]);
@@ -80,7 +93,14 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
     const again = await vercelCron(w, toronto(WEEK, "13:30"));
     expect(again.filter((c) => c.route === "cora").every((c) => c.status === "sent")).toBe(true);
     expect(w.stripe.callsTo("subscriptions.create")).toHaveLength(2);
-    for (const m of [trial, third, paying, single]) expect(w.mail(m.email).filter((x) => x.subject === "Your list, and your receipt" || x.subject.includes("December 28"))).toHaveLength(1);
+    for (const m of [fresh, third, paying, single]) expect(mondayMail(m)).toHaveLength(1);
+
+    // Wednesday: the new member adds a card; the held list is delivered then, as free list 1 of 2, with its list email.
+    await w.at(toronto("2026-12-30", "12:00"));
+    await saveCard(w, fresh);
+    expect(await delivered(w, fresh.id, WEEK)).toHaveLength(3);
+    expect(await userRow(w, fresh.id)).toMatchObject({ status: "trial", free_lists_used: 1 });
+    expect(w.mail(fresh.email).find((x) => x.subject.includes("December 28"))!.text).toContain("Free list 1 of 2.");
   });
 });
 
@@ -96,7 +116,10 @@ describe("the same cycle in summer time", () => {
     expect(first(log, "cora", "ready")).toBe("2027-07-05T05:00:00.000Z");
     expect(first(log, "charge", "done")).toBe("2027-07-05T10:00:00.000Z");
     expect(first(log, "send", "done")).toBe("2027-07-05T11:00:00.000Z");
-    expect(await delivered(s, m.id, "2027-07-05")).toHaveLength(3);
+    // A new member with no card: the first list is held at the send (the teaser), not delivered.
+    expect(await delivered(s, m.id, "2027-07-05")).toEqual([]);
+    expect(s.subjects(m.email)).toContain("Your first 3 ideas are ready");
+    expect((await s.query<{ at: string }>(`select first_teaser_at::text as at from users where id = $1`, [m.id]))[0].at).not.toBeNull();
   });
 
   // The settings accept job times from 1:00 AM (src/lib/v3-settings.ts), so every route runs all Monday morning: since

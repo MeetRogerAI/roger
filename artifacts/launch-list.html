@@ -104,11 +104,11 @@
   <p class="eyebrow">Roger v3 · launch list</p>
   <h1>What Peter still has to supply, and the defaults waiting for his yes</h1>
   <p class="lead">The build spec leaves 14 things only Peter can provide and 12 choices made on his behalf; the B1 build added eight more owner-only go-live items (S15 to S22). Nothing here is finished until its row says so.</p>
-  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Updated November 23, 2026 for spec version 1.2 and the B1 build (section 3) · Updated November 25, 2026 for spec version 1.3 (one list now US$200 or CA$280, the same as a month) · Updated November 26, 2026: go-live status by area (section 0), progress on S13, S15, S16 and S17, and the sign-up changes (section 3) · Source: <code>artifacts/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
+  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Updated November 23, 2026 for spec version 1.2 and the B1 build (section 3) · Updated November 25, 2026 for spec version 1.3 (one list now US$200 or CA$280, the same as a month) · Updated November 26, 2026: go-live status by area (section 0), progress on S13, S15, S16 and S17, and the sign-up changes (section 3) · Updated again November 26, 2026 for spec version 1.4 (no card at sign-up: the card is asked for on a new Payment page when the first list is ready; monthly is the only plan): the Stripe area, S13, S16, S18, S19 done, the schema step and the Payment browser check before go-live · Source: <code>artifacts/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
 
   <div class="tiles" aria-label="Progress">
-    <div class="tile"><b id="n-open">21</b><span>items still to supply</span></div>
-    <div class="tile"><b id="n-done">0</b><span>items supplied</span></div>
+    <div class="tile"><b id="n-open">20</b><span>items still to supply</span></div>
+    <div class="tile"><b id="n-done">2</b><span>items supplied</span></div>
     <div class="tile"><b id="n-unconf">11</b><span>defaults not yet confirmed</span></div>
     <div class="tile"><b id="n-conf">1</b><span>defaults confirmed or changed</span></div>
   </div>
@@ -145,14 +145,19 @@
         <header><h3>2. Stripe</h3><span class="st partial">Under way</span></header>
         <h4>Finished (test mode)</h4>
         <ul>
-          <li>Products and six prices: monthly US$200 / CA$280, higher rate US$400 / CA$560, one list US$200 / CA$280, all before tax.</li>
+          <li>Products and six prices: monthly US$200 / CA$280, higher rate US$400 / CA$560, one list US$200 / CA$280, all before tax. (Since spec 1.4 only monthly is offered; the one-list prices stay for leftover per-run test accounts.)</li>
           <li>Tax settings: prices exclude tax; tax is added on top.</li>
           <li>Webhook to preview on API version <code>2026-11-18.endive</code>, checked end to end (an event arrived and was recorded). On Nov 26 the missing <code>checkout.session.completed</code> event was added; without it the card step could not finish.</li>
           <li>Stripe CLI logged in on Peter's machine (upgrade before Feb 8, 2027). Decision: this Stripe account is Roger's.</li>
+          <li>Nov 26: the preview <code>STRIPE_SECRET_KEY</code> was corrected to this account's sandbox (test) key. It had been a live key from another Stripe account.</li>
+          <li>Nov 26, the Payment page spike (plan 2026-11-26-001, Unit 4) passed in the sandbox: Stripe's embedded setup-mode Checkout (<code>ui_mode: 'elements'</code>, cards only) saves the card and writes the billing address, tax previews work, promotion codes and coupons behave as recorded. No new webhook event is needed (no <code>setup_intent.succeeded</code>); <code>checkout.session.completed</code> stays the one that finishes a card save.</li>
         </ul>
         <h4>Left</h4>
         <ul>
-          <li><b>Now:</b> a full test sign-up on preview with card 4242 4242 4242 4242, then check the Canadian test invoice shows HST as its own line.</li>
+          <li><code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> in Vercel for each environment: the sandbox <code>pk_test_…</code> on Preview (and local), the live <code>pk_live_…</code> on Production. Without it the Payment page shows "The card form didn't load".</li>
+          <li><b>Now:</b> a browser check of the Payment page on preview: sign up (no card is asked), get a held first list, then on Payment use 4242 4242 4242 4242 and a 3DS card (4000 0027 6000 3184, both "Complete" and "Fail"), a decline (4000 0000 0000 0002), a US ZIP (10001), the currency toggle, a promo code, and the phone layout at 375px; then check the Canadian test invoice at the first charge shows HST as its own line. The eight checks are listed in the plan's Unit 6 notes.</li>
+          <li>Link off in the Stripe dashboard's payment methods (test and live), as a second guard: the page already turns Link and wallets off.</li>
+          <li>The Payment page's content security policy ships report-only (it allows Stripe's hosts, including <code>m.stripe.network</code>). Watch the browser console on preview, then decide: enforce it with <code>'unsafe-inline'</code> plus the Stripe hosts, or move the two Payment routes to a nonce set per request. There is no endpoint collecting reports yet.</li>
           <li>Live mode: products and six live prices (Claude Code can script this), the live webhook to <code>https://meetroger.ai/api/stripe/webhook</code>, and the live key, price ids and webhook secret in Vercel Production.</li>
           <li>Live dashboard settings Peter sets by hand: failed renewals end <b>unpaid</b> (not cancelled) when retries run out; Stripe's own customer emails off (failed payments, renewals, expiring cards, receipts); Radar on.</li>
           <li>Tax: the HST registration active in Stripe Tax; the accountant's word on US customers and on the product tax category.</li>
@@ -196,7 +201,7 @@
           <li>Approve Zack 2.0 (Claude, Duet, Grok Bot, Hark) and Cora 2.0: drafts are in the repo.</li>
           <li>Confirm the category list (D10, closes S3).</li>
           <li>The starter setup file: supply <code>Real estate Grok Bot Setup.md</code>, read version 1, publish it, and give the Grok Bot download link.</li>
-          <li>Wording sign-offs: the ~30 automatic emails and the sign-up screens ("tax included" or "plus tax", the no-ideas note, the higher-rate invoice line).</li>
+          <li>Wording sign-offs: the ~30 automatic emails and the sign-up screens ("tax included" or "plus tax", the no-ideas note, the higher-rate invoice line), plus the spec 1.4 text: Step 3, the welcome, the held-list emails, the no-card closing email and the Payment page (S18).</li>
           <li>Privacy and terms: a read, the AI provider's position on training, then remove the "draft" label.</li>
           <li>For the public v3 site: the letter without Circles, headshot and signature, testimonial attributions and a quote from Grace, the group session day, time and link, the demo video and the "one real week" figures.</li>
           <li>New: the Levels documents (Zack 2.1, Cora 2.1, dashboard) are in the repo; nothing is built from them yet. The quiz records each person's level, but Cora does not use it yet.</li>
@@ -208,7 +213,7 @@
         <header><h3>6. Decisions</h3><span class="st open">To do</span></header>
         <h4>Left</h4>
         <ul>
-          <li>Take the pending Next.js security release before real cards, or wait (S19).</li>
+          <li><s>Take the pending Next.js security release before real cards, or wait (S19).</s> Done Nov 26: <code>main</code> is on Next.js 16.4.6.</li>
           <li>Remove the shared admin password once both admins have signed in by email on production (S21).</li>
           <li>Privacy points (S22): admin reads of runs are not logged; a deleted member's email stays in the admin log; retention gaps for idle one-at-a-time and held members; pooled plays after a run is deleted; withdrawal; how long leads, notifications and Stripe events are kept.</li>
           <li>Cora's six literal readings and three unbuilt Cora 2.0 changes (S20).</li>
@@ -222,8 +227,9 @@
         <h4>Left, in order</h4>
         <ol>
           <li>Content approved (Zack 2.0, Cora 2.0, categories).</li>
-          <li>On preview: the test sign-up and charge, then the seven checks that need a live environment (webhook, Monday crons, the model reading a run, a Cora dry run).</li>
-          <li>Next.js decision; <code>db/setup.mjs</code> run on production.</li>
+          <li><code>db/setup.mjs</code> run on the preview, production and scenario-test databases, for the spec 1.4 schema (listed in section 3).</li>
+          <li>On preview: the test sign-up (no card), a held first list, the Payment page browser check with 4242 and a 3DS card (Stripe area), the first charge, then the seven checks that need a live environment (webhook, Monday crons, the model reading a run, a Cora dry run).</li>
+          <li><s>Next.js decision</s> (done: 16.4.6); <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> on Production.</li>
           <li>Live Stripe in place; a Canadian test invoice shows HST on its own line.</li>
           <li>The 13 pilot runs read by the model, imported on production, pilots linked, a Cora dry run read by an admin.</li>
           <li>Privacy and terms linked from sign-up.</li>
@@ -369,12 +375,12 @@
           <tr data-id="S13" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S13</td>
             <th scope="row">Keys and settings in Vercel</th>
-            <td>Environment variables: the Stripe secret key and webhook secret, <code>ADMIN_EMAILS</code> (the Roger team), and the sending address for "Roger support". In Stripe: a monthly price at the standard rate and at the higher rate, and a one-list price, each in US and Canadian dollars.</td>
+            <td>Environment variables: the Stripe secret key, publishable key (<code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>, added for the Payment page in spec 1.4) and webhook secret, <code>ADMIN_EMAILS</code> (the Roger team), and the sending address for "Roger support". In Stripe: a monthly price at the standard rate and at the higher rate, and a one-list price, each in US and Canadian dollars.</td>
             <td>A test sign-up saves a card, the webhook is received, both admins can open <code>/admin</code>, and an automatic email arrives from the support address.</td>
             <td><span class="ver">B1</span></td>
             <td>Build against Stripe test keys. Never commit a key to the repo.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.<br>2026-11-23, build: everything that reads these is built. The exact list: <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_WEBHOOK_SECRET</code> (test values on Preview, live on Production); the six price ids <code>STRIPE_PRICE_MONTHLY_USD</code>, <code>_MONTHLY_CAD</code>, <code>_MONTHLY_HIGHER_USD</code>, <code>_MONTHLY_HIGHER_CAD</code>, <code>_RUN_USD</code>, <code>_RUN_CAD</code> (US$200, CA$280, US$400, CA$560, US$200, CA$280, before tax, each in test and live mode; the run prices were US$100 and CA$140 until 2026-11-25); <code>ADMIN_EMAILS</code> (the Roger team's sign-in addresses); <code>EMAIL_FROM_SUPPORT</code> ("Roger support &lt;support@meetroger.ai&gt;", a verified Resend sender). The webhook endpoint, its events and the dashboard settings are S16.<br>2026-11-25, Peter: the admins are <code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code> (in place of individual names). By 2026-11-26 on <b>Preview</b>: the test <code>STRIPE_SECRET_KEY</code>, the six test price ids, <code>STRIPE_WEBHOOK_SECRET</code>, <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>. On <b>Production</b>: <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>, <code>SITE_URL</code>, <code>DATABASE_URL</code>; no Stripe values yet. Resend: meetroger.ai verified; the sender defaults to "Roger support &lt;support@meetroger.ai&gt;". Still to do: a test sign-up that saves a card on preview, <code>/admin</code> opened by both admins, and the live Stripe values on Production.</td>
+            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.<br>2026-11-23, build: everything that reads these is built. The exact list: <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_WEBHOOK_SECRET</code> (test values on Preview, live on Production); the six price ids <code>STRIPE_PRICE_MONTHLY_USD</code>, <code>_MONTHLY_CAD</code>, <code>_MONTHLY_HIGHER_USD</code>, <code>_MONTHLY_HIGHER_CAD</code>, <code>_RUN_USD</code>, <code>_RUN_CAD</code> (US$200, CA$280, US$400, CA$560, US$200, CA$280, before tax, each in test and live mode; the run prices were US$100 and CA$140 until 2026-11-25); <code>ADMIN_EMAILS</code> (the Roger team's sign-in addresses); <code>EMAIL_FROM_SUPPORT</code> ("Roger support &lt;support@meetroger.ai&gt;", a verified Resend sender). The webhook endpoint, its events and the dashboard settings are S16.<br>2026-11-25, Peter: the admins are <code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code> (in place of individual names). By 2026-11-26 on <b>Preview</b>: the test <code>STRIPE_SECRET_KEY</code>, the six test price ids, <code>STRIPE_WEBHOOK_SECRET</code>, <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>. On <b>Production</b>: <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>, <code>SITE_URL</code>, <code>DATABASE_URL</code>; no Stripe values yet. Resend: meetroger.ai verified; the sender defaults to "Roger support &lt;support@meetroger.ai&gt;". Still to do: a test sign-up that saves a card on preview, <code>/admin</code> opened by both admins, and the live Stripe values on Production.<br>2026-11-26, payment at the first list (spec 1.4): the preview <code>STRIPE_SECRET_KEY</code> was corrected to this account's sandbox key (it had been a live key from another Stripe account). New variable <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>, per environment: <code>pk_test_…</code> on Preview and local, <code>pk_live_…</code> on Production (in <code>.env.example</code>). The card is now saved on the Payment page when the first list is ready, not at sign-up, so "a test sign-up saves a card" means: sign up, get a held list, then save the card on Payment.</td>
           </tr>
           <tr data-id="S14" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S14</td>
@@ -404,7 +410,7 @@
             <td><span class="ver">B1</span></td>
             <td>Build and test against fakes and Stripe test mode.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build (plan Units 12 to 15). The preview webhook needs an address that is not behind Vercel's deployment protection.<br>By 2026-11-26, test mode: the webhook to preview.meetroger.ai exists on <code>2026-11-18.endive</code> and was checked end to end (an event arrived and was recorded in <code>stripe_events</code>). On 2026-11-26 <code>checkout.session.completed</code> was added to it; it had been left out, which would have stopped the card step from finishing. Vercel's protection is now off, so the address needs no bypass. Still to do: the live endpoint and its secret; in live mode, failed renewals end unpaid, Stripe's customer emails off, Radar on; the HST line on a Canadian test invoice.</td>
+            <td class="notes">Added 2026-11-23 from the B1 build (plan Units 12 to 15). The preview webhook needs an address that is not behind Vercel's deployment protection.<br>By 2026-11-26, test mode: the webhook to preview.meetroger.ai exists on <code>2026-11-18.endive</code> and was checked end to end (an event arrived and was recorded in <code>stripe_events</code>). On 2026-11-26 <code>checkout.session.completed</code> was added to it; it had been left out, which would have stopped the card step from finishing. Vercel's protection is now off, so the address needs no bypass. Still to do: the live endpoint and its secret; in live mode, failed renewals end unpaid, Stripe's customer emails off, Radar on; the HST line on a Canadian test invoice.<br>2026-11-26, spec 1.4: the embedded Payment page spike passed, so the event list above is unchanged: no <code>setup_intent.succeeded</code> is needed, and <code>checkout.session.completed</code> (already on the preview endpoint) finishes the card save; the live endpoint needs it too. In the dashboard's payment methods, turn Link off in test and live mode (the page also turns it off).</td>
           </tr>
           <tr data-id="S17" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S17</td>
@@ -419,22 +425,30 @@
           <tr data-id="S18" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S18</td>
             <th scope="row">Wording sign-offs</th>
-            <td>Email templates in <code>src/lib/mail/templates/</code>; the plan, card and done steps; the status strip; the sharing confirmation</td>
-            <td>Peter has read every automatic email (spec B.13, 1 to 30) and the sign-up screens and said yes or given changes.</td>
+            <td>Email templates in <code>src/lib/mail/templates/</code>; <s>the plan, card and done steps</s> Step 3 (Product and Pricing) and the Payment page (spec 1.4); the status strip; the sharing confirmation</td>
+            <td>Peter has read every automatic email (spec B.13, 1 to 33) and the sign-up and Payment screens and said yes or given changes.</td>
             <td><span class="ver">B1</span></td>
             <td>Ship the drafted wording.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build. Points to decide: emails state amounts as "tax included" where spec B.8 says "plus {tax}"; the no-ideas note to a paying member does not say the week never counts as a miss (requirements R15); the first invoice's higher-rate line carries the plan's product name (spec B.9, 1.2).</td>
+            <td class="notes">Added 2026-11-23 from the B1 build. Points to decide: emails state amounts as "tax included" where spec B.8 says "plus {tax}"; the no-ideas note to a paying member does not say the week never counts as a miss (requirements R15); the first invoice's higher-rate line carries the plan's product name (spec B.9, 1.2).<br>2026-11-26, added for spec 1.4 (plan 2026-11-26-001; all drafted and shipping until signed off):
+              <ul>
+                <li><b>Step 3, Product and Pricing:</b> the Product paragraph ("Zack runs in your own AI agent each week…"), the consent text, and the Pricing paragraph ("Roger is US$200 a month or CA$280 a month, plus tax. We'll ask for your card before Cora's first full list is shown. Your free trial includes your first two Cora lists, two Mondays.").</li>
+                <li><b>Welcome email</b> (B.13 #2), now sent at Step 3: "Your first two Cora lists are free. When your first list is ready we'll ask for your card."</li>
+                <li><b>First list held</b> (#31, "Your first 3 ideas are ready", titles only), <b>held reminder</b> (#32, "Your ideas are waiting", days 2 and 7), and the <b>no-card closing email</b> (#33, "Your first ideas were ready, but no card was added, so your trial has closed. Nothing was charged.").</li>
+                <li><b>Payment page:</b> the Price Box lines, the trust line, "Start free trial", "Not now", the error and "didn't load" messages. Decide <b>"Due today: CA$0" / "US$0"</b> (as built, because a price always names its currency, spec A.16 check 5) versus the origin's bare <b>"$0"</b>.</li>
+                <li><b>Discount-duration lines</b> on Payment ("CA$56 off your first month", "… a month for your first 3 months", "… every month", "Then CA$316.40 a month") and in the second-list and 48-hour emails ("That includes your promo code …: CA$56 off your first month. After that, it's CA$316.40 a month, tax included."); a promo that covers a whole first month says "we'll charge CA$0" there.</li>
+                <li><b>"Terms and refunds"</b>: Payment's one link for both goes to <code>/terms</code>. There is no monthly-plan refund page yet (<code>/refunds</code> is the old setups policy); decide whether to write one or keep the terms link.</li>
+              </ul></td>
           </tr>
-          <tr data-id="S19" data-status="open" data-blocks="B1" data-done-on="">
+          <tr data-id="S19" data-status="done" data-blocks="B1" data-done-on="2026-11-26">
             <td class="id">S19</td>
             <th scope="row">The Next.js security upgrade decision</th>
-            <td><code>package.json</code> (Next.js 16.4.1 today)</td>
+            <td><code>package.json</code> (Next.js 16.4.1 then; 16.4.6 now)</td>
             <td>Peter has decided whether to take the pending Next.js security release before real cards, and the upgrade is merged with the build, lint and tests passing, or the decision to wait is recorded here.</td>
             <td><span class="ver">B1</span></td>
             <td>Stay on 16.4.1.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build.</td>
+            <td class="statuscell"><span class="st done">Done</span></td>
+            <td class="notes">Added 2026-11-23 from the B1 build.<br>2026-11-26: taken. <code>main</code> is on Next.js 16.4.6 (branch <code>chore/next-16.4.6</code>, merged 2026-11-26), which clears the seven moderate advisories npm audit reported for 16.0.0 to 16.4.4 and the intermittent <code>SecurityFatalError</code> in <code>next build</code> on 16.4.1; <code>eslint-config-next</code> moved with it. The payment branch was built, linted and tested on 16.4.6 after merging <code>main</code>.</td>
           </tr>
           <tr data-id="S20" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S20</td>
@@ -617,7 +631,7 @@
         </thead>
         <tbody>
           <tr><th scope="row">Accounts and sign-in</th><td>Built: email links with a confirm button, sessions, the admin check by <code>ADMIN_EMAILS</code>, Google sign-in (hidden).</td><td>S5, S13, S21</td></tr>
-          <tr><th scope="row">Sign-up and the card step</th><td>Built: <code>/start</code> quiz, account, plan and consent, Stripe card step, done, welcome email, pilot links, the "not open yet" note.</td><td>S10, S13, S16</td></tr>
+          <tr><th scope="row">Sign-up and the card step</th><td>Built: <code>/start</code> quiz, account, plan and consent, Stripe card step, done, welcome email, pilot links, the "not open yet" note. <b>Since spec 1.4:</b> three steps ending at Product and Pricing with no card; the card is saved on the embedded Payment page (<code>/start/payment</code>) when the first list is ready.</td><td>S10, S13, S16, S18</td></tr>
           <tr><th scope="row">Zack</th><td>Built: key, instructions and runs endpoints, <code>/app/zack</code> controls, upload, run history and delete. Zack 2.0 files drafted.</td><td>S1, S3</td></tr>
           <tr><th scope="row">Intake</th><td>Built: block parsing, the model fallback, validation, the three privacy passes and the fourth (harm) pass, flags.</td><td>S15 (the model)</td></tr>
           <tr><th scope="row">Cora</th><td>Built: pool, merge, scoring in code, eligibility, picks, short lists, the job with lease, phases, noon deadline and dry run, seed import. Cora 2.0 drafted.</td><td>S2, S14, S20</td></tr>
@@ -628,10 +642,13 @@
       </table>
     </div>
     <p class="sub" style="margin-top:20px"><b>Sign-up changes, November 25 and 26 (PRs #51 to #55, all merged; 967 tests pass).</b> Question 3 takes several agents, with a star for the primary agent and "Make primary". A new question 5 asks for the AI agent level, 0 to 8 (<code>src/data/agent-levels.ts</code>); help with is 6 and new software is 7. The quiz shows one question per screen with a progress bar, Next and Back, and keeps every answer when one is missing. Typing a role picks "Something else". Step 2 asks for first and last name and does not ask again for an email this browser already typed into Roger. Sign-up, sign-in and the app show no Circles header button. Spec 1.3 records all of this.</p>
+    <p class="sub" style="margin-top:20px"><b>Payment at the first list, November 26 (branch <code>feat/payment-at-first-curation</code>, plan <code>docs/plans/2026-11-26-001-feat-payment-at-first-curation-plan.md</code>; spec 1.4).</b> Sign-up ends at Step 3 (Product and Pricing, with the Zack consent) as a trial with no card. A no-card member's Monday list is held: a titles-only teaser by email and on <code>/app</code>, linking to Payment, an embedded Stripe card form with a Price Box (USD/CAD, live tax, a promo code, "Due today: CA$0"). Saving the card delivers the held list as free list 1 of 2; the first charge still comes with the third list, now with the locked-in promo. A newer held list replaces the older one; reminders on days 2 and 7; the no-card close at 14 days after the first teaser (21 after consent with no teaser), with a 7-day reopen for a card confirmed around it. Monthly is the only plan. The admin has a "First list held, no card" state and a sign-up funnel. The scenario tests cover the new order end to end (<code>tests/scenarios/</code>, including <code>held-and-closed.test.ts</code>).</p>
+    <p class="sub"><b>Schema for this change</b> (appended to <code>db/schema.sql</code>, idempotent; run <code>db/setup.mjs</code> on the <b>preview</b>, <b>production</b> and <b>scenario-test</b> databases before deploying the branch): on <code>users</code>, <code>first_teaser_at</code>, <code>setup_session</code>, <code>promo_code</code>, <code>promo_coupon</code>, <code>promo_label</code>, <code>promo_refused_at</code>, <code>unlock_attempted_at</code>, <code>promo_ended_label</code>, <code>promo_duration</code>, <code>promo_duration_months</code>; <code>cora_user_weeks.superseded_at</code>; the new table <code>promo_reservations</code> (with <code>slot</code>, the unique index <code>promo_reservations_slot</code> and the index <code>promo_reservations_fingerprint</code>); <code>charge_attempts.coupon</code>.</p>
     <p class="sub" style="margin-top:20px"><b>The go-live gate, in order.</b></p>
     <ol class="sub">
       <li>S1, S2, S3 approved; S13, S15, S16 in place on Preview; the scenario tests run once against the sandbox (S17) and the checks marked "needs the live environment" in the first-pass record are walked on preview.</li>
-      <li>S19 decided. Run <code>db/setup.mjs</code> on production (an owner step).</li>
+      <li>S19 decided (done 2026-11-26: Next.js 16.4.6). Run <code>db/setup.mjs</code> on production (an owner step), and on preview and the scenario-test database, for the spec 1.4 columns listed above, before the payment branch deploys.</li>
+      <li>The Payment page checked in a browser on preview with 4242 4242 4242 4242 and a 3DS test card (Stripe area); <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> set on Preview and Production; Link off in the Stripe dashboard; the report-only CSP reviewed.</li>
       <li>Live keys and prices (S13) and the live webhook (S16) on Production; a Canadian test invoice shows HST as its own row.</li>
       <li>The 13 seed runs imported on production (S14), pilots' records linked, a Cora dry run read by an admin.</li>
       <li>Privacy and terms linked from <code>/start</code> (S10); the Circles banner hidden on app pages and the header change agreed with the marketing builder. Since 2026-11-26 sign-up, sign-in and the app show no Circles header; the public v3 site (spec Part A, <code>v3Mode</code>) is still to be built.</li>

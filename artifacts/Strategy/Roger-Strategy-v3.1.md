@@ -555,6 +555,14 @@ Other decisions from the design interview that affect this document:
 
 **Revision, November 25, 2026 (Peter, while setting up Stripe).** A single run now costs $200 (CA$280), up from $100 (CA$140). Monthly stays $200 (CA$280) and the higher monthly rate stays $400 (CA$560). The framing, in Peter's words: "Monthly brings you weekly lists so it is much cheaper than doing a one-time run." Every comparison between the two plans says so: monthly costs the same as one run and brings a list every Monday, about four a month, so per list it is roughly a quarter of the price. The referral credit for a run rises with it, to $200. Current-price references in this document were updated; decision 33 in Appendix A stays as history. Design spec version 1.3 carries the same change.
 
+**Revision, November 26, 2026 (card at the first list; monthly only).** Two changes, made before sign-up opens on production:
+
+- **Decision 38 is reversed.** The card is no longer collected when the user starts. Sign-up ends after a plain Product and Pricing step with the Zack consent, and no card. When the user's first Cora list is ready, it is held: the email and the dashboard show its titles only, and the card is asked for then, on an embedded payment page ("Due today: $0", named in the account's currency). Saving the card unlocks that list as free run 1 of 2. The allowance and the gate do not change: two free delivered runs, counted from the card, and the first charge with the third. A held list with no card closes 14 days after its first teaser; a user who never connects Zack closes 21 days after sign-up. The view behind it: a card asked for at sign-up, before the person has seen anything, and surrounded by dense terms, costs more trials than it saves; asking when a real, personal list exists catches the moment of highest intent. Sections 5 (Trial, From trial to first charge), 8 (Website) and 10 (R12, R14) describe the old order and are superseded on this point.
+- **Single runs are dropped.** Monthly ($200, CA$280) is the only plan: one list at a time is no longer offered in sign-up, the dashboard or the site copy (this supersedes topic 1 of the table above and decision 12's "two ways of buying"). The referral script becomes "$200 a month for a list every Monday". The higher monthly rate ($400, CA$560) and the contributor rule are unchanged, stated in the FAQ and the terms, not in sign-up.
+- **How the reversal is judged.** The admin shows a funnel by week of sign-up: signed up, Zack connected, first teaser, card saved, first charge (requirement R30 of `docs/brainstorms/2026-11-26-payment-at-first-curation-requirements.md`). The share of first teasers that end with a saved card is the measure; the rate below which the card goes back to sign-up is still to be set. The earlier estimate in section 5 (a card up front lowers trials started and raises the share that pay) is the hypothesis this tests.
+
+Design spec version 1.4 carries the same change.
+
 # Appendix A. Decision log, second interview (November 21, 2026)
 
 1. Robyn and Grace pitched about 6 people to get 3 users.
@@ -568,7 +576,7 @@ Other decisions from the design interview that affect this document:
 9. The user-loop role may go full time if things go well in December; the trigger is outside this document.
 10. The 3 who declined were not open enough to AI tools.
 11. Users pick their own agent-platform plan; that cost is not part of Roger's price.
-12. One product, two ways of buying, after a free trial.
+12. One product, two ways of buying, after a free trial. (Superseded November 26, 2026: monthly only; see section 15.)
 13. Trial to payment: stated at onboarding, prompted in the second Cora email, followed up by the Roger team within two days, gated at the third Monday, no exceptions. (Refined by decision 38: the card is on file from the start and charged on the third run.)
 14. Everyone, including the Circles waitlist, moves to v3. The waitlist is a general mix and part of the pipeline.
 15. Testimonials exist (shared folder); see section 3.
@@ -594,7 +602,7 @@ Other decisions from the design interview that affect this document:
 35. No refund, because of the two free runs.
 36. Office deals start from the listed base price and are negotiated.
 37. Cora always sends the best 3 ideas available, ranked on suitability.
-38. A payment card is collected when the user starts, with a clear statement that they get two free Cora curations and the card is charged only on the third.
+38. A payment card is collected when the user starts, with a clear statement that they get two free Cora curations and the card is charged only on the third. (Reversed November 26, 2026: the card is asked for when the first list is ready; see section 15.)
 
 # Appendix B. Entry points beyond the first brokerage (from v3 market research)
 
