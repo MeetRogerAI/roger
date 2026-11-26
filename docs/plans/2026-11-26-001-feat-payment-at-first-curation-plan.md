@@ -1062,3 +1062,6 @@ Run 2026-11-26 against the Stripe sandbox (`sk_test`, API `2026-11-18.endive`, `
   - `ops.test.ts`: `heldNoCard` is false for a no-card member whose weeks are only delivered, or superseded plus delivered (+1), and false for the superseded case already covered.
 - **Checks run:** full `npx vitest run` green (122 files, 1442 tests; 2 files / 14 tests skipped as before). `next typegen` and `tsc --noEmit` pass. `npm run lint` shows 0 errors and the 6 pre-existing warnings, after the guard's local `module` variable was renamed (`@next/next/no-assign-module-variable`); the guard test was re-run after the rename.
 - **Left as is:** `/app/billing`'s plan line for a leftover per-run account ("One list at a time: …", `src/lib/app/billing.ts`). It describes the member's own plan and offers nothing, and `src/lib/app/billing.ts` is not in the guard's scan. It goes with the per-run cleanup after launch.
+
+### Compound pass (Unit 9)
+- No compound-worthy learning: the cancel-settles-session fix applies the existing `closing-an-account-must-settle-in-flight-external-flows` lesson; the dormant-server-action point (a hidden UI does not close a server action) is noted here only.
