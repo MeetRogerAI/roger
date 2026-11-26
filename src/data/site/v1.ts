@@ -289,6 +289,8 @@ export const v1 = {
     whoRuns: {
       title: "Who runs this",
       leadIn: "Roger is run by Peter Kuperman.",
+      /** Read out for his photograph, once the file exists. */
+      photoAlt: "Peter Kuperman",
       link: { label: "Read Peter’s letter", href: "/about" },
     },
     closing: { line: "See what your first {freeLists} Mondays bring." },

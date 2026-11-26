@@ -287,6 +287,53 @@ describe("the brick stack", () => {
     expect(renderToStaticMarkup(<BrickStack weeks={1} level={3} words={copy.bricks} />)).toContain("bg-level-3");
     expect(renderToStaticMarkup(<BrickStack weeks={1} level={3} night words={copy.bricks} />)).toContain("bg-f-proof-night");
   });
+
+  it("renders exactly as it did before `wide` and `xl`, for a caller that passes neither", () => {
+    const brick = (n: number) => `<li data-week="1" data-brick="${n}" data-set-up="yes" style="--i:${n - 1}" class="size-5 rounded-[5px] bg-level-1"><span class="sr-only">Week 1, idea ${n}: set up</span></li>`;
+    expect(renderToStaticMarkup(<BrickStack weeks={1} words={copy.bricks} />)).toBe(
+      `<figure class="inline-flex flex-col items-center "><ul class="flex flex-wrap-reverse gap-1.5" style="width:72px" data-bricks="3">${brick(1)}${brick(2)}${brick(3)}</ul></figure>`,
+    );
+    // The same at every size that existed, with a width in pixels and no breakpoint classes or width variables.
+    for (const [size, classes, width] of [
+      ["s", "size-3 rounded-[3px]", 12 * 13 + 4 * 12],
+      ["m", "size-5 rounded-[5px]", 20 * 13 + 6 * 12],
+      ["l", "size-8 rounded-[8px]", 32 * 13 + 8 * 12],
+    ] as const) {
+      const markup = renderToStaticMarkup(<BrickStack weeks={2} size={size} perRow={13} setUp={4} words={copy.bricks} />);
+      expect(markup, size).toContain(`style="width:${width}px" data-bricks="6"`);
+      expect(markup.match(new RegExp(`class="${classes.replace(/[[\]]/g, "\\$&")} `, "g")), size).toHaveLength(6);
+      expect(markup, size).not.toContain("lg:");
+      expect(markup, size).not.toContain("--bricks-w");
+    }
+  });
+
+  it("has an xl size: a larger brick and gap, and a width to match", () => {
+    const markup = renderToStaticMarkup(<BrickStack weeks={4} size="xl" night words={copy.bricks} />);
+    // Three across: 3 × 56 and two gaps of 12.
+    expect(markup).toContain('<ul class="flex flex-wrap-reverse gap-3" style="width:192px" data-bricks="12">');
+    expect(markup.match(/class="size-14 rounded-\[8px\] bg-f-reach-night"/g)).toHaveLength(12);
+    expect(markup).not.toContain("lg:");
+  });
+
+  it("with `wide`, changes size and number across from the lg breakpoint, through two width variables", () => {
+    const markup = renderToStaticMarkup(<BrickStack weeks={2} size="m" perRow={7} wide={{ size: "l", perRow: 13 }} words={copy.bricks} />);
+    // Narrow: 7 × 20 and six gaps of 6. Wide: 13 × 32 and twelve gaps of 8.
+    expect(markup).toContain('<ul class="flex flex-wrap-reverse gap-1.5 lg:gap-2 w-(--bricks-w) lg:w-(--bricks-w-lg)" style="--bricks-w:176px;--bricks-w-lg:512px" data-bricks="6">');
+    expect(markup.match(/class="size-5 rounded-\[5px\] lg:size-8 lg:rounded-\[8px\] bg-level-1"/g)).toHaveLength(6);
+    // The width is left to the classes: no fixed width in the style.
+    expect(markup).not.toMatch(/style="width:/);
+  });
+
+  it("with `wide`, keeps the narrow size or number across for whichever is left out", () => {
+    const sameSize = renderToStaticMarkup(<BrickStack weeks={1} size="s" perRow={3} wide={{ perRow: 9 }} words={copy.bricks} />);
+    expect(sameSize).toContain('class="flex flex-wrap-reverse gap-1 lg:gap-1 w-(--bricks-w) lg:w-(--bricks-w-lg)" style="--bricks-w:44px;--bricks-w-lg:140px"');
+    expect(sameSize).toContain('class="size-3 rounded-[3px] lg:size-3 lg:rounded-[3px] bg-level-1"');
+
+    const sameAcross = renderToStaticMarkup(<BrickStack weeks={1} size="m" wide={{ size: "xl" }} words={copy.bricks} />);
+    expect(sameAcross).toContain('style="--bricks-w:72px;--bricks-w-lg:192px"');
+    expect(sameAcross).toContain('class="size-5 rounded-[5px] lg:size-14 lg:rounded-[8px] bg-level-1"');
+    expect(sameAcross).toContain("gap-1.5 lg:gap-3");
+  });
 });
 
 describe("the other blocks", () => {

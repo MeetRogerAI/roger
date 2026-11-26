@@ -514,6 +514,104 @@ h2 {
   opacity: 1 !important;
 }
 
+/* ---------------------------------------------------------------------------
+ * Bricks in motion (site version 1: the hero, "how it works", "It compounds").
+ * The markup is always the finished picture. A hidden or dimmed state exists
+ * only with motion allowed and only once script is running: html.js for the
+ * hero, html.reveal-ready for "how it works", and .is-staged, which the scroll
+ * story's own script adds, for "It compounds". With reduced motion or with no
+ * script, none of these rules applies and nothing moves. The scroll story is
+ * staged only while it is still below the screen, and in print every brick and
+ * label is forced to its finished state.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /* Hero: the newest three bricks drop onto the stack, one after another */
+  .js .bricks-arrive [data-brick]:nth-last-child(-n + 3) {
+    animation: brick-drop 760ms var(--ease-spring) both;
+    animation-delay: 700ms;
+  }
+  .js .bricks-arrive [data-brick]:nth-last-child(2) {
+    animation-delay: 840ms;
+  }
+  .js .bricks-arrive [data-brick]:nth-last-child(1) {
+    animation-delay: 980ms;
+  }
+
+  /* How it works: each step's stack builds as the steps come in, a step at a time */
+  .reveal-ready [data-reveal] .bricks-grow [data-brick] {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition:
+      opacity 300ms var(--ease-out),
+      transform 520ms var(--ease-spring);
+  }
+  .reveal-ready [data-reveal].is-in .bricks-grow [data-brick] {
+    opacity: 1;
+    transform: none;
+    transition-delay: calc(var(--step, 0) * 240ms + var(--i, 0) * 45ms + 350ms);
+  }
+
+  /* It compounds: a step is shown as its label crosses the middle of the screen, and stays shown */
+  .compounding.is-staged [data-brick] {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.92);
+  }
+  .compounding.is-staged [data-brick].is-in {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 260ms var(--ease-out) var(--d, 0ms),
+      transform 560ms var(--ease-spring) var(--d, 0ms);
+  }
+  .compounding.is-staged [data-step-week] {
+    opacity: 0.6;
+    transition: opacity 400ms var(--ease-out);
+  }
+  .compounding.is-staged [data-step-week].is-in {
+    opacity: 1;
+  }
+  .compounding.is-staged [data-step-dot] {
+    transition: background-color 400ms var(--ease-out);
+  }
+  .compounding.is-staged [data-step-week]:not(.is-in) [data-step-dot] {
+    background-color: var(--color-ground-2);
+  }
+}
+@keyframes brick-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-48px);
+  }
+}
+/* Failsafe, as for the headline: the hero's bricks end in place even on a slow device */
+.settled .bricks-arrive [data-brick] {
+  animation: none !important;
+}
+/* On paper it is always the finished picture, whatever classes script has added and wherever the page was scrolled to */
+@media print {
+  .bricks-arrive [data-brick],
+  .bricks-grow [data-brick],
+  .compounding [data-brick],
+  .compounding [data-step-week] {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .compounding [data-step-dot] {
+    transition: none !important;
+    background-color: var(--color-level-1) !important;
+  }
+  /* A brick is a filled square: without this a printer leaves the fill out */
+  .bricks-arrive [data-brick],
+  .bricks-grow [data-brick],
+  .compounding [data-brick],
+  .compounding [data-step-dot] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
 /* The pricing stage swaps its contents in place */
 @media (prefers-reduced-motion: no-preference) {
   .stage-swap {

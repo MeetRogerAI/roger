@@ -43,12 +43,14 @@ const hrefs = (markup: string) => [...markup.matchAll(/href="([^"]*)"/g)].map((m
 beforeAll(() => resetNextFakes());
 
 describe("a site version before its pages are built", () => {
-  it("serves a placeholder home, kept out of search", async () => {
+  it("serves the v1 home, open to search (U5)", async () => {
     const markup = await pageMarkup(<Home />);
-    expect(markup).toContain("not built yet");
+    expect(markup).not.toContain("not built yet");
+    expect(markup).toContain("Your AI agents, smarter every Monday.");
     expect(markup).toContain('data-site="v1"');
     expect(markup).not.toContain("Circle");
-    expect(homeMetadata.robots).toEqual({ index: false, follow: false });
+    expect(homeMetadata.robots).toBeUndefined();
+    expect(homeMetadata.alternates).toEqual({ canonical: "/" });
   });
 
   it("serves a placeholder at /zack, not the Hampton page", async () => {

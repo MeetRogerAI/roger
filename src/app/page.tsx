@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { CirclesHome } from "@/components/circles/home";
-import { SiteNotBuilt } from "@/components/site/not-built";
+import { V1Home } from "@/components/site/v1/home";
 import { siteMeta } from "@/lib/site/chrome";
 import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import Image from "next/image";
@@ -28,10 +28,8 @@ export const metadata: Metadata = site === "circles" ? {
   alternates: { canonical: "/" },
   openGraph: { url: "/", title: "Stop figuring out AI agents alone.", description: "Eight people. Any agents. A better week of work." },
 } : isBuiltVersion(site) ? {
-  // The placeholder home stays out of search until the version's home is built (U5).
   title: { absolute: siteMeta(site).title },
   description: siteMeta(site).description,
-  robots: { index: false, follow: false },
   alternates: { canonical: "/" },
   openGraph: { url: "/", title: siteMeta(site).headline, description: siteMeta(site).description },
 } : {
@@ -74,7 +72,8 @@ function byShelf(list: UseCase[]) {
 
 export default async function LibraryHome() {
   if (site === "circles") return <CirclesHome />;
-  if (isBuiltVersion(site)) return <SiteNotBuilt version={site} page="Home" />;
+  // v2 and v3 show v1's home until each has its own (U13, U17).
+  if (isBuiltVersion(site)) return <V1Home version={site} />;
   const [all, settings] = await Promise.all([getUseCases(), getSettings()]);
   const sorted = [...all].sort((a, b) =>
     (b.addedAt ?? b.weekOf).localeCompare(a.addedAt ?? a.weekOf),

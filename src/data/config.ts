@@ -37,7 +37,11 @@ export const siteConfig = {
     bio: [
       "A background in coding education: years teaching people to build with new tools.",
     ] as string[],
-    photo: "" as string, // e.g. "/peter.jpg" (square, at least 480px). Hidden while empty.
+    /**
+     * Peter's photograph: a path under public/, e.g. "/media/peter.jpg" (at least 480px wide; it is cropped to 4:5).
+     * Shown once set, on the site's "Who runs this" and the company pages. Hidden while empty.
+     */
+    photo: "" as string,
     city: "Toronto",
     links: [] as { label: string; href: string }[], // e.g. { label: "X", href: "https://x.com/…" }
   },
