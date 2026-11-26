@@ -394,19 +394,38 @@ export const v1 = {
   },
 } satisfies SharedCopy & Record<string, unknown>;
 
+// The /agents headline and sub-line, which that page's browser title and search description repeat.
+const agentsHeadline = "Stop figuring out AI agents alone.";
+const agentsSubLine = "Every Monday, Roger sends you the three plays most worth installing, drawn from what other heavy users ran last week.";
+
 /**
  * /agents, for people who already run AI agents. Kept apart from `v1` because
  * this page may say "agent" on its own (spec 0.4).
  */
 export const v1Agents = {
+  /** The browser title, the search description and the shared link's one line: this page's own headline and sub-line. */
+  meta: {
+    title: `Roger: ${agentsHeadline}`,
+    headline: agentsHeadline,
+    description: agentsSubLine,
+  },
   hero: {
-    headline: "Stop figuring out AI agents alone.",
-    sub: "Every Monday, Roger sends you the three plays most worth installing, drawn from what other heavy users ran last week.",
+    headline: agentsHeadline,
+    sub: agentsSubLine,
     secondary: { label: "Run Zack on yourself first", href: "/zack" },
   },
+  /**
+   * The strip under the hero. The spec's line is "Zack files for Claude, Duet,
+   * Grok Bot and Hark. Any other agent adapts one with a single prompt." The
+   * names are not typed here: the page takes them from src/data/zack.ts, the
+   * agents whose file exists, so the sentence stays true when a file is added
+   * or removed (agentsStripLine in src/components/site/v1/agents.tsx).
+   */
   strip: {
     title: "Works with every agent",
-    line: "Zack files for Claude, Duet, Grok Bot and Hark. Any other agent adapts one with a single prompt.",
+    filesFor: "Zack files for",
+    and: "and",
+    others: "Any other agent adapts one with a single prompt.",
   },
   problem: {
     title: "The problem",

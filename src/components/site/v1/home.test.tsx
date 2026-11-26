@@ -200,8 +200,12 @@ describe("the v1 homepage's sections", () => {
     const how = sectionMarkup(await view(), "how");
     const steps = how.split(/<li>/).slice(1);
     expect(steps).toHaveLength(4);
-    expect(how).toMatch(/<ol data-reveal="true"/);
+    // Four steps keep the four-across grid; three steps (the /agents page) use another.
+    expect(how).toMatch(/<ol data-reveal="true" class="[^"]*sm:grid-cols-2 lg:grid-cols-4[^"]*"/);
+    expect(how).not.toContain("md:grid-cols-3");
     for (const [i, step] of steps.entries()) {
+      expect(step).toContain("sm:h-[98px]");
+      expect(step).not.toContain("md:h-[72px]");
       expect(step).toContain(`data-bricks="${(i + 1) * 3}"`);
       expect(step).toContain(`--step:${i}`);
       expect(step.match(/<span class="sr-only">Week \d+, idea [123]: set up<\/span>/g)).toHaveLength((i + 1) * 3);

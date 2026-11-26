@@ -9,7 +9,7 @@
  * settings reader into the browser bundle.
  */
 import type { SharedCopy } from "@/data/site/copy-types";
-import { v1 } from "@/data/site/v1";
+import { v1, v1Agents } from "@/data/site/v1";
 import { fillCopy, getAmounts, type Amounts } from "./amounts";
 import type { BuiltVersion } from "./version";
 
@@ -43,6 +43,11 @@ export const builtSitemapPaths = ["/", "/agents", "/pricing", "/how-it-works", "
 /** A site version's title, description and social card line. No amounts, so static metadata can read it at build. */
 export function siteMeta(version: BuiltVersion): SharedCopy["meta"] {
   return copyFor(version).meta;
+}
+
+/** The same three for /agents, from that page's own copy. v2 and v3 use v1's until each has its own. */
+export function agentsMeta(version: BuiltVersion): SharedCopy["meta"] {
+  return { v1: v1Agents, v2: v1Agents, v3: v1Agents }[version].meta;
 }
 
 /**

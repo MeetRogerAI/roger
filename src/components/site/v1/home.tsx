@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { siteConfig } from "@/data/config";
 import { CountryDefault } from "@/components/site/shared/country-default";
-import { Reveal } from "@/components/site/shared/reveal";
 import { StartLink } from "@/components/site/shared/start-link";
 import { letterShown } from "@/data/site/letter";
 import { samplePlay } from "@/data/site/sample-play";
@@ -17,8 +16,7 @@ import { ControlBlock } from "./blocks/control-block";
 import { HowItWorks } from "./blocks/how-it-works";
 import { PriceBlock } from "./blocks/price-block";
 import { Questions } from "./blocks/questions";
-import { SampleCard } from "./blocks/sample-card";
-import { SectionHead } from "./blocks/section-head";
+import { Hairline, Problem, SampleSection } from "./blocks/sections";
 import { Testimonials } from "./blocks/testimonials";
 import { WhoRunsThis } from "./blocks/who-runs-this";
 
@@ -111,31 +109,13 @@ export function V1HomeView({
       </section>
 
       {/* 2. The problem */}
-      <section id="problem" aria-labelledby="problem-title" className="scroll-mt-14 bg-ground">
-        <div className="wrap py-24 md:py-32">
-          <SectionHead id="problem-title" title={home.problem.title} />
-          <Reveal as="ul" className="mx-auto mt-14 grid max-w-[64rem] gap-10 md:grid-cols-3 md:gap-12">
-            {home.problem.statements.map((statement) => (
-              <li key={statement} className="border-t border-rule-strong pt-6">
-                <p className="text-lead">{statement}</p>
-              </li>
-            ))}
-          </Reveal>
-        </div>
-      </section>
+      <Problem copy={home.problem} />
 
       {/* 3. How it works */}
       <HowItWorks copy={home.how} words={copy.bricks} id={home.how.id} />
 
       {/* 4. What arrives on Monday */}
-      <section id="sample" aria-labelledby="sample-title" className="scroll-mt-14 bg-ground">
-        <div className="wrap py-24 md:py-32">
-          <SectionHead id="sample-title" title={copy.sample.title} sub={copy.sample.line} />
-          <div className="mt-14">
-            <SampleCard idea={idea} copy={copy.sample} />
-          </div>
-        </div>
-      </section>
+      <SampleSection idea={idea} copy={copy.sample} />
 
       {/* 5. It compounds */}
       <Compounding copy={home.compounds} words={copy.bricks} />
@@ -159,17 +139,6 @@ export function V1HomeView({
 
       {/* 11. Closing band */}
       <ClosingBand copy={closingBandCopy(copy, home.closing.line)} audience="re" />
-    </div>
-  );
-}
-
-/** Between two ground sections that are neighbours, so one does not run into the next. */
-function Hairline() {
-  return (
-    <div data-hairline className="bg-ground">
-      <div className="wrap">
-        <hr className="border-rule" />
-      </div>
     </div>
   );
 }

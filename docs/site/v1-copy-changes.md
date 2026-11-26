@@ -190,6 +190,8 @@ The spec says what these sections hold, without giving the words. The wording be
 | Footer, beside the contact email | "Roger, Toronto" (as the footer reads today) |
 | Not-found page | "That page isn’t here" (as today), "The link may be old or mistyped.", "Go to the homepage", then the start button. Today's line ends "(error 404). Try one of these:" and lists old offers; under v1 the list is gone and the number with it. |
 | Browser title, search description and social card | Title: "Roger: Your AI agents, smarter every Monday." Description: the homepage sub-line. The social card shows "Roger" and the headline only. All three repeat the homepage's own headline and sub-line. |
+| `/agents`, browser title and search description | Title: "Roger: Stop figuring out AI agents alone." Description: the `/agents` sub-line. Both repeat that page's own headline and sub-line. |
+| `/agents`, the strip under the hero | The spec's line, "Zack files for Claude, Duet, Grok Bot and Hark. Any other agent adapts one with a single prompt.", reads the same today. The four names are no longer typed: the page lists the agents whose Zack file exists, in alphabetical order, so the sentence changes by itself when a file is added or removed. |
 | `/zack` | "Run Zack on yourself first", "Pick your agent", "Your email", "Run Zack once", "Paste the report back", "Agent not listed?", "Start from the Hark file and ask your own agent to adapt it.", "Your top plays" |
 
 **`/how-it-works`** (spec A.8 lists the sections; none of its text is written)

@@ -4,7 +4,9 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // Zack's instructions and connector texts are read from disk at request time.
-  outputFileTracingIncludes: { "/api/zack/instructions": ["./content/zack/**/*"], "/app/**": ["./content/zack/**/*"] },
+  // /agents lists the agents whose Zack file exists (src/data/zack.ts looks in public/zack), and is
+  // regenerated in a function, which has public/ beside it only if the files are traced in.
+  outputFileTracingIncludes: { "/api/zack/instructions": ["./content/zack/**/*"], "/app/**": ["./content/zack/**/*"], "/agents": ["./public/zack/*.md"] },
   experimental: {
     // Vercel restores Turbopack's build cache between deploys, and the Tailwind
     // loader below doesn't invalidate it when globals.css changes: the Oct 24
