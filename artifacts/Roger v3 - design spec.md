@@ -573,7 +573,7 @@ Five short screens. Progress is saved after each, so a person who leaves can ret
 | `new` | Everyone else | Onboarding starts with the startup page: install an agent and the starter team, then connect Zack |
 | `not_ready` | "Not yet" on question 2 and "I avoid it" on question 6 | An honest note before the account step: "Roger works best once you use AI agents most days. You can start anyway, or leave your email and we'll check in later." Two buttons. Choosing "later" saves a `leads` row with `kind = 'not_ready'`. Choosing "start anyway" continues on the `new` path with the tag kept for the admin. |
 
-**2. Account (`/start/account`).** Name, then email link or Google.
+**2. Account (`/start/account`).** First name and last name in separate boxes, then email link or Google *(1.3)*. When this browser already typed an email into Roger (sign-in, the waitlist, or this step before), the address is shown with "Change" instead of asked for again. In the quiz, typing a role before choosing "I work in real estate" or "Something else" selects "Something else".
 
 **3. Plan (`/start/plan`).** Two choices, with monthly selected and marked "Most people choose this".
 
