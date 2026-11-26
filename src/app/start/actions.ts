@@ -12,6 +12,7 @@ import { newAccountFrom, startAccount } from "@/lib/signup/account";
 import { decodeDraft, DRAFT_COOKIE, DRAFT_DAYS, encodeDraft, type SignupDraft } from "@/lib/signup/draft";
 import { parseStartParams } from "@/lib/signup/params";
 import { parseQuiz, routeFor } from "@/lib/signup/quiz";
+import { rememberEmail } from "@/lib/signup/known-email";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export type StartFormState = { status: "idle" | "ok" | "error"; message?: string; errors?: Record<string, string>; email?: string };
@@ -52,6 +53,7 @@ async function leadFrom(fd: FormData, kind: "not_open" | "not_ready"): Promise<S
     if (!(await hit(`lead:ip:${ip}`, limits.leadPerIp))) return { status: "error", message: "Too many tries from here. Try again in an hour." };
     const utm = parseStartParams({ utm: field(fd, "utm", 200) }).utm;
     await query(`insert into leads (email, kind, persona, utm) values ($1, $2, 'v3', $3) on conflict do nothing`, [email, kind, utm]);
+    await rememberEmail(email);
   } catch (e) {
     console.error("[start] lead not saved", e);
     return { status: "error", message: OUR_SIDE };
@@ -112,7 +114,7 @@ export async function startGoogleSignup(fd: FormData) {
     if (!(await hit(`google:ip:${clientIp(await headers())}`, limits.googleStartPerIp))) {
       url = "/signin?e=limited";
     } else {
-      const started = await beginGoogle(query, cfg, { next: "/start/plan", newAccount: newAccountFrom(d, field(fd, "name", 80)) });
+      const started = await beginGoogle(query, cfg, { next: "/start/plan", newAccount: newAccountFrom(d, `${field(fd, "firstName", 40)} ${field(fd, "lastName", 40)}`.trim()) });
       (await cookies()).set(GOOGLE_STATE_COOKIE, started.state, googleStateCookie());
       url = started.url;
     }
@@ -122,21 +124,28 @@ export async function startGoogleSignup(fd: FormData) {
   redirect(url);
 }
 
-/** Step 2: name and email. Ends at "check your email" for a valid address. */
+/**
+ * Step 2: first and last name, and the email (filled in already when this
+ * browser typed it before). Ends at "check your email" for a valid address.
+ */
 export async function submitAccount(_prev: StartFormState, fd: FormData): Promise<StartFormState> {
   if (!(await signupOpen())) redirect("/start");
   if (honeypotTripped(fd)) return { status: "ok" };
   const d = await readDraft();
   if (!d) redirect("/start");
-  const name = field(fd, "name", 80);
+  const firstName = field(fd, "firstName", 40);
+  const lastName = field(fd, "lastName", 40);
+  const name = `${firstName} ${lastName}`.trim();
   const email = field(fd, "email", 254);
   const errors: Record<string, string> = {};
-  if (!name) errors.name = "Enter your name.";
+  if (!firstName) errors.firstName = "Enter your first name.";
+  if (!lastName) errors.lastName = "Enter your last name.";
   if (!isEmail(email)) errors.email = "Enter a valid email address.";
   if (Object.keys(errors).length) return { status: "error", errors };
   try {
     const outcome = await startAccount(query, { name, email, draft: d, ip: clientIp(await headers()) });
     if (outcome === "send_failed") return { status: "error", message: "We couldn’t send the email just now. Try again in a minute." };
+    await rememberEmail(email);
   } catch (e) {
     console.error("[start] account step failed", e);
     return { status: "error", message: OUR_SIDE };

@@ -60,7 +60,18 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         <label htmlFor={`${id}-role`} className="mt-4 block text-small font-[560]">
           Your role and kind of business, in one line
         </label>
-        <input id={`${id}-role`} name="role" maxLength={120} placeholder="e.g. Broker, residential resale" className={field} />
+        <input
+          id={`${id}-role`}
+          name="role"
+          maxLength={120}
+          placeholder="e.g. Broker, residential resale"
+          className={field}
+          // Typing a role with neither choice made means "Something else"; a choice already made is left alone.
+          onChange={(ev) => {
+            const work = ev.currentTarget.form?.elements.namedItem("work") as RadioNodeList | null;
+            if (work && !work.value && ev.currentTarget.value.trim()) work.value = "other";
+          }}
+        />
       </Question>
 
       <Question n={2} legend="Do you use AI agents for work today?" error={e.uses}>
