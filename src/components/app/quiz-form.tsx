@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useId, useState, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { submitQuiz, type StartFormState } from "@/app/start/actions";
 import type { StartParams } from "@/lib/signup/params";
 import { agentLevels } from "@/data/agent-levels";
@@ -10,9 +10,12 @@ const idle: StartFormState = { status: "idle" };
 type Option = { value: string; label: string };
 
 /**
- * The seven-question sign-up quiz (spec B.4), on one screen. Every question is
- * a real fieldset with a visible legend; errors show inline under the
- * question and are announced.
+ * The seven-question sign-up quiz (spec B.4), one question per screen with a
+ * progress bar. Every question stays in the form (only the current one is
+ * shown), so Back loses nothing and one submit sends every answer. Next checks
+ * the current question; a missing answer the server finds opens that question.
+ * Every question is a real fieldset with a visible legend; errors show inline
+ * and are announced.
  */
 export function QuizForm({ params, agents, categories }: { params: StartParams; agents: Option[]; categories: readonly string[] }) {
   const [state, action, pending] = useActionState(submitQuiz, idle);
@@ -22,14 +25,72 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
   const primary = chosen && ticked.includes(chosen) ? chosen : (ticked.find((v) => v !== "not_sure") ?? "");
   const toggle = (v: string, on: boolean) => setTicked((t) => (on ? [...t.filter((x) => x !== v), v] : t.filter((x) => x !== v)));
   const agentOptions = [...agents, { value: "other", label: "Another one" }, { value: "not_sure", label: "Not sure yet" }];
-  const e = state.errors ?? {};
-  // Bring the first unanswered question into view.
-  useEffect(() => {
-    if (state.status !== "error") return;
-    const first = document.querySelector<HTMLElement>("fieldset[aria-invalid]");
-    first?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [state]);
   const id = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [step, setStep] = useState(0);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const e = errors;
+  const last = QUESTIONS.length - 1;
+
+  // The server's answer: open the first question it says is missing.
+  const [seen, setSeen] = useState(state);
+  if (state !== seen) {
+    setSeen(state);
+    const errs = state.errors ?? {};
+    setErrors(errs);
+    const first = QUESTIONS.findIndex((keys) => keys.some((k) => errs[k]));
+    if (first >= 0) setStep(first);
+  }
+
+  // A new question takes focus, so keyboard and screen-reader users land on it.
+  const moved = useRef(false);
+  useEffect(() => {
+    if (!moved.current) return;
+    const q = formRef.current?.querySelector<HTMLElement>(`[data-q="${step}"]`);
+    q?.focus({ preventScroll: true });
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [step]);
+
+  /** Checks one question in the browser, with the server's own messages. */
+  function check(i: number): Record<string, string> {
+    const f = formRef.current;
+    if (!f) return {};
+    const val = (n: string) => ((f.elements.namedItem(n) as RadioNodeList | HTMLInputElement | null)?.value ?? "").trim();
+    const out: Record<string, string> = {};
+    if (i === 0) {
+      if (!val("work")) out.work = "Choose one.";
+      else if (val("role").length < 2) out.role = "Tell us your role and kind of business, in a few words.";
+    }
+    if (i === 1 && !val("uses")) out.uses = "Choose one.";
+    if (i === 2) {
+      if (!ticked.length) out.agent = "Choose at least one.";
+      else if (ticked.includes("other") && !val("agentOther")) out.agentOther = "Which AI agent?";
+    }
+    if (i === 3 && !val("count")) out.count = "Choose one.";
+    if (i === 4 && !val("level")) out.level = "Choose the one closest to you.";
+    if (i === 6 && !val("software")) out.software = "Choose one.";
+    return out;
+  }
+
+  /** Shows a question's problems, or clears them; true when it is answered. */
+  function settle(i: number): boolean {
+    const found = check(i);
+    setErrors((prev) => {
+      const next = { ...prev };
+      for (const k of QUESTIONS[i]) delete next[k];
+      return { ...next, ...found };
+    });
+    return Object.keys(found).length === 0;
+  }
+
+  function go(to: number) {
+    moved.current = true;
+    setStep(Math.max(0, Math.min(last, to)));
+  }
+
+  const next = () => {
+    if (settle(step)) go(step + 1);
+  };
 
   return (
     <form
@@ -38,17 +99,23 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
       // everything typed and ticked stays, and the missing answers are marked.
       onSubmit={(ev) => {
         ev.preventDefault();
+        // Enter in an earlier question means "next", not "send".
+        if (step < last) return next();
+        if (!settle(step)) return;
         const fd = new FormData(ev.currentTarget);
         startTransition(() => action(fd));
       }}
-      className="mt-10 space-y-10"
+      ref={formRef}
+      className="mt-10"
       noValidate
     >
+      <Progress step={step} total={QUESTIONS.length} />
+
       {(["path", "cur", "ref", "zack", "utm"] as const).map((k) => (
         <input key={k} type="hidden" name={k} value={params[k] ?? ""} />
       ))}
 
-      <Question n={1} legend="What do you do?" error={e.work ?? e.role}>
+      <Question n={1} at={step} legend="What do you do?" error={e.work ?? e.role}>
         <Radios
           name="work"
           defaultValue={params.path === "re" ? "real_estate" : undefined}
@@ -74,7 +141,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         />
       </Question>
 
-      <Question n={2} legend="Do you use AI agents for work today?" error={e.uses}>
+      <Question n={2} at={step} legend="Do you use AI agents for work today?" error={e.uses}>
         <Radios
           name="uses"
           options={[
@@ -87,6 +154,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
 
       <Question
         n={3}
+        at={step}
         legend="Which AI agents do you use, or plan to?"
         hint="Choose any. The star marks your primary agent, the one Roger sets you up with first."
         error={e.agent ?? e.agentOther}
@@ -133,7 +201,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         )}
       </Question>
 
-      <Question n={4} legend="How many agents, bots or scheduled routines do you run?" error={e.count}>
+      <Question n={4} at={step} legend="How many agents, bots or scheduled routines do you run?" error={e.count}>
         <Radios
           name="count"
           options={[
@@ -145,7 +213,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         />
       </Question>
 
-      <Question n={5} legend="Which level sounds most like you today?" hint="Pick the one that matches how you work most weeks." error={e.level}>
+      <Question n={5} at={step} legend="Which level sounds most like you today?" hint="Pick the one that matches how you work most weeks." error={e.level}>
         <div className="grid gap-2">
           {agentLevels.map((l) => (
             <label key={l.level} className={`${choice} items-start py-3`}>
@@ -162,7 +230,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         </div>
       </Question>
 
-      <Question n={6} legend="What do you most want help with?" hint="Choose any.">
+      <Question n={6} at={step} legend="What do you most want help with?" hint="Choose any.">
         <div className="grid gap-2 sm:grid-cols-2">
           {categories.map((c) => (
             <label key={c} className={choice}>
@@ -173,7 +241,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         </div>
       </Question>
 
-      <Question n={7} legend="How do you feel about trying new software for work?" error={e.software}>
+      <Question n={7} at={step} legend="How do you feel about trying new software for work?" error={e.software}>
         <Radios
           name="software"
           options={[
@@ -184,14 +252,27 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         />
       </Question>
 
-      {state.status === "error" && state.message && (
-        <p role="alert" className="text-small text-error">
+      {state.status === "error" && state.message && !Object.keys(e).length && (
+        <p role="alert" className="mt-6 text-small text-error">
           {state.message}
         </p>
       )}
-      <button type="submit" className="btn btn-l" disabled={pending}>
-        {pending ? "Saving…" : "Continue"}
-      </button>
+      <div className="mt-10 flex items-center gap-6">
+        {step < last ? (
+          <button type="button" onClick={next} className="btn btn-l">
+            Next
+          </button>
+        ) : (
+          <button type="submit" className="btn btn-l" disabled={pending}>
+            {pending ? "Saving…" : "Continue"}
+          </button>
+        )}
+        {step > 0 && (
+          <button type="button" onClick={() => go(step - 1)} className="min-h-12 px-1 text-body text-ink-2 underline-offset-4 hover:text-ink hover:underline">
+            Back
+          </button>
+        )}
+      </div>
     </form>
   );
 }
@@ -200,18 +281,44 @@ const field = "mt-2 w-full rounded-[8px] border border-rule-strong bg-surface px
 const choice =
   "flex min-h-12 cursor-pointer items-center gap-3 rounded-[8px] border border-rule bg-surface px-4 py-2 text-small has-[:checked]:border-accent has-[:checked]:bg-accent-wash";
 
-function Question({ n, legend, hint, error, children }: { n: number; legend: string; hint?: string; error?: string; children: ReactNode }) {
+/** The form fields behind each question, in order: which errors open which question. */
+const QUESTIONS: readonly (readonly string[])[] = [["work", "role"], ["uses"], ["agent", "agentOther"], ["count"], ["level"], ["help"], ["software"]];
+
+function Progress({ step, total }: { step: number; total: number }) {
+  const pct = Math.round(((step + 1) / total) * 100);
+  return (
+    <div className="mb-8">
+      <p className="tabular text-small text-ink-2">
+        Question {step + 1} of {total}
+      </p>
+      <div
+        role="progressbar"
+        aria-label="Questions"
+        aria-valuemin={1}
+        aria-valuemax={total}
+        aria-valuenow={step + 1}
+        aria-valuetext={`Question ${step + 1} of ${total}`}
+        className="mt-2 h-2 overflow-hidden rounded-full bg-rule"
+      >
+        <div className="h-full rounded-full bg-accent transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** One question. Only the current one is shown; the others stay in the form so their answers are sent. */
+function Question({ n, at, legend, hint, error, children }: { n: number; at: number; legend: string; hint?: string; error?: string; children: ReactNode }) {
   const errId = `q${n}-err`;
   return (
     <fieldset
+      data-q={n - 1}
+      tabIndex={-1}
+      hidden={at !== n - 1}
       aria-describedby={error ? errId : undefined}
       aria-invalid={error ? true : undefined}
-      className={error ? "rounded-[8px] outline outline-2 outline-offset-[10px] outline-error" : undefined}
+      className="outline-none"
     >
-      <legend className="text-title">
-        <span className="tabular mr-2 text-ink-2">{n}.</span>
-        {legend}
-      </legend>
+      <legend className="text-title">{legend}</legend>
       {hint && <p className="mt-1 text-small text-ink-2">{hint}</p>}
       <div className="mt-4">{children}</div>
       {error && (

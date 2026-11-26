@@ -553,7 +553,7 @@ Five short screens. Progress is saved after each, so a person who leaves can ret
 
 **When sign-up is open.** *(1.2)* `/start` works on production for anyone who has the link from the day B1 ships; it does not wait for the new marketing pages, and nothing on the Circles pages links to it. The privacy and terms pages, draft or final, are live and linked from `/start` that day. With `v3.signupOpen` off, `/start` shows a short, honest "not open yet" note and an email field that saves a `leads` row and sends nothing; existing accounts keep working, and every sign-up action checks the switch again. On production it stays off until the go-live gate in the launch list is met (Zack 2.0 and Cora 2.0 approved, live Stripe keys and prices, the seed runs imported, privacy and terms linked), and an admin turns it on after `v3.cycleLive`.
 
-**1. The quiz (`/start`).** Seven questions *(1.3)*, one screen. A missing answer keeps everything already entered and marks the unanswered questions. The answers are saved as the user's profile, which Cora uses for matching (B.7).
+**1. The quiz (`/start`).** Seven questions *(1.3)*, one per screen, with a progress bar ("Question 3 of 7"), Next and Back. Next checks the question on screen; Back keeps every answer. The last question has Continue. If anything is still missing, the quiz opens that question with everything else kept. The answers are saved as the user's profile, which Cora uses for matching (B.7).
 
 | # | Question | Answers |
 |---|---|---|
