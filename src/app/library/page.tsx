@@ -59,6 +59,14 @@ async function TrialBand({ version }: { version: BuiltVersion }) {
   );
 }
 
+/**
+ * The word for the software. A site version says "AI agent" in full, because
+ * its readers in real estate are also called agents (spec 0.4, A.16 check 10).
+ * Circles and the legacy site keep "agent".
+ */
+const agent = isBuiltVersion(site) ? "AI agent" : "agent";
+const anyAgent = isBuiltVersion(site) ? "Any AI agent" : undefined;
+
 export default async function LibraryPage() {
   const items = await getUseCases();
 
@@ -79,7 +87,8 @@ export default async function LibraryPage() {
         </h1>
         <div className="after-lines">
           <p className="text-lead">
-            {items.length.toLocaleString("en-CA")} real things people’s agents did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.
+            {items.length.toLocaleString("en-CA")}
+            {` real things people’s ${agent}s did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.`}
           </p>
           <p className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
             {site === "circles" && <Link href="/apply" className="btn btn-m">Apply for a founding Circle</Link>}
@@ -91,8 +100,8 @@ export default async function LibraryPage() {
         </div>
       </section>
 
-      <Suspense fallback={<LibraryStatic items={items} showOffer={site === "legacy"} />}>
-        <LibraryBrowser items={items} showOffer={site === "legacy"} band={isBuiltVersion(site) ? null : <SetUpBand />} />
+      <Suspense fallback={<LibraryStatic items={items} showOffer={site === "legacy"} anyAgent={anyAgent} />}>
+        <LibraryBrowser items={items} showOffer={site === "legacy"} anyAgent={anyAgent} band={isBuiltVersion(site) ? null : <SetUpBand />} />
       </Suspense>
 
       <section id="watch" aria-labelledby="watch-title" className="wrap scroll-mt-32 pb-8 pt-16 md:pt-24">
@@ -101,9 +110,9 @@ export default async function LibraryPage() {
           Not in the library yet?
         </h2>
         <div className="mt-6">
-          <WatchSentence />
+          <WatchSentence agent={agent} />
         </div>
-        <p className="mt-6 max-w-[36rem] text-small text-ink-2">The morning someone’s agent does it, you get one email with the link. Every email has a link to stop.</p>
+        <p className="mt-6 max-w-[36rem] text-small text-ink-2">{`The morning someone’s ${agent} does it, you get one email with the link. Every email has a link to stop.`}</p>
         </div>
       </section>
 

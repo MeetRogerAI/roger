@@ -34,7 +34,8 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
   const titleId = `${id}-idea`;
   const scored = idea.scores.some((s) => typeof s.value === "number");
   return (
-    <article aria-labelledby={titleId} className="mx-auto max-w-[44rem] rounded-[8px] border border-rule bg-surface p-5 text-left text-ink sm:p-8">
+    // data-claims: the play's own text and scores, for the claims check (src/lib/site/claims.ts).
+    <article aria-labelledby={titleId} data-claims="sample" className="mx-auto max-w-[44rem] rounded-[8px] border border-rule bg-surface p-5 text-left text-ink sm:p-8">
       <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">{idea.category}</p>
       <h3 id={titleId} className="mt-2 text-h3">
         {idea.title}

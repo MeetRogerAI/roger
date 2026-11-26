@@ -125,22 +125,29 @@ describe("getServedSite", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("SITE_VERSION", undefined);
     expect(getServedSite()).toBe(siteConfig.site.live);
-    vi.stubEnv("SITE_VERSION", "v1");
-    expect(getServedSite()).toBe("v1");
+    // An override that differs from the live version, so the answer can only be the override's.
+    vi.stubEnv("SITE_VERSION", "v2");
+    expect(getServedSite()).toBe("v2");
   });
 
+  it("serves v1 in production and on previews: merging to main is what makes it live", () => {
+    expect(siteConfig.site.live).toBe("v1");
+    expect(siteConfig.site.preview).toBe("v1");
+  });
 
-  it("keeps Circles live in production until Peter names a version (R2)", () => {
-    expect(siteConfig.site.live).toBe("circles");
+  it("serves the live version in production and ignores the override there", () => {
     vi.stubEnv("VERCEL_ENV", "production");
-    vi.stubEnv("SITE_VERSION", "v1");
-    expect(getServedSite()).toBe("circles");
+    for (const override of ["circles", "v2", "v3", "nonsense"]) {
+      vi.stubEnv("SITE_VERSION", override);
+      expect(getServedSite(), override).toBe(siteConfig.site.live);
+    }
+    expect(getServedSite()).toBe("v1");
   });
 
   it("reads the override outside production", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
-    vi.stubEnv("SITE_VERSION", "v1");
-    expect(getServedSite()).toBe("v1");
+    vi.stubEnv("SITE_VERSION", "v2");
+    expect(getServedSite()).toBe("v2");
     vi.stubEnv("SITE_VERSION", "v9");
     expect(getServedSite()).toBe(siteConfig.site.preview);
   });

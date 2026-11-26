@@ -167,7 +167,8 @@ export function V1HowItWorksView({
           </blockquote>
         </figure>
 
-        <article aria-labelledby="anatomy-idea" className="mt-14">
+        {/* data-claims: the play's own text, for the claims check (src/lib/site/claims.ts). */}
+        <article aria-labelledby="anatomy-idea" data-claims="sample" className="mt-14">
           <div className="max-w-[44rem]">
             <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">{idea.category}</p>
             <h3 id="anatomy-idea" className="mt-2 text-h3">
@@ -214,7 +215,7 @@ export function V1HowItWorksView({
           {how.firstWeeks.steps.map((step, i) => (
             <li key={step} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 border-t border-rule py-5">
               {/* Decoration: the list is ordered, so a screen reader already counts the steps. */}
-              <span aria-hidden="true" className="tabular text-title text-ink-2">
+              <span aria-hidden="true" data-claims="numeral" className="tabular text-title text-ink-2">
                 {i + 1}
               </span>
               <span className="text-body">{step}</span>

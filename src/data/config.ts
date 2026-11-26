@@ -10,11 +10,12 @@ export type SiteVersion = "circles" | "v1" | "v2" | "v3";
 export const siteConfig = {
   productName: "Roger",
   /**
-   * Which public site is served. `live` is production; `preview` is Vercel
-   * previews, local development and tests. Anywhere else gets `live`. Going live is a change to `live`
-   * and a deploy. Read through src/lib/site/version.ts, never from here.
+   * Which public site is served: v1. Merging to main makes it live, and
+   * previews show the same. `live` is production; `preview` is Vercel
+   * previews, local development and tests; anywhere else gets `live`.
+   * Read through src/lib/site/version.ts, never from here.
    */
-  site: { live: "circles" as SiteVersion, preview: "circles" as SiteVersion },
+  site: { live: "v1" as SiteVersion, preview: "v1" as SiteVersion },
   /** Applies while the site above is "circles". Disable to restore the library-led site. */
   flags: { circlesMode: true },
   circles: {

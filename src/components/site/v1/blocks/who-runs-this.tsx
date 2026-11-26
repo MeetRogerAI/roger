@@ -37,7 +37,8 @@ export function WhoRunsThis({
           )}
           <div>
             <p className="text-title">{copy.leadIn}</p>
-            <div className="mt-6 space-y-5 text-body">
+            {/* data-claims: Peter's letter, word for word, for the claims check (src/lib/site/claims.ts). */}
+            <div data-claims="letter" className="mt-6 space-y-5 text-body">
               {paragraphs.map((p) => (
                 <p key={p.id}>{p.shown}</p>
               ))}

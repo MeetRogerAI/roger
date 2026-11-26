@@ -41,7 +41,7 @@ function Steps({ steps, current }: { steps: string[]; current: number }) {
     <ol className="mx-auto mt-10 flex max-w-[44rem] flex-wrap justify-center gap-x-6 gap-y-2 text-meta text-ink-2">
       {steps.map((step, i) => (
         <li key={step} aria-current={i === current ? "step" : undefined} className={i === current ? "font-[600] text-ink" : undefined}>
-          <span className="tabular">{i + 1}.</span> {step}
+          <span data-claims="numeral" className="tabular">{i + 1}.</span> {step}
         </li>
       ))}
     </ol>
@@ -54,10 +54,11 @@ function Step({ n, title, word, children }: { n: number; title: string; /** "Ste
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-14 border-t border-rule py-12 first:border-t-0 md:py-16">
       <h2 id={`${id}-title`} className="text-h3">
-        <span aria-hidden="true" className="mr-3 text-accent tabular">
+        {/* data-claims: a step's number, for the claims check (src/lib/site/claims.ts). */}
+        <span aria-hidden="true" data-claims="numeral" className="mr-3 text-accent tabular">
           {String(n).padStart(2, "0")}
         </span>
-        <span className="sr-only">
+        <span data-claims="numeral" className="sr-only">
           {word} {n}:{" "}
         </span>
         {title}
@@ -181,7 +182,8 @@ export async function V1ZackAgent({ version, agent, searchParams }: { version: B
       </section>
       <div className="bg-ground">
         <div className="wrap pb-20 pt-6 md:pb-28">
-          <div className="mx-auto max-w-[44rem]">
+          {/* The steps stream in after the heading. The column keeps most of a screen's height from the start, so the footer waits below the fold and does not jump when they arrive. */}
+          <div data-flow-column className="mx-auto min-h-[70svh] max-w-[44rem]">
             <Suspense
               fallback={
                 <p role="status" className="py-12 text-body text-ink-2">

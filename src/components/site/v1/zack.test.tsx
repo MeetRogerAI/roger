@@ -281,6 +281,16 @@ describe("/zack/[agent] on v1: the steps", () => {
     const other = await pageMarkup(<V1ZackAgent version="v1" agent={freeRunAgent("other")!} searchParams={Promise.resolve({ run: ["a", "b"] })} />);
     expect(text(other)).toContain("Run Zack on your agent");
   });
+
+  it("holds the steps' column to most of a screen from the start, so the footer does not jump when they stream in (U10 acceptance)", async () => {
+    const markup = await pageMarkup(<V1ZackAgent version="v1" agent={freeRunAgent("other")!} searchParams={Promise.resolve({})} />);
+    // The column that holds the Suspense boundary reserves its height whether the fallback or the steps are in it.
+    const column = /<div data-flow-column="true" class="([^"]*)">/.exec(markup);
+    expect(column, "the steps' column").not.toBeNull();
+    expect(column![1].split(" ")).toContain("min-h-[70svh]");
+    expect(markup).toContain('id="step-2"');
+    expect(markup.indexOf("data-flow-column")).toBeLessThan(markup.indexOf('id="step-2"'));
+  });
 });
 
 /**

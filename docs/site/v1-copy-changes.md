@@ -414,7 +414,9 @@ Terms:
 - **The playbook names Claude.** The sample play was written on Claude, and its text says "Claude returns two ready-to-send versions", "a file Claude should check first" and "Claude drafts only". The card also prints "Written on Claude". This is the source's wording, kept. It is the third thing for Peter to settle in section 2.2.
 - **"One list on its own costs the same as a whole month"** is true only while the two settings are equal. So are "for the price of one list" in "What does it cost?" and "For the same price" in "Can I buy one list at a time?". The prices come from the settings and these sentences do not, so if the monthly price and the one-list price are ever set apart, the three sentences turn false and no test will catch it. They are the wording R14a asks for, so they are not changed.
 
-## 6. Must be resolved before a version goes live
+## 6. Resolve before merging to main, because merging goes live
+
+Merging the v1 pull request into `main` puts v1 on meetroger.ai. There is no separate go-live step, so everything in this section is settled before the merge.
 
 ### 6.1 "He does not read your email, calendar or files." conflicts with the public Zack files
 

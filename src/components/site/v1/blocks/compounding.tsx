@@ -33,7 +33,8 @@ export function storyText(words: BrickWords): string {
 export function Compounding({ copy, words, id = "compounds" }: { copy: { title: string; line: string }; words: BrickWords; id?: string }) {
   const titleId = `${id}-title`;
   return (
-    <section id={id} aria-labelledby={titleId} className="scroll-mt-14 bg-ground-2">
+    // data-claims: the one place the week numbers and brick counts may be printed (src/lib/site/claims.ts).
+    <section id={id} aria-labelledby={titleId} className="scroll-mt-14 bg-ground-2" data-claims="compounding">
       <div className="wrap py-24 md:py-32">
         <SectionHead id={titleId} title={copy.title} sub={copy.line} />
         {/* The sequence in words. The labels beside the stack say the same thing, so they are hidden from a screen reader. */}

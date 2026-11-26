@@ -17,8 +17,8 @@ execution: code
 - **Product authority:** Peter Kuperman. He builds this himself; James Camarota is not building it. The content authority is `artifacts/v3-marketing-website-spec.md`, corrected by this plan's Key Decisions. The app (`/start`, `/signin`, `/app`, `/admin`, billing) is not active scope.
 - **Open blockers:** None for v1. v2 and v3 each stop for Peter's picks (R17, R22).
 - **Execution profile:** Three pull requests, one per version, built in order. v1's branch comes off `main`; each later version's branch comes off the previous version's branch until that one is merged. Each unit is built, reviewed, fixed and pushed before the next starts.
-- **Stop conditions:** Stop before merging any pull request, before changing the live version (KTD1), and at every pick gate (U11, U15, U16). Stop if build, lint or tests cannot be made green.
-- **Who finishes:** The executor builds through each version's acceptance unit and opens its pull request. Peter reviews on preview, merges, and decides when a version goes live.
+- **Stop conditions:** Stop before merging any pull request, because merging goes live, and at every pick gate (U11, U15, U16). Stop if build, lint or tests cannot be made green.
+- **Who finishes:** The executor builds through each version's acceptance unit and opens its pull request. Peter reviews on the branch's preview and signs off; merging to `main` makes that version live.
 - **Product Contract preservation:** Unchanged in scope. The letter-source assumption was corrected from research, the planning questions were resolved into KTDs, and AE8 to AE11 were added as clarifications of R2, R3, R5 and R9.
 
 ---
@@ -45,7 +45,7 @@ Reading about these does not settle which is best; seeing the same content in ea
 
 - **Three successive versions, one public at a time.** v1, then v2, then v3, each a full replacement. (session-settled: user-directed — chosen over a side-by-side bake-off: one site that gets better, not three to compare.) Governs R1, R2.
 - **No deadline.** Build in order and see how far it gets; the Nov 30 date in the spec does not bind this work. (session-settled: user-directed — chosen over "v1 live by Nov 30": Peter said "no deadline, just build".)
-- **Preview until Peter says go.** (session-settled: user-approved — chosen over going live when checks pass: publishing is Peter's call.) Governs R2, R3.
+- **Merging is going live.** Each version is reviewed on its branch's preview; when Peter signs off, merging to `main` makes it live, and Circles is replaced outright. (session-settled: user-directed — chosen on November 26 over a separate go-live switch after the merge and a test guarding the Circles pages: "We need a branch where I can review, and then when I sign off we merge to main.") Governs R2, R3.
 - **Single list is US$200 / CA$280.** The spec's US$100 / CA$140 is stale; Strategy v3.1 (Nov 25 revision) and the code agree on US$200. (session-settled: user-directed — chosen over the spec's price.) Governs R8.
 - **The spec's design rules bind v1 only.** v2 may change fonts, colours, layout and imagery. Claims rules, vocabulary and product facts bind every version. (session-settled: user-directed — chosen over "imagery only" and "stay inside the tokens".) Governs R6, R15.
 - **v3's look is open.** It uses the guide's process, with token-bound and free directions both on the table. (session-settled: user-directed — chosen over following the guide's token rules literally, and over refining v2's look.) Governs R20, R21.
@@ -64,8 +64,8 @@ Reading about these does not settle which is best; seeing the same content in ea
 **All versions**
 
 - R1. The three versions are built in order, and each is a complete site: v2 does not start until v1 passes R24, and v3 does not start until v2 does.
-- R2. The public site keeps serving the Circles preview until Peter names a version to make live.
-- R3. Which version is served is one setting, and any earlier version can be restored by changing it back.
+- R2. The public site changes only when Peter merges a version's pull request; until then that version is seen on its branch's preview.
+- R3. Which version is served is one setting on the branch, so a later version's branch replaces an earlier one by changing it, and going back is reverting the merge.
 - R4. No version changes how `/start`, `/signin`, `/app/*` or `/admin/*` look or behave.
 - R5. Every version covers the public routes, header, footer, sitemap, robots and social card that `artifacts/v3-marketing-website-spec.md` assigns to the marketing site, with the spec's behaviour for each.
 - R6. Every version follows the spec's claims rules, its "AI agent" vocabulary rule and its tone rules, with the one exception in R10.
@@ -115,8 +115,8 @@ Reading about these does not settle which is best; seeing the same content in ea
   - **Steps:** Peter opens the preview link. He says go, or sends edits; edits are applied and the checks rerun. On go, the next version starts. The public site does not change.
   - **Covered by:** R1, R2, R24
 - F2. Going live
-  - **Trigger:** Peter says "make v-n live".
-  - **Steps:** Peter approves the sample play text if he has not. The serving setting changes to that version. Circles pages stay reachable but unlinked and noindex.
+  - **Trigger:** Peter signs off on a version's preview.
+  - **Steps:** The items listed as "resolve before merging" in the version's acceptance file are settled. Peter merges the pull request, and production builds that version.
   - **Covered by:** R2, R3, R12
 - F3. v2 pick
   - **Trigger:** Five hero sketches are ready.
@@ -125,16 +125,16 @@ Reading about these does not settle which is best; seeing the same content in ea
 
 ### Acceptance Examples
 
-- AE1. **Covers R2, R3.** Given v1 is finished and Peter has not said go, when a visitor opens meetroger.ai, then they see the Circles preview.
+- AE1. **Covers R2, R3.** Given v1 is finished and its pull request is not merged, when a visitor opens meetroger.ai, then they see what `main` serves; after the merge they see v1.
 - AE2. **Covers R3.** Given v2 is live, when the serving setting is changed back to v1, then every public page shows v1's look and v1's copy.
 - AE3. **Covers R8, R14a.** Given v1's pricing page, when a visitor reads the comparison under the two columns, then it does not say "Two lists one at a time cost the same as a whole month."
 - AE4. **Covers R18b.** Given a v2 hero placeholder, when Peter saves the generated image at the checklist's file name, then the hero shows it at the same size and position.
 - AE5. **Covers R19.** Given v2 art that shows a person, when testimonials are later switched on, then that art is not adjacent to the testimonial section.
 - AE6. **Covers R10.** Given a visitor with reduced motion set, when they reach "It compounds", then they see the week 26 stack with its labels and nothing animates.
 - AE7. **Covers R4.** Given v2 is live with a new font, when a visitor clicks "Get two free Monday lists", then `/start` looks as it does today.
-- AE8. **Covers R2.** Given production is serving Circles, when a visitor opens `/pricing`, `/agents`, `/faq`, `/how-it-works`, `/about` or `/zack/claude` by typing the address, then they get the not-found page.
-- AE9. **Covers R9.** Given production is serving Circles, when a visitor opens `/zack`, then they see the Hampton partner page exactly as today.
-- AE10. **Covers R3, R5.** Given a version is live, when a visitor opens `/apply`, then they are sent to `/start`; after switching back to Circles, `/apply` shows the Circles application page again.
+- AE8. **Covers R2.** Given a build whose served site is Circles, when a visitor opens `/pricing`, `/agents`, `/faq`, `/how-it-works`, `/about` or `/zack/claude` by typing the address, then they get the not-found page.
+- AE9. **Covers R9.** Given a build whose served site is Circles, when a visitor opens `/zack`, then they see the Hampton partner page.
+- AE10. **Covers R3, R5.** Given a site version is served, when a visitor opens `/apply`, then they are sent to `/start`.
 - AE11. **Covers R5.** Given a Canadian visitor who chose CAD and arrived with campaign tags, when they read `/agents`, then `/pricing`, and click a start button, then the link carries `path=agents`, `cur=CAD` and the campaign tags.
 
 ### Success Criteria
@@ -196,7 +196,7 @@ None block the build. Each has a default the plan uses until Peter says otherwis
 
 ### Key Technical Decisions
 
-- KTD1. **The served version is one constant, resolved on the server.** `siteConfig.site.live` holds `"circles" | "v1" | "v2" | "v3"` and stays `"circles"`. `siteConfig.site.preview` holds the newest built version, starts as `"circles"` and becomes `"v1"` only in U10, and applies only where the environment is positively identified as non-production: `VERCEL_ENV` is `preview` or `development`, or it is unset and `NODE_ENV` is `development` or `test`. Anything else serves `site.live`, so a production build with no Vercel variable fails closed. A `SITE_VERSION` environment override is honoured whenever `VERCEL_ENV` is not `production`. Going live is a one-line change to `site.live` plus a deploy. Rationale: static `metadata`, `sitemap()`, `robots()` and the social card read the value at module level, so a database setting would make each of them async and add cache lag on a switch. Implements R2, R3.
+- KTD1. **The served version is one constant, resolved on the server.** `siteConfig.site.live` holds `"circles" | "v1" | "v2" | "v3"`. It stayed `"circles"` while v1 was built and is set to the branch's version in that version's acceptance unit, so merging the branch is what makes it live. `siteConfig.site.preview` holds the same value from then on, and applies only where the environment is positively identified as non-production: `VERCEL_ENV` is `preview` or `development`, or it is unset and `NODE_ENV` is `development` or `test`. Anything else serves `site.live`, so a production build with no Vercel variable fails closed. A `SITE_VERSION` environment override is honoured whenever `VERCEL_ENV` is not `production`. Going live is a one-line change to `site.live` plus a deploy. Rationale: static `metadata`, `sitemap()`, `robots()` and the social card read the value at module level, so a database setting would make each of them async and add cache lag on a switch. Implements R2, R3.
 - KTD2. **One pure resolver; no component reads the constant directly.** `src/lib/site/version.ts` exposes the resolved version and a pure function that takes its inputs as arguments, so every version is testable without rebuilding. The resolved value is read only in server files, because `VERCEL_ENV` is not available in the browser; client components receive it as a prop from the root layout or their server parent. `circlesMode` stays in the code as the spec asks, and every one of its reads moves to the resolver.
 - KTD3. **Every non-Circles version is its own branch, never "Circles off".** With `circlesMode` false the code falls back to the older setup-era site: the code banner, starter-pack offers and `/business` links. Each branch point therefore becomes three-way: Circles, a site version, and the legacy fallback that nothing selects.
 - KTD4. **New routes are gated in the page, not in config.** For static pages the gate is evaluated at build, so the version is fixed per deployment and `SITE_VERSION` must be set at build time. Each new public route calls not-found when the version is Circles. `/zack` renders the Hampton page under Circles and the free-run tool otherwise. `/apply` redirects to `/start` in the page when a version is serving, not in `next.config.ts`, so switching back restores it. Implements AE8, AE9, AE10.
@@ -845,7 +845,6 @@ Waits on: PR2, needed before this group can start, because v3 reuses v2's scopin
 | Lint | `npm run lint` | every unit |
 | Unit and component tests | `npm test` | every unit |
 | Types and production build | `npm run build` | every unit |
-| Circles unchanged | `src/lib/site/circles-parity.test.tsx` within `npm test` | every unit that touches a shared file |
 | Clean development console | `npm run dev`, load each new or changed page | U5 to U9, U13, U17 |
 | Claims and vocabulary | `src/lib/site/claims.test.tsx` within `npm test` | U10 onward |
 | Keyboard, reduced motion, five widths | Real browser, recorded in the version's acceptance file | U10, U14, U18 |
@@ -862,7 +861,7 @@ There is no CI workflow in the repo, so these gates are run locally before each 
 
 **Per version**
 - Every requirement in its group and every shared requirement holds, and its acceptance file records each A.16 check.
-- `site.live` is still `"circles"`.
+- `site.live` and `site.preview` are set to this version on its branch.
 - Experimental and abandoned code from the build is removed from the diff. After each pick, the unpicked sketches and mockups are removed and screenshots of all of them stay in the version's docs folder as the record.
 - Its pull request is open with a preview link, and nothing is merged without Peter.
 

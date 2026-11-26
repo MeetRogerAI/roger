@@ -21,7 +21,8 @@ export function Testimonials({ title, items, night = false, id = "say" }: { titl
           {items.map((t) => (
             <li key={t.id}>
               <figure className={`flex h-full flex-col rounded-[8px] border p-6 sm:p-8 ${night ? "border-night-rule bg-night-2" : "border-rule bg-surface"}`}>
-                <blockquote className="text-lead">
+                {/* data-claims: a user's own words, which the claims check reads by its testimonial rules (src/lib/site/claims.ts). */}
+                <blockquote data-claims="testimonial" className="text-lead">
                   <p>{`“${t.quote}”`}</p>
                 </blockquote>
                 <figcaption className={`mt-6 text-small ${night ? "text-night-ink-2" : "text-ink-2"}`}>

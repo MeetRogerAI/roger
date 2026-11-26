@@ -10,8 +10,8 @@ type For = "all" | "home" | "work";
 
 const PAGE = 60;
 
-/** `showOffer` comes from the server parent, which knows the served site; this file runs in the browser. */
-export function LibraryBrowser({ items, band, showOffer = false }: { items: UseCase[]; band: React.ReactNode; showOffer?: boolean }) {
+/** `showOffer` and `anyAgent` come from the server parent, which knows the served site; this file runs in the browser. */
+export function LibraryBrowser({ items, band, showOffer = false, anyAgent }: { items: UseCase[]; band: React.ReactNode; showOffer?: boolean; /** The label of a use case that names no tool; the row's own default when left out. */ anyAgent?: string }) {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -159,7 +159,7 @@ export function LibraryBrowser({ items, band, showOffer = false }: { items: UseC
             {results.slice(0, shown).map((u, i) => (
               <Fragment key={u.id}>
                 <li>
-                  <UseCaseRow u={u} shade={i % 2 === 1} showOffer={showOffer} />
+                  <UseCaseRow u={u} shade={i % 2 === 1} showOffer={showOffer} anyAgent={anyAgent} />
                 </li>
                 {band && i === 8 && results.length > 12 && <li className="py-6">{band}</li>}
               </Fragment>
@@ -179,14 +179,14 @@ export function LibraryBrowser({ items, band, showOffer = false }: { items: UseC
 }
 
 /** Rendered while the filters wake up, and for anyone without JavaScript: every card, unfiltered. */
-export function LibraryStatic({ items, showOffer = false }: { items: UseCase[]; showOffer?: boolean }) {
+export function LibraryStatic({ items, showOffer = false, anyAgent }: { items: UseCase[]; showOffer?: boolean; anyAgent?: string }) {
   return (
     <div className="wrap py-12 md:py-16">
       <p className="text-small">{items.length > PAGE ? `Showing the newest ${PAGE} of ${items.length.toLocaleString("en-CA")} use cases.` : `Showing all ${items.length} use cases.`}</p>
       <ul className="mt-6 space-y-1 md:-mx-6">
         {items.slice(0, PAGE).map((u, i) => (
           <li key={u.id}>
-            <UseCaseRow u={u} shade={i % 2 === 1} showOffer={showOffer} />
+            <UseCaseRow u={u} shade={i % 2 === 1} showOffer={showOffer} anyAgent={anyAgent} />
           </li>
         ))}
       </ul>

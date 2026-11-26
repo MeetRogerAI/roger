@@ -57,7 +57,8 @@ export function V1AboutView({
             )}
             <div data-letter>
               <p className="text-title">{about.leadIn}</p>
-              <div className="mt-8 space-y-5 text-body">
+              {/* data-claims: Peter's letter, word for word, for the claims check (src/lib/site/claims.ts). */}
+              <div data-claims="letter" className="mt-8 space-y-5 text-body">
                 <p>{letter.greeting}</p>
                 {letterShown.map((p) => (
                   <p key={p.id}>{p.shown}</p>

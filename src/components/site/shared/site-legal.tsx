@@ -12,7 +12,8 @@ import type { BuiltVersion } from "@/lib/site/version";
 export async function SiteLegalPage({ version, name }: { version: BuiltVersion; name: SiteLegalName }) {
   const doc = siteLegal(await getAmounts())[name];
   return (
-    <div data-site={version}>
+    // data-claims: a legal document, for the claims check (src/lib/site/claims.ts).
+    <div data-site={version} data-claims="legal">
       <LegalPage doc={doc} reviewed={false} />
     </div>
   );

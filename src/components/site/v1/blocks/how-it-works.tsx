@@ -34,7 +34,7 @@ export function HowItWorks({ copy, words, id = "how" }: { copy: { title: string;
               <div className={`bricks-grow flex items-end ${layout.stack}`} style={{ "--step": i } as CSSProperties}>
                 <BrickStack weeks={i + 1} size="m" night words={words} />
               </div>
-              <p aria-hidden="true" className="tabular mt-8 text-[clamp(3.5rem,6vw,5rem)] font-[650] leading-none tracking-[-0.04em] text-night-ink-2/60">
+              <p aria-hidden="true" data-claims="numeral" className="tabular mt-8 text-[clamp(3.5rem,6vw,5rem)] font-[650] leading-none tracking-[-0.04em] text-night-ink-2/60">
                 {i + 1}
               </p>
               <h3 className="mt-4 text-title">{step.title}</h3>
