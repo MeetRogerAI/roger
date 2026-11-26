@@ -131,6 +131,22 @@ describe("needs attention (spec check 30)", () => {
     expect(row(listed).closesAt).toBeNull();
   });
 
+  it("shows the no-card clocks (plan 2026-11-26-001, Unit 7): teaser + 14 days, consent + 21 days; a held list never moves them", async () => {
+    // First teaser Monday 2026-11-30, 7:05 AM Toronto; a newer held week since does not extend.
+    const teasered = await user("teasered@example.com", { consent_at: "2026-11-20T12:00:00Z", first_teaser_at: "2026-11-30T12:05:00Z" });
+    await query("insert into cora_weeks (week_of, status) values ('2026-12-07', 'sent')");
+    await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2026-12-07', 'picked')", [teasered]);
+    const fresh = await user("fresh@example.com", { consent_at: "2026-12-10T12:00:00Z" });
+    const sponsored = await user("sponsored@example.com", { consent_at: "2026-11-01T12:00:00Z", sponsor_id: "00000000-0000-4000-8000-000000000001" });
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const row = (id: string) => rows.find((r) => r.id === id)!;
+    expect(row(teasered).closesAt).toBe("2026-12-14T12:05:00.000Z");
+    expect(row(teasered).attention).toContain("trial_closing");
+    expect(row(fresh).closesAt).toBe("2026-12-31T12:00:00.000Z");
+    expect(row(fresh).attention).not.toContain("trial_closing");
+    expect(row(sponsored).closesAt).toBeNull();
+  });
+
   it("does not show a trial as closing while its run for the coming week waits on Cora", async () => {
     const waiting = await user("waiting@example.com", { trial_started_at: "2026-11-25T12:00:00Z" });
     await run(waiting, "accepted");

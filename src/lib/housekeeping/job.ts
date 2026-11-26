@@ -22,7 +22,7 @@ import { stripeGateway } from "@/lib/billing/gateway";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { applyRetention, cleanUpExpired } from "./retention";
-import { closeTrialsWithNoList, sendTrialNudges, sendUploadReminders } from "./trial";
+import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
 import { sendUnsentWelcomes } from "@/lib/signup/finish";
 import { finishCancellations } from "@/lib/billing/cancel";
 import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
@@ -59,10 +59,16 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Plan 2026-11-26-001, Unit 2. A welcome that failed when sign-up ended (a server action has no retry): the free-tool
   // claim re-run and the welcome sent, for trials with no card that consented since this flow shipped.
   { name: "welcome_unsent", run: (q, d, c) => sendUnsentWelcomes(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
-  // Unit 18. A trial with no run: "Zack hasn't sent a report yet" on days 3, 10 and 17.
+  // Unit 18. A trial with no run: "Zack hasn't sent a report yet" on days 3, 10 and 17 (from the card, or for a
+  // no-card trial with no teaser yet, from consent: plan 2026-11-26-001, Unit 7).
   { name: "trial_nudges", run: (q, d, c) => sendTrialNudges(q, { ...d, deadline: c.deadline }) },
   // Day 21 with no first list (weeks with no list because of Roger not counted): closed, no charge, one email.
   { name: "trial_no_list_close", run: (q, d, c) => closeTrialsWithNoList(q, { ...d, deadline: c.deadline }) },
+  // Plan 2026-11-26-001, Unit 7. A no-card trial with a held list: "Your ideas are waiting" on days 2 and 7 after the first teaser.
+  { name: "held_reminders", run: (q, d, c) => sendHeldReminders(q, { ...d, deadline: c.deadline }) },
+  // Unit 7. No card: closed 14 days after the first teaser, or 21 days after consent with no teaser (failed Cora weeks
+  // and no-eligible weeks extend; held lists never do), one closing email.
+  { name: "no_card_close", run: (q, d, c) => closeNoCardTrials(q, { ...d, deadline: c.deadline }) },
   // Sunday 6:00 PM in the member's time zone: upload-route members with no run yet.
   { name: "upload_reminders", run: (q, d, c) => sendUploadReminders(q, { ...d, deadline: c.deadline }) },
   // 48 hours before a first charge: the reminder with the stored date and amount.

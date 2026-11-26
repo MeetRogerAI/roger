@@ -7,7 +7,7 @@ import { loadUsers } from "@/lib/cora/context";
 import { eligiblePlays } from "@/lib/cora/eligible";
 import type { Query } from "@/lib/db-query";
 import { nextMonthly } from "@/lib/app/status";
-import { trialClocks } from "@/lib/housekeeping/trial";
+import { noCardClocks, trialClocks } from "@/lib/housekeeping/trial";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -260,7 +260,12 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
   const rows = await q<Row>(ROW_SQL, [week, o.userId ?? null]);
   const eligible = await eligibleCounts(q, week, o.userId ? [o.userId] : undefined);
   const only = o.userId ? [o.userId] : undefined;
-  const clocks = [...(await trialClocks(q, o.settings, o.now, only)), ...(await trialClocks(q, o.settings, o.now, only, "no_charge"))];
+  const clocks = [
+    ...(await trialClocks(q, o.settings, o.now, only)),
+    ...(await trialClocks(q, o.settings, o.now, only, "no_charge")),
+    // Plan 2026-11-26-001, Unit 7: a trial still waiting for its card closes on its own clock.
+    ...(await noCardClocks(q, o.settings, o.now, only)),
+  ];
   const noListCloses = new Map(clocks.map((t) => [t.id, t.closesAt]));
   const out: OpsRow[] = [];
   for (const r of rows) {

@@ -35,6 +35,21 @@ export function trialNoChargeClosedEmail(): Rendered {
   });
 }
 
+/**
+ * Plan 2026-11-26-001, Unit 7 (origin R11): a no-card trial whose first list
+ * was held closes 14 days after its first teaser with no card added. The
+ * same closing email, worded for the held list. Drafted copy, for S18 sign-off.
+ */
+export function trialNoCardClosedEmail(): Rendered {
+  return renderEmail({
+    subject: "Your Roger trial has closed",
+    preview: "Nothing was charged.",
+    heading: "Your trial has closed.",
+    paragraphs: ["Your first ideas were ready, but no card was added, so your trial has closed. Nothing was charged.", COME_BACK_LINE],
+    button: comeBackButton(),
+  });
+}
+
 /** Spec B.13 email 11, the day-21 form: no first list in the trial's 21 days, so it closes with no charge. */
 export function trialNoListClosedEmail(): Rendered {
   return renderEmail({
