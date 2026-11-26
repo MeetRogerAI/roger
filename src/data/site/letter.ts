@@ -12,7 +12,8 @@
  * `original` is Peter's text, untouched. `shown` is what a page prints. They
  * differ in one paragraph, by one added word: "agents" became "AI agents", which
  * the vocabulary rule requires on every page but /agents and /zack (spec 0.4).
- * That change awaits Peter's approval: docs/site/v1-copy-changes.md.
+ * Peter approved that change on November 26, 2026: section 2 of
+ * docs/site/v1-copy-changes.md.
  */
 export type LetterParagraph = {
   id: string;

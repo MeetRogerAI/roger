@@ -5,9 +5,9 @@
  * SOURCE: the 2026-11-14 pilot Zack run, Play 1 ("Client email in two
  * tones"), written on Claude.
  *
- * AWAITING PETER'S APPROVAL (plan R12). This text must not reach the live site
- * until Peter has read it. The full cleaned text and the list of what was
- * removed are in docs/site/v1-copy-changes.md, under "Needs Peter's approval".
+ * Approved by Peter on November 26, 2026 (plan R12). The full cleaned text and
+ * the list of what was removed are in section 2.2 of
+ * docs/site/v1-copy-changes.md. A change to this text needs his approval again.
  *
  * Cleaning rules applied to the source:
  * - Every time-saved figure, run count, yearly total and range is removed, so

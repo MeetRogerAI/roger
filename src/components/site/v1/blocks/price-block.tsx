@@ -34,10 +34,12 @@ export function PriceBlock({
   /** The audience of the page, carried by the start button. */
   audience?: SiteAudience;
   id?: string;
-  /** "h1" on /pricing, where the block opens the page. */
+  /** "h1" on /pricing, where the block opens the page. The plan names are one level under it: h2 there, h3 elsewhere. */
   as?: "h1" | "h2";
 }) {
   const titleId = `${id}-title`;
+  // One level under the block's heading, so no level is skipped. The classes set the size, not the level.
+  const PlanName = Heading === "h1" ? "h2" : "h3";
   return (
     <section id={id} aria-labelledby={titleId} className="on-night scroll-mt-14 bg-night text-night-ink">
       <div className="wrap py-24 text-center md:py-32">
@@ -51,7 +53,7 @@ export function PriceBlock({
         <div className="mx-auto mt-8 grid max-w-[60rem] items-stretch gap-4 text-left md:grid-cols-[1.35fr_1fr]" aria-live="polite">
           <div data-plan="monthly" className="rounded-[8px] border border-night-ink-2 bg-night-2 p-6 sm:p-10">
             <p className="inline-block rounded-full border border-night-ink-2 px-3 py-1 text-meta font-semibold">{copy.popular}</p>
-            <h3 className="mt-5 text-title">{copy.monthly.name}</h3>
+            <PlanName className="mt-5 text-title">{copy.monthly.name}</PlanName>
             {currencies.map((currency) => (
               <ForCurrency key={currency} currency={currency} initial={initialCurrency}>
                 <Price currency={currency} amount={amounts.monthly[currency]} per={copy.perMonth} tax={copy.tax[currency]} large />
@@ -61,7 +63,7 @@ export function PriceBlock({
           </div>
 
           <div data-plan="list" className="rounded-[8px] border border-night-rule p-6 sm:p-8">
-            <h3 className="text-title">{copy.list.name}</h3>
+            <PlanName className="text-title">{copy.list.name}</PlanName>
             {currencies.map((currency) => (
               <ForCurrency key={currency} currency={currency} initial={initialCurrency}>
                 <Price currency={currency} amount={amounts.list[currency]} per={copy.perList} tax={copy.tax[currency]} />

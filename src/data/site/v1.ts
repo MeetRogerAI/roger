@@ -10,8 +10,9 @@
  *   monthly brings a list every Monday for the price of one list;
  * - short labels and the /how-it-works paragraphs, which the spec describes
  *   but does not write;
- * - the lines that state the higher rate, which now give the Canadian figure
- *   beside the US one.
+ * - the lines that state the higher rate, and the one that states the price
+ *   of one list in US dollars alone, which now give the Canadian figure beside
+ *   the US one.
  *
  * Amounts are never typed here. A line names them in braces, {monthlyUsd},
  * {monthlyCad}, {listUsd}, {listCad}, {higherUsd}, {higherCad}, {freeLists},
@@ -146,7 +147,7 @@ const questions: V1QuestionGroup[] = [
       },
       {
         q: "Can I buy one list at a time?",
-        a: "Yes. One list costs {listUsd}, and you order it for any Monday you want. For the same price, monthly brings a new list every Monday.",
+        a: "Yes. One list costs {listUsd} ({listCad} in Canada), and you order it for any Monday you want. For the same price, monthly brings a new list every Monday.",
         on: [],
       },
     ],
@@ -156,6 +157,15 @@ const questions: V1QuestionGroup[] = [
 // The homepage headline and sub-line, which the browser title, the search description and the social card repeat.
 const headline = "Your AI agents, smarter every Monday.";
 const subLine = "Roger makes your AI agents smarter every week, with ideas that worked for other real estate users.";
+
+// Lines of /pricing, /how-it-works and /about that each page's search description repeats. None names an amount, so static metadata can read them.
+const firstIncluded = "Three ideas every Monday, each with a full playbook.";
+const underBothColumns = "One list on its own costs the same as a whole month. Monthly brings a list every Monday for that price.";
+const mondayOfTheWeek = "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. You receive your three ideas, each with a full playbook.";
+const runBy = "Roger is run by Peter Kuperman.";
+
+/** A reading page's browser title, search description and shared-link line, from its own heading and one of its own lines. */
+const pageMeta = (title: string, description: string) => ({ title: `Roger: ${title}`, headline: title, description });
 
 /** Everything but /agents and /zack. The vocabulary rule applies to all of it except `zackWarning`. */
 export const v1 = {
@@ -288,7 +298,7 @@ export const v1 = {
     },
     whoRuns: {
       title: "Who runs this",
-      leadIn: "Roger is run by Peter Kuperman.",
+      leadIn: runBy,
       /** Read out for his photograph, once the file exists. */
       photoAlt: "Peter Kuperman",
       link: { label: "Read Peter’s letter", href: "/about" },
@@ -298,10 +308,11 @@ export const v1 = {
 
   pricing: {
     title: "Pricing",
+    meta: pageMeta("Pricing", `${firstIncluded} ${underBothColumns}`),
     included: {
       title: "What is included",
       items: [
-        "Three ideas every Monday, each with a full playbook.",
+        firstIncluded,
         "Your own history of every idea you have received.",
         "Your Zack controls.",
         "A compounding view of what you have set up.",
@@ -311,7 +322,7 @@ export const v1 = {
       title: "Monthly or one at a time, explained",
       monthly: { title: "Monthly", body: "Three ideas every Monday. Charged once a month, starting with your {firstPaidList} list." },
       list: { title: "One at a time", body: "Order a list for any Monday you want one. You are charged only for the lists you order." },
-      under: "One list on its own costs the same as a whole month. Monthly brings a list every Monday for that price.",
+      under: underBothColumns,
     },
     contributing: {
       title: "How contributing works",
@@ -325,12 +336,13 @@ export const v1 = {
 
   howItWorks: {
     title: "How it works",
+    meta: pageMeta("How it works", mondayOfTheWeek),
     week: {
       title: "The week",
       days: [
-        { day: "Sunday", body: "Zack reviews the past seven days of your own AI agent activity and writes up what worked, with client details removed. You do nothing. He runs on his own." },
-        { day: "Monday", body: "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. You receive your three ideas, each with a full playbook." },
-        { day: "Tuesday", body: "Nothing new arrives. Open an idea, press copy and paste it into your AI agent. It sets itself up and asks you what it needs to know." },
+        { day: "Sunday", body: "Zack reviews the past seven days of your own AI agent activity and writes up what worked, with client details removed. He runs on his own, or you can upload his report yourself." },
+        { day: "Monday", body: mondayOfTheWeek },
+        { day: "Tuesday", body: "Open an idea, press copy and paste it into your AI agent. It sets itself up and asks you what it needs to know." },
         { day: "Wednesday", body: "Each idea you set up stays set up, and your three ideas stay in your dashboard for when you want them." },
       ],
     },
@@ -382,11 +394,19 @@ export const v1 = {
     },
   },
 
-  faq: { title: "Questions" },
+  faq: {
+    title: "Questions",
+    /** The description lists the page's four groups, by their own titles. */
+    meta: pageMeta("Questions", `${questions.map((group) => group.title).join(", ")}.`),
+  },
 
   about: {
     title: "About",
-    leadIn: "Roger is run by Peter Kuperman.",
+    meta: pageMeta("About", runBy),
+    leadIn: runBy,
+    /** Read out for his photograph and for his signature, once each file exists. */
+    photoAlt: "Peter Kuperman",
+    signatureAlt: "Peter’s signature",
   },
 
   library: {

@@ -42,6 +42,11 @@ export const siteConfig = {
      * Shown once set, on the site's "Who runs this" and the company pages. Hidden while empty.
      */
     photo: "" as string,
+    /**
+     * Peter's signature: a path under public/, e.g. "/media/peter-signature.png" (dark ink on a clear background).
+     * Shown under his letter on the site's /about once set. While empty, his name is typed there instead.
+     */
+    signature: "" as string,
     city: "Toronto",
     links: [] as { label: string; href: string }[], // e.g. { label: "X", href: "https://x.com/…" }
   },

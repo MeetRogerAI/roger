@@ -17,6 +17,7 @@ export function Questions({
   night = false,
   id = "questions",
   as: Heading = "h2",
+  group = false,
 }: {
   title: string;
   items: Question[];
@@ -26,14 +27,16 @@ export function Questions({
   id?: string;
   /** "h3" for a group under a page's own heading. */
   as?: "h2" | "h3";
+  /** One of several on a page, as on /faq: the heading keeps its level and takes the smaller size, and the groups sit closer together. */
+  group?: boolean;
 }) {
   if (items.length === 0) return null;
   const titleId = `${id}-title`;
   return (
     <section id={id} aria-labelledby={titleId} className={`scroll-mt-14 ${night ? "on-night bg-night text-night-ink" : "bg-ground"}`}>
-      <Reveal className="wrap grid gap-10 py-24 md:grid-cols-[0.8fr_1.2fr] md:gap-16 md:py-32">
+      <Reveal className={`wrap grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16 ${group ? "py-10 md:py-14" : "py-24 md:py-32"}`}>
         <div>
-          <Heading id={titleId} className={`${Heading === "h2" ? "text-h2" : "text-h3"} md:sticky md:top-24`}>
+          <Heading id={titleId} className={`${Heading === "h2" && !group ? "text-h2" : "text-h3"} md:sticky md:top-24`}>
             {title}
           </Heading>
         </div>

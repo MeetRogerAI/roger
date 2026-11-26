@@ -189,6 +189,20 @@ describe("the price block", () => {
     expect(plan(markup, "list")).not.toContain(copy.price.popular);
   });
 
+  it("names the plans one heading level under its own heading: h3 under an h2, h2 under an h1, in the same classes", async () => {
+    const headings = (markup: string) => [...markup.matchAll(/<(h[1-6])\b([^>]*)>(.*?)<\/\1>/g)].map((m) => ({ tag: m[1], classes: /class="([^"]*)"/.exec(m[2])?.[1], words: m[3] }));
+    // The homepage and /agents: the block's heading is an h2.
+    const asH2 = headings(await render("USD"));
+    expect(asH2).toEqual([
+      { tag: "h2", classes: "text-h2", words: copy.priceBlock.title },
+      { tag: "h3", classes: "mt-5 text-title", words: copy.priceBlock.monthly.name },
+      { tag: "h3", classes: "text-title", words: copy.priceBlock.list.name },
+    ]);
+    // /pricing: the block's heading is the page's h1, so the plans are h2 and no level is skipped.
+    const asH1 = headings(await pageMarkup(<PriceBlock amounts={amounts} copy={priceCopy} initialCurrency="USD" audience="re" as="h1" />));
+    expect(asH1).toEqual(asH2.map((h) => ({ ...h, tag: h.tag === "h2" ? "h1" : "h2" })));
+  });
+
   it("puts the trial line directly after the prices, before the button", async () => {
     const markup = await render("USD");
     const afterPrices = markup.slice(markup.indexOf(copy.priceBlock.list.note) + copy.priceBlock.list.note.length);

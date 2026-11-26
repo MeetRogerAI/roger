@@ -50,6 +50,14 @@ export function agentsMeta(version: BuiltVersion): SharedCopy["meta"] {
   return { v1: v1Agents, v2: v1Agents, v3: v1Agents }[version].meta;
 }
 
+/** The four reading pages, by their name in a version's copy. */
+export type ReadingPage = "pricing" | "howItWorks" | "faq" | "about";
+
+/** The same three for /pricing, /how-it-works, /faq and /about, from each page's own copy. v2 and v3 use v1's until each has its own. */
+export function pageMeta(version: BuiltVersion, page: ReadingPage): SharedCopy["meta"] {
+  return { v1, v2: v1, v3: v1 }[version][page].meta;
+}
+
 /**
  * The chrome from a version's copy. Only the four parts named here are filled
  * with amounts. This runs in the root layout, for every route under a site
