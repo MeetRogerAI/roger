@@ -1,7 +1,7 @@
 import type { Query } from "@/lib/db-query";
 import { counterFor, hit, limits, type Counter } from "@/lib/rate-limit";
 import { refusePromotion, type CardGateway, type Promotion } from "./gateway";
-import { isNoCardTrialUser } from "./has-card";
+import { isNoCardTrialUser, NO_CARD_TRIAL_SQL } from "./has-card";
 import type { Currency } from "./prices";
 
 /**
@@ -41,3 +41,50 @@ export async function checkPromoCode(
 
 /** What the person reads for any refused code. */
 export const PROMO_INVALID = "That code isn’t valid.";
+
+/**
+ * The pending promo selection (plan 2026-11-26-001, Unit 5): the code the
+ * person applied on the Payment page, kept on the user until the card is
+ * saved. `users.promo_code` is the code as Stripe holds it (the completion
+ * looks it up again by this text), `promo_coupon` the coupon applied at
+ * preview and at the first charge, `promo_label` what the Price Box shows.
+ * At card save the completion re-checks the code and either locks it in (a
+ * `promo_reservations` row) or clears all three and stamps `promo_refused_at`.
+ * Only a trial still waiting for its card can change it; once the card is
+ * saved the selection is fixed. Returns whether it was stored.
+ */
+export async function setPendingPromo(q: Query, userId: string, p: Pick<Promotion, "code" | "couponId" | "label">): Promise<boolean> {
+  const rows = await q(
+    `update users u set promo_code = $2, promo_coupon = $3, promo_label = $4, promo_refused_at = null
+     where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")} returning u.id`,
+    [userId, p.code, p.couponId, p.label],
+  );
+  return rows.length > 0;
+}
+
+/** "Remove" on the Payment page: no code pending. Only before the card is saved. */
+export async function clearPendingPromo(q: Query, userId: string): Promise<boolean> {
+  const rows = await q(
+    `update users u set promo_code = null, promo_coupon = null, promo_label = null
+     where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")} returning u.id`,
+    [userId],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * "Apply" on the Payment page: the code is checked (`checkPromoCode`: limits,
+ * Stripe, Roger's reservations) and, if valid, stored as the pending
+ * selection. Unit 6's `applyPromo` action calls this after its own guard.
+ */
+export async function choosePromoCode(
+  q: Query,
+  gw: Pick<CardGateway, "findPromotion">,
+  o: { userId: string; ip: string; code: string; currency: Currency; customer?: string | null },
+  d: { now?: Date; counter?: Counter } = {},
+): Promise<PromoCheck> {
+  const r = await checkPromoCode(q, gw, o, d);
+  if (!r.ok) return r;
+  if (!(await setPendingPromo(q, o.userId, r.promotion))) return { ok: false, reason: "not_allowed" };
+  return r;
+}

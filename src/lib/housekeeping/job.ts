@@ -29,6 +29,7 @@ import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals"
 import { applyDueSwitches } from "@/lib/billing/switch";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
 import { deliverLate, sendUnsentTeasers } from "@/lib/cora/send-job";
+import { sendPendingUnlocks } from "@/lib/cora/unlock";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -74,6 +75,9 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, adjust: d.adjust, query: d.query, transport: d.transport, sleep: d.sleep }) },
   // Plan 2026-11-26-001, Unit 3. A held list's titles-only teaser (no card yet) that the Monday send could not send.
   { name: "teaser_unsent", run: (q, d, c) => sendUnsentTeasers(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
+  // Plan 2026-11-26-001, Unit 5. A card saved after a held list whose unlock did not finish (the list undelivered, or
+  // delivered without its email): delivered and emailed now, whatever the list's age (deliver_late stops at 8 days).
+  { name: "unlock_pending", run: (q, d, c) => sendPendingUnlocks(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
   // The contributor rule: misses settled (forgiven, or the adjustment), then any Stripe items due (a carried one after its renewal).
   { name: "contributions", run: (q, d) => processContributions(q, d) },
   // Stripe deletes of dropped adjustment items that failed, until Stripe confirms them.

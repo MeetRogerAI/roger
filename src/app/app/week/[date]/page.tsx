@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { CardSavedNotice } from "@/components/app/card-saved-notice";
 import { HeldIdeas } from "@/components/app/held-ideas";
 import { WeekIdeas } from "@/components/app/week-ideas";
 import { heldHeading, heldTeaser } from "@/lib/app/held";
@@ -19,9 +20,10 @@ export const metadata: Metadata = { title: "A past week" };
  * card yet, plan 2026-11-26-001 Unit 3) shows its titles only; any other week
  * is a plain empty state.
  */
-async function Week({ params }: { params: PageProps<"/app/week/[date]">["params"] }) {
+async function Week({ params, searchParams }: { params: PageProps<"/app/week/[date]">["params"]; searchParams: PageProps<"/app/week/[date]">["searchParams"] }) {
   await connection();
   const { date } = await params;
+  const { card } = await searchParams;
   const session = await requireUser(`/app/week/${encodeURIComponent(date)}`);
   const settings = await readV3Settings();
   const ideas = await weekIdeas(query, session.userId, date, settings.playbookPreface);
@@ -37,6 +39,8 @@ async function Week({ params }: { params: PageProps<"/app/week/[date]">["params"
   }
   return (
     <div className="space-y-8">
+      {/* After a card save on the Payment page (Unit 5): "Your card is saved. Here are your ideas." */}
+      {ideas.length > 0 && <CardSavedNotice card={card} />}
       <h1 className="text-h2">{valid ? `Your ideas for the week of ${longDate(date)}` : "That isn’t a week"}</h1>
       {ideas.length ? (
         <WeekIdeas week={date} ideas={ideas} />
@@ -52,10 +56,10 @@ async function Week({ params }: { params: PageProps<"/app/week/[date]">["params"
   );
 }
 
-export default function Page({ params }: PageProps<"/app/week/[date]">) {
+export default function Page({ params, searchParams }: PageProps<"/app/week/[date]">) {
   return (
     <Suspense fallback={<p className="text-lead text-ink-2">Loading…</p>}>
-      <Week params={params} />
+      <Week params={params} searchParams={searchParams} />
     </Suspense>
   );
 }

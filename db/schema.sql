@@ -738,3 +738,15 @@ create table if not exists promo_reservations (
   reserved_at timestamptz not null,
   unique (promotion_code, user_id)
 );
+
+-- 2026-11-26, payment at first list, Unit 5: the last use of a limited code
+-- is taken by one member only. A reservation for a code with a limit takes
+-- the next slot number; two members saving at once both ask for the same
+-- slot and the unique index lets one of them have it (a code with no limit
+-- leaves slot null, which never conflicts). promo_refused_at is when a
+-- pending code could not be applied at card save (used up, or first-time
+-- only); the card is saved at the regular price and the return page says so.
+alter table promo_reservations add column if not exists slot integer;
+create unique index if not exists promo_reservations_slot on promo_reservations (promotion_code, slot);
+create index if not exists promo_reservations_fingerprint on promo_reservations (card_fingerprint) where card_fingerprint is not null;
+alter table users add column if not exists promo_refused_at timestamptz;

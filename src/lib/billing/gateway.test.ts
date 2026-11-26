@@ -71,6 +71,20 @@ describe("stripeGateway", () => {
     expect(await stripeGateway(asIds.s)!.getSetupSession("cs_1")).toMatchObject({ paymentMethod: null, userId: null, currency: null, country: null });
   });
 
+  it("reads the saved card's fingerprint from the expanded payment method (Unit 5, first-time-only codes)", async () => {
+    let expand: unknown;
+    const { s } = stubStripe({ session: { setup_intent: { id: "seti", payment_method: { id: "pm_9", card: { fingerprint: "fp_abc" } } } } });
+    const retrieve = s.checkout.sessions.retrieve.bind(s.checkout.sessions);
+    (s.checkout.sessions as unknown as { retrieve: unknown }).retrieve = async (id: string, o: { expand: unknown }) => {
+      expand = o.expand;
+      return retrieve(id);
+    };
+    expect(await stripeGateway(s)!.getSetupSession("cs_1")).toMatchObject({ paymentMethod: "pm_9", cardFingerprint: "fp_abc" });
+    expect(expand).toEqual(["setup_intent.payment_method"]);
+    // A bare payment method id has no fingerprint to read.
+    expect(await stripeGateway(stubStripe().s)!.getSetupSession("cs_1")).toMatchObject({ paymentMethod: "pm_1", cardFingerprint: null });
+  });
+
   it("maps Stripe Tax's answer, and its invalid-location error, to the address check", async () => {
     expect(await stripeGateway(stubStripe({ taxStatus: "not_collecting" }).s)!.checkTaxLocation("cus_1")).toBe("not_collecting");
     expect(await stripeGateway(stubStripe({ taxError: "customer_tax_location_invalid" }).s)!.checkTaxLocation("cus_1")).toBe("invalid");

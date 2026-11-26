@@ -115,7 +115,8 @@ export function fakeGateway(tax: TaxLocation = "ok") {
   const payment = fakePaymentStripe();
   let n = 0;
   const gw: CardGateway & {
-    complete(id: string, country?: string): void;
+    /** Confirms a session as Stripe.js would; `fingerprint` names the card (default: one card per session). */
+    complete(id: string, country?: string, fingerprint?: string): void;
     sessions: typeof sessions;
     defaults: typeof defaults;
     expired: typeof expired;
@@ -157,9 +158,9 @@ export function fakeGateway(tax: TaxLocation = "ok") {
     },
     previewMonthly: payment.previewMonthly,
     findPromotion: payment.findPromotion,
-    complete(id, country = "CA") {
+    complete(id, country = "CA", fingerprint = `fp_${id}`) {
       const s = sessions.get(id)!;
-      sessions.set(id, { ...s, status: "complete", paymentMethod: "pm_card", country });
+      sessions.set(id, { ...s, status: "complete", paymentMethod: "pm_card", country, cardFingerprint: fingerprint });
     },
     sessions,
     defaults,

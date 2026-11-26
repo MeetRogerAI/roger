@@ -59,7 +59,7 @@ type U = {
   has_delivered: boolean;
 };
 
-async function usersFor(q: Query, week: string, onlyIds: string[] | null = null): Promise<U[]> {
+export async function usersFor(q: Query, week: string, onlyIds: string[] | null = null): Promise<U[]> {
   return q<U>(
     `select u.id, u.email, u.email_prefs, u.status, u.plan, (u.sponsor_id is not null) as sponsored, u.sharing, u.currency, u.free_lists_used,
             u.quote, u.first_charge_at::text, u.access_ends_at::text, u.hold_reason, u.renewal_failed_at::text,

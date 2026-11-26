@@ -24,6 +24,8 @@ export type SetupSession = {
   purpose?: string | null;
   /** The embedded (elements-mode) session's client secret, for Stripe.js; null for hosted pages. */
   clientSecret?: string | null;
+  /** The saved card's fingerprint (the same card number gives the same value), for first-time-only promo codes. */
+  cardFingerprint?: string | null;
 };
 
 /**
@@ -211,7 +213,8 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
     },
 
     async getSetupSession(id) {
-      const session = await s.checkout.sessions.retrieve(id, { expand: ["setup_intent"] });
+      // The payment method is expanded too: its card fingerprint is read for first-time-only promo codes.
+      const session = await s.checkout.sessions.retrieve(id, { expand: ["setup_intent.payment_method"] });
       const intent = session.setup_intent as Stripe.SetupIntent | string | null;
       const pm = intent && typeof intent !== "string" ? intent.payment_method : null;
       const cur = session.metadata?.currency;
@@ -225,6 +228,7 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
         country: session.customer_details?.address?.country ?? null,
         purpose: session.metadata?.purpose ?? null,
         clientSecret: session.client_secret ?? null,
+        cardFingerprint: pm && typeof pm !== "string" ? (pm.card?.fingerprint ?? null) : null,
       };
     },
 

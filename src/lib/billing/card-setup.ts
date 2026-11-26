@@ -2,7 +2,9 @@ import type { Query } from "@/lib/db-query";
 import type { MailDeps } from "@/lib/mail/send";
 import { counterFor, hit, limits, type Counter } from "@/lib/rate-limit";
 import type { V3Settings } from "@/lib/v3-settings";
-import type { CardGateway, SetupSession } from "./gateway";
+import { deliverUnlock, newestDeliveredWeek, UnlockEmailNotSent } from "@/lib/cora/unlock";
+import type { CardSaveResult } from "./card-saved";
+import { refusePromotion, type CardGateway, type Promotion, type SetupSession } from "./gateway";
 import { hasCard, isNoCardTrial } from "./has-card";
 import type { Currency, Plan } from "./prices";
 
@@ -11,9 +13,11 @@ import type { Currency, Plan } from "./prices";
  *
  * Sign-up no longer reaches this (plan 2026-11-26-001, Unit 2): it ends at
  * Step 3 with a trial and no card, and the welcome email is sent there
- * (`src/lib/signup/finish.ts`). `startCardSetup` / `completeCardSetup` stay
- * for the Payment step, which Units 5 and 6 rebuild on them; until then they
- * still move a `signup` account to `trial` and send nothing.
+ * (`src/lib/signup/finish.ts`). The card is saved on the Payment page
+ * (`openEmbeddedSetup`), and `completeCardSetup` (Unit 5) is the unlock: it
+ * saves the card, locks in the promo code and delivers the held list. The
+ * hosted `startCardSetup` is kept only for the scenario tests' sign-up until
+ * Unit 10 rewrites them; it still moves a `signup` account to `trial`.
  */
 
 type SignupUser = {
@@ -54,6 +58,8 @@ export async function startCardSetup(
 
   const customer = await ensureCustomer(q, gw, u);
   const session = await gw.createSetupSession({ userId: u.id, customer, currency: o.currency, successUrl: o.successUrl, cancelUrl: o.cancelUrl });
+  // The completion accepts only the stored session (Unit 5); the newest one opened is the one stored.
+  await q(`update users set setup_session = $2 where id = $1`, [u.id, session.id]);
   return { ok: true, url: session.url };
 }
 
@@ -216,55 +222,222 @@ export async function discardSetupSession(q: Query, gw: CardGateway, userId: str
   return "discarded";
 }
 
-export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer" | "not_consented";
+/**
+ * "closed": the account is no longer one that can save its first card (closed,
+ * cancelled before saving one); nothing changes.
+ */
+export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer" | "not_consented" | "closed";
 
 export type CompleteOptions = {
   expectUserId?: string;
-  /** Not read by the card step itself; the webhook reads it for the events that need settings. */
+  /** Read once the card is saved: the unlock delivers with the free-list count and the playbook preface. */
   getSettings: () => Promise<V3Settings>;
+  /** The job clock: `trial_started_at`, the reservation and the delivery are stamped with it. */
   now?: Date;
 } & MailDeps;
 
+type CardSaveUser = SignupUser & { setup_session: string | null; promo_code: string | null; promo_coupon: string | null };
+
+/** Passes at the save claim before giving up for now (each pass after losing a promo slot or a changed selection). */
+const CLAIM_ATTEMPTS = 3;
+
 /**
- * Finishes the card step. Safe to run twice and from two places: the return
- * page and the Stripe webhook both call it, and whichever is first starts the
- * trial. It sends no email: the welcome moved to the end of sign-up (Unit 2),
- * and Unit 5 makes this the unlock of a held list.
+ * Saves the first card and unlocks the held list (plan 2026-11-26-001,
+ * Unit 5). Called from the return page (`/start/payment/done`), the Stripe
+ * webhook (`checkout.session.completed`) and its reconcile replay; safe to run
+ * any number of times, in any order, at once.
  *
- * `expectUserId` is the signed-in user on the return path; a session that
- * belongs to someone else changes nothing.
+ * - Ownership: the session must be complete, not a card update, on the user's
+ *   own Stripe customer, carry the user's id, and be the session stored in
+ *   `users.setup_session` (`openEmbeddedSetup`). `expectUserId` is the
+ *   signed-in user on the return page.
+ * - Before the card is saved (`trial_started_at` null) only: the default card
+ *   and the tax location. An address Stripe cannot place → "address_invalid"
+ *   and nothing else changes. Then one claim statement (CARD_SAVE_CLAIM_SQL)
+ *   stamps `trial_started_at` (job clock), the currency and country, and locks
+ *   in or refuses the pending promo code with its reservation.
+ * - After it, on every call (whoever saved the card): the unlock, from stored
+ *   state (`deliverUnlock`). A replay never touches the card again, so a card
+ *   changed since through "Update card" stays the default.
+ *
+ * Throws when the unlocked list's email failed (UnlockEmailNotSent), so the
+ * webhook answers 500 and Stripe retries; the hourly `unlock_pending` sweep
+ * retries too.
  */
 export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: string, o: CompleteOptions): Promise<CompleteOutcome> {
   const s = await gw.getSetupSession(sessionId);
   if (s.status !== "complete" || !s.customer || !s.paymentMethod) return "pending";
+  // An "Update card" session can never unlock a held list (it has its own completion).
+  if (s.purpose === "card_update") return "not_yours";
 
-  const rows = await q<SignupUser>(`select ${USER_COLUMNS} from users where stripe_customer = $1`, [s.customer]);
-  const u = rows[0];
+  const [u] = await q<CardSaveUser>(`select ${USER_COLUMNS}, setup_session, promo_code, promo_coupon from users where stripe_customer = $1`, [s.customer]);
   if (!u) return "unknown_customer";
   if (o.expectUserId && o.expectUserId !== u.id) return "not_yours";
-  if (s.userId && s.userId !== u.id) return "not_yours";
+  if (s.userId !== u.id || u.setup_session !== s.id) return "not_yours";
 
   const now = o.now ?? new Date();
-  if (u.status === "signup") {
-    if (!u.consent_at) return "not_consented";
+  if (u.trial_started_at == null) {
+    if (u.status === "signup" && !u.consent_at) return "not_consented";
+    if (u.status !== "signup" && u.status !== "trial") return "closed";
     await gw.setDefaultCard(s.customer, s.paymentMethod);
-    const tax = await gw.checkTaxLocation(s.customer);
-    if (tax === "invalid") return "address_invalid";
-
-    // The user's own last choice wins over the currency an older Checkout tab was opened with.
-    const currency: Currency = u.currency ?? s.currency ?? "USD";
-    const started = await q<SignupUser>(
-      `update users set status = 'trial', signup_step = 'done', currency = $2, country = coalesce($3, country),
-         trial_started_at = coalesce(trial_started_at, $4)
-       where id = $1 and status = 'signup' and consent_at is not null
-       returning ${USER_COLUMNS}`,
-      [u.id, currency, s.country, now.toISOString()],
-    );
-    // Another call may have started the trial between our read and this update.
-    const now_ = started[0] ?? (await loadUser(q, u.id));
-    return now_?.status === "trial" ? "done" : "pending";
+    if ((await gw.checkTaxLocation(s.customer)) === "invalid") return "address_invalid";
+    const claimed = await claimCardSave(q, gw, u.id, s, now);
+    if (claimed !== "saved") return claimed;
   }
+
+  const settings = await o.getSettings();
+  await deliverUnlock(q, { settings, now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
   return "done";
+}
+
+/**
+ * The card-save claim, one statement (Neon over HTTP has no transactions):
+ *
+ * - `u` locks the user row while the card is not saved yet and the pending
+ *   code is still the one checked ($5), so two completions for one member
+ *   run one after the other and the second finds the card saved.
+ * - The reservation (`r`) is written only when the code was found valid in
+ *   Stripe ($6 not null), other members' reservations plus Stripe's
+ *   `times_redeemed` leave room under `max_redemptions` (no limit: always),
+ *   and a first-time-only code is not blocked: this member holds another
+ *   reservation, the same card fingerprint was used by another member, or the
+ *   member has paid before. A limited code takes the next slot number; the
+ *   unique (code, slot) index lets one of two members saving the last use at
+ *   once have it.
+ * - `verdict`: none (no code pending), reserved, refused (invalid, used up or
+ *   first-time blocked: the card is saved at the regular price, the pending
+ *   code cleared and `promo_refused_at` stamped), or lost_race (another
+ *   member took the slot after our snapshot: nothing is written, and the
+ *   caller tries again with a fresh count).
+ * - `upd` stamps the card as saved, last, and only when `u` held the row and
+ *   the verdict is final. The user row is updated once.
+ *
+ * $1 user, $2 job clock, $3 currency, $4 country, $5 pending code as read,
+ * $6 promotion code id (null when Stripe refused it), $7 max redemptions,
+ * $8 Stripe's times redeemed, $9 first-time only, $10 card fingerprint.
+ */
+export const CARD_SAVE_CLAIM_SQL = `
+with u as (
+  select id from users
+  where id = $1 and trial_started_at is null and promo_code is not distinct from $5::text
+    and (status = 'trial' or (status = 'signup' and consent_at is not null))
+  for update
+),
+others as (
+  select count(*)::int as taken, coalesce(max(slot), 0)::int as top
+  from promo_reservations where promotion_code = $6::text and user_id <> $1
+),
+own as (select exists (select 1 from promo_reservations where promotion_code = $6::text and user_id = $1) as yes),
+room as (select ($7::int is null or (select taken from others) + $8::int < $7::int) as yes),
+first_blocked as (
+  select ($9::boolean and (
+       exists (select 1 from promo_reservations pr where pr.user_id = $1 and pr.promotion_code <> $6::text)
+    or ($10::text is not null and exists (select 1 from promo_reservations pr where pr.card_fingerprint = $10::text and pr.user_id <> $1))
+    or exists (select 1 from users pu where pu.id = $1 and pu.first_charge_at is not null)
+    or exists (select 1 from orders po where po.user_id = $1 and po.status in ('charged', 'sent'))
+  )) as yes
+),
+r as (
+  insert into promo_reservations (promotion_code, user_id, card_fingerprint, reserved_at, slot)
+  select $6::text, u.id, $10::text, coalesce($2::timestamptz, now()), case when $7::int is null then null else (select top from others) + 1 end
+  from u
+  where $6::text is not null and (select yes from room) and not (select yes from first_blocked) and not (select yes from own)
+  on conflict do nothing
+  returning id
+),
+verdict as (
+  select case
+    when $5::text is null then 'none'
+    when $6::text is null then 'refused'
+    when (select yes from own) or exists (select 1 from r) then 'reserved'
+    when (select yes from first_blocked) or not (select yes from room) then 'refused'
+    else 'lost_race'
+  end as v
+),
+upd as (
+  update users set
+    trial_started_at = coalesce($2::timestamptz, now()), status = 'trial', signup_step = 'done',
+    currency = $3, country = coalesce($4::text, country),
+    promo_code = case when (select v from verdict) = 'refused' then null else promo_code end,
+    promo_coupon = case when (select v from verdict) = 'refused' then null else promo_coupon end,
+    promo_label = case when (select v from verdict) = 'refused' then null else promo_label end,
+    promo_refused_at = case when (select v from verdict) = 'refused' then coalesce($2::timestamptz, now()) end
+  where id = $1 and exists (select 1 from u) and (select v from verdict) <> 'lost_race'
+  returning id
+)
+select (select v from verdict) as verdict, exists (select 1 from upd) as saved`;
+
+/**
+ * Re-reads the pending code, re-checks it in Stripe (its limits and
+ * first-time rule as they are now) and runs the claim. Returns "saved" once
+ * the card is saved, by this call or another; "closed" or "not_consented" if
+ * the account can no longer save its first card.
+ */
+async function claimCardSave(q: Query, gw: CardGateway, userId: string, s: { customer: string | null; country: string | null; currency: Currency | null; cardFingerprint?: string | null }, now: Date): Promise<"saved" | "closed" | "not_consented"> {
+  for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt++) {
+    const [u] = await q<{ status: string; consent_at: string | null; currency: Currency | null; trial_started_at: string | null; promo_code: string | null; promo_coupon: string | null }>(
+      `select status, consent_at, currency, trial_started_at, promo_code, promo_coupon from users where id = $1`,
+      [userId],
+    );
+    if (!u || u.trial_started_at != null) return "saved";
+    if (u.status === "signup" && !u.consent_at) return "not_consented";
+    if (u.status !== "signup" && u.status !== "trial") return "closed";
+    // The user's own last choice wins over the currency an older card tab was opened with.
+    const currency: Currency = u.currency ?? s.currency ?? "USD";
+
+    let promo: Promotion | null = null;
+    if (u.promo_code) {
+      const found = await gw.findPromotion(u.promo_code, currency, { customer: s.customer, now });
+      // The coupon shown on the Payment page is the one locked in; a code now pointing elsewhere is refused.
+      if (found.valid && found.couponId === u.promo_coupon) promo = found;
+      else if (found.valid) refusePromotion(found.code, "coupon_invalid");
+    }
+    const [r] = await q<{ verdict: string; saved: boolean }>(CARD_SAVE_CLAIM_SQL, [
+      userId,
+      now.toISOString(),
+      currency,
+      s.country,
+      u.promo_code,
+      promo?.promotionCodeId ?? null,
+      promo?.maxRedemptions ?? null,
+      promo?.timesRedeemed ?? 0,
+      promo?.firstTimeOnly ?? false,
+      s.cardFingerprint ?? null,
+    ]);
+    if (r?.verdict === "refused") console.info("[card] promo code not applied at card save", { userId });
+    if (r?.saved) return "saved";
+    // Lost a slot to another member, the pending code changed, or another call saved the card: read again.
+  }
+  const [u] = await q<{ trial_started_at: string | null }>(`select trial_started_at from users where id = $1`, [userId]);
+  if (u?.trial_started_at != null) return "saved";
+  throw new Error("The card-save claim kept losing; try again");
+}
+
+/**
+ * What the return page (and Unit 6's Payment action, when `openEmbeddedSetup`
+ * answers "complete") does with a session: runs the completion for the
+ * signed-in user and reads the result from stored state. A list delivered
+ * whose email failed is still "done" (the webhook and the hourly sweep send
+ * the email). Any other failure reads as "pending" unless the card is saved
+ * already, so the page re-checks rather than showing an error.
+ */
+export async function finishCardSave(q: Query, gw: CardGateway, sessionId: string, o: CompleteOptions & { expectUserId: string }): Promise<CardSaveResult> {
+  let outcome: CompleteOutcome | "error";
+  try {
+    outcome = await completeCardSetup(q, gw, sessionId, o);
+  } catch (e) {
+    if (!(e instanceof UnlockEmailNotSent)) console.error("[card] could not finish the card save", { message: (e as Error)?.message });
+    outcome = e instanceof UnlockEmailNotSent ? "done" : "error";
+  }
+  if (outcome === "pending") return { outcome: "pending" };
+  if (outcome === "address_invalid") return { outcome: "address_invalid" };
+  const [u] = await q<{ saved: boolean; refused: boolean }>(
+    `select trial_started_at is not null as saved, promo_refused_at is not null as refused from users where id = $1`,
+    [o.expectUserId],
+  );
+  if (outcome === "error") return u?.saved ? { outcome: "done", week: await newestDeliveredWeek(q, o.expectUserId), promoRefused: u.refused } : { outcome: "pending" };
+  if (outcome !== "done") return { outcome: "not_yours" };
+  return { outcome: "done", week: await newestDeliveredWeek(q, o.expectUserId), promoRefused: Boolean(u?.refused) };
 }
 
 /**

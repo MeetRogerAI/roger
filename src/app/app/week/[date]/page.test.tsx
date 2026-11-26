@@ -21,8 +21,8 @@ vi.mock("@/lib/v3-settings", async (orig) => {
 const { default: Page } = await import("./page");
 const WEEK = "2026-12-14";
 
-async function render(date: string): Promise<string> {
-  const { prelude } = await prerender(<Page params={Promise.resolve({ date })} searchParams={Promise.resolve({})} />);
+async function render(date: string, search: Record<string, string> = {}): Promise<string> {
+  const { prelude } = await prerender(<Page params={Promise.resolve({ date })} searchParams={Promise.resolve(search)} />);
   const html = await new Response(prelude).text();
   return html;
 }
@@ -80,5 +80,25 @@ describe("/app/week/[date] for a held list", () => {
     const html = await render("2026-12-07");
     expect(html).toContain("There are no ideas for you for that week.");
     expect(html).not.toContain("Inbox triage");
+  });
+});
+
+describe("/app/week/[date] after a card save (Unit 5)", () => {
+  beforeEach(async () => {
+    await db.query!("update picks set delivered_at = now()");
+    await db.query!("update users set trial_started_at = now()");
+  });
+
+  it("shows the one-line notice above the unlocked ideas", async () => {
+    const html = await render(WEEK, { card: "saved" });
+    expect(html).toContain("Your card is saved. Here are your ideas.");
+    expect(html).toContain('role="status"');
+    expect(await render(WEEK, { card: "promo" })).toContain("Your card is saved; that code couldn’t be applied, so the price is the regular one.");
+  });
+
+  it("shows nothing for any other flag, or on a week with no ideas", async () => {
+    expect(await render(WEEK, { card: "toString" })).not.toContain("Your card is saved");
+    expect(await render(WEEK)).not.toContain("Your card is saved");
+    expect(await render("2026-12-07", { card: "saved" })).not.toContain("Your card is saved");
   });
 });
