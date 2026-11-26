@@ -88,20 +88,34 @@ export const CHECKOUT_LIMITED = "Too many tries. Wait a while and try again, or 
 
 export type EmbeddedSetup =
   | { ok: true; sessionId: string; clientSecret: string; currency: Currency; reused: boolean }
-  | { ok: false; reason: "not_found" | "not_allowed" | "rate_limited" };
+  /** "complete": the stored session already saved a card; the caller runs `completeCardSetup(sessionId)`. */
+  | { ok: false; reason: "complete"; sessionId: string }
+  /** "try_again": other calls kept replacing the stored session; nothing is wrong with the account. */
+  | { ok: false; reason: "not_found" | "not_allowed" | "rate_limited" | "try_again" };
 
 type EmbeddedUser = SignupUser & { setup_session: string | null; sponsored: boolean };
+
+/** Passes over the stored session before giving up with "try_again" (each pass after a lost store). */
+const OPEN_ATTEMPTS = 3;
+
+const logExpireFailure = (id: string) => (e: unknown) => console.warn("[card] expire setup session failed", { id, message: (e as Error)?.message });
 
 /**
  * The Payment page's card form (plan 2026-11-26-001, Unit 4): the embedded
  * setup session for a trial with no card. One open session per user, kept in
  * `users.setup_session` and handed back on every visit while it is still open
  * for this customer and currency (a double submit or a reload never opens a
- * second one). A new one is made only when the stored one is complete,
- * expired, gone or for the other currency, and only that counts against the
- * checkout limits. The store is compare-and-set, so two tabs opening at once
- * end with one stored session, which both are given; Unit 5's completion
- * accepts only the stored session.
+ * second one). A stored session that is complete (the card was confirmed but
+ * the completion has not run yet) is never replaced: the answer is
+ * "complete", and the caller completes it. A new one is made only when the
+ * stored one is expired, gone, or open but unusable (another customer, user
+ * or currency, a card update, no client secret), and only that counts against
+ * the checkout limits. The store is compare-and-set, so two tabs opening at
+ * once end with one stored session, which both are given; Unit 5's completion
+ * accepts only the stored session. An open session that was replaced is
+ * expired in Stripe (best effort) and read again: if it completed meanwhile it
+ * is put back and "complete" is answered, so a confirmed card is never left
+ * on a session nobody stores.
  */
 export async function openEmbeddedSetup(
   q: Query,
@@ -110,18 +124,23 @@ export async function openEmbeddedSetup(
 ): Promise<EmbeddedSetup> {
   const counter = o.counter ?? counterFor(q);
   let limited = false;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < OPEN_ATTEMPTS; attempt++) {
     const [u] = await q<EmbeddedUser>(`select ${USER_COLUMNS}, setup_session, sponsor_id is not null as sponsored from users where id = $1`, [o.userId]);
     if (!u) return { ok: false, reason: "not_found" };
     if (!isNoCardTrial({ status: u.status, trialStartedAt: u.trial_started_at, sponsored: u.sponsored })) return { ok: false, reason: "not_allowed" };
     const customer = await ensureCustomer(q, gw, u);
     const currency: Currency = u.currency ?? "USD";
 
+    // The stored session, while it is open but cannot be handed back; expired once ours is stored.
+    let replacing: SetupSession | null = null;
     if (u.setup_session) {
       const s = await readSession(gw, u.setup_session);
-      if (s && s.status === "open" && s.clientSecret && s.customer === customer && s.currency === currency && s.purpose !== "card_update" && (!s.userId || s.userId === u.id)) {
+      const ours = s != null && s.customer === customer && s.purpose !== "card_update" && (!s.userId || s.userId === u.id);
+      if (s && ours && s.status === "complete") return { ok: false, reason: "complete", sessionId: s.id };
+      if (s && ours && s.status === "open" && s.clientSecret && s.currency === currency) {
         return { ok: true, sessionId: s.id, clientSecret: s.clientSecret, currency, reused: true };
       }
+      if (s?.status === "open") replacing = s;
     }
 
     if (!limited) {
@@ -133,11 +152,37 @@ export async function openEmbeddedSetup(
       `update users set setup_session = $2 where id = $1 and setup_session is not distinct from $3 returning id`,
       [u.id, created.id, u.setup_session],
     );
-    if (stored.length) return { ok: true, sessionId: created.id, clientSecret: created.clientSecret, currency, reused: false };
-    // Another call stored its session first: ours is closed, and theirs is handed back on the next pass.
-    await gw.expireSetupSession(created.id).catch(() => {});
+    if (!stored.length) {
+      // Another call stored its session first: ours is closed, and theirs is handed back on the next pass.
+      await gw.expireSetupSession(created.id).catch(logExpireFailure(created.id));
+      continue;
+    }
+    if (replacing) {
+      const kept = await retireReplaced(q, gw, u.id, replacing.id, created.id);
+      if (kept) return { ok: false, reason: "complete", sessionId: kept };
+    }
+    return { ok: true, sessionId: created.id, clientSecret: created.clientSecret, currency, reused: false };
   }
-  return { ok: false, reason: "not_allowed" };
+  return { ok: false, reason: "try_again" };
+}
+
+/**
+ * Closes the open session `oldId` that `newId` has just replaced, so an old
+ * tab cannot save a card on it. If it completed before the expiry landed (a
+ * confirm in flight), the card is on `oldId`: it is stored again in place of
+ * `newId` (or of nothing, after a discard), `newId` is closed, and `oldId` is
+ * returned for the caller to complete. Otherwise null.
+ */
+async function retireReplaced(q: Query, gw: CardGateway, userId: string, oldId: string, newId: string): Promise<string | null> {
+  await gw.expireSetupSession(oldId).catch(logExpireFailure(oldId));
+  const after = await readSession(gw, oldId).catch((e) => {
+    console.warn("[card] re-read of a replaced setup session failed", { id: oldId, message: (e as Error)?.message });
+    return null;
+  });
+  if (after?.status !== "complete") return null;
+  await q(`update users set setup_session = $2 where id = $1 and (setup_session = $3 or setup_session is null)`, [userId, oldId, newId]);
+  await gw.expireSetupSession(newId).catch(logExpireFailure(newId));
+  return oldId;
 }
 
 /** The stored session, or null when Stripe no longer has it. */

@@ -84,7 +84,53 @@ describe("checkPromoCode (plan 2026-11-26-001, Unit 4)", () => {
     expect(await check(gw, "TWO")).toMatchObject({ ok: true });
     await query(`insert into promo_reservations (promotion_code, user_id, reserved_at) values ($1, $2, now())`, [p.promotionCodeId, otherId]);
     expect(await check(gw, "TWO")).toEqual({ ok: false, reason: "invalid" });
-    expect(info).toHaveBeenCalledWith("[promo] code refused", expect.objectContaining({ code: "TWO", reason: "limit_reached" }));
+    expect(info).toHaveBeenCalledWith("[promo] code refused", expect.objectContaining({ code: '"TWO"', reason: "limit_reached" }));
+  });
+
+  const reserve = (code: string, user: string) => query(`insert into promo_reservations (promotion_code, user_id, reserved_at) values ($1, $2, now())`, [code, user]);
+
+  it("does not count the caller's own reservation (redeemed 1, max 2)", async () => {
+    const gw = fakeGateway();
+    const p = gw.payment.addPromotion({ code: "MINE", maxRedemptions: 2, timesRedeemed: 1 });
+    await reserve(p.promotionCodeId, userId);
+    expect(await check(gw, "MINE")).toMatchObject({ ok: true });
+  });
+
+  it("accepts while redemptions plus other reservations stay under the limit (one other, max 3)", async () => {
+    const gw = fakeGateway();
+    const p = gw.payment.addPromotion({ code: "THREE", maxRedemptions: 3, timesRedeemed: 1 });
+    await reserve(p.promotionCodeId, otherId);
+    expect(await check(gw, "THREE")).toMatchObject({ ok: true });
+  });
+
+  it("ignores reservations for a code with no limit", async () => {
+    const gw = fakeGateway();
+    const p = gw.payment.addPromotion({ code: "OPEN", maxRedemptions: null, timesRedeemed: 50 });
+    await reserve(p.promotionCodeId, otherId);
+    expect(await check(gw, "OPEN")).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    ["a trial whose card is saved", "update users set trial_started_at = now() where id = $1"],
+    ["a sponsored trial", "update users set sponsor_id = id where id = $1"],
+    ["an active member", "update users set status = 'active', trial_started_at = now() where id = $1"],
+    ["an account still signing up", "update users set status = 'signup' where id = $1"],
+  ])("refuses %s (not_allowed), without counting or asking Stripe", async (_n, sql) => {
+    const gw = fakeGateway();
+    gw.payment.addPromotion({ code: "WELCOME20" });
+    const find = vi.spyOn(gw, "findPromotion");
+    const counter = vi.fn(memoryCounter());
+    await query(sql, [userId]);
+    expect(await check(gw, "WELCOME20", { counter })).toEqual({ ok: false, reason: "not_allowed" });
+    expect(find).not.toHaveBeenCalled();
+    expect(counter).not.toHaveBeenCalled();
+  });
+
+  it("never logs what was typed for a malformed code, only its length", async () => {
+    const gw = fakeGateway();
+    expect(await check(gw, "4242 4242 4242 4242")).toEqual({ ok: false, reason: "invalid" });
+    expect(info).toHaveBeenCalledWith("[promo] code refused", { length: 19, reason: "malformed" });
+    expect(JSON.stringify(info.mock.calls)).not.toContain("4242");
   });
 
   it("refuses the eleventh try in an hour from one person, before asking Stripe", async () => {
@@ -99,9 +145,15 @@ describe("checkPromoCode (plan 2026-11-26-001, Unit 4)", () => {
   it("refuses many tries from one IP across accounts", async () => {
     const gw = fakeGateway();
     const counter = memoryCounter();
-    for (let i = 0; i < 30; i++) {
-      await checkPromoCode(query, gw, { userId: `u${i}`, ip: "9.9.9.9", code: "X1", currency: "CAD" }, { now: NOW, counter });
+    const ids = (
+      await query<{ id: string }>(
+        `insert into users (email, name, plan, currency, path, email_verified_at, signup_step, status, consent_at)
+         select 'p' || i || '@example.com', 'P', 'monthly', 'CAD', 'new', now(), 'done', 'trial', now() from generate_series(1, 31) i returning id`,
+      )
+    ).map((r) => r.id);
+    for (const id of ids.slice(0, 30)) {
+      await checkPromoCode(query, gw, { userId: id, ip: "9.9.9.9", code: "X1", currency: "CAD" }, { now: NOW, counter });
     }
-    expect(await checkPromoCode(query, gw, { userId: "fresh", ip: "9.9.9.9", code: "X1", currency: "CAD" }, { now: NOW, counter })).toEqual({ ok: false, reason: "rate_limited" });
+    expect(await checkPromoCode(query, gw, { userId: ids[30], ip: "9.9.9.9", code: "X1", currency: "CAD" }, { now: NOW, counter })).toEqual({ ok: false, reason: "rate_limited" });
   });
 });

@@ -23,11 +23,14 @@ export type FakePromo = Partial<Omit<PromoFacts, "coupon">> & { code: string; co
  * Promotion codes and the monthly preview, shared by the unit-test fake and
  * the scenario fake. Promotion codes are judged by the same `judgePromotion`
  * the Stripe gateway uses; previews use FAKE_TAX. A postal code in
- * `taxPending` answers like Stripe asking for more location inputs.
+ * `taxPending` answers like Stripe asking for more location inputs. A coupon
+ * that is unknown, not valid or past `redeemBy` (by `now`, default the real
+ * clock) throws CouponUnavailable, like Stripe's deleted and expired coupons.
  */
-export function fakePaymentStripe(o: { monthlyCents?: Record<Currency, number>; tax?: typeof FAKE_TAX } = {}) {
+export function fakePaymentStripe(o: { monthlyCents?: Record<Currency, number>; tax?: typeof FAKE_TAX; now?: () => Date } = {}) {
   const monthly = o.monthlyCents ?? FAKE_MONTHLY_CENTS;
   const tax = o.tax ?? FAKE_TAX;
+  const clock = o.now ?? (() => new Date());
   const promotions = new Map<string, PromoFacts>();
   const coupons = new Map<string, NonNullable<PromoFacts["coupon"]>>();
   const taxPending = new Set<string>();
@@ -72,6 +75,8 @@ export function fakePaymentStripe(o: { monthlyCents?: Record<Currency, number>; 
     if (args.coupon) {
       const c = coupons.get(args.coupon);
       if (!c || !c.valid) throw new CouponUnavailable(`No such coupon: '${args.coupon}'`);
+      // Stripe's coupon_expired: past its redeem_by.
+      if (c.redeemBy != null && c.redeemBy <= Math.floor(clock().getTime() / 1000)) throw new CouponUnavailable(`Coupon ${c.id} is expired and cannot be applied.`);
       discount = c.percentOff != null ? Math.round((subtotal * c.percentOff) / 100) : Math.min(subtotal, c.amountOff?.[args.currency.toLowerCase()] ?? 0);
     }
     const base = { currency: args.currency, subtotalCents: subtotal, discountCents: discount };

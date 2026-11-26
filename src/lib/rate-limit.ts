@@ -38,25 +38,25 @@ export function windowStart(now: Date, windowSeconds: number): number {
   return s - (s % windowSeconds);
 }
 
-/** Increments the counter for (key, window) and returns the new count. */
-export type Counter = (key: string, windowStart: number, expiresAt: Date) => Promise<number>;
+/** Adds `by` (default 1; -1 for a refund) to the counter for (key, window) and returns the new count. */
+export type Counter = (key: string, windowStart: number, expiresAt: Date, by?: number) => Promise<number>;
 
 /** The Postgres counter, over any query function (the app's, or a test database's). */
 export function counterFor(q: Query): Counter {
-  return async (key, start, expiresAt) => {
+  return async (key, start, expiresAt, by = 1) => {
     const rows = await q<{ count: number | string }>(
       `insert into rate_events (key, window_start, count, expires_at)
-       values ($1, $2, 1, $3)
-       on conflict (key, window_start) do update set count = rate_events.count + 1
+       values ($1, $2, greatest($4::int, 0), $3)
+       on conflict (key, window_start) do update set count = greatest(rate_events.count + $4::int, 0)
        returning count`,
-      [key, start, expiresAt.toISOString()],
+      [key, start, expiresAt.toISOString(), by],
     );
     // Drivers may hand back integers as strings; compare as numbers.
     return Number(rows[0].count);
   };
 }
 
-export const postgresCounter: Counter = (key, start, expiresAt) => counterFor(query)(key, start, expiresAt);
+export const postgresCounter: Counter = (key, start, expiresAt, by) => counterFor(query)(key, start, expiresAt, by);
 
 /**
  * Counts one attempt and says whether it is within the limit. The attempt is
@@ -66,6 +66,15 @@ export async function hit(key: string, l: Limit, now: Date = new Date(), counter
   const start = windowStart(now, l.windowSeconds);
   const count = await counter(key, start, new Date((start + l.windowSeconds) * 1000));
   return count <= l.limit;
+}
+
+/**
+ * Gives back one attempt counted by `hit` in the same window, for a call that
+ * failed on our side (Stripe down), so the person's budget is not spent on it.
+ */
+export async function refund(key: string, l: Limit, now: Date = new Date(), counter: Counter = postgresCounter): Promise<void> {
+  const start = windowStart(now, l.windowSeconds);
+  await counter(key, start, new Date((start + l.windowSeconds) * 1000), -1);
 }
 
 /** The caller's IP as Vercel reports it. Only the platform-set header is trusted. */

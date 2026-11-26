@@ -1,3 +1,5 @@
+import type { Query } from "@/lib/db-query";
+
 /**
  * "Has a card" (plan 2026-11-26-001, Unit 1). Sign-up ends without a card, so
  * a trial account may have none: `status = 'trial'` with `trial_started_at`
@@ -48,6 +50,12 @@ export function hasCardOrSponsored(f: CardFacts): boolean {
 
 /** A trial still waiting for its card: no card and not sponsored. */
 export const isNoCardTrial = (f: CardFacts) => f.status === "trial" && !hasCardOrSponsored(f);
+
+/** Reads the user and says whether it is a trial still waiting for its card (false for an unknown id). */
+export async function isNoCardTrialUser(q: Query, userId: string): Promise<boolean> {
+  const rows = await q<{ ok: boolean }>(`select ${NO_CARD_TRIAL_SQL("u")} as ok from users u where u.id = $1`, [userId]);
+  return rows[0]?.ok === true;
+}
 
 /** What admin actions that need a card say for a trial without one. */
 export const WAITING_FOR_CARD = "Waiting for the member’s card.";

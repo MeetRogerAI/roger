@@ -184,16 +184,56 @@ describe("openEmbeddedSetup: the Payment page's card session (plan 2026-11-26-00
     expect(await stored()).toMatchObject({ setup_session: a.sessionId, stripe_customer: expect.stringMatching(/^cus_/) });
   });
 
-  it.each(["complete", "expired"] as const)("makes and stores a new session when the stored one is %s", async (status) => {
+  it("makes and stores a new session when the stored one is expired", async () => {
     const gw = fakeGateway();
     const a = await open(gw);
     if (!a.ok) throw new Error("unreachable");
-    gw.sessions.set(a.sessionId, { ...gw.sessions.get(a.sessionId)!, status });
+    gw.sessions.set(a.sessionId, { ...gw.sessions.get(a.sessionId)!, status: "expired" });
     const b = await open(gw);
     expect(b).toMatchObject({ ok: true, reused: false });
     if (!b.ok) throw new Error("unreachable");
     expect(b.sessionId).not.toBe(a.sessionId);
     expect((await stored()).setup_session).toBe(b.sessionId);
+  });
+
+  it("never replaces a stored session that is complete: it answers 'complete' so the caller runs the completion", async () => {
+    const gw = fakeGateway();
+    const a = await open(gw);
+    if (!a.ok) throw new Error("unreachable");
+    gw.complete(a.sessionId);
+    const create = vi.spyOn(gw, "createEmbeddedSetupSession");
+    const counted = vi.fn(counter);
+    expect(await openEmbeddedSetup(query, gw, { userId, ip: "1.2.3.4", returnUrl, now: NOW, counter: counted })).toEqual({ ok: false, reason: "complete", sessionId: a.sessionId });
+    expect(create).not.toHaveBeenCalled();
+    expect(counted).not.toHaveBeenCalled();
+    expect((await stored()).setup_session).toBe(a.sessionId);
+  });
+
+  it.each([
+    ["another customer", { customer: "cus_other" }],
+    ["another user", { userId: "11111111-1111-1111-1111-111111111111" }],
+    ["a card update", { purpose: "card_update" }],
+    ["no client secret (a hosted page)", { clientSecret: null }],
+  ])("does not hand back a stored open session for %s: a new one replaces it, and the old one is expired", async (_n, over) => {
+    const gw = fakeGateway();
+    const a = await open(gw);
+    if (!a.ok) throw new Error("unreachable");
+    gw.sessions.set(a.sessionId, { ...gw.sessions.get(a.sessionId)!, ...over });
+    const b = await open(gw);
+    expect(b).toMatchObject({ ok: true, reused: false });
+    if (!b.ok) throw new Error("unreachable");
+    expect(b.sessionId).not.toBe(a.sessionId);
+    expect((await stored()).setup_session).toBe(b.sessionId);
+    expect(gw.sessions.get(a.sessionId)?.status).toBe("expired");
+  });
+
+  it("lets a failure to read the stored session through (only a missing one is replaced)", async () => {
+    const gw = fakeGateway();
+    await open(gw);
+    vi.spyOn(gw, "getSetupSession").mockRejectedValue(Object.assign(new Error("api down"), { type: "StripeAPIError" }));
+    const create = vi.spyOn(gw, "createEmbeddedSetupSession");
+    await expect(open(gw)).rejects.toThrow("api down");
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("makes a new session when Stripe no longer has the stored one", async () => {
@@ -210,6 +250,95 @@ describe("openEmbeddedSetup: the Payment page's card session (plan 2026-11-26-00
     expect(b).toMatchObject({ ok: true, reused: false, currency: "USD" });
     if (!a.ok || !b.ok) throw new Error("unreachable");
     expect(gw.sessions.get(b.sessionId)?.currency).toBe("USD");
+    // The old-currency session is closed, so an old tab cannot save a card on it.
+    expect(gw.sessions.get(a.sessionId)?.status).toBe("expired");
+  });
+
+  it("still opens the new session when expiring the replaced one fails", async () => {
+    const gw = fakeGateway();
+    const a = await open(gw);
+    await query("update users set currency = 'USD' where id = $1", [userId]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(gw, "expireSetupSession").mockRejectedValue(new Error("api down"));
+    const b = await open(gw);
+    expect(warn).toHaveBeenCalledWith("[card] expire setup session failed", expect.objectContaining({ message: "api down" }));
+    warn.mockRestore();
+    expect(b).toMatchObject({ ok: true, reused: false, currency: "USD" });
+    if (!a.ok || !b.ok) throw new Error("unreachable");
+    expect((await stored()).setup_session).toBe(b.sessionId);
+  });
+
+  it("keeps a replaced session that completed while it was being expired: it is stored again, the new one closed, and 'complete' answered", async () => {
+    const gw = fakeGateway();
+    const a = await open(gw);
+    if (!a.ok) throw new Error("unreachable");
+    await query("update users set currency = 'USD' where id = $1", [userId]);
+    // The old tab's confirm lands just before the expiry: Stripe completes it, and the expire is a no-op.
+    const expire = gw.expireSetupSession.bind(gw);
+    vi.spyOn(gw, "expireSetupSession").mockImplementation(async (id) => {
+      if (id === a.sessionId) gw.complete(id);
+      return expire(id);
+    });
+    const create = vi.spyOn(gw, "createEmbeddedSetupSession");
+    expect(await open(gw)).toEqual({ ok: false, reason: "complete", sessionId: a.sessionId });
+    expect((await stored()).setup_session).toBe(a.sessionId);
+    const made = (await create.mock.results[0].value) as { id: string };
+    expect(gw.sessions.get(made.id)?.status).toBe("expired");
+    expect(gw.sessions.get(a.sessionId)?.status).toBe("complete");
+  });
+
+  describe("losing the compare-and-set (forced: the winner is stored between the read and the store)", () => {
+    function racedGateway(o: { failExpire?: boolean } = {}) {
+      const gw = fakeGateway();
+      const real = gw.createEmbeddedSetupSession.bind(gw);
+      let winner: string | null = null;
+      vi.spyOn(gw, "createEmbeddedSetupSession").mockImplementation(async (args) => {
+        const mine = await real(args);
+        if (!winner) {
+          // The other tab creates and stores its session first.
+          winner = (await real(args)).id;
+          await query("update users set setup_session = $2 where id = $1", [userId, winner]);
+        }
+        return mine;
+      });
+      const expire = gw.expireSetupSession.bind(gw);
+      if (o.failExpire) vi.spyOn(gw, "expireSetupSession").mockRejectedValue(new Error("api down"));
+      else vi.spyOn(gw, "expireSetupSession").mockImplementation(expire);
+      return { gw, winner: () => winner };
+    }
+
+    it("the loser closes its own session and hands back the winner's, counted once against the limits", async () => {
+      const { gw, winner } = racedGateway();
+      const counted = vi.fn(counter);
+      const r = await openEmbeddedSetup(query, gw, { userId, ip: "1.2.3.4", returnUrl, now: NOW, counter: counted });
+      expect(r).toMatchObject({ ok: true, reused: true, sessionId: winner() });
+      expect((await stored()).setup_session).toBe(winner());
+      const loser = [...gw.sessions.keys()].find((id) => id !== winner())!;
+      expect(gw.sessions.get(loser)?.status).toBe("expired");
+      expect(gw.expireSetupSession).toHaveBeenCalledWith(loser);
+      expect(counted.mock.calls.filter(([k]) => String(k).startsWith("checkout:user:"))).toHaveLength(1);
+    });
+
+    it("still hands back the winner's session when closing its own fails", async () => {
+      const { gw, winner } = racedGateway({ failExpire: true });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(await open(gw)).toMatchObject({ ok: true, reused: true, sessionId: winner() });
+      warn.mockRestore();
+    });
+  });
+
+  it("answers try_again, not not_allowed, when every store is lost", async () => {
+    const gw = fakeGateway();
+    const real = gw.createEmbeddedSetupSession.bind(gw);
+    vi.spyOn(gw, "createEmbeddedSetupSession").mockImplementation(async (args) => {
+      const mine = await real(args);
+      // Each pass, another tab stores a session that is then closed again before the next read.
+      const theirs = await real(args);
+      await query("update users set setup_session = $2 where id = $1", [userId, theirs.id]);
+      gw.sessions.set(theirs.id, { ...gw.sessions.get(theirs.id)!, status: "expired" });
+      return mine;
+    });
+    expect(await open(gw)).toEqual({ ok: false, reason: "try_again" });
   });
 
   it("two tabs opening at once end with one stored session, which both are given", async () => {
@@ -291,6 +420,29 @@ describe("discardSetupSession: a currency change on the Payment page (Unit 4 hel
 
   it("does nothing when no session is stored", async () => {
     expect(await discardSetupSession(query, fakeGateway(), userId)).toBe("none");
+  });
+
+  it("keeps a session whose confirm landed just before the expiry: 'complete', and it stays stored", async () => {
+    const gw = fakeGateway();
+    const id = await openOne(gw);
+    vi.spyOn(gw, "expireSetupSession").mockImplementation(async (sid) => gw.complete(sid));
+    expect(await discardSetupSession(query, gw, userId)).toBe("complete");
+    const [u] = await query<{ setup_session: string | null }>("select setup_session from users where id = $1", [userId]);
+    expect(u.setup_session).toBe(id);
+  });
+
+  it.each([
+    ["expired", (gw: ReturnType<typeof fakeGateway>, id: string) => gw.sessions.set(id, { ...gw.sessions.get(id)!, status: "expired" })],
+    ["gone from Stripe", (gw: ReturnType<typeof fakeGateway>, id: string) => gw.sessions.delete(id)],
+  ])("clears a stored session that is %s ('discarded')", async (_n, change) => {
+    const gw = fakeGateway();
+    const id = await openOne(gw);
+    change(gw, id);
+    const expire = vi.spyOn(gw, "expireSetupSession");
+    expect(await discardSetupSession(query, gw, userId)).toBe("discarded");
+    expect(expire).not.toHaveBeenCalled();
+    const [u] = await query<{ setup_session: string | null }>("select setup_session from users where id = $1", [userId]);
+    expect(u.setup_session).toBeNull();
   });
 });
 

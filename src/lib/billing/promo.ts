@@ -1,6 +1,7 @@
 import type { Query } from "@/lib/db-query";
 import { counterFor, hit, limits, type Counter } from "@/lib/rate-limit";
 import { refusePromotion, type CardGateway, type Promotion } from "./gateway";
+import { isNoCardTrialUser } from "./has-card";
 import type { Currency } from "./prices";
 
 /**
@@ -9,9 +10,10 @@ import type { Currency } from "./prices";
  * limits are judged in the gateway; Roger then adds its own reservations
  * (written at card save, Unit 5), because the coupon is applied directly and
  * Stripe never counts the redemption. A refusal is always the same generic
- * answer; the reason is logged.
+ * answer; the reason is logged. Only a trial still waiting for its card may
+ * ask (the Unit 6 action checks too).
  */
-export type PromoCheck = { ok: true; promotion: Promotion } | { ok: false; reason: "invalid" | "rate_limited" };
+export type PromoCheck = { ok: true; promotion: Promotion } | { ok: false; reason: "invalid" | "rate_limited" | "not_allowed" };
 
 export async function checkPromoCode(
   q: Query,
@@ -19,6 +21,7 @@ export async function checkPromoCode(
   o: { userId: string; ip: string; code: string; currency: Currency; customer?: string | null },
   d: { now?: Date; counter?: Counter } = {},
 ): Promise<PromoCheck> {
+  if (!(await isNoCardTrialUser(q, o.userId))) return { ok: false, reason: "not_allowed" };
   const now = d.now ?? new Date();
   const counter = d.counter ?? counterFor(q);
   const allowed = [await hit(`promo:user:${o.userId}`, limits.promoPerUser, now, counter), await hit(`promo:ip:${o.ip}`, limits.promoPerIp, now, counter)];

@@ -155,6 +155,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
   const payment = fakePaymentStripe({
     monthlyCents: { USD: PRICES.price_monthly_usd.cents, CAD: PRICES.price_monthly_cad.cents },
     tax: { CA: { rate: TAX_RATE.CA, name: "HST" }, US: { rate: TAX_RATE.US, name: "Sales Tax" } },
+    now,
   });
   let n = 0;
   const id = (p: string) => `${p}_${++n}`;

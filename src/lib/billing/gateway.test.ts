@@ -251,10 +251,18 @@ describe("stripeGateway.previewMonthly (Unit 4)", () => {
   });
 
   it("falls back to a preview without tax when the tax calculation fails (Endive failed_tax_calculation)", async () => {
-    const failed = Object.assign(new Error("Tax could not be calculated"), { code: "failed_tax_calculation" });
+    const failed = Object.assign(new Error("Tax could not be calculated"), { type: "StripeInvalidRequestError", code: "failed_tax_calculation" });
     const { s, calls } = stubPayments({ previews: [failed, invoice({ total: 28000, total_taxes: [], automatic_tax: { enabled: false, status: null } })] });
     expect(await stripeGateway(s)!.previewMonthly({ currency: "CAD", country: "CA", postal: "M5V 2T6" })).toMatchObject({ tax: "pending", taxCents: 0, totalCents: 28000 });
     expect(calls[1].params).toMatchObject({ automatic_tax: { enabled: false } });
+  });
+
+  it("raises CouponUnavailable when the coupon fails on the fallback preview too", async () => {
+    const failed = Object.assign(new Error("Tax could not be calculated"), { type: "StripeInvalidRequestError", code: "failed_tax_calculation" });
+    const expired = Object.assign(new Error("Coupon co_y is expired and cannot be applied."), { type: "StripeInvalidRequestError", code: "coupon_expired", param: "discounts" });
+    const { s, calls } = stubPayments({ previews: [failed, expired] });
+    await expect(stripeGateway(s)!.previewMonthly({ currency: "CAD", country: "CA", postal: "M5V 2T6", coupon: "co_y" })).rejects.toThrow(CouponUnavailable);
+    expect(calls).toHaveLength(2);
   });
 
   it("raises CouponUnavailable for a deleted or expired coupon (the error shapes seen in the sandbox)", async () => {
@@ -277,9 +285,52 @@ describe("isCouponGone / isTaxPreviewError", () => {
     expect(isCouponGone({ code: "resource_missing", param: "discounts[0][coupon]" })).toBe(true);
     expect(isCouponGone({ code: "coupon_expired", param: "discounts" })).toBe(true);
     expect(isCouponGone({ code: "resource_missing", param: "customer" })).toBe(false);
-    expect(isTaxPreviewError({ code: "failed_tax_calculation" })).toBe(true);
-    expect(isTaxPreviewError({ code: "customer_tax_location_invalid" })).toBe(true);
-    expect(isTaxPreviewError({ code: "resource_missing", message: "No such price" })).toBe(false);
+  });
+
+  it("treats only Stripe invalid-request errors with a known tax code as a tax preview error", () => {
+    const bad = { type: "StripeInvalidRequestError" };
+    expect(isTaxPreviewError({ ...bad, code: "failed_tax_calculation" })).toBe(true);
+    expect(isTaxPreviewError({ ...bad, code: "customer_tax_location_invalid" })).toBe(true);
+    expect(isTaxPreviewError({ rawType: "invalid_request_error", code: "taxes_calculation_failed" })).toBe(true);
+    expect(isTaxPreviewError({ ...bad, code: "resource_missing", message: "No such price" })).toBe(false);
+    // Not the person's location: a timeout, Stripe's own 5xx, or a message that merely mentions tax.
+    expect(isTaxPreviewError({ type: "StripeAPIError", code: "failed_tax_calculation" })).toBe(false);
+    expect(isTaxPreviewError({ type: "StripeConnectionError", message: "tax request timed out" })).toBe(false);
+    expect(isTaxPreviewError({ ...bad, message: "Invalid location for tax" })).toBe(false);
+    expect(isTaxPreviewError({ code: "failed_tax_calculation" })).toBe(false);
+  });
+});
+
+describe("stripeGateway.createCustomer: an idempotency key reused with other details", () => {
+  function stub(o: { createError?: unknown; found?: { id: string }[] }) {
+    const searches: unknown[] = [];
+    const s = {
+      customers: {
+        create: async () => {
+          if (o.createError) throw o.createError;
+          return { id: "cus_new" };
+        },
+        search: async (params: unknown) => {
+          searches.push(params);
+          return { data: o.found ?? [] };
+        },
+      },
+    };
+    return { s: s as unknown as Stripe, searches };
+  }
+  const mismatch = Object.assign(new Error("Keys for idempotent requests can only be used with the same parameters they were first used with."), { type: "StripeIdempotencyError", rawType: "idempotency_error" });
+
+  it("finds the customer already made for this user by its user_id metadata", async () => {
+    const { s, searches } = stub({ createError: mismatch, found: [{ id: "cus_first" }] });
+    expect(await stripeGateway(s)!.createCustomer({ userId: "u-1", email: "new@example.com", name: "Ana B" })).toBe("cus_first");
+    expect(searches).toEqual([{ query: "metadata['user_id']:'u-1'", limit: 1 }]);
+  });
+
+  it("lets the error through when no customer is found, and leaves other errors alone", async () => {
+    await expect(stripeGateway(stub({ createError: mismatch }).s)!.createCustomer({ userId: "u-1", email: "a@example.com", name: "A" })).rejects.toThrow("idempotent");
+    const other = stub({ createError: Object.assign(new Error("api down"), { type: "StripeAPIError" }) });
+    await expect(stripeGateway(other.s)!.createCustomer({ userId: "u-1", email: "a@example.com", name: "A" })).rejects.toThrow("api down");
+    expect(other.searches).toHaveLength(0);
   });
 });
 

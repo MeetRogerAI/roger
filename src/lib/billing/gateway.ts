@@ -105,8 +105,17 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
   if (!s) return null;
   return {
     async createCustomer({ userId, email, name }) {
-      const c = await s.customers.create({ email, name, metadata: { user_id: userId } }, { idempotencyKey: `customer:${userId}` });
-      return c.id;
+      try {
+        const c = await s.customers.create({ email, name, metadata: { user_id: userId } }, { idempotencyKey: `customer:${userId}` });
+        return c.id;
+      } catch (e) {
+        // The same key with other parameters (the name or email changed within Stripe's 24 hours):
+        // the customer exists already, so it is found by the user id it carries.
+        if (!isIdempotencyMismatch(e)) throw e;
+        const found = await s.customers.search({ query: `metadata['user_id']:'${userId.replace(/['\\]/g, "")}'`, limit: 1 });
+        if (found.data[0]) return found.data[0].id;
+        throw e;
+      }
     },
 
     async createSetupSession({ userId, customer, currency, successUrl, cancelUrl, purpose }) {
@@ -172,7 +181,13 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
         if (isCouponGone(e)) throw new CouponUnavailable((e as Error).message);
         if (!isTaxPreviewError(e)) throw e;
         // Stripe could not work the tax out: the price without tax, and the tax line "pending".
-        const inv = await s.invoices.createPreview({ ...base, automatic_tax: { enabled: false } });
+        let inv: Stripe.Invoice;
+        try {
+          inv = await s.invoices.createPreview({ ...base, automatic_tax: { enabled: false } });
+        } catch (e2) {
+          if (isCouponGone(e2)) throw new CouponUnavailable((e2 as Error).message);
+          throw e2;
+        }
         return { ...monthlyPreviewFrom(inv, currency), tax: "pending", taxCents: 0, taxName: null, taxRate: null };
       }
     },
@@ -241,7 +256,13 @@ export function taxStatus(status: string | null | undefined): TaxLocation {
   throw new TaxLookupUnavailable(`Stripe Tax answered ${status ?? "nothing"}`);
 }
 
-type StripeErrorish = { code?: string; param?: string; message?: string } | null;
+type StripeErrorish = { code?: string; param?: string; message?: string; type?: string; rawType?: string } | null;
+
+/** Stripe's idempotency error: a key reused with different parameters. */
+export function isIdempotencyMismatch(e: unknown): boolean {
+  const err = e as StripeErrorish;
+  return err?.type === "StripeIdempotencyError" || err?.rawType === "idempotency_error";
+}
 
 /**
  * A coupon applied by id that Stripe will no longer apply. Seen in the
@@ -256,12 +277,18 @@ export function isCouponGone(e: unknown): boolean {
   return err?.code === "resource_missing" && (err.param ?? "").startsWith("discounts");
 }
 
-/** Stripe could not place the location for tax (Endive `failed_tax_calculation`, an invalid tax location). */
+/** The invalid-request codes that mean Stripe could not work the tax out for this location. */
+const TAX_PREVIEW_CODES = new Set(["failed_tax_calculation", "customer_tax_location_invalid", "taxes_calculation_failed"]);
+
+/**
+ * Stripe could not place the location for tax (Endive `failed_tax_calculation`,
+ * an invalid tax location): a Stripe invalid-request error with one of the
+ * known tax codes. Anything else (a timeout, a 5xx, another 400) is not this.
+ */
 export function isTaxPreviewError(e: unknown): boolean {
   const err = e as StripeErrorish;
-  const code = err?.code ?? "";
-  if (code === "failed_tax_calculation" || code === "customer_tax_location_invalid" || /tax/i.test(code)) return true;
-  return !code && /tax|location/i.test(err?.message ?? "");
+  const invalidRequest = err?.type === "StripeInvalidRequestError" || err?.rawType === "invalid_request_error";
+  return invalidRequest && TAX_PREVIEW_CODES.has(err?.code ?? "");
 }
 
 /** Reads an invoice preview into the Price Box's lines. Only taxes actually charged are named. */
@@ -343,8 +370,10 @@ export function normalizePromoCode(code: string): string | null {
   return /^[A-Za-z0-9_-]{1,50}$/.test(c) ? c : null;
 }
 
+/** Logs a refusal. A malformed code is never logged (only its length); others are quoted and cut to 50 characters. */
 export function refusePromotion(code: string, reason: PromoRefusal): { valid: false } {
-  console.info("[promo] code refused", { code: code.slice(0, 50), reason });
+  if (reason === "malformed") console.info("[promo] code refused", { length: code.length, reason });
+  else console.info("[promo] code refused", { code: JSON.stringify(code.slice(0, 50)), reason });
   return { valid: false };
 }
 
