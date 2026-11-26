@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays } from "@/lib/clock";
-import { delivered, dollars, monday, newWorld, passHours, seedPool, sendRun, signUp, toronto, userRow, type World } from "./helpers";
+import { delivered, dollars, monday, newWorld, passHours, seedPool, sendRun, signUp, toronto, userRow, vercelCron, type World } from "./helpers";
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
 /**
@@ -98,6 +98,83 @@ describe("trial to the third-list charge", () => {
     expect(w.stripe.callsTo("subscriptions.create")).toHaveLength(2);
     expect(await delivered(w, ca.id, "2026-12-28")).toHaveLength(3);
     expect(w.subjects(ca.email).filter((s) => s.startsWith("Your three ideas"))).toHaveLength(4);
+  });
+});
+
+// Plan 2026-11-26-001, Key Technical Decisions "Pre-existing charge gap" (Unit 8): the charge cron runs every
+// 10 minutes on Monday, also after the 7:00 send. The second free list delivered at 7:00 must not make that
+// same Monday's later charge runs start the subscription: that week's list was itself free.
+describe("the charge cron re-runs after the second free list", () => {
+  it("creates no subscription the Monday the second free list is delivered, and charges once the next Monday with the third", async () => {
+    await w.at("2026-12-02T16:00:00Z");
+    const m = await signUp(w, { email: "lee@example.ca", currency: "CAD", country: "CA" });
+    await w.at(toronto(addDays(WEEKS[0], -1), "15:00"));
+    await sendRun(w, m);
+    await monday(w, WEEKS[0]);
+    expect((await userRow(w, m.id)).free_lists_used).toBe(1);
+
+    // Second Monday, unattended: every route at its vercel.json minutes until 13:00 (charge every 10 minutes from 5:00).
+    await w.at(toronto(addDays(WEEKS[1], -1), "15:00"));
+    await sendRun(w, m);
+    const log = await vercelCron(w, toronto(WEEKS[1], "13:00"));
+    const charges = log.filter((c) => c.route === "charge" && c.status === "done");
+    expect(charges.filter((c) => c.at > toronto(WEEKS[1], "07:00").toISOString()).length).toBeGreaterThan(30);
+    expect(await delivered(w, m.id, WEEKS[1])).toHaveLength(3);
+    expect(await userRow(w, m.id)).toMatchObject({ status: "trial", free_lists_used: 2, stripe_subscription: null });
+    expect(w.stripe.callsTo("subscriptions.create")).toEqual([]);
+    expect(await w.query("select 1 from charge_attempts")).toEqual([]);
+    expect(w.subjects(m.email)).toContain("Your next list is your first paid one");
+
+    // The third Monday: one subscription, with the third list.
+    await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
+    await sendRun(w, m);
+    await vercelCron(w, toronto(WEEKS[2], "13:00"));
+    expect(w.stripe.callsTo("subscriptions.create")).toHaveLength(1);
+    expect(await userRow(w, m.id)).toMatchObject({ status: "active", free_lists_used: 2 });
+    expect(await delivered(w, m.id, WEEKS[2])).toHaveLength(3);
+  }, 120_000);
+});
+
+describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
+  async function promoMember(email: string) {
+    await w.at("2026-12-02T16:00:00Z");
+    const m = await signUp(w, { email, currency: "CAD", country: "CA" });
+    const p = w.stripe.payment.addPromotion({ code: "WELCOME20", coupon: { id: "co_20", percentOff: 20 } });
+    await w.query("update users set promo_code = $2, promo_coupon = $3, promo_label = 'WELCOME20' where id = $1", [m.id, p.code, p.coupon!.id]);
+    for (const week of WEEKS.slice(0, 2)) {
+      await w.at(toronto(addDays(week, -1), "15:00"));
+      await sendRun(w, m);
+      await monday(w, week);
+    }
+    return m;
+  }
+
+  it("tells the discounted amount after the second list and charges exactly that with the third", async () => {
+    const m = await promoMember("dee@example.ca");
+    // CA$280 less 20% = CA$224, plus 13% HST = CA$253.12.
+    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
+    expect(paidNext.text).toContain("CA$253.12");
+    expect(paidNext.text).toContain("That includes your promo code WELCOME20: CA$56 off.");
+    await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
+    await sendRun(w, m);
+    expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ charged: 1 });
+    expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon)).toEqual(["co_20"]);
+    expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", totalCents: 25312, discountCents: 5600 });
+    expect(w.mail(m.email).find((x) => x.subject === "You’re subscribed")!.text).toContain("CA$253.12");
+  });
+
+  it("a coupon deleted before the third Monday: held and told the full price, charged it the next day", async () => {
+    const m = await promoMember("eli@example.ca");
+    w.stripe.payment.coupons.delete("co_20");
+    await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
+    await sendRun(w, m);
+    expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ held_amount: 1 });
+    expect(await userRow(w, m.id)).toMatchObject({ status: "held", hold_reason: "amount_changed" });
+    expect(w.mail(m.email).find((x) => x.subject === "Your first charge amount changed")!.text).toContain("CA$316.40");
+    await passHours(w, toronto(addDays(WEEKS[2], 1), "08:00"));
+    expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon)).toEqual([null]);
+    expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", totalCents: 31640 });
+    expect(await userRow(w, m.id)).toMatchObject({ status: "active" });
   });
 });
 

@@ -2,7 +2,7 @@ import { isAtOrPast } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { sendToUser } from "@/lib/mail/send";
 import { chargeDateMovedEmail } from "@/lib/mail/templates/charges";
-import { chargeFirst, nextChargeMonday, type ChargeDeps, type FirstOutcome } from "./first-charge";
+import { chargeFirst, FREE_LIST_WEEK_SQL, nextChargeMonday, type ChargeDeps, type FirstOutcome } from "./first-charge";
 import { chargeOrders, type OrderOutcome } from "./orders";
 
 /**
@@ -29,10 +29,13 @@ export async function runChargeJob(q: Query, d: ChargeDeps, o: { week: string })
   if (!w || w.dry_run || (w.status !== "ready" && w.status !== "sent")) return { week, status: "skipped", note: "Cora's week is not ready." };
 
   // The third list: a monthly trial user who has had the free lists and has picks this week (two ideas still count, R14).
+  // Not a week whose delivered list was itself a free list: the job re-runs every 10 minutes after the 7:00 send,
+  // which delivers the second free list (plan 2026-11-26-001, "Pre-existing charge gap").
   const due = await q<{ id: string }>(
     `select u.id from users u join cora_user_weeks cw on cw.user_id = u.id and cw.week_of = $1 and not cw.dry_run
      where u.status = 'trial' and u.plan = 'monthly' and u.cancel_requested_at is null and u.stripe_subscription is null
        and u.sponsor_id is null and u.free_lists_used >= $2 and cw.outcome in ('picked', 'short')
+       and not exists (${FREE_LIST_WEEK_SQL("u.id", "$1")})
      order by u.id`,
     [week, d.settings.freeRuns],
   );

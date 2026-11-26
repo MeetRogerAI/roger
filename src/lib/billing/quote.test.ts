@@ -176,3 +176,60 @@ describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
     expect(quotable({ ...base, stripe_customer: null, trial_started_at: "2026-11-16T15:00:00Z" })).toBe(false);
   });
 });
+
+describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
+  // US$200 at 13% tax; the coupon takes 20% off before tax: (20000 - 4000) * 1.13 = 18080.
+  const gone = new Set<string>();
+  const coupons: (string | null)[] = [];
+  const created: (string | null)[] = [];
+  const promoGw: BillingGateway = {
+    preview: async ({ coupon }) => {
+      coupons.push(coupon ?? null);
+      if (coupon && gone.has(coupon)) throw Object.assign(new Error(`No such coupon: '${coupon}'`), { code: "resource_missing", param: "discounts[0][coupon]" });
+      const off = coupon ? 4000 : 0;
+      return { totalCents: Math.round((20000 - off) * 1.13), currency: "USD", discountCents: off };
+    },
+    subscriptions: async () => [],
+    createSubscription: async ({ coupon }) => (created.push(coupon ?? null), { kind: "succeeded", object: "sub_1", amountCents: coupon ? 18080 : 22600, currency: "USD" }),
+  };
+  const pdeps = (now: Date) => ({ ...deps(now), gw: promoGw });
+  const promo = async () => (await query<{ coupon: string | null; label: string | null }>("select promo_coupon as coupon, promo_label as label from users"))[0];
+
+  beforeEach(async () => {
+    gone.clear();
+    coupons.length = 0;
+    created.length = 0;
+    await query("update users set promo_code = 'WELCOME20', promo_coupon = 'co_20', promo_label = 'WELCOME20'");
+  });
+
+  it("the second-list email, the reminder and the charge all carry the discount, at the same told amount", async () => {
+    expect(await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid)).toBe(true);
+    expect((await query<{ quote: unknown }>("select quote from users"))[0].quote).toMatchObject({ totalCents: 18080, coupon: "co_20", discountCents: 4000, week: WEEK });
+    expect(await sendFirstChargeReminders(query, pdeps(SATURDAY))).toBe(1);
+    for (const m of sent) {
+      expect(m.text).toContain("US$180.80");
+      expect(m.text).toContain("That includes your promo code WELCOME20: US$40 off.");
+    }
+    expect(await chargeFirst(query, pdeps(MONDAY_CHARGE), uid, WEEK)).toBe("charged");
+    expect(coupons).toEqual(["co_20", "co_20", "co_20"]);
+    expect(created).toEqual(["co_20"]);
+  });
+
+  it("a coupon deleted before the second-list email is dropped: the full price is told, with no discount line", async () => {
+    gone.add("co_20");
+    expect(await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid)).toBe(true);
+    expect(await told()).toMatchObject({ total: 22600 });
+    expect(await promo()).toEqual({ coupon: null, label: null });
+    expect(sent[0].text).toContain("US$226");
+    expect(sent[0].text).not.toContain("promo code");
+    expect(await chargeFirst(query, pdeps(MONDAY_CHARGE), uid, WEEK)).toBe("charged");
+    expect(created).toEqual([null]);
+  });
+
+  it("no promo: the emails have no discount line and the quote records no coupon", async () => {
+    await query("update users set promo_code = null, promo_coupon = null, promo_label = null");
+    await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid);
+    expect(sent[0].text).not.toContain("promo code");
+    expect((await query<{ quote: unknown }>("select quote from users"))[0].quote).toMatchObject({ totalCents: 22600, coupon: null, discountCents: 0 });
+  });
+});

@@ -4,7 +4,7 @@ import { sendToUser, type MailDeps, type SendResult } from "@/lib/mail/send";
 import type { Rendered } from "@/lib/mail/layout";
 import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail } from "@/lib/mail/templates/quote";
 import type { V3Settings } from "@/lib/v3-settings";
-import { sharingAtCutoff } from "./first-charge";
+import { previewFirst, sharingAtCutoff } from "./first-charge";
 import { carriedDifferenceCents } from "./adjustment";
 import { HAS_CARD_SQL, hasCard } from "./has-card";
 import { firstChargePricing, type Currency } from "./prices";
@@ -20,13 +20,34 @@ import type { BillingGateway } from "./subscriptions";
  * Amounts are priced the way the charge prices them: from the user's sharing
  * at the cutoff of the Monday being quoted.
  */
-export type Quote = { totalCents: number; currency: Currency; price: string; extraCents?: number; at: string; week: string };
+export type Quote = {
+  totalCents: number;
+  currency: Currency;
+  price: string;
+  extraCents?: number;
+  at: string;
+  week: string;
+  /** The coupon locked in at card save that the amount was previewed with (plan 2026-11-26-001, Unit 8). */
+  coupon?: string | null;
+  discountCents?: number;
+};
 export type QuoteDeps = { gw: BillingGateway; settings: V3Settings; now: Date } & MailDeps;
 
-type U = { id: string; email: string; status: string; plan: string; currency: Currency | null; stripe_customer: string | null; trial_started_at: string | null; quote: Quote | null };
+type U = {
+  id: string;
+  email: string;
+  status: string;
+  plan: string;
+  currency: Currency | null;
+  stripe_customer: string | null;
+  trial_started_at: string | null;
+  quote: Quote | null;
+  promo_coupon: string | null;
+  promo_label: string | null;
+};
 
 async function load(q: Query, userId: string): Promise<U | null> {
-  const [u] = await q<U>(`select id, email, status, plan, currency, stripe_customer, trial_started_at::text, quote from users where id = $1`, [userId]);
+  const [u] = await q<U>(`select id, email, status, plan, currency, stripe_customer, trial_started_at::text, quote, promo_coupon, promo_label from users where id = $1`, [userId]);
   return u ?? null;
 }
 
@@ -48,7 +69,11 @@ export function quoteFrozen(quote: Pick<Quote, "week"> | null, now: Date, s: V3S
   return now >= cutoffInstant(quote.week, s.runCutoff) && now < wallToInstant(addDays(quote.week, 1), "00:00");
 }
 
-/** What the first charge would be for the coming Monday, priced as the charge will price it. */
+/**
+ * What the first charge would be for the coming Monday, priced as the charge
+ * will price it, with the member's locked-in coupon (a coupon Stripe no
+ * longer applies is dropped, so the amount told is the full price).
+ */
 async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   const week = weekOf(d.now, d.settings.runCutoff);
   const sharing = await sharingAtCutoff(q, u.id, week, d.settings);
@@ -56,12 +81,25 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   // Exactly as the charge prices it: the standard price, plus the month's difference on the first invoice when not sharing at the cutoff.
   const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw, await carriedDifferenceCents(q, u.id));
   if (!price) return null;
-  const p = await d.gw.preview({ customer: u.stripe_customer!, price, extra: extraCents > 0 ? { amountCents: extraCents, currency } : null });
-  return { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week };
+  const extra = extraCents > 0 ? { amountCents: extraCents, currency } : null;
+  const { preview: p, coupon } = await previewFirst(q, d.gw, { id: u.id, promo_coupon: u.promo_coupon, stripe_customer: u.stripe_customer! }, price, extra);
+  return { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week, coupon, discountCents: coupon ? (p.discountCents ?? 0) : 0 };
 }
 
 const same = (a: Quote | null, b: Quote) =>
-  Boolean(a && a.totalCents === b.totalCents && a.currency === b.currency && a.price === b.price && (a.extraCents ?? 0) === b.extraCents && a.week === b.week);
+  Boolean(
+    a &&
+      a.totalCents === b.totalCents &&
+      a.currency === b.currency &&
+      a.price === b.price &&
+      (a.extraCents ?? 0) === b.extraCents &&
+      a.week === b.week &&
+      (a.coupon ?? null) === (b.coupon ?? null),
+  );
+
+/** The discount line for an email stating the first charge: the locked-in promo's label and amount off. */
+const discountOf = (u: U, quote: Quote) =>
+  quote.coupon && (quote.discountCents ?? 0) > 0 ? { label: u.promo_label ?? "Promo code", amountCents: quote.discountCents! } : null;
 
 /** Sends an email stating an amount, and stores that amount as told only if it was sent. */
 async function tell(q: Query, d: QuoteDeps, u: U, kind: string, ref: string, quote: Quote, message: Rendered): Promise<SendResult> {
@@ -111,7 +149,7 @@ export async function sendFirstPaidNext(q: Query, d: QuoteDeps, userId: string):
   if (!u || !quotable(u)) return false;
   const fresh = await preview(q, d, u);
   if (!fresh) return false;
-  const res = await tell(q, d, u, "first_paid_next", fresh.week, fresh, firstPaidNextEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency }));
+  const res = await tell(q, d, u, "first_paid_next", fresh.week, fresh, firstPaidNextEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh) }));
   return res === "sent";
 }
 
@@ -138,7 +176,7 @@ export async function sendFirstChargeReminders(q: Query, d: QuoteDeps): Promise<
       const u = (await load(q, id))!;
       const fresh = await preview(q, d, u);
       if (!fresh) continue;
-      const res = await tell(q, d, u, "first_charge_reminder", week, fresh, firstChargeReminderEmail({ week, amountCents: fresh.totalCents, currency: fresh.currency }));
+      const res = await tell(q, d, u, "first_charge_reminder", week, fresh, firstChargeReminderEmail({ week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh) }));
       if (res === "sent") n++;
     } catch (e) {
       console.error("[quote] reminder", id, e instanceof Error ? e.message : e);

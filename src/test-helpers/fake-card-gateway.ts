@@ -68,6 +68,21 @@ export function fakePaymentStripe(o: { monthlyCents?: Record<Currency, number>; 
     return f;
   };
 
+  /**
+   * A coupon applied by id to a first-charge preview or subscription create
+   * (`discounts: [{coupon}]`): the amount it takes off `subtotal`, or Stripe's
+   * own error for one deleted (`resource_missing` on `discounts[0][coupon]`)
+   * or past `redeem_by` (`coupon_expired`), as the Unit 4 spike recorded.
+   */
+  const couponOff = (couponId: string, subtotal: number, currency: string): number => {
+    const c = coupons.get(couponId);
+    if (!c || !c.valid) throw Object.assign(new Error(`No such coupon: '${couponId}'`), { type: "StripeInvalidRequestError", code: "resource_missing", param: "discounts[0][coupon]" });
+    if (c.redeemBy != null && c.redeemBy <= Math.floor(clock().getTime() / 1000)) {
+      throw Object.assign(new Error(`Coupon ${c.id} is expired and cannot be applied.`), { type: "StripeInvalidRequestError", code: "coupon_expired", param: "discounts" });
+    }
+    return c.percentOff != null ? Math.round((subtotal * c.percentOff) / 100) : Math.min(subtotal, c.amountOff?.[currency.toLowerCase()] ?? 0);
+  };
+
   const previewMonthly: CardGateway["previewMonthly"] = async (args) => {
     previews.push({ ...args });
     const subtotal = monthly[args.currency];
@@ -103,7 +118,7 @@ export function fakePaymentStripe(o: { monthlyCents?: Record<Currency, number>; 
     return judgePromotion(f, currency, { customer: opts.customer ?? null, now: opts.now ?? new Date(), price: { cents: monthly[currency], product: "prod_roger_monthly" } });
   };
 
-  return { promotions, coupons, taxPending, previews, addPromotion, previewMonthly, findPromotion };
+  return { promotions, coupons, taxPending, previews, addPromotion, previewMonthly, findPromotion, couponOff };
 }
 
 /** A fake Stripe: one customer per user id (like the idempotency key), sessions held in memory. */

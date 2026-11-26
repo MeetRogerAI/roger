@@ -36,7 +36,7 @@ import { sendSignupWelcome } from "@/lib/signup/finish";
 import { placeOrder } from "@/lib/billing/orders";
 import { runChargeJob, type ChargeJobResult } from "@/lib/billing/charge-job";
 import type { ChargeDeps } from "@/lib/billing/first-charge";
-import type { CardGateway, SetupSession } from "@/lib/billing/gateway";
+import { isCouponGone, type CardGateway, type SetupSession } from "@/lib/billing/gateway";
 import { anniversary } from "@/lib/billing/period";
 import type {
   AdjustmentGateway,
@@ -109,6 +109,8 @@ export type FakeInvoice = {
   currency: string;
   lines: Line[];
   totalCents: number;
+  /** The locked-in promo's discount (`discounts: [{coupon}]`), taken off before tax. */
+  discountCents?: number;
   created: number;
   periodStart: number | null;
 };
@@ -167,13 +169,16 @@ export function fakeStripe(now: () => Date): FakeStripe {
     return x;
   };
   const country = (customer: string) => customers.get(customer)?.country ?? "US";
-  /** Lines plus tax as its own row where tax is collected. */
-  const priced = (customer: string, lines: Line[]) => {
-    const subtotal = lines.reduce((s, l) => s + l.amountCents, 0);
+  /** Lines plus tax as its own row where tax is collected; a coupon's discount comes off before tax, as in Stripe. */
+  const priced = (customer: string, lines: Line[], discountCents = 0) => {
+    const subtotal = lines.reduce((s, l) => s + l.amountCents, 0) - discountCents;
     const tax = Math.round(subtotal * (TAX_RATE[country(customer)] ?? 0));
     const all = tax > 0 ? [...lines, { kind: "tax" as const, description: "HST (13%)", amountCents: tax, invoiceItem: null, price: null }] : lines;
-    return { lines: all, totalCents: subtotal + tax };
+    return { lines: all, totalCents: subtotal + tax, ...(discountCents ? { discountCents } : {}) };
   };
+  /** The coupon's amount off a first invoice's lines (throws Stripe's error for a deleted or expired coupon). */
+  const couponOff = (coupon: string | null | undefined, p: string, lines: Line[]) =>
+    coupon ? payment.couponOff(coupon, lines.reduce((s, l) => s + l.amountCents, 0), price(p).currency) : 0;
   const planLines = (p: string, extra?: FirstExtra): Line[] => [
     { kind: "plan", description: `1 × ${price(p).product}`, amountCents: price(p).cents, invoiceItem: null, price: p },
     // add_invoice_items takes no description: Stripe names the line after the plan's product (plan Unit 14 deviation).
@@ -186,7 +191,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
     return null;
   };
   const invoice = (o: Omit<FakeInvoice, "id" | "created" | "lines" | "totalCents">, lines: Line[]): FakeInvoice => {
-    const inv: FakeInvoice = { ...o, id: id("in"), created: sec(now()) + n, ...priced(o.customer, lines) };
+    const inv: FakeInvoice = { ...o, id: id("in"), created: sec(now()) + n, ...priced(o.customer, lines, o.discountCents ?? 0) };
     invoiceList.unshift(inv);
     return inv;
   };
@@ -275,19 +280,29 @@ export function fakeStripe(now: () => Date): FakeStripe {
     async unitAmount(p) {
       return price(p).cents;
     },
-    async preview({ customer, price: p, extra }) {
-      call("invoices.createPreview", { customer, price: p, extra: extra ?? null, automatic_tax: true });
-      const inv = priced(customer, planLines(p, extra));
-      return { totalCents: inv.totalCents, currency: price(p).currency };
+    async preview({ customer, price: p, extra, coupon }) {
+      call("invoices.createPreview", { customer, price: p, extra: extra ?? null, coupon: coupon ?? null, automatic_tax: true });
+      const lines = planLines(p, extra);
+      const discountCents = couponOff(coupon, p, lines);
+      const inv = priced(customer, lines, discountCents);
+      return { totalCents: inv.totalCents, currency: price(p).currency, discountCents };
     },
     async subscriptions(customer) {
       return [...subs.values()].filter((s) => s.customer === customer).map((s) => ({ id: s.id, status: s.status, claimId: s.claimId, anchor: s.anchor }));
     },
-    async createSubscription({ customer, price: p, extra, claimId, userId, idempotencyKey }) {
-      call("subscriptions.create", { customer, price: p, extra: extra ?? null, claimId, userId, idempotencyKey, payment_behavior: "error_if_incomplete", off_session: true, automatic_tax: true });
+    async createSubscription({ customer, price: p, extra, coupon, claimId, userId, idempotencyKey }) {
+      call("subscriptions.create", { customer, price: p, extra: extra ?? null, coupon: coupon ?? null, claimId, userId, idempotencyKey, payment_behavior: "error_if_incomplete", off_session: true, automatic_tax: true });
       // Stripe replays the stored answer for a reused key, declines included.
       const replay = replays.get(idempotencyKey);
       if (replay) return replay;
+      let discountCents = 0;
+      try {
+        discountCents = couponOff(coupon, p, planLines(p, extra));
+      } catch (e) {
+        // A deleted or expired coupon: Stripe refuses the create (nothing made), as the real gateway maps it.
+        if (coupon && isCouponGone(e)) return { kind: "coupon_gone", error: (e as Error).message };
+        throw e;
+      }
       const declined = nextPayment(customer);
       if (declined) {
         replays.set(idempotencyKey, declined);
@@ -296,7 +311,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
       const at = now();
       const s: FakeSub = { id: id("sub"), customer, price: p as PriceId, claimId, userId, status: "active", anchor: sec(at), periodEnd: sec(anniversary(at, 1)), cancelAt: null, endedAt: null };
       subs.set(s.id, s);
-      const inv = invoice({ customer, subscription: s.id, claimId, billingReason: "subscription_create", status: "paid", currency: price(p).currency, periodStart: s.anchor }, planLines(p, extra));
+      const inv = invoice({ customer, subscription: s.id, claimId, billingReason: "subscription_create", status: "paid", currency: price(p).currency, periodStart: s.anchor, ...(discountCents ? { discountCents } : {}) }, planLines(p, extra));
       const r: ChargeResult = { kind: "succeeded", object: s.id, amountCents: inv.totalCents, currency: inv.currency, anchor: s.anchor };
       replays.set(idempotencyKey, r);
       return r;

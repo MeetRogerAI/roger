@@ -8,6 +8,7 @@ import type { V3Settings } from "@/lib/v3-settings";
 import { carriedDifferenceCents, clearCarried } from "./adjustment";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, stillChargeable, type Claim } from "./claims";
 import { firstChargePricing, type Currency } from "./prices";
+import { isCouponGone } from "./gateway";
 import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult, type FirstExtra, type OrderGateway, type PlanGateway } from "./subscriptions";
 
 /**
@@ -22,12 +23,72 @@ import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult,
 export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; adjust?: AdjustmentGateway; plans?: PlanGateway; settings: V3Settings; now: Date } & MailDeps;
 export type FirstOutcome = "charged" | "declined" | "held_amount" | "unknown" | "error" | "skipped" | "open";
 
-type Quote = { totalCents?: number; currency?: string; price?: string; extraCents?: number; at?: string; week?: string };
-type U = { id: string; email: string; currency: Currency | null; status: string; hold_reason: string | null; stripe_customer: string | null; quote: Quote | null; free_lists_used: number };
+type Quote = { totalCents?: number; currency?: string; price?: string; extraCents?: number; at?: string; week?: string; coupon?: string | null; discountCents?: number };
+type U = {
+  id: string;
+  email: string;
+  currency: Currency | null;
+  status: string;
+  hold_reason: string | null;
+  stripe_customer: string | null;
+  quote: Quote | null;
+  free_lists_used: number;
+  promo_coupon: string | null;
+  promo_label: string | null;
+};
 
 async function loadUser(q: Query, userId: string): Promise<U | null> {
-  const [u] = await q<U>(`select id, email, currency, status, hold_reason, stripe_customer, quote, free_lists_used from users where id = $1`, [userId]);
+  const [u] = await q<U>(`select id, email, currency, status, hold_reason, stripe_customer, quote, free_lists_used, promo_coupon, promo_label from users where id = $1`, [userId]);
   return u ?? null;
+}
+
+/**
+ * A list delivered free to this member for this week (`picks.is_free_list`,
+ * not a dry run): that week is never their first paid one. The charge job
+ * re-runs every 10 minutes after the 7:00 send, which delivers the second free
+ * list (plan 2026-11-26-001, "Pre-existing charge gap").
+ */
+export const FREE_LIST_WEEK_SQL = (user: string, week: string) =>
+  `select 1 from picks fl where fl.user_id = ${user} and fl.week_of = ${week}::date and not fl.dry_run and fl.is_free_list`;
+
+/**
+ * Drops a locked-in coupon Stripe no longer applies (deleted, or past its
+ * `redeem_by`): the member is then quoted and charged the full price, told
+ * first through the amount-changed hold (plan R17). Only if it is still the
+ * coupon that was tried.
+ */
+async function dropCoupon(q: Query, userId: string, coupon: string): Promise<string | null> {
+  const [r] = await q<{ label: string | null }>(
+    `update users u set promo_coupon = null, promo_label = null from users o where u.id = o.id and u.id = $1 and u.promo_coupon = $2 returning o.promo_label as label`,
+    [userId, coupon],
+  );
+  console.warn("[charge] locked-in coupon no longer applies; dropped", { userId, coupon });
+  return r?.label ?? null;
+}
+
+export type FirstPreview = { totalCents: number; currency: string; discountCents?: number };
+
+/**
+ * Stripe's preview of the first invoice with the member's locked-in coupon,
+ * shared by the quote and the charge so the told amount and the charge are
+ * priced alike. A coupon Stripe no longer applies is dropped from the member
+ * and the preview made again without it; `ended` names the dropped discount.
+ */
+export async function previewFirst(
+  q: Query,
+  gw: BillingGateway,
+  u: Pick<U, "id" | "promo_coupon"> & { stripe_customer: string },
+  price: string,
+  extra: FirstExtra,
+): Promise<{ preview: FirstPreview; coupon: string | null; ended: string | null }> {
+  const coupon = u.promo_coupon ?? null;
+  try {
+    return { preview: await gw.preview({ customer: u.stripe_customer, price, extra, coupon }), coupon, ended: null };
+  } catch (e) {
+    if (!coupon || !isCouponGone(e)) throw e;
+    const label = await dropCoupon(q, u.id, coupon);
+    return { preview: await gw.preview({ customer: u.stripe_customer, price, extra, coupon: null }), coupon: null, ended: label ?? coupon };
+  }
 }
 
 /**
@@ -58,6 +119,9 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
   if (!u) return "skipped";
   // A trial member who still has a free list (an admin gave one back after the job listed them) is not charged.
   if (u.status === "trial" && u.free_lists_used < d.settings.freeRuns) return "skipped";
+  // This week's delivered list was itself a free list (the second, delivered at 7:00): the charge comes with the next one.
+  const [free] = await q(FREE_LIST_WEEK_SQL("$1", "$2"), [userId, week]);
+  if (free) return "skipped";
   if (!u.stripe_customer) {
     await alert("charge_setup", `${userId}:${week}`, "A first charge has no Stripe customer", [`User ${userId}, week ${week}.`], d);
     return "error";
@@ -73,26 +137,20 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
   const attempt = await nextAttempt(q, { userId, purpose: "first_charge", weekOf: week, reset: o.reset });
   if (attempt == null) return "open";
 
-  // The amount must be the one the user was told (spec check 21), checked before anything is claimed.
-  const preview = await d.gw.preview({ customer: u.stripe_customer, price, extra });
-  const fresh: Quote = { totalCents: preview.totalCents, currency: preview.currency, price, extraCents, at: d.now.toISOString(), week };
+  // The amount must be the one the user was told (spec check 21), checked before anything is claimed. The told
+  // quote and this preview carry the same locked-in coupon; one Stripe no longer applies is dropped here.
+  const { preview, coupon, ended } = await previewFirst(q, d.gw, { ...u, stripe_customer: u.stripe_customer }, price, extra);
+  const fresh = quoteOf(preview, price, extraCents, coupon, d.now, week);
   // No amount was ever told (its email failed), or the amount moved: tell first, charge after 24 hours.
   if (
     u.quote?.totalCents == null ||
     u.quote.totalCents !== preview.totalCents ||
     u.quote.currency !== preview.currency ||
     u.quote.price !== price ||
-    (u.quote.extraCents ?? 0) !== extraCents
+    (u.quote.extraCents ?? 0) !== extraCents ||
+    (u.quote.coupon ?? null) !== coupon
   ) {
-    const held = await q(
-      `update users set status = 'held', hold_reason = 'amount_changed', quote = $2 where id = $1 and status in ('trial', 'held') and stripe_subscription is null and free_lists_used >= $3 returning id`,
-      [userId, JSON.stringify(fresh), d.settings.freeRuns],
-    );
-    if (held.length) {
-      await sendToUser({ id: u.id, email: u.email }, "amount_changed", `${week}:${preview.totalCents}:${price}`, amountChangedEmail({ amountCents: preview.totalCents, currency: preview.currency as Currency }), d).catch(() => {});
-      await alert("amount_changed", `${userId}:${week}:${preview.totalCents}`, "A first charge amount changed", [`User ${userId}: told ${u.quote?.totalCents ?? "nothing"} ${u.quote?.currency ?? ""}, now ${preview.totalCents} ${preview.currency}. Charged in 24 hours if unchanged.`], d);
-    }
-    return "held_amount";
+    return holdForAmount(q, d, u, week, fresh, { ended });
   }
 
   const claim = await claimCharge(q, { userId, purpose: "first_charge", weekOf: week, attempt, price, amountCents: preview.totalCents, currency: preview.currency, extraCents, now: d.now });
@@ -102,8 +160,76 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
   const live = (await d.gw.subscriptions(u.stripe_customer)).find(isLive);
   if (live) return applyResult(q, d, u, claim, { kind: "error", error: `The customer already has a live subscription (${live.id}).` }, "charge_duplicate");
 
-  const result = await d.gw.createSubscription({ customer: u.stripe_customer, price, extra, claimId: claim.id, userId, idempotencyKey: idempotencyKey(claim) });
+  const result = await d.gw.createSubscription({ customer: u.stripe_customer, price, extra, coupon, claimId: claim.id, userId, idempotencyKey: idempotencyKey(claim) });
+  if (result.kind === "coupon_gone") return couponGoneAtCreate(q, d, u, claim, price, extra, extraCents, result.error);
   return applyResult(q, d, u, claim, result);
+}
+
+const quoteOf = (p: FirstPreview, price: string, extraCents: number, coupon: string | null, now: Date, week: string): Quote => ({
+  totalCents: p.totalCents,
+  currency: p.currency,
+  price,
+  extraCents,
+  at: now.toISOString(),
+  week,
+  coupon,
+  discountCents: coupon ? (p.discountCents ?? 0) : 0,
+});
+
+/**
+ * The amount moved (or was never told, or the locked-in coupon ended): held
+ * as `amount_changed` with the new amount, told by email, charged 24 hours
+ * later if unchanged. With `claim`, the claim that found the coupon gone is
+ * settled as an error and the coupon dropped in the same statement, so the
+ * hold and the claim's end never part.
+ */
+async function holdForAmount(
+  q: Query,
+  d: ChargeDeps,
+  u: Pick<U, "id" | "email" | "quote">,
+  week: string,
+  fresh: Quote,
+  o: { ended?: string | null; claim?: { id: string; error: string } } = {},
+): Promise<FirstOutcome> {
+  const held = await q(
+    `with s as (
+       update charge_attempts set outcome = 'error', error = $5, settled_at = now(), next_attempt_at = null
+       where $4::uuid is not null and id = $4 and outcome in ('claimed', 'unknown') returning id
+     )
+     update users set status = 'held', hold_reason = 'amount_changed', quote = $2,
+       promo_coupon = case when $4::uuid is null then promo_coupon end, promo_label = case when $4::uuid is null then promo_label end
+     where id = $1 and status in ('trial', 'held') and stripe_subscription is null and free_lists_used >= $3
+       and ($4::uuid is null or exists (select 1 from s))
+     returning id`,
+    [u.id, JSON.stringify(fresh), d.settings.freeRuns, o.claim?.id ?? null, o.claim?.error.slice(0, 1000) ?? null],
+  );
+  if (!held.length) return o.claim ? "open" : "held_amount";
+  const total = fresh.totalCents!;
+  await sendToUser(
+    { id: u.id, email: u.email },
+    "amount_changed",
+    `${week}:${total}:${fresh.price}`,
+    amountChangedEmail({ amountCents: total, currency: fresh.currency as Currency, discountEnded: o.ended ?? null }),
+    d,
+  ).catch(() => {});
+  const why = o.ended ? ` The locked-in discount (${o.ended}) no longer applies.` : "";
+  await alert("amount_changed", `${u.id}:${week}:${total}`, "A first charge amount changed", [`User ${u.id}: told ${u.quote?.totalCents ?? "nothing"} ${u.quote?.currency ?? ""}, now ${total} ${fresh.currency}.${why} Charged in 24 hours if unchanged.`], d);
+  return "held_amount";
+}
+
+/**
+ * Stripe refused the subscription because the locked-in coupon was deleted
+ * or expired since the preview: nothing was created. The full price is
+ * previewed, then the claim ends as an error, the coupon is dropped and the
+ * member is held for the changed amount, all in one statement; the 24-hour
+ * retry (a new attempt) charges the full price. If the preview fails, the
+ * claim stays open and the takeover repeats the create, which finds the
+ * coupon gone again.
+ */
+async function couponGoneAtCreate(q: Query, d: ChargeDeps, u: U, claim: Claim, price: string, extra: FirstExtra, extraCents: number, error: string): Promise<FirstOutcome> {
+  const p = await d.gw.preview({ customer: u.stripe_customer!, price, extra, coupon: null });
+  const ended = u.promo_label ?? u.promo_coupon;
+  return holdForAmount(q, d, u, claim.weekOf, quoteOf(p, price, extraCents, null, d.now, claim.weekOf), { ended, claim: { id: claim.id, error: `Coupon no longer applies: ${error}` } });
 }
 
 /** The dates still to come, for the decline email. */
@@ -214,7 +340,10 @@ export async function takeOverFirstCharge(q: Query, d: ChargeDeps, claim: Claim)
   if (!(await stillChargeable(q, claim.id))) return applyResult(q, d, u, claim, { kind: "error", error: "The user can no longer be charged (cancelled, closed or switched)." });
   const { price, extraCents, currency } = await claimedPrice(q, claim.id);
   if (!price) return applyResult(q, d, u, claim, { kind: "error", error: "The claim has no recorded price." });
-  const r = await d.gw.createSubscription({ customer: u.stripe_customer, price, extra: extraOf(extraCents, currency ?? u.currency ?? "USD"), claimId: claim.id, userId: u.id, idempotencyKey: idempotencyKey(claim) });
+  const extra = extraOf(extraCents, currency ?? u.currency ?? "USD");
+  // The same coupon as the claimed call: it stays on the member until a claim finds it gone (and is settled with that).
+  const r = await d.gw.createSubscription({ customer: u.stripe_customer, price, extra, coupon: u.promo_coupon, claimId: claim.id, userId: u.id, idempotencyKey: idempotencyKey(claim) });
+  if (r.kind === "coupon_gone") return couponGoneAtCreate(q, d, u, claim, price, extra, extraCents, r.error);
   return applyResult(q, d, u, claim, r);
 }
 

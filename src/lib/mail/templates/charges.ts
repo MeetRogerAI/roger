@@ -58,12 +58,13 @@ export function chargeDateMovedEmail(o: { nextMonday: string; reason?: "no_plays
 }
 
 /** The amount changed after the reminder: the list waits a day so the user sees the new amount first. */
-export function amountChangedEmail(o: { amountCents: number; currency: Currency }): Rendered {
+export function amountChangedEmail(o: { amountCents: number; currency: Currency; /** The label of a locked-in discount Stripe no longer applies. */ discountEnded?: string | null }): Rendered {
   return renderEmail({
     subject: "Your first charge amount changed",
     preview: `It is now ${moneyCents(o.amountCents, o.currency)}.`,
     heading: "Your first charge amount changed.",
     paragraphs: [
+      ...(o.discountEnded ? [`Your promo code’s discount (${o.discountEnded}) has ended and can no longer be applied, so your first charge is at the full price.`] : []),
       `Your first charge will be ${moneyCents(o.amountCents, o.currency)}, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.`,
       "We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.",
     ],

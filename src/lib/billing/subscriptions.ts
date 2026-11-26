@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { isHardDecline } from "./claims";
+import { isCouponGone } from "./gateway";
 import { stripe } from "./stripe";
 
 /**
@@ -15,6 +16,8 @@ export type ChargeResult =
   | { kind: "tax_address"; error: string }
   /** The call may have happened: never treated as a decline; settled later by looking it up. */
   | { kind: "unknown"; error: string }
+  /** The locked-in coupon was deleted or is past its `redeem_by`: nothing was created; re-quote at full price. */
+  | { kind: "coupon_gone"; error: string }
   /** Refused for a reason a retry cannot fix (our setup, a bad request). */
   | { kind: "error"; error: string };
 
@@ -29,12 +32,23 @@ export type FoundSubscription = { id: string; status: string; claimId: string | 
  */
 export type FirstExtra = { amountCents: number; currency: string } | null;
 
+/**
+ * The promo locked in at card save (plan 2026-11-26-001, Unit 8): the
+ * coupon id applied as `discounts: [{coupon}]` to both the preview and the
+ * subscription, so the told amount and the charge agree. Customer-level
+ * discounts no longer exist (Basil).
+ */
+export type FirstCoupon = string | null;
+
 export interface BillingGateway {
-  /** The first invoice's total with tax, from Stripe's preview. */
-  preview(o: { customer: string; price: string; extra?: FirstExtra }): Promise<{ totalCents: number; currency: string }>;
+  /**
+   * The first invoice's total with tax, from Stripe's preview, and the discount it carries. Throws Stripe's
+   * error for a coupon that no longer applies (`isCouponGone`).
+   */
+  preview(o: { customer: string; price: string; extra?: FirstExtra; coupon?: FirstCoupon }): Promise<{ totalCents: number; currency: string; discountCents?: number }>;
   /** The customer's subscriptions that are live (or were made by a claim). */
   subscriptions(customer: string): Promise<FoundSubscription[]>;
-  createSubscription(o: { customer: string; price: string; extra?: FirstExtra; claimId: string; userId: string; idempotencyKey: string }): Promise<ChargeResult>;
+  createSubscription(o: { customer: string; price: string; extra?: FirstExtra; coupon?: FirstCoupon; claimId: string; userId: string; idempotencyKey: string }): Promise<ChargeResult>;
   /** A price's unit amount in cents (to bill the month's difference as Stripe prices it). */
   unitAmount?(price: string): Promise<number | null>;
 }
@@ -57,10 +71,15 @@ async function sameProduct(s: Stripe, price: string, extra: NonNullable<FirstExt
 const LIVE = new Set(["active", "trialing", "past_due", "unpaid"]);
 export const isLive = (s: FoundSubscription) => LIVE.has(s.status);
 
+/** Stripe could not work the tax out for the customer's location (Endive `failed_tax_calculation`, an invalid tax location). */
+const TAX_ADDRESS_CODES = new Set(["failed_tax_calculation", "customer_tax_location_invalid", "taxes_calculation_failed"]);
+
 /** How a Stripe error ends a claim. */
 export function classify(e: unknown): ChargeResult {
   const msg = e instanceof Error ? e.message : String(e);
   const code = (e as { code?: string } | null)?.code ?? "";
+  // Endive's failed_tax_calculation (and the other tax-location codes), whatever the error class: an admin looks; no new card is asked for.
+  if (TAX_ADDRESS_CODES.has(code)) return { kind: "tax_address", error: msg };
   // The bank wants the person to confirm (3D Secure). Nobody is there at 6 AM: a soft decline, with the update-card email.
   if (/requires_action|authentication_required/i.test(code) || /requires_action|authentication_required|3d secure/i.test(msg)) {
     return { kind: "declined", code: code || "authentication_required", hard: false };
@@ -89,14 +108,17 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
       return (await s.prices.retrieve(price)).unit_amount;
     },
 
-    async preview({ customer, price, extra }) {
+    async preview({ customer, price, extra, coupon }) {
       const inv = await s.invoices.createPreview({
         customer,
         automatic_tax: { enabled: true },
         subscription_details: { items: [{ price }] },
         ...(extra?.amountCents ? { invoice_items: [{ price_data: await sameProduct(s, price, extra) }] } : {}),
+        // The coupon locked in at card save; a deleted or expired one throws (isCouponGone), as subscription create does.
+        ...(coupon ? { discounts: [{ coupon }] } : {}),
       });
-      return { totalCents: inv.total, currency: inv.currency.toUpperCase() };
+      const discountCents = (inv.total_discount_amounts ?? []).reduce((n, x) => n + x.amount, 0);
+      return { totalCents: inv.total, currency: inv.currency.toUpperCase(), discountCents };
     },
 
     async subscriptions(customer) {
@@ -104,7 +126,7 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
       return list.data.map((x) => ({ id: x.id, status: x.status, claimId: x.metadata?.claim_id ?? null, anchor: x.billing_cycle_anchor }));
     },
 
-    async createSubscription({ customer, price, extra, claimId, userId, idempotencyKey }) {
+    async createSubscription({ customer, price, extra, coupon, claimId, userId, idempotencyKey }) {
       try {
         const sub = await s.subscriptions.create(
           {
@@ -112,6 +134,8 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
             items: [{ price }],
             // The first month's higher-rate difference, on the first invoice only.
             ...(extra?.amountCents ? { add_invoice_items: [{ price_data: await sameProduct(s, price, extra), metadata: { kind: "first_month_higher_rate" } }] } : {}),
+            // The promo locked in at card save: the same coupon the told amount was previewed with.
+            ...(coupon ? { discounts: [{ coupon }] } : {}),
             automatic_tax: { enabled: true },
             payment_behavior: "error_if_incomplete",
             // A merchant-initiated charge on the card saved for later use: no one is there to confirm it.
@@ -130,6 +154,8 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
           currency: inv && typeof inv !== "string" ? inv.currency.toUpperCase() : null,
         };
       } catch (e) {
+        // Deleted, or past redeem_by (Unit 4 spike): nothing was created; the caller re-quotes at full price.
+        if (coupon && isCouponGone(e)) return { kind: "coupon_gone", error: e instanceof Error ? e.message : String(e) };
         return classify(e);
       }
     },
