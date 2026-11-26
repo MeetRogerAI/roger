@@ -5,9 +5,16 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakePlans } from "@/test-helpers/fake-plans";
 import { testDb } from "@/test-helpers/pglite-db";
+import { fakeGateway } from "@/test-helpers/fake-card-gateway";
+import { stripeGateway } from "@/lib/billing/gateway";
 import { HOURLY_TASKS, reconcileStripe, runHourly, type HourlyTask } from "./job";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// Stripe's real card gateway, observable: each test may make the next call answer a fake.
+vi.mock("@/lib/billing/gateway", async (orig) => {
+  const real = await orig<typeof import("@/lib/billing/gateway")>();
+  return { ...real, stripeGateway: vi.fn(real.stripeGateway) };
+});
 
 let query: Query;
 const transport: Transport = async () => ({ ok: true });
@@ -141,5 +148,54 @@ describe("welcome_unsent (plan 2026-11-26-001, Unit 2)", () => {
     for (let i = 0; i < MAX_WELCOMES + 2; i++) await trial(`u${i}@example.com`);
     expect(await pass()).toEqual({ welcome_unsent: MAX_WELCOMES });
     expect(await pass()).toEqual({ welcome_unsent: 2 });
+  });
+});
+
+describe("no_card_close's card gateway (review fixes Unit 10, T1)", () => {
+  const task = HOURLY_TASKS.find((t) => t.name === "no_card_close")!;
+  /** A no-card trial 15 days past its first teaser (due to close), with a stored Payment session on `gw`. */
+  async function dueWithSession(gw: ReturnType<typeof fakeGateway>) {
+    const [{ id }] = await query<{ id: string }>(
+      `insert into users (email, status, plan, currency, signup_step, consent_at, first_teaser_at, stripe_customer)
+       values ('ana@example.com', 'trial', 'monthly', 'USD', 'done', $1, $2, 'cus_ana') returning id`,
+      [new Date(NOW.getTime() - 20 * 86_400_000).toISOString(), new Date(NOW.getTime() - 15 * 86_400_000).toISOString()],
+    );
+    const s = await gw.createEmbeddedSetupSession({ userId: id, customer: "cus_ana", currency: "USD", returnUrl: "https://roger.test/start/payment/done" });
+    await query("update users set setup_session = $2 where id = $1", [id, s.id]);
+    return { id, sid: s.id };
+  }
+  const pass = (extra: Record<string, unknown> = {}) =>
+    runHourly(query, { gw: {} as BillingGateway, settings, now: NOW, query, transport, sleep: async () => {}, ...extra }, [task], { deadline: Date.now() + 60_000 });
+  const status = async (id: string) => (await query<{ status: string }>("select status from users where id = $1", [id]))[0].status;
+
+  beforeEach(() => vi.mocked(stripeGateway).mockClear());
+
+  it("the real task uses the gateway the pass is given (a card confirmed there is saved, not closed)", async () => {
+    const gw = fakeGateway();
+    const { id, sid } = await dueWithSession(gw);
+    gw.complete(sid);
+    expect(await pass({ card: gw })).toEqual({ no_card_close: 0 });
+    expect(await status(id)).toBe("trial");
+    expect(stripeGateway).not.toHaveBeenCalled();
+  });
+
+  it("falls back to stripeGateway() when the pass is given none", async () => {
+    const gw = fakeGateway();
+    const { id, sid } = await dueWithSession(gw);
+    vi.mocked(stripeGateway).mockReturnValueOnce(gw);
+    expect(await pass()).toEqual({ no_card_close: 1 });
+    expect(stripeGateway).toHaveBeenCalledTimes(1);
+    expect(await status(id)).toBe("closed");
+    // The close retired the stored session through the fallback gateway.
+    expect(gw.expired).toEqual([sid]);
+  });
+
+  it("null (Stripe not set up): closes without asking Stripe", async () => {
+    const gw = fakeGateway();
+    const { id } = await dueWithSession(gw);
+    expect(await pass({ card: null })).toEqual({ no_card_close: 1 });
+    expect(await status(id)).toBe("closed");
+    expect(stripeGateway).not.toHaveBeenCalled();
+    expect(gw.expired).toEqual([]);
   });
 });

@@ -54,8 +54,7 @@ import { handleStripeEvent, type EventOutcome } from "@/lib/billing/webhook";
 import { runCoraJob, type CoraDeps, type JobResult } from "@/lib/cora/job";
 import { importSeedRun } from "@/lib/cora/seed-import";
 import { runSendJob, type SendResult } from "@/lib/cora/send-job";
-import { HOURLY_TASKS, runHourly, type HourlyTask } from "@/lib/housekeeping/job";
-import { closeNoCardTrials } from "@/lib/housekeeping/trial";
+import { runHourly } from "@/lib/housekeeping/job";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3, type V3Settings } from "@/lib/v3-settings";
 import { storeReport } from "@/lib/zack/receive";
@@ -666,17 +665,9 @@ export async function vercelCron(w: World, until: Date): Promise<CronCall[]> {
   return log;
 }
 
-/**
- * The hourly tasks as the route runs them, except that the no-card close is
- * given this world's fake Stripe as its card gateway: the job itself asks
- * `stripeGateway()` (the real one, null without a key), so without this the
- * close could never see a card confirmed on the stored Payment session.
- */
-const scenarioTasks = (w: World): HourlyTask[] =>
-  HOURLY_TASKS.map((t) => (t.name === "no_card_close" ? { ...t, run: (q, d, c) => closeNoCardTrials(q, { ...d, deadline: c.deadline, card: w.stripe }) } : t));
-
 export async function hourly(w: World): Promise<Record<string, unknown>> {
-  return runHourly(w.query, w.charge(), scenarioTasks(w));
+  // The route's tasks, unmodified: the no-card close is handed this world's fake Stripe as the pass's card gateway.
+  return runHourly(w.query, { ...w.charge(), card: w.stripe });
 }
 
 /** A Monday as the jobs see it: Cora from 1:00 AM, the charge at 6:00, the send at 7:00, with hourly passes between. */

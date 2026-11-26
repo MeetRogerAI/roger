@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays } from "@/lib/clock";
-import { delivered, hourly, monday, newWorld, openPayment, passHours, saveCard, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, event, type Member, type World } from "./helpers";
+import { applyPromo, delivered, dollars, hourly, monday, newWorld, openPayment, passHours, saveCard, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, event, type Member, type World } from "./helpers";
 import { finishCardSave } from "@/lib/billing/card-setup";
+import { cardSavePath } from "@/lib/billing/card-saved";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -19,7 +20,10 @@ vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
  * - a member who never connects Zack gets the day-3, 10 and 17 nudges and is
  *   closed 21 days after consent;
  * - a card confirmed in Stripe around the close reopens the trial and unlocks
- *   the list (the 7-day grace, Unit 7 review F1);
+ *   the list (the 7-day grace, Unit 7 review F1), and nothing is billed
+ *   until the third delivered list;
+ * - a promo code refused at the card save unlocks the held list at the
+ *   regular price, says so, and the first charge is the full told amount;
  * - a sponsored member gets lists from the first Monday and is never asked
  *   for a card.
  */
@@ -46,6 +50,28 @@ const facts = async (m: Member) =>
 const superseded = async (m: Member, week: string) =>
   (await w.query<{ at: string | null }>(`select superseded_at::text as at from cora_user_weeks where user_id = $1 and week_of = $2 and not dry_run`, [m.id, week]))[0]?.at ?? null;
 const at = (s: string | null) => (s ? new Date(s).toISOString() : null);
+/** Nothing billed: no subscription created and no charge claim for anyone (review fixes Unit 10, T2). */
+async function nothingCharged() {
+  expect(w.stripe.callsTo("subscriptions.create")).toEqual([]);
+  expect(await w.query("select 1 from charge_attempts")).toEqual([]);
+}
+/**
+ * The first paid list's amount as told (review fixes Unit 10, T3): the stored quote, which the "first paid one"
+ * email and the 48-hour reminder both state in dollars.
+ */
+async function toldCents(m: Member): Promise<number> {
+  const quote = (await userRow(w, m.id)).quote as { totalCents: number; currency: string } | null;
+  expect(quote).not.toBeNull();
+  const told = dollars(quote!.totalCents, quote!.currency);
+  expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).toContain(told);
+  return quote!.totalCents;
+}
+/** The first charge is the told amount: the paid invoice and the charge claim both carry it. */
+async function chargedTold(m: Member, told: number) {
+  expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", totalCents: told });
+  const claims = await w.query<{ amount_cents: number; outcome: string }>("select amount_cents, outcome from charge_attempts where user_id = $1 and purpose = 'first_charge'", [m.id]);
+  expect(claims).toEqual([{ amount_cents: told, outcome: "succeeded" }]);
+}
 /** n days later at the same Toronto wall time (no daylight-saving change in December), in ms. */
 const addDaysMs = (d: Date, n: number) => d.getTime() + n * 86_400_000;
 
@@ -92,10 +118,13 @@ describe("two held Mondays without a card", () => {
     expect(second.charge.first?.charged ?? 0).toBe(0);
     expect((await userRow(w, m.id)).free_lists_used).toBe(2);
     expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).toContain("December 28");
+    const told = await toldCents(m);
+    // CA$280 plus 13% HST.
+    expect(told).toBe(31640);
     const [third] = await weeksWithRuns(w, [m], ["2026-12-28"]);
     expect(third.charge.first).toMatchObject({ charged: 1 });
     expect(w.stripe.callsTo("subscriptions.create")).toHaveLength(1);
-    expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", totalCents: 31640 });
+    await chargedTold(m, told);
     expect(await userRow(w, m.id)).toMatchObject({ status: "active", free_lists_used: 2 });
     for (const week of ["2026-12-14", "2026-12-21", "2026-12-28"]) expect(await delivered(w, m.id, week)).toHaveLength(3);
     expect(await delivered(w, m.id, "2026-12-07")).toEqual([]);
@@ -202,6 +231,8 @@ describe("a card confirmed in Stripe around the no-card close (the 7-day grace)"
     expect(await delivered(w, m.id, "2026-12-07")).toHaveLength(3);
     expect(w.mail(m.email).find((x) => x.subject.includes("December 7"))!.text).toContain("Free list 1 of 2.");
     expect(count(m, CLOSED)).toBe(0);
+    // Reopened as a trial, not billed: the first charge is still two delivered lists away.
+    await nothingCharged();
   });
 
   it("confirmed after the close (its expiry failed): the return page two days later reopens the trial and unlocks the list", async () => {
@@ -229,11 +260,43 @@ describe("a card confirmed in Stripe around the no-card close (the 7-day grace)"
     expect(await userRow(w, m.id)).toMatchObject({ status: "trial", closed_reason: null, access_ends_at: null, free_lists_used: 1 });
     expect(await delivered(w, m.id, "2026-12-07")).toHaveLength(3);
     expect(w.subjects(m.email).filter((s) => s.includes("December 7"))).toHaveLength(1);
+    await nothingCharged();
 
-    // The trial carries on: the next Monday is free list 2.
+    // The trial carries on: the next Monday is free list 2, still with no charge.
     await runAndMonday(m, "2026-12-28");
     expect(await delivered(w, m.id, "2026-12-28")).toHaveLength(3);
     expect((await userRow(w, m.id)).free_lists_used).toBe(2);
+    await nothingCharged();
+  });
+});
+
+describe("a promo code refused when the card is saved on a held list", () => {
+  it("saves the card and unlocks the list at the regular price, says so, and charges the full price with the third list", async () => {
+    const m = await signUp(w, { email: "remy@example.ca", ...CA });
+    w.stripe.payment.addPromotion({ code: "SPRING20", coupon: { id: "co_spring", percentOff: 20, duration: "once" } });
+    await runAndMonday(m, "2026-12-07");
+    await w.at(toronto("2026-12-08", "12:00"));
+    expect(await applyPromo(w, m, "SPRING20")).toMatchObject({ ok: true });
+    // The code is switched off in Stripe between Apply and the card save.
+    w.stripe.payment.promotions.get("SPRING20")!.active = false;
+    await w.at(toronto("2026-12-09", "12:00"));
+    const r = await saveCard(w, m);
+    expect(r).toMatchObject({ outcome: "done", week: "2026-12-07", promoRefused: true });
+    // The return page lands on the unlocked week with the "regular price" notice.
+    expect(cardSavePath(r)).toBe("/app/week/2026-12-07?card=promo");
+    expect(await w.query("select promo_code, promo_coupon, promo_label from users where id = $1", [m.id])).toEqual([{ promo_code: null, promo_coupon: null, promo_label: null }]);
+    expect(await w.query("select 1 from promo_reservations where user_id = $1", [m.id])).toEqual([]);
+    expect(await delivered(w, m.id, "2026-12-07")).toHaveLength(3);
+
+    await weeksWithRuns(w, [m], ["2026-12-14"]);
+    expect((await userRow(w, m.id)).free_lists_used).toBe(2);
+    const told = await toldCents(m);
+    expect(told).toBe(31640);
+    expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).not.toContain("promo code");
+    const [third] = await weeksWithRuns(w, [m], ["2026-12-21"]);
+    expect(third.charge.first).toMatchObject({ charged: 1 });
+    expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon ?? null)).toEqual([null]);
+    await chargedTold(m, told);
   });
 });
 

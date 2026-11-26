@@ -144,7 +144,9 @@ export type TrialDeps = {
    * Stripe's card gateway, for the no-card close (review fixes Unit 7, F1): a
    * card confirmed on the stored Payment session is saved instead of the
    * account being closed, and the session is closed after a close. Absent
-   * (Stripe not set up): nobody could have confirmed a card.
+   * (Stripe not set up): nobody could have confirmed a card. The hourly pass
+   * hands it its own (`HourlyDeps.card`, Stripe's by default; review fixes
+   * Unit 10, T1), so the scenarios run the real task with their fake Stripe.
    */
   card?: CardGateway | null;
 } & MailDeps;

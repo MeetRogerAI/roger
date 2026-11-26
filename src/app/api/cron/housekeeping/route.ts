@@ -1,4 +1,5 @@
 import { AsOfRefused } from "@/lib/clock";
+import { stripeGateway } from "@/lib/billing/gateway";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { cronAuthorized, cronNow } from "@/lib/cron";
 import { query } from "@/lib/db-query";
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
     const gw = stripeBilling();
     if (!gw) return Response.json({ status: "skipped", note: "Stripe is not configured." });
     return Response.json(
-      await runHourly(query, { gw, orders: stripeOrders() ?? undefined, adjust: stripeAdjustments() ?? undefined, plans: stripePlans() ?? undefined, settings: await readV3Settings(), now }),
+      await runHourly(query, { gw, orders: stripeOrders() ?? undefined, adjust: stripeAdjustments() ?? undefined, plans: stripePlans() ?? undefined, card: stripeGateway(), settings: await readV3Settings(), now }),
     );
   } catch (e) {
     if (e instanceof AsOfRefused) return Response.json({ status: "refused", note: e.message }, { status: 400 });
