@@ -17,14 +17,14 @@ This document sets out how Roger gets from 5 unpaid users to $30,000 billed in a
 | Reader | What to take from it |
 |---|---|
 | Peter | The decisions made, the numbers behind the target, and the risks, stated strictly |
-| Ehab | His weekly cycle, the referral loop he runs, the script, and the scorecard (sections 6 and 7) |
+| The Roger team (user loop) | Its weekly cycle, the referral loop it runs, the script, and the scorecard (sections 6 and 7) |
 | The Roger team and its build agents | Every requirement as an outcome (section 10). This document does not set build order or pace |
 
 ## The strategy in five lines
 
 1. Every user gets two free Cora runs, with a card on file that is charged only on the third.
 2. After the trial a user chooses $200 a month, the clear pick, or $200 a run. Monthly brings a list every week for the price of one run, so it is much cheaper per list. Everyone contributes their Zack runs; no non-contributor plan is offered.
-3. Growth runs through a referral loop that Ehab operates by hand each week until the product takes it over. Referrers earn credit equal to their referral's first payment.
+3. Growth runs through a referral loop that the Roger team operates by hand each week until the product takes it over. Referrers earn credit equal to their referral's first payment.
 4. The referral loop builds proof. Reaching $30,000 billed also needs office-level deals through brokerages and partner offices.
 5. Everything is measured weekly, so real rates replace the assumptions in this document as soon as they exist.
 
@@ -50,7 +50,7 @@ Dates are America/Toronto. "Agents" means AI agents (Grok Bot, Claude, Hark, Due
 | 4. Target math | What does $30,000 billed take, and can referrals reach it? |
 | 5. Pricing, trial, and referral credit | What does a user pay, when, and what does a referrer earn? |
 | 6. The referral loop and the viral coefficient | How does the loop work and how is it measured? |
-| 7. Ehab's role | What does Ehab do each week, and where does it run out? |
+| 7. The Roger team's role | What does the Roger team do each week, and where does it run out? |
 | 8. Sales and marketing | Where do users come from, and what do we say? |
 | 9. Customer service | What do users get when something goes wrong? |
 | 10. Product requirements | What must the product do (R1–R22)? |
@@ -66,12 +66,12 @@ Dates are America/Toronto. "Agents" means AI agents (Grok Bot, Claude, Hark, Due
 | Prices | $100 single run, $200/month | **$200 a month or $200 a run**, monthly as the clear pick (a list every week for the price of one run), after two free runs. No non-contributor plan is offered. A $400 monthly rate applies only after two missed weeks in a month or when a user switches sharing off. |
 | Refund | Refund within 30 days | **No refund.** The two free runs replace it. Cancel any time stays. |
 | Referral reward | Leaderboard points only | **Credit equal to the referred user's first payment**, no cap. A rule for now. |
-| Who runs the user loop | Peter, manually | **Ehab**, 20 hours a week, on a 7-day cycle, until automation is built. |
+| Who runs the user loop | Peter, manually | **The Roger team**, 20 hours a week, on a 7-day cycle, until automation is built. |
 | Committed target | $30,000/month, stated as 150 paying users | **$30,000 actually billed in a month** by BUZZ. That needs more than 150 paying users (section 4). |
 | Audience | Real estate users; Circles kept as a second audience | **Everyone moves to v3.** The Circles waitlist (about 100 people, general mix) is part of the pipeline. One pool, one product. |
 | Agent platforms | Grok Bot | **Every agent platform**, listed or not. |
 | Group calls | Dropped | **Weekly group session** for subscribers, each may bring one guest. |
-| Human contact | "Roger support", no named person | **Ehab under his own name** for follow-ups. "Roger support" stays for automated emails and the inbox. |
+| Human contact | "Roger support", no named person | **A Roger team member under their own name** for follow-ups. "Roger support" stays for automated emails and the inbox. |
 | North-star target | Open | **At least 2 of every 3 Cora ideas adopted** per user per week, across all users. |
 | Partner channel | None | **Growth Partners AI** (growthpartnersai.ca), office by office. |
 | Checkpoint | None | **December 14** review of the referral rate (section 6). |
@@ -86,7 +86,7 @@ Unchanged. Cora the Curator is the product. Zack collects, Roger aggregates, Cor
 
 ## What is new in the plan
 
-Growth runs through a referral loop that Ehab operates by hand each week: every user runs Zack, receives Cora, sends their thoughts, and is asked for 1–2 referrals. Referred users get two free Cora runs, then pay. Referrers earn credit when their referral's first payment clears. The loop is measured weekly so its real rate replaces the assumptions in this document.
+Growth runs through a referral loop that the Roger team operates by hand each week: every user runs Zack, receives Cora, sends their thoughts, and is asked for 1–2 referrals. Referred users get two free Cora runs, then pay. Referrers earn credit when their referral's first payment clears. The loop is measured weekly so its real rate replaces the assumptions in this document.
 
 ## Pricing (Decided)
 
@@ -201,7 +201,7 @@ HST and other applicable tax is charged from the first build.
 ## Contributor rule (Decided)
 
 - Contributing means the user's Zack run arrives each week. A single run needs that week's Zack run.
-- On the $200 monthly plan, one missed week per month is forgiven, with a note from Ehab.
+- On the $200 monthly plan, one missed week per month is forgiven, with a note from the Roger team.
 - A second miss in the same month moves that month's price to $400. The extra $200 goes on the next invoice. The user is told at the first miss, at the second, and three days before that invoice.
 - A miss caused by Roger never counts.
 - A monthly user who switches sharing off in the dashboard pays $400 a month. This is not offered as a plan; it exists only as the effect of that switch. Such a user is matched from a private Zack run that never enters the pool, or from their sign-up profile when Zack is off.
@@ -229,7 +229,7 @@ Decided:
 
 1. At sign-up the user enters a card and sees the terms: two free Cora curations, card charged only on the third.
 2. At onboarding, every user is told the same thing again: two free runs, then the price.
-3. Ehab follows up within two days of the second free run, and records the reason for every cancellation.
+3. The Roger team follows up within two days of the second free run, and records the reason for every cancellation.
 4. On monthly, the card is charged with the third run. A user who cancels before it is not charged and gets no third run.
 5. On single runs, the card is charged only when the user orders a run.
 6. Only a run actually delivered counts as a free run. A trial with no first run within 21 days of sign-up closes without a charge.
@@ -238,7 +238,7 @@ Decided:
 Recommendation:
 
 - The second Cora email restates the date and amount of the first charge. With no refunds, a reminder before the charge prevents disputes.
-- Once there is enough data to show a conversion rate, Ehab's personal follow-up can narrow to users who go quiet.
+- Once there is enough data to show a conversion rate, the Roger team's personal follow-up can narrow to users who go quiet.
 
 # 6. The referral loop and the viral coefficient
 
@@ -257,11 +257,11 @@ A loop grows fastest when k is high and cycle time is short. Halving cycle time 
 
 ## The weekly ask (Decided)
 
-Ehab has every user, every week: run Zack, receive Cora, email their thoughts on the system, and refer 1–2 users. The first second-generation ask is Monday, November 23.
+The Roger team has every user, every week: run Zack, receive Cora, email their thoughts on the system, and refer 1–2 users. The first second-generation ask is Monday, November 23.
 
 ## Handoff (Decided)
 
-When a user gives a name, Ehab or Peter contacts that person, brings them to a 1:1 or small-group onboarding call, and starts the onboarding cycle.
+When a user gives a name, the Roger team contacts that person, brings them to a 1:1 or small-group onboarding call, and starts the onboarding cycle.
 
 ## Referral script (Decided as the working script)
 
@@ -273,14 +273,14 @@ The price is included so the colleague is never surprised, the referrer's credib
 
 Recommendation: now that a card is collected at the start, add one clause so that is not a surprise either, for example "you add a card to start and it isn't charged until the third week".
 
-## Levers Ehab works (Recommendation)
+## Levers the Roger team works (Recommendation)
 
-| Lever | What Ehab does | What it moves |
+| Lever | What the Roger team does | What it moves |
 |---|---|---|
 | Ask at the moment of value | Make the referral ask right after Monday's ideas land or when a user reports a win | Names per user |
 | Ask for names, not "anyone" | Prompt by category: teammates, office colleagues, people they co-list with, former colleagues elsewhere | Names per user |
 | Hand over the script | Send the script ready to forward | Conversion |
-| Contact within 24 hours | Every new name hears from Ehab within a day | Cycle time, conversion |
+| Contact within 24 hours | Every new name hears from the Roger team within a day | Cycle time, conversion |
 | Group onboarding twice a week | Nobody waits more than a few days for a call | Cycle time |
 | Guests at the group session | Each subscriber may bring one colleague | Names per user, conversion |
 | Close the loop | Tell the referrer when their colleague joins and when the credit lands | Repeat referrals |
@@ -289,11 +289,11 @@ Recommendation: now that a card is collected at the start, add one clause so tha
 
 ## Operating states of the referral engine (not a build order)
 
-- **Manual:** Ehab asks, logs names, and tracks credits by hand. This is today.
-- **Assisted:** each user has a personal referral link, credits post automatically, and Ehab works from an operations view.
-- **Automatic:** the product makes the ask (for example after the Wednesday stats email) and Ehab handles exceptions.
+- **Manual:** the Roger team asks, logs names, and tracks credits by hand. This is today.
+- **Assisted:** each user has a personal referral link, credits post automatically, and the Roger team works from an operations view.
+- **Automatic:** the product makes the ask (for example after the Wednesday stats email) and the Roger team handles exceptions.
 
-## Tests in Ehab's first two weeks
+## Tests in the user-loop role's first two weeks
 
 - Channel: email, text, and phone, to learn which gets the fastest replies. Not yet known.
 - Timing of the referral ask: Monday with the ideas, or later in the week.
@@ -302,11 +302,11 @@ Recommendation: now that a card is collected at the start, add one clause so tha
 
 After three weekly cycles, review k. If it is below 0.25 (one new user per four existing users each week), the referral loop alone will not carry the target, and Peter's hours shift toward office-level deals through the partner and brokerages.
 
-# 7. Ehab's role
+# 7. The Roger team's role
 
 ## Scope (Decided)
 
-Ehab is an intern at 20 hours a week. He and Peter are both admins in the product, with the same access. He can do everything on his own: onboarding calls, product questions, and support. Until automation is built, he makes sure all Zack runs are done, all Cora curations are delivered, and all referral requests are completed. He writes and calls under his own name. Ehab and Peter work in 7-day cycles.
+The Roger team runs the user loop with 20 hours a week (the user-loop role). Everyone on the Roger team is an admin in the product, with the same access. The user-loop role can do everything on its own: onboarding calls, product questions, and support. Until automation is built, the Roger team makes sure all Zack runs are done, all Cora curations are delivered, and all referral requests are completed. A team member writes and calls under their own name. The Roger team works in 7-day cycles.
 
 ## The 7-day cycle (Decided order; days are a Recommendation)
 
@@ -322,7 +322,7 @@ Twenty hours is five half-days. The list is ranked. When hours run short, work i
 
 ## Weekly scorecard
 
-One page, reviewed by Ehab and Peter at the end of each cycle:
+One page, reviewed by the Roger team at the end of each cycle:
 
 - Active users; Zack runs done out of expected; Cora runs delivered on time
 - Cora ideas adopted out of ideas sent (north star, target 2 of 3)
@@ -344,7 +344,7 @@ The manual cycle costs about 15–20 minutes per user per week.
 | 40 | 10–13.5 |
 | 60 | 15–20 |
 
-At 30–40 active users the manual cycle takes half or more of Ehab's week and pushes out onboarding and conversion. In scenarios B and C with the waitlist, that point arrives around the week of December 14. Past it, either the weekly cycle is automated (R1, R2, R6) or more hours are needed.
+At 30–40 active users the manual cycle takes half or more of the user-loop role's 20 hours and pushes out onboarding and conversion. In scenarios B and C with the waitlist, that point arrives around the week of December 14. Past it, either the weekly cycle is automated (R1, R2, R6) or more hours are needed.
 
 # 8. Sales and marketing
 
@@ -365,15 +365,15 @@ Unchanged. Plan as if the individual user is the buyer. Any brokerage subsidy is
 
 ## Bandwidth required (Estimate)
 
-Peter has 60 hours a week for Roger (15 half-days). Ehab has 20 (5 half-days). People time is not the constraint; conversion and cycle time are.
+Peter has 60 hours a week for Roger (15 half-days). The user-loop role has 20 (5 half-days). People time is not the constraint; conversion and cycle time are.
 
 | Work | Half-days a week | Who |
 |---|---|---|
-| User loop and referrals | 5 | Ehab |
+| User loop and referrals | 5 | Roger team |
 | Office-level deals: brokerages and partner offices | 3, rising to 6 if the December 14 rule triggers | Peter |
 | Onboarding overflow and waitlist conversations | 2 | Peter |
 | Talks and content | 2 | Peter |
-| Weekly review | 0.5 | Peter and Ehab |
+| Weekly review | 0.5 | Roger team |
 
 ## Messages
 
@@ -391,7 +391,7 @@ meetroger.ai must reflect v3.1 only: two free runs with a card collected at the 
 ## Testimonials and demo
 
 - The four pilot users' quotes go on the site, each with its own on-off switch, attributed without the brokerage.
-- Outcome still wanted: Cora-specific quotes from paying users. Ehab asks at the moment a user pays.
+- Outcome still wanted: Cora-specific quotes from paying users. The Roger team asks at the moment a user pays.
 - Demo outcome (from v3): one or more real users in a 2–3 minute demo showing real Cora results, with no income claims by Roger. A user may describe time saved in their own words.
 
 # 9. Customer service
@@ -408,16 +408,16 @@ meetroger.ai must reflect v3.1 only: two free runs with a card collected at the 
 - Ask why, lightly: one optional question on cancel.
 - Close the loop: tell users when their feedback led to a change.
 - Self-serve first, with a human always reachable.
-- **Ehab is the human.** He follows up under his own name. "Roger support" is the sender of automated emails and the help inbox (changed).
-- The week-2 check-in from v3 is now Ehab's follow-up after the second free run, which comes before the first charge (changed).
+- **The Roger team is the human contact.** A team member follows up under their own name. "Roger support" is the sender of automated emails and the help inbox (changed).
+- The week-2 check-in from v3 is now the Roger team's follow-up after the second free run, which comes before the first charge (changed).
 
 ## Group session (Decided)
 
-A weekly group session returns in v3, hosted by Ehab, where users hear what works for others. Sessions are scheduled once a user is a subscriber. Each subscriber may bring one guest colleague.
+A weekly group session returns in v3, hosted by the Roger team, where users hear what works for others. Sessions are scheduled once a user is a subscriber. Each subscriber may bring one guest colleague.
 
 ## Lapses
 
-Until automation exists, Ehab confirms every week that each user's Zack ran. A missed week is an early churn signal and, on the monthly plan, counts toward the pricing rule in section 5.
+Until automation exists, the Roger team confirms every week that each user's Zack ran. A missed week is an early churn signal and, on the monthly plan, counts toward the pricing rule in section 5.
 
 # 10. Product requirements
 
@@ -427,13 +427,13 @@ R1–R13 are carried from v3 with the changes marked. R14–R22 are new. Each is
 
 **R2. Data connection.** A direct connection from each user's agent setup to a Roger service (not email or forms). It records whether Zack ran, which Cora ideas were sent, and which were adopted. Zack results are held on the user's side until Roger confirms receipt.
 
-**R3. Lapse detection (changed).** A monitoring bot watches usage and alerts Ehab and Peter when a user goes quiet or a run misses its deadline. Ehab follows up under his own name.
+**R3. Lapse detection (changed).** A monitoring bot watches usage and alerts the Roger team when a user goes quiet or a run misses its deadline. A Roger team member follows up under their own name.
 
 **R4. Accounts, login, and self-serve cancel.** One-click cancel, no guilt. Stripe for checkout and billing. No refund flow (changed).
 
 **R5. Self-serve dashboard (changed).** Users can check that Zack ran, see their Cora ideas, switch between monthly and single runs, order a single run, update billing, see their contributor status and any forgiven miss, see their referral credit balance, and cancel. A delayed run appears only after it is resolved. No brokerage admin features.
 
-**R6. Self-serve onboarding.** The product carries the whole onboarding cycle (a to g) so that calls with Ehab or Peter become optional. Until then, onboarding is a 1:1 or small-group call.
+**R6. Self-serve onboarding.** The product carries the whole onboarding cycle (a to g) so that calls with the Roger team become optional. Until then, onboarding is a 1:1 or small-group call.
 
 - **R6a. Screening.** A short quiz sorts incoming traffic by openness to AI tools. Half of even warm prospects drop out here.
 - **R6b. Install.** An in-product checklist: go to the agent platform's site, download, open, upgrade to a paid plan of the user's choice, and name the Chief of Staff bot.
@@ -465,7 +465,7 @@ R1–R13 are carried from v3 with the changes marked. R14–R22 are new. Each is
 
 **R17. Referral loop measures (new).** k, cycle time, generation, and paid referral rate are computed weekly and shown to the Roger team.
 
-**R18. Operations view (new).** One screen for Ehab showing, per user: whether Zack ran, whether Cora was delivered, trial stage and gate date, names awaiting contact, and first charges coming up. This is what lets one person run the cycle by hand.
+**R18. Operations view (new).** One screen for the Roger team showing, per user: whether Zack ran, whether Cora was delivered, trial stage and gate date, names awaiting contact, and first charges coming up. This is what lets one person run the cycle by hand.
 
 **R19. Group sessions (new).** Subscribers can see and join the weekly session and register one guest. Guests enter the CRM as referred leads attributed to the subscriber.
 
@@ -508,7 +508,7 @@ Business milestones, not a build sequence.
 1. **Nobody has paid.** Every assumption about price is untested. Payment waits for the v3 website's payment part; each week of delay removes one of 8 onboarding cycles. A hosted payment link would remove that dependency (Recommendation; not decided).
 2. **The referral loop decays.** Early names are the easy ones. The model reaches the target only in the no-decay case.
 3. **The target depends on office-level deals that do not exist yet.** One introduction is in progress and one partnership has not run its first office.
-4. **The manual cycle saturates Ehab at 30–40 users,** possibly by mid-December.
+4. **The manual cycle saturates the 20-hour user-loop role at 30–40 users,** possibly by mid-December.
 5. **The holidays** take two of the 8 cycles.
 6. **Proof is thin.** The four testimonials are cleared for use, but they describe the pilot's hand-run version and do not mention Cora by name.
 7. **The $400 rule can surprise users.** A billing change after a missed week needs the advance notice in section 5 every time.
@@ -518,13 +518,13 @@ Business milestones, not a build sequence.
 
 1. How "$30,000 billed in a month" is measured. This document assumes the 30 days ending February 4, 2027.
 2. When the referral credit rule ("a rule for now") is reviewed.
-3. Ehab's hours. The plan and its capacity math assume 20 a week; the deck was edited to say 10 to 20.
+3. The user-loop role's hours. The plan and its capacity math assume 20 a week; the deck was edited to say 10 to 20.
 
 Settled since the first version of this document: currency (both, with the target in Canadian dollars), who attends group sessions (subscribers, with one guest each), and the message for people outside real estate (their own page and headline).
 
 ## Deliberately out of scope (per Peter)
 
-Build order and build status; the trigger for Ehab going full time; what Ehab can decide alone; money terms with Growth Partners AI; the plan for attending BUZZ; how client details are scrubbed (part of the codebase).
+Build order and build status; the trigger for the user-loop role going full time; what the user-loop role can decide alone; money terms with Growth Partners AI; the plan for attending BUZZ; how client details are scrubbed (part of the codebase).
 
 # 15. Revisions after the design interview (November 21, 2026)
 
@@ -541,7 +541,7 @@ The design spec first differed from this document in ten places. Peter settled a
 | 7 | Sales tax | Charged from the first build. |
 | 8 | The extra $200 after a second missed week | On the next invoice, with notices before it. |
 | 9 | Office deals | Sponsor codes; the brokerage gets an invoice and nothing else. |
-| 10 | Admin roles | Peter and Ehab, with equal access. |
+| 10 | Admin roles | The Roger team, with equal access. |
 
 Other decisions from the design interview that affect this document:
 
@@ -558,35 +558,35 @@ Other decisions from the design interview that affect this document:
 # Appendix A. Decision log, second interview (November 21, 2026)
 
 1. Robyn and Grace pitched about 6 people to get 3 users.
-2. The 3 referred users are asked for referrals on Monday, November 23, by Ehab.
-3. Ehab has every user run Zack, run Cora, email their thoughts, and refer 1–2 users every week.
-4. Ehab or Peter contacts each referred person and brings them to a 1:1 or small-group onboarding call.
+2. The 3 referred users are asked for referrals on Monday, November 23, by the Roger team.
+3. The Roger team has every user run Zack, run Cora, email their thoughts, and refer 1–2 users every week.
+4. The Roger team contacts each referred person and brings them to a 1:1 or small-group onboarding call.
 5. Two Cora runs are free, then the user pays.
 6. That rule applies to the current 5; payment starts for everyone once the v3 payment part is built.
 7. Referral credit: one free month per paying referral, no cap, as a rule for now; later refined to equal the referred user's first payment.
-8. Ehab can do everything on his own.
-9. Ehab may go full time if things go well in December; the trigger is outside this document.
+8. The user-loop role can do everything on its own.
+9. The user-loop role may go full time if things go well in December; the trigger is outside this document.
 10. The 3 who declined were not open enough to AI tools.
 11. Users pick their own agent-platform plan; that cost is not part of Roger's price.
 12. One product, two ways of buying, after a free trial.
-13. Trial to payment: stated at onboarding, prompted in the second Cora email, followed up by Ehab within two days, gated at the third Monday, no exceptions. (Refined by decision 38: the card is on file from the start and charged on the third run.)
+13. Trial to payment: stated at onboarding, prompted in the second Cora email, followed up by the Roger team within two days, gated at the third Monday, no exceptions. (Refined by decision 38: the card is on file from the start and charged on the third run.)
 14. Everyone, including the Circles waitlist, moves to v3. The waitlist is a general mix and part of the pipeline.
 15. Testimonials exist (shared folder); see section 3.
 16. The "three month period" in early emails is three months of growing user numbers, not a free period. All prospects and clients change with the product.
 17. A weekly group session returns in v3, with one guest per user; sessions are scheduled once a user is a subscriber.
-18. Ehab's outreach channel is not yet known and will be tested.
+18. The Roger team's outreach channel is not yet known and will be tested.
 19. Cora draws only from Zack runs, cross-referenced with each user's needs.
 20. The pool is cumulative, most recent first; all existing data is seed data.
 21. No user has objected to sharing yet; some will.
 22. Everything goes in the spec; other agents decide what to build and in what order.
 23. The committed target is $30,000 actually billed.
-24. Ehab and Peter work in 7-day cycles; the ranked list in section 7 is approved.
+24. The Roger team works in 7-day cycles; the ranked list in section 7 is approved.
 25. Peter has 60 hours a week for Roger.
 26. Growth Partners AI partnership, one office at a time.
 27. December 14 checkpoint at k below 0.25.
 28. The referral script includes the price.
-29. Ehab works under his own name.
-30. Until automation, Ehab makes sure all Zack runs are done, all Cora curations are delivered, and all referral requests are completed.
+29. The Roger team follows up under a team member's own name.
+30. Until automation, the Roger team makes sure all Zack runs are done, all Cora curations are delivered, and all referral requests are completed.
 31. v3 serves every agent platform, listed or not, using the "agent not listed" route.
 32. North-star target: at least 2 of 3 ideas adopted per user per week, across all users.
 33. Four prices: $100 / $200 single run and $200 / $400 a month, by contribution. (Superseded the same day: see section 15, topic 1.)

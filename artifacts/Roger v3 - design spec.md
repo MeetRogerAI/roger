@@ -67,11 +67,11 @@ Roger makes each user's AI agents better every week. An agent called Zack runs i
 | Contributor rule | For monthly users. One missed week per billing month is forgiven. A second miss makes that month US$400; the difference goes on the next invoice. A miss caused by Roger never counts. Users are told at every step (B.9). |
 | Referral credit | A referrer earns a credit equal to the referred user's first payment at list price (one month, or one list), in the referrer's own currency, when that payment clears. No cap. (Version B2.) |
 | Office deals | Sponsor codes created in the admin. Sponsored users skip the card step. The brokerage receives an invoice and nothing else: no login, no reporting. (Version B2.) |
-| Group session | Weekly, hosted by Ehab, for subscribers, one guest each. A session card in the dashboard. (Version B2.) |
+| Group session | Weekly, hosted by the Roger team, for subscribers, one guest each. A session card in the dashboard. (Version B2.) |
 | Audiences | The homepage is for people in real estate. `/agents` is for people who already run AI agents. |
 | Sign-up quiz | Routes people into three paths and never blocks anyone. Its answers become the profile Cora matches on. |
 | Sign-in | Email link, plus "Sign in with Google". No passwords. |
-| Admins | Peter and Ehab are both admins with the same access. |
+| Admins | Everyone on the Roger team is an admin with the same access. |
 | Where the app lives | Same repo and domain. Public pages at `/`, the app under `/app/`. |
 | Design | The site's existing system (Mona Sans, copper, ground and night), plus a small data palette for score bars and bricks. |
 | Agents supported | Every agent platform. Zack files exist for Claude, Duet, Grok Bot, and Hark; any other agent adapts one with a single prompt, or the user uploads the report. The site may say "Works with every agent." |
@@ -95,7 +95,7 @@ Version 1.0 of this spec differed from the strategy in ten places. Peter settled
 | 7 | Sales tax | This spec: HST and other applicable tax is charged from this build. |
 | 8 | The extra $200 after a second missed week | This spec: on the next invoice, with notices before it. |
 | 9 | Office deals | This spec: sponsor codes; the brokerage gets an invoice and nothing else. |
-| 10 | Admin roles | This spec: Peter and Ehab, with equal access. |
+| 10 | Admin roles | This spec: the Roger team, with equal access. |
 
 ## 0.4 What the site and the app may and may not say
 
@@ -426,7 +426,7 @@ Draft copy for the builder to place. Peter edits before launch.
   3. "Each idea comes with a full playbook. Paste it into your agent and it adapts itself to your setup."
 - **Closing band:** "Find out what other heavy users know."
 
-**Referral script (for Ehab and referrers; not on the site).** "I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two weeks are free, then it's $200 a month for a list every Monday, or $200 for a single run, and you can cancel any time *(1.3)*. You add a card to start and it isn't charged until the third week. They run a short group call to get you set up. Want me to connect you?"
+**Referral script (for the Roger team and referrers; not on the site).** "I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two weeks are free, then it's $200 a month for a list every Monday, or $200 for a single run, and you can cancel any time *(1.3)*. You add a card to start and it isn't charged until the third week. They run a short group call to get you set up. Want me to connect you?"
 
 **Questions**
 
@@ -501,7 +501,7 @@ Draft copy for the builder to place. Peter edits before launch.
 
 ## B.1 Goal and rules
 
-**Goal.** A person can go from the public site to a working weekly cycle without talking to anyone: sign up, connect Zack, receive two free lists, be charged with the third, and manage everything themselves. Ehab can see every user's state on one screen and step in where someone is stuck.
+**Goal.** A person can go from the public site to a working weekly cycle without talking to anyone: sign up, connect Zack, receive two free lists, be charged with the third, and manage everything themselves. The Roger team can see every user's state on one screen and step in where someone is stuck.
 
 **Rules that apply to every screen and email in the app.**
 
@@ -543,7 +543,7 @@ Every `/app/*` and `/admin/*` page carries noindex and requires a session.
 - **Google.** "Sign in with Google" using the verified email from Google. Google's own account id is stored at first use and matched on afterwards. Google is trusted for an address only where it is the authority for it: a `@gmail.com` or `@googlemail.com` address, or a Google Workspace account whose domain is the address's domain. For any other address, an existing account must first sign in with an email link and then link Google from `/app/settings`; a new sign-up with such an address is sent the ordinary email sign-up link. Linking Google to an existing account sends a notice to that account's address. Changing the account's email unlinks Google. A Google sign-in never grants admin access, and admin addresses are never linked to Google. The button is hidden until the Google keys exist. *(1.2)*
 - **No passwords** are stored anywhere.
 - **Session:** an httpOnly, secure cookie lasting 30 days, renewed on use. Sign-out clears it.
-- **Admins:** Peter and Ehab. An admin is a signed-in user whose email is listed in the `ADMIN_EMAILS` environment variable. Both have identical access. The existing `/admin` pages move to this check, and the shared `ADMIN_PASSWORD` login is removed once it works. Until then it stays, switched by the variable itself: unset, the password login is off and every password cookie stops working. Admin pages need an email-link sign-in from the last 14 days, and the address is checked against `ADMIN_EMAILS` on every request. *(1.2)*
+- **Admins:** the Roger team. An admin is a signed-in user whose email is listed in the `ADMIN_EMAILS` environment variable. All admins have identical access. The existing `/admin` pages move to this check, and the shared `ADMIN_PASSWORD` login is removed once it works. Until then it stays, switched by the variable itself: unset, the password login is off and every password cookie stops working. Admin pages need an email-link sign-in from the last 14 days, and the address is checked against `ADMIN_EMAILS` on every request. *(1.2)*
 - **Rate limits** on sign-in requests by email and by IP.
 - The choice of auth library is the builder's. The existing HMAC cookie in `src/lib/admin-auth.ts` shows the house style.
 
@@ -875,7 +875,7 @@ This applies to monthly users only.
 
 ## B.11 The startup page and its setup file
 
-**`/getstarted`** is public, so referrers and Ehab can send it to anyone.
+**`/getstarted`** is public, so referrers and the Roger team can send it to anyone.
 
 1. **Install.** Grok Bot is the recommended agent for someone starting from nothing: go to its site, download, open, upgrade to a paid plan of your choice, name your Chief of Staff.
 2. **Set up your starter team.** The current setup file in a block with a "Copy" button, and the instruction to paste it when the agent asks "What's the first task I can help you with?" Under the block: "Version {n}, updated {date}."
@@ -936,7 +936,7 @@ There is no solo quote from Grace in the document; one is needed (see "Needed fr
 
 ## B.13 Emails
 
-Plain and short, sent through the existing `sendEmail`. Automatic emails come from "Roger support". Ehab's personal follow-ups are written and sent by him, outside the app.
+Plain and short, sent through the existing `sendEmail`. Automatic emails come from "Roger support". The Roger team's personal follow-ups are written and sent by a team member, outside the app.
 
 | # | Email | Trigger | Version |
 |---|---|---|---|
@@ -1326,7 +1326,7 @@ That is about 3 half-days. Nothing else in B1 can go without breaking the trial,
 | 10 | A read of the privacy and terms text, and the model provider's position on training | Launch |
 | 11 | The session day, time, and Meet link | The session card (B2) |
 | 12 | The demo video and the data for the "one real week" example | A2 |
-| 13 | Keys and settings in Vercel: Stripe secret key and webhook secret, the Stripe prices created (monthly at both rates, and one list, in both currencies), `ADMIN_EMAILS` (Peter and Ehab), and the sending address for "Roger support" | Billing, the admin, and every automatic email |
+| 13 | Keys and settings in Vercel: Stripe secret key and webhook secret, the Stripe prices created (monthly at both rates, and one list, in both currencies), `ADMIN_EMAILS` (the Roger team), and the sending address for "Roger support" | Billing, the admin, and every automatic email |
 
 Items 1 and 2 are documents, not code. They can be drafted from this spec and the existing 1.9 and 1.1 files.
 

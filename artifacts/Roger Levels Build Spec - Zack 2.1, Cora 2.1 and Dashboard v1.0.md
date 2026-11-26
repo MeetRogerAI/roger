@@ -76,7 +76,7 @@ roger-level:
 | C3 | Store per user: `level_earned`, `level_earned_at`, `items[]` with live state and last evidence date, `gaps[]`. |
 | C4 | Dashboard: Level number and name, the next level's check chart with live 0s and 1s, gaps flagged at the top, and "how this is checked" per item. Seasons stay on `/app/history` with their new name. |
 | C5 | Wednesday stats email: Level, Season, and "1 step from Level N" when only one core item is open. |
-| C6 | Operations view (R18): each user's Level and core gaps, so Ehab can see who has stalled. |
+| C6 | Operations view (R18): each user's Level and core gaps, so the Roger team can see who has stalled. |
 | C7 | Sign-up quiz: provisional level (levels file rule 2.5). |
 
 ---
@@ -85,7 +85,7 @@ roger-level:
 
 ### 2.1 Every pool play gets level tags (Recommendation)
 
-At intake, each play in the pool is tagged with the check items installing it would turn to 1 (`unlocks: [4.01, 4.04, 4.10]`) and its **entry level**: the lowest level at which a user could install and run it. A review agent proposes the tags and Peter or Ehab approves them, as with R7. All existing seed runs get tagged once.
+At intake, each play in the pool is tagged with the check items installing it would turn to 1 (`unlocks: [4.01, 4.04, 4.10]`) and its **entry level**: the lowest level at which a user could install and run it. A review agent proposes the tags and the Roger team approves them, as with R7. All existing seed runs get tagged once.
 
 ### 2.2 Choosing the three (Recommendation)
 
@@ -115,7 +115,7 @@ Adoption stays the north star: 2 of every 3 ideas adopted. Levels add a second m
 
 ## 3. Build plan, scope splits and effort (Estimate)
 
-Sized in half-days, as Peter plans. These are estimates for Claude Code and agents doing the build, with Peter or Ehab reviewing.
+Sized in half-days, as Peter plans. These are estimates for Claude Code and agents doing the build, with the Roger team reviewing.
 
 ### v1: hand-run, with the current pilot users (about 8 half-days)
 
@@ -124,9 +124,9 @@ Sized in half-days, as Peter plans. These are estimates for Claude Code and agen
 | Approve both files; settle their open questions | 1 | Peter |
 | Zack 2.1 prompt: the `roger-level` block (Z1–Z6) across the Claude, Grok Bot, Hark and Duet files | 2 | Build agent, Peter reviews |
 | Hand-run Cora 2.1 prompt: read the block, apply eligibility and the three slots | 1 | Build agent |
-| Tag the existing Zack Runs pool plays with `unlocks` and entry level | 1.5 | Review agent, Ehab approves |
-| Score every current user by hand from their next Zack 2.1 run; record Level and gaps | 1 | Ehab |
-| First review: do the levels match what Peter knows of each user? Adjust items | 1.5 | Peter and Ehab |
+| Tag the existing Zack Runs pool plays with `unlocks` and entry level | 1.5 | Review agent, Roger team approves |
+| Score every current user by hand from their next Zack 2.1 run; record Level and gaps | 1 | Roger team |
+| First review: do the levels match what the Roger team knows of each user? Adjust items | 1.5 | Roger team |
 
 ### v2: in the product (about 11 half-days)
 
@@ -147,7 +147,7 @@ Sized in half-days, as Peter plans. These are estimates for Claude Code and agen
 - Level-based group sessions (for example, a Level 5+ session).
 - Revisit "beyond 9".
 
-Strict note: v1 depends on Zack 2.1 being written and run by users who are already being chased to run Zack 2.0. Until a user runs 2.1, their level is Ehab's judgment, not a measurement.
+Strict note: v1 depends on Zack 2.1 being written and run by users who are already being chased to run Zack 2.0. Until a user runs 2.1, their level is the Roger team's judgment, not a measurement.
 
 ---
 
