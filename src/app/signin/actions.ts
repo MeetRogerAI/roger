@@ -7,6 +7,7 @@ import { hasDb } from "@/lib/db";
 import { query } from "@/lib/db-query";
 import { field, isEmail } from "@/lib/form";
 import { clientIp } from "@/lib/rate-limit";
+import { rememberEmail } from "@/lib/signup/known-email";
 
 export type SignInState = { status: "idle" | "sent" | "error"; message?: string; email?: string };
 
@@ -23,6 +24,7 @@ export async function requestLinkAction(_prev: SignInState, fd: FormData): Promi
   try {
     const outcome = await requestSignInLink(query, email, clientIp(await headers()), safeNext(field(fd, "next")));
     if (outcome === "send_failed") return { status: "error", message: OUR_SIDE };
+    await rememberEmail(email);
   } catch (e) {
     console.error("[signin] request failed", e);
     return { status: "error", message: OUR_SIDE };

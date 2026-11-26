@@ -22,6 +22,7 @@ vi.mock("@/lib/signup/account", () => ({ startAccount: (...a: unknown[]) => star
 
 const { submitQuiz, submitAccount, startAnyway, saveNotOpenLead } = await import("./actions");
 const { DRAFT_COOKIE, encodeDraft } = await import("@/lib/signup/draft");
+const { KNOWN_EMAIL_COOKIE } = await import("@/lib/signup/known-email");
 
 const idle = { status: "idle" as const };
 function quiz(over: Record<string, string> = {}) {
@@ -59,7 +60,8 @@ describe("with sign-up off, or the setting unreadable", () => {
       expect(await outcome(() => submitQuiz(idle, quiz()))).toEqual({ redirect: "/start" });
       resetNextFakes({ [DRAFT_COOKIE]: draft });
       const fd = new FormData();
-      fd.set("name", "Ana");
+      fd.set("firstName", "Ana");
+      fd.set("lastName", "Lima");
       fd.set("email", "ana@example.com");
       expect(await outcome(() => submitAccount(idle, fd))).toEqual({ redirect: "/start" });
       expect(await outcome(() => startAnyway())).toEqual({ redirect: "/start" });
@@ -86,7 +88,8 @@ describe("the quiz", () => {
 describe("the account step", () => {
   it("needs the quiz first", async () => {
     const fd = new FormData();
-    fd.set("name", "Ana");
+    fd.set("firstName", "Ana");
+    fd.set("lastName", "Lima");
     fd.set("email", "ana@example.com");
     expect(await outcome(() => submitAccount(idle, fd))).toEqual({ redirect: "/start" });
   });
@@ -95,13 +98,43 @@ describe("the account step", () => {
     resetNextFakes({ [DRAFT_COOKIE]: draft });
     startAccount.mockResolvedValueOnce("send_failed" as never);
     const fd = new FormData();
-    fd.set("name", "Ana");
+    fd.set("firstName", "Ana");
+    fd.set("lastName", "Lima");
     fd.set("email", "ana@example.com");
     expect(await submitAccount(idle, fd)).toMatchObject({ status: "error" });
   });
 });
 
+describe("the account step's names and email", () => {
+  it("needs a first and a last name", async () => {
+    resetNextFakes({ [DRAFT_COOKIE]: draft });
+    const fd = new FormData();
+    fd.set("firstName", "Ana");
+    fd.set("email", "ana@example.com");
+    expect(await submitAccount(idle, fd)).toEqual({ status: "error", errors: { lastName: "Enter your last name." } });
+    expect(startAccount).not.toHaveBeenCalled();
+  });
+
+  it("joins the names and remembers the address", async () => {
+    resetNextFakes({ [DRAFT_COOKIE]: draft });
+    const fd = new FormData();
+    fd.set("firstName", " Ana ");
+    fd.set("lastName", "Lima");
+    fd.set("email", "Ana@Example.com");
+    expect(await submitAccount(idle, fd)).toEqual({ status: "ok", email: "Ana@Example.com" });
+    expect(startAccount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ name: "Ana Lima" }));
+    expect(jar.get(KNOWN_EMAIL_COOKIE)).toBe("ana@example.com");
+  });
+});
+
 describe("the not-open form", () => {
+  it("remembers the address for sign-up", async () => {
+    const fd = new FormData();
+    fd.set("email", "ana@example.com");
+    await saveNotOpenLead(idle, fd);
+    expect(jar.get(KNOWN_EMAIL_COOKIE)).toBe("ana@example.com");
+  });
+
   it("answers the same for a new address and one already saved", async () => {
     const fd = new FormData();
     fd.set("email", "ana@example.com");
