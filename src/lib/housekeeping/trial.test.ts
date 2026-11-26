@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { wallToInstant } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
@@ -257,8 +258,13 @@ describe("closeMoment", () => {
 });
 
 describe("the Sunday reminder on the upload route (spec B.5)", () => {
-  /** Sunday 2026-12-13, 6:05 PM in Vancouver (02:05 UTC Monday). */
-  const SUNDAY_6PM_VANCOUVER = new Date("2026-12-14T02:05:00Z");
+  // Worked out from the clock, not typed as UTC: British Columbia stopped
+  // changing its clocks in 2026, so Vancouver's winter offset depends on how
+  // new the runtime's time zone data is.
+  const SIX_PM = wallToInstant("2026-12-13", "18:00", "America/Vancouver").getTime();
+  const minutesAfterSix = (m: number) => new Date(SIX_PM + m * 60_000);
+  /** Sunday 2026-12-13, 6:05 PM in Vancouver. */
+  const SUNDAY_6PM_VANCOUVER = minutesAfterSix(5);
 
   async function uploader(email: string, cols: Record<string, unknown> = {}) {
     const id = await user(email, { status: "active", timezone: "America/Vancouver", free_lists_used: 2, ...cols });
@@ -268,9 +274,9 @@ describe("the Sunday reminder on the upload route (spec B.5)", () => {
 
   it("reminds at 6:00 PM their time on Sunday when no run has arrived, once", async () => {
     await uploader("van@example.com");
-    expect(await sendUploadReminders(query, deps(new Date("2026-12-14T01:30:00Z")))).toBe(0);
+    expect(await sendUploadReminders(query, deps(minutesAfterSix(-30)))).toBe(0);
     expect(await sendUploadReminders(query, deps(SUNDAY_6PM_VANCOUVER))).toBe(1);
-    expect(await sendUploadReminders(query, deps(new Date("2026-12-14T03:05:00Z")))).toBe(0);
+    expect(await sendUploadReminders(query, deps(minutesAfterSix(65)))).toBe(0);
     expect(subjects()).toEqual(["Zack’s report for Monday hasn’t arrived"]);
   });
 
