@@ -54,7 +54,7 @@ describe("completeCardSetup", () => {
     return [...gw.sessions.keys()].pop()!;
   }
 
-  it("starts the trial, sets the default card, and sends one welcome email, charging nothing", async () => {
+  it("starts the trial and sets the default card, charging nothing and sending no welcome (it moved to Step 3, Unit 2)", async () => {
     const gw = fakeGateway();
     const id = await opened(gw);
     gw.complete(id);
@@ -65,14 +65,10 @@ describe("completeCardSetup", () => {
     expect(u).toMatchObject({ status: "trial", signup_step: "done", currency: "CAD", country: "CA" });
     expect(u.trial_started_at).not.toBeNull();
     expect([...gw.defaults.values()]).toEqual(["pm_card"]);
-    expect(sent).toHaveLength(1);
-    expect(sent[0].subject).toBe("Welcome to Roger");
-    expect(sent[0].text).toMatch(/charged only with the third/);
-    expect(sent[0].text).toMatch(/CA\$280 a month, plus HST/);
-    expect(sent[0].text).toMatch(/that month is CA\$560/);
+    expect(sent).toHaveLength(0);
   });
 
-  it("is safe from both the browser return and the webhook: one trial, one email", async () => {
+  it("is safe from both the browser return and the webhook: one trial, no email", async () => {
     const gw = fakeGateway();
     const id = await opened(gw);
     gw.complete(id);
@@ -81,7 +77,9 @@ describe("completeCardSetup", () => {
       completeCardSetup(query, gw, id, { getSettings, query, transport }),
     ]);
     expect(both).toEqual(["done", "done"]);
-    expect(sent).toHaveLength(1);
+    const [u] = await query<{ status: string }>("select status from users");
+    expect(u.status).toBe("trial");
+    expect(sent).toHaveLength(0);
   });
 
   it("waits while the card page is not finished", async () => {
@@ -115,17 +113,6 @@ describe("completeCardSetup", () => {
     gw.complete(id, "US");
     expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("done");
   });
-
-  it("tells one-at-a-time users they pay only when they order", async () => {
-    await query("update users set plan = 'per_run', currency = 'USD'");
-    const gw = fakeGateway();
-    await startCardSetup(query, gw, { userId, currency: "USD", ...urls });
-    const id = [...gw.sessions.keys()].pop()!;
-    gw.complete(id, "US");
-    await completeCardSetup(query, gw, id, { getSettings, query, transport });
-    expect(sent[0].text).toMatch(/US\$200, plus tax where it applies, only when you order a list/);
-    expect(sent[0].text).not.toMatch(/misses two weeks/);
-  });
 });
 
 describe("Stripe webhook handling", () => {
@@ -137,7 +124,8 @@ describe("Stripe webhook handling", () => {
     const event = { id: "evt_1", type: "checkout.session.completed", data: { object: { id, mode: "setup" } } } as never;
     expect(await handleStripeEvent(query, gw, event, { getSettings, query, transport })).toBe("handled");
     expect(await handleStripeEvent(query, gw, event, { getSettings, query, transport })).toBe("duplicate");
-    expect(sent).toHaveLength(1);
+    const [u] = await query<{ status: string }>("select status from users");
+    expect(u.status).toBe("trial");
   });
 
   it("lets Stripe's retry run an event whose handling failed", async () => {

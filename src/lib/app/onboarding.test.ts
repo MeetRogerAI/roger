@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
+import { finishSignup } from "@/lib/signup/finish";
+import { mergeV3 } from "@/lib/v3-settings";
+import { loadHome } from "./home";
 import { buildChecklist, loadChecklist, noteOnboarding, recordGetStartedView, type Facts } from "./onboarding";
 
 let q: Query;
@@ -101,5 +104,15 @@ describe("the onboarding checklist", () => {
   it("shows nothing for an account still signing up or closed", async () => {
     expect(await loadChecklist(q, await user("new", "signup"))).toBeNull();
     expect(await loadChecklist(q, await user("new", "closed"))).toBeNull();
+  });
+
+  it("an account that just finished Step 3 (a trial with no card) gets the checklist and the /app home (plan 2026-11-26-001, Unit 2)", async () => {
+    const id = await user("running", "signup");
+    expect(await finishSignup(q, id)).toBe(true);
+    const [u] = await q<{ status: string; trial_started_at: unknown }>("select status, trial_started_at from users where id = $1", [id]);
+    expect(u).toEqual({ status: "trial", trial_started_at: null });
+    expect((await loadChecklist(q, id))?.steps.map((s) => s.key)).toContain("connect");
+    const home = await loadHome(q, id, mergeV3([]), new Date("2026-12-02T15:00:00Z"));
+    expect(home?.status).toBe("trial");
   });
 });

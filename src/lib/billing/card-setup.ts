@@ -1,16 +1,18 @@
-import { addDays, weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
-import { sendToUser, type MailDeps } from "@/lib/mail/send";
-import { welcomeEmail } from "@/lib/mail/templates/welcome";
-import { claimFreeRun } from "@/lib/zack/receive";
+import type { MailDeps } from "@/lib/mail/send";
 import type { V3Settings } from "@/lib/v3-settings";
 import type { CardGateway } from "./gateway";
 import { hasCard } from "./has-card";
 import type { Currency, Plan } from "./prices";
 
 /**
- * Sign-up screens 4 and 5 (spec B.4, B.9 "At sign-up"): save a card with a
- * billing address, charge nothing, start the trial.
+ * Saving the card (spec B.9): a card with a billing address, nothing charged.
+ *
+ * Sign-up no longer reaches this (plan 2026-11-26-001, Unit 2): it ends at
+ * Step 3 with a trial and no card, and the welcome email is sent there
+ * (`src/lib/signup/finish.ts`). `startCardSetup` / `completeCardSetup` stay
+ * for the Payment step, which Units 5 and 6 rebuild on them; until then they
+ * still move a `signup` account to `trial` and send nothing.
  */
 
 type SignupUser = {
@@ -67,20 +69,16 @@ export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_your
 
 export type CompleteOptions = {
   expectUserId?: string;
-  /** Read only when the welcome email is built, so a settings problem cannot stop the card step. */
+  /** Not read by the card step itself; the webhook reads it for the events that need settings. */
   getSettings: () => Promise<V3Settings>;
   now?: Date;
 } & MailDeps;
 
 /**
- * Finishes the card step. Safe to run twice and from two places: the browser
- * returning to /start/done and the Stripe webhook both call it, and whichever
- * is first starts the trial.
- *
- * The welcome email is sent by every call that finds the user in trial, not
- * only the one that started it: the notifications claim makes repeats free,
- * and a send that failed the first time is tried again on the next visit or
- * webhook retry.
+ * Finishes the card step. Safe to run twice and from two places: the return
+ * page and the Stripe webhook both call it, and whichever is first starts the
+ * trial. It sends no email: the welcome moved to the end of sign-up (Unit 2),
+ * and Unit 5 makes this the unlock of a held list.
  *
  * `expectUserId` is the signed-in user on the return path; a session that
  * belongs to someone else changes nothing.
@@ -113,38 +111,8 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
     );
     // Another call may have started the trial between our read and this update.
     const now_ = started[0] ?? (await loadUser(q, u.id));
-    return now_?.status === "trial" ? sendWelcome(q, now_, o) : "pending";
+    return now_?.status === "trial" ? "done" : "pending";
   }
-  if (u.status === "trial") return sendWelcome(q, u, o);
-  return "done";
-}
-
-/**
- * Sends the welcome email (at most once). A send that fails throws, so the
- * webhook answers with an error and Stripe tries again later; the trial has
- * already started either way.
- */
-async function sendWelcome(q: Query, u: SignupUser, o: CompleteOptions): Promise<"done"> {
-  const startedAt = u.trial_started_at ? new Date(u.trial_started_at) : (o.now ?? new Date());
-  const currency = u.currency ?? "USD";
-  const settings = await o.getSettings();
-  // A report brought from the free tool becomes this week's run (claimed once; never blocks the trial).
-  await claimFreeRun(q, u.id, settings.runCutoff, o.now).catch((e) => console.error("[billing] free-tool run not claimed", e));
-  const result = await sendToUser(
-    { id: u.id, email: u.email },
-    "welcome",
-    "signup",
-    welcomeEmail({
-      name: u.name,
-      plan: u.plan,
-      currency,
-      path: u.path,
-      settings,
-      firstChargeNoEarlier: addDays(weekOf(startedAt), 14),
-    }),
-    o,
-  );
-  if (result === "failed") throw new WelcomeNotSent();
   return "done";
 }
 
@@ -220,10 +188,4 @@ export async function completeCardUpdate(
   }
   await q(`update card_updates set done_at = now(), outcome = $2 where session_id = $1`, [s.id, outcome]);
   return outcome;
-}
-
-export class WelcomeNotSent extends Error {
-  constructor() {
-    super("The trial started but the welcome email could not be sent yet.");
-  }
 }

@@ -32,6 +32,7 @@ import { vi } from "vitest";
 import { addDays, currentMonday, isAtOrPast, wallParts, wallToInstant } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { startCardSetup } from "@/lib/billing/card-setup";
+import { sendSignupWelcome } from "@/lib/signup/finish";
 import { placeOrder } from "@/lib/billing/orders";
 import { runChargeJob, type ChargeJobResult } from "@/lib/billing/charge-job";
 import type { ChargeDeps } from "@/lib/billing/first-charge";
@@ -654,10 +655,11 @@ export async function passHours(w: World, until: Date, stepHours = 1): Promise<v
 export type Member = { id: string; email: string; customer: string };
 
 /**
- * Sign-up screens 3 to 5 as the app runs them: the plan and consent are saved,
- * Stripe's hosted card page opens on a new customer, the person finishes it,
- * and Stripe's `checkout.session.completed` reaches the webhook, which starts
- * the trial and sends the welcome email.
+ * Sign-up with the card saved straight away: the plan and consent are saved,
+ * the welcome email is sent (as Step 3 does), Stripe's hosted card page opens
+ * on a new customer, the person finishes it, and Stripe's
+ * `checkout.session.completed` reaches the webhook, which starts the trial.
+ * (Unit 10 of plan 2026-11-26-001 rewrites this for the held-list flow.)
  */
 export async function signUp(
   w: World,
@@ -668,6 +670,10 @@ export async function signUp(
      values ($1, 'Test', 'signup', $2, $3, $4, $5, 'card', $5) returning id`,
     [o.email, o.plan ?? "monthly", o.sharing ?? "share", o.currency, w.now.toISOString()],
   );
+  // The welcome is sent when sign-up ends at Step 3 (plan 2026-11-26-001, Unit 2), no longer by the card step.
+  // Until Unit 10 rewrites this helper for the held-list flow, the card is still saved here, at sign-up.
+  const c = w.charge();
+  await sendSignupWelcome(w.query, id, { settings: c.settings, now: c.now, query: c.query, transport: c.transport, sleep: c.sleep });
   const started = await startCardSetup(w.query, w.stripe, { userId: id, currency: o.currency, successUrl: "https://roger.test/start/done", cancelUrl: "https://roger.test/start/card" });
   if (!started.ok) throw new Error(`The card step did not open: ${started.reason}`);
   const session = started.url.split("/").pop()!;

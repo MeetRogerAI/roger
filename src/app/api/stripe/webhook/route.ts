@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Settings are read only if a welcome email is built, so a settings problem cannot block other events.
+    // Settings are read only by the events that need them, so a settings problem cannot block other events.
     const outcome = await handleStripeEvent(query, gw, event, {
       getSettings: readV3Settings,
       adjust: stripeAdjustments(s) ?? undefined,

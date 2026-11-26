@@ -135,7 +135,7 @@ export async function undoExcuseAction(_p: V3State, fd: FormData): Promise<V3Sta
   return { status: "ok", message: `Excuse for the week of ${week} undone: ${n} week${n === 1 ? "" : "s"} counted again.`, at: Date.now() };
 }
 
-/** R11: a new account and the pilot link that opens at the plan step. The link is shown once. */
+/** R11: a new account and the pilot link that opens at Product and Pricing (Step 3). The link is shown once. */
 export async function pilotLinkAction(_p: V3State, fd: FormData): Promise<V3State> {
   const by = await requireAdmin();
   const r = await createPilotLink(query, { email: field(fd, "email", 254), name: field(fd, "name", 80), createdBy: by });

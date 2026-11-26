@@ -5,48 +5,31 @@ import { useActionState, useId } from "react";
 import { savePlan, type PlanState } from "@/app/start/billing-actions";
 
 const idle: PlanState = { status: "idle" };
-const choice =
-  "flex cursor-pointer gap-4 rounded-[8px] border border-rule bg-surface p-5 has-[:checked]:border-accent has-[:checked]:bg-accent-wash";
 
-/** Spec B.4, screen 3. Monthly is selected and marked; the consent box starts unticked. */
-export function PlanForm({ monthly, perRun, higher, zackLink }: { monthly: string; perRun: string; higher: string; zackLink: string }) {
+/**
+ * Step 3, Product and Pricing (plan 2026-11-26-001, Unit 2; origin R3–R6).
+ * Product explains the weekly process and carries the Zack consent, which
+ * starts unticked; Pricing states both prices. No plan picker and no
+ * higher-rate line. Draft wording, for Peter's sign-off (launch list S18).
+ *
+ * The only error is an unticked box, so React's reset after the action leaves
+ * the form exactly as it was submitted.
+ */
+export function PlanForm({ usd, cad, zackLink }: { usd: string; cad: string; zackLink: string }) {
   const [state, action, pending] = useActionState(savePlan, idle);
   const e = state.errors ?? {};
   const id = useId();
   return (
-    <form action={action} className="mt-10 space-y-8" noValidate>
-      <fieldset aria-describedby={e.plan ? `${id}-plan` : undefined}>
-        <legend className="sr-only">Choose how to pay after your two free lists</legend>
-        <div className="grid gap-4">
-          <label className={choice}>
-            <input type="radio" name="plan" value="monthly" defaultChecked className="mt-1 size-4 accent-accent" />
-            <span>
-              <span className="text-meta font-semibold uppercase tracking-wider text-accent">Most people choose this</span>
-              <span className="mt-1 block text-title">Monthly, {monthly} a month</span>
-              <span className="mt-1 block text-small text-ink-2">Three ideas every Monday. Charged once a month, starting with your third list.</span>
-            </span>
-          </label>
-          <label className={choice}>
-            <input type="radio" name="plan" value="per_run" className="mt-1 size-4 accent-accent" />
-            <span>
-              <span className="block text-title">One list at a time, {perRun} each</span>
-              <span className="mt-1 block text-small text-ink-2">
-                Order a list for any Monday you want one, after your two free lists. Monthly costs the same and brings a list every
-                Monday.
-              </span>
-            </span>
-          </label>
-        </div>
-        {e.plan && (
-          <p id={`${id}-plan`} role="alert" className="mt-2 text-small text-error">
-            {e.plan}
-          </p>
-        )}
-        <p className="mt-4 text-small text-ink-2">On monthly: if Zack misses two weeks in a month, that month is {higher}. We always tell you first.</p>
-      </fieldset>
-
-      <div>
-        <label className="flex gap-3 text-small">
+    <form action={action} className="mt-10 max-w-[40rem] space-y-10" noValidate>
+      <section aria-labelledby={`${id}-product`}>
+        <h2 id={`${id}-product`} className="text-title">
+          Product
+        </h2>
+        <p className="mt-3 text-ink-2">
+          Zack runs in your own AI agent each week and collects what you did and what worked. Cora curates three ideas picked for you,
+          every Monday.
+        </p>
+        <label className="mt-6 flex gap-3 text-small">
           <input
             type="checkbox"
             name="consent"
@@ -71,10 +54,20 @@ export function PlanForm({ monthly, perRun, higher, zackLink }: { monthly: strin
             Read what Zack does first
           </Link>
         </p>
-      </div>
+      </section>
+
+      <section aria-labelledby={`${id}-pricing`}>
+        <h2 id={`${id}-pricing`} className="text-title">
+          Pricing
+        </h2>
+        <p className="mt-3 text-ink-2">
+          Roger is {usd} a month or {cad} a month, plus tax. We’ll ask for your card before Cora’s first full list is shown. Your free
+          trial includes your first two Cora lists, two Mondays.
+        </p>
+      </section>
 
       <button type="submit" className="btn btn-l" disabled={pending}>
-        {pending ? "Saving…" : "Continue to your card"}
+        {pending ? "Saving…" : "Continue"}
       </button>
     </form>
   );

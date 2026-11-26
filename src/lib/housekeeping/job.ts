@@ -23,6 +23,7 @@ import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { applyRetention, cleanUpExpired } from "./retention";
 import { closeTrialsWithNoList, sendTrialNudges, sendUploadReminders } from "./trial";
+import { sendUnsentWelcomes } from "@/lib/signup/finish";
 import { finishCancellations } from "@/lib/billing/cancel";
 import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
 import { applyDueSwitches } from "@/lib/billing/switch";
@@ -54,6 +55,9 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "charge_retries", run: (q, d) => dueRetries(q, d) },
   // After the retries, so a day-7 attempt runs before its trial closes.
   { name: "close_unpaid_trials", run: (q, d) => closeUnpaidTrials(q, d) },
+  // Plan 2026-11-26-001, Unit 2. A welcome that failed when sign-up ended (a server action has no retry): the free-tool
+  // claim re-run and the welcome sent, for trials with no card that consented since this flow shipped.
+  { name: "welcome_unsent", run: (q, d, c) => sendUnsentWelcomes(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
   // Unit 18. A trial with no run: "Zack hasn't sent a report yet" on days 3, 10 and 17.
   { name: "trial_nudges", run: (q, d, c) => sendTrialNudges(q, { ...d, deadline: c.deadline }) },
   // Day 21 with no first list (weeks with no list because of Roger not counted): closed, no charge, one email.

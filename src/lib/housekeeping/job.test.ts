@@ -69,3 +69,70 @@ describe("the hourly pass", () => {
     expect(await reconcileStripe(query, { ...d, now: later }, { deadline: Date.now() + 60_000, realNow: later }, ok)).toMatchObject({ finished: true });
   });
 });
+
+describe("welcome_unsent (plan 2026-11-26-001, Unit 2)", () => {
+  let sent: Parameters<Transport>[0][];
+  const recording: Transport = async (m) => {
+    sent.push(m);
+    return { ok: true };
+  };
+  const task = HOURLY_TASKS.find((t) => t.name === "welcome_unsent")!;
+  const pass = (now = NOW) => runHourly(query, { gw: {} as BillingGateway, settings, now, query, transport: recording, sleep: async () => {} }, [task], { deadline: Date.now() + 60_000 });
+  const trial = (email: string, consentAt = "2026-12-01T10:00:00Z", extra = "") =>
+    query<{ id: string }>(
+      `insert into users (email, name, path, currency, status, plan, signup_step, consent_at${extra ? ", trial_started_at" : ""})
+       values ($1, 'Ana', 'running', 'CAD', 'trial', 'monthly', 'done', $2${extra ? `, '${extra}'` : ""}) returning id`,
+      [email, consentAt],
+    ).then((r) => r[0].id);
+
+  beforeEach(() => {
+    sent = [];
+  });
+
+  it("is registered, before the trial nudges", () => {
+    const names = HOURLY_TASKS.map((t) => t.name);
+    expect(names.indexOf("welcome_unsent")).toBeGreaterThan(-1);
+    expect(names.indexOf("welcome_unsent")).toBeLessThan(names.indexOf("trial_nudges"));
+  });
+
+  it("welcomes a no-card trial that has none, once, however many passes run", async () => {
+    await trial("ana@example.com");
+    expect(await pass()).toEqual({ welcome_unsent: 1 });
+    expect(await pass()).toEqual({ welcome_unsent: 0 });
+    expect(sent.map((m) => [m.to[0], m.subject])).toEqual([["ana@example.com", "Welcome to Roger"]]);
+    expect(sent[0].text).toContain("When your first list is ready we’ll ask for your card.");
+  });
+
+  it("leaves alone accounts from before this release, trials with a card, accounts still signing up, and ones already welcomed", async () => {
+    await trial("old@example.com", "2026-11-20T10:00:00Z");
+    await trial("card@example.com", "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z");
+    await query("insert into users (email, name, status, consent_at) values ('signup@example.com', 'S', 'signup', '2026-12-01T10:00:00Z')");
+    const done = await trial("done@example.com");
+    await query("insert into notifications (recipient, kind, ref, status) values ($1, 'welcome', 'signup', 'sent')", [done]);
+    expect(await pass()).toEqual({ welcome_unsent: 0 });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("stops retrying a welcome the mail layer gave up on", async () => {
+    const id = await trial("ana@example.com");
+    await query("insert into notifications (recipient, kind, ref, status, attempts) values ($1, 'welcome', 'signup', 'failed', 3)", [id]);
+    expect(await pass()).toEqual({ welcome_unsent: 0 });
+  });
+
+  it("re-runs the free-tool claim on the job clock: the report becomes the run of the job's week", async () => {
+    const id = await trial("ana@example.com");
+    await query("insert into free_runs (token, email, agent, report, report_at) values ('tok1', 'ana@example.com', 'hark', '# free report', now())");
+    await query("update users set pending_zack_token = 'tok1' where id = $1", [id]);
+    await pass();
+    const runs = await query<{ week_of: string }>("select week_of::text from runs where user_id = $1", [id]);
+    // NOW is Tuesday 2026-12-15: before Sunday's cutoff, the run counts for Monday 2026-12-21.
+    expect(runs).toEqual([{ week_of: "2026-12-21" }]);
+  });
+
+  it("sends at most MAX_WELCOMES a pass", async () => {
+    const { MAX_WELCOMES } = await import("@/lib/signup/finish");
+    for (let i = 0; i < MAX_WELCOMES + 2; i++) await trial(`u${i}@example.com`);
+    expect(await pass()).toEqual({ welcome_unsent: MAX_WELCOMES });
+    expect(await pass()).toEqual({ welcome_unsent: 2 });
+  });
+});

@@ -15,7 +15,7 @@ export type SignupRow = {
   consent_at: string | null;
 };
 
-/** The signed-in user's sign-up state, for the plan, card and done pages. Redirects to sign in if needed. */
+/** The signed-in user's sign-up state, for Step 3 (Product and Pricing). Redirects to sign in if needed. */
 export async function signupUser(next: string): Promise<SignupRow> {
   const session = await requireUser(next);
   const rows = await query<SignupRow>(
