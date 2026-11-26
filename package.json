@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
+    "@stripe/react-stripe-js": "^7.1.0",
+    "@stripe/stripe-js": "^10.4.0",
     "ai": "^7.0.152",
     "next": "16.4.1",
     "react": "19.3.0",

@@ -21,6 +21,12 @@ export const limits = {
   // Card-testing scripts open many setup sessions slowly; a daily cap stops that too.
   checkoutPerUserDay: { limit: 10, windowSeconds: 24 * 60 * 60 },
   checkoutPerIpDay: { limit: 40, windowSeconds: 24 * 60 * 60 },
+  // Payment page (plan 2026-11-26-001, Unit 4). Promo codes are guessable: a tight hourly cap.
+  promoPerUser: { limit: 10, windowSeconds: 60 * 60 },
+  promoPerIp: { limit: 30, windowSeconds: 60 * 60 },
+  // Tax previews follow typing (debounced); identical inputs come from a cache and are not counted.
+  taxPerUser: { limit: 40, windowSeconds: 60 * 60 },
+  taxPerIp: { limit: 120, windowSeconds: 60 * 60 },
   zackSendsPerKey: { limit: 6, windowSeconds: 24 * 60 * 60 },
   zackBadKeyPerIp: { limit: 10, windowSeconds: 60 },
   leadPerIp: { limit: 5, windowSeconds: 60 * 60 },

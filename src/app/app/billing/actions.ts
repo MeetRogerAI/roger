@@ -5,14 +5,14 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUserForAction } from "@/lib/auth/access";
 import { cancelPlan, undoCancel, type PlanDeps, type PlanResult } from "@/lib/billing/cancel";
-import { startCardUpdate } from "@/lib/billing/card-setup";
+import { CHECKOUT_LIMITED, checkoutAllowed, startCardUpdate } from "@/lib/billing/card-setup";
 import { stripeGateway } from "@/lib/billing/gateway";
 import { stripeAdjustments, stripeBilling, stripePlans } from "@/lib/billing/subscriptions";
 import { switchPlan } from "@/lib/billing/switch";
 import { query } from "@/lib/db-query";
 import { field } from "@/lib/form";
 import { appUrl } from "@/lib/mail/layout";
-import { clientIp, hit, limits } from "@/lib/rate-limit";
+import { clientIp, hit } from "@/lib/rate-limit";
 import { readV3Settings } from "@/lib/v3-settings";
 
 /**
@@ -75,14 +75,7 @@ export async function updateCardAction(): Promise<BillingState> {
   const s = await requireUserForAction();
   const gw = stripeGateway();
   if (!gw) return OFF;
-  const ip = clientIp(await headers());
-  const allowed = [
-    await hit(`checkout:user:${s.userId}`, limits.checkoutPerUser),
-    await hit(`checkout:ip:${ip}`, limits.checkoutPerIp),
-    await hit(`checkout:user-day:${s.userId}`, limits.checkoutPerUserDay),
-    await hit(`checkout:ip-day:${ip}`, limits.checkoutPerIpDay),
-  ];
-  if (allowed.includes(false)) return { status: "error", message: "Too many tries. Wait a while and try again, or write to us." };
+  if (!(await checkoutAllowed(s.userId, clientIp(await headers())))) return { status: "error", message: CHECKOUT_LIMITED };
   let r: Awaited<ReturnType<typeof startCardUpdate>>;
   try {
     r = await startCardUpdate(query, gw, {

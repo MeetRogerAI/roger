@@ -56,6 +56,7 @@ import { runHourly } from "@/lib/housekeeping/job";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3, type V3Settings } from "@/lib/v3-settings";
 import { storeReport } from "@/lib/zack/receive";
+import { fakePaymentStripe } from "@/test-helpers/fake-card-gateway";
 import { testDb } from "@/test-helpers/pglite-db";
 
 // A scenario walks weeks of jobs; with every test file running at once it needs more than the unit-test limit.
@@ -127,6 +128,8 @@ export type FakeStripe = CardGateway &
     invoiceList: FakeInvoice[];
     items: Map<string, FakeItem>;
     sessions: Map<string, SetupSession>;
+    /** Promotion codes and the Payment page's tax preview (shared with the unit-test fake). */
+    payment: ReturnType<typeof fakePaymentStripe>;
     /** The next payments for a customer (first charge, order or renewal), in order; a success when none is queued. */
     script(customer: string, ...results: ("ok" | "soft" | "hard")[]): void;
     /** Stripe's hosted Checkout finished: the card and billing address are saved. */
@@ -149,6 +152,10 @@ export function fakeStripe(now: () => Date): FakeStripe {
   const replays = new Map<string, ChargeResult>();
   const itemKeys = new Map<string, string>();
   const calls: Call[] = [];
+  const payment = fakePaymentStripe({
+    monthlyCents: { USD: PRICES.price_monthly_usd.cents, CAD: PRICES.price_monthly_cad.cents },
+    tax: { CA: { rate: TAX_RATE.CA, name: "HST" }, US: { rate: TAX_RATE.US, name: "Sales Tax" } },
+  });
   let n = 0;
   const id = (p: string) => `${p}_${++n}`;
   const call = (method: string, args: Record<string, unknown>) => calls.push({ method, args: structuredClone(args) });
@@ -201,6 +208,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
     invoiceList,
     items,
     sessions,
+    payment,
     callsTo: (m) => calls.filter((c) => c.method === m),
     invoicesFor: (c) => invoiceList.filter((i) => i.customer === c),
     script(customer, ...results) {
@@ -222,10 +230,31 @@ export function fakeStripe(now: () => Date): FakeStripe {
       sessions.set(sid, { id: sid, status: "open", customer, paymentMethod: null, userId, currency, country: null, purpose: purpose ?? null });
       return { id: sid, url: `https://checkout.stripe.test/${sid}` };
     },
+    async createEmbeddedSetupSession({ userId, customer, currency, returnUrl }) {
+      call("checkout.sessions.create", { userId, customer, currency, mode: "setup", ui_mode: "elements", returnUrl });
+      const sid = id("cs");
+      const clientSecret = `${sid}_secret_test`;
+      sessions.set(sid, { id: sid, status: "open", customer, paymentMethod: null, userId, currency, country: null, purpose: null, clientSecret });
+      return { id: sid, clientSecret };
+    },
+    async expireSetupSession(sid) {
+      call("checkout.sessions.expire", { id: sid });
+      const s = sessions.get(sid);
+      if (s?.status === "open") sessions.set(sid, { ...s, status: "expired" });
+    },
     async getSetupSession(sid) {
       const s = sessions.get(sid);
-      if (!s) throw new Error("No such session");
+      if (!s) throw Object.assign(new Error(`No such checkout.session: ${sid}`), { code: "resource_missing" });
       return { ...s };
+    },
+    // --- the Payment page's price box (Unit 4): the same fake tax as invoices (HST 13% in CA, none in the US)
+    async previewMonthly(args) {
+      call("invoices.createPreview.monthly", { ...args });
+      return payment.previewMonthly(args);
+    },
+    async findPromotion(code, currency, opts) {
+      call("promotionCodes.list", { code, currency });
+      return payment.findPromotion(code, currency, opts);
     },
     async setDefaultCard(customer, pm) {
       call("customers.update.default_payment_method", { customer, pm });
