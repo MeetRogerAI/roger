@@ -1,4 +1,5 @@
 import type { Query } from "@/lib/db-query";
+import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 
 /**
  * Delivering a list (plan "Delivery and email are separate"): one statement
@@ -33,14 +34,23 @@ import type { Query } from "@/lib/db-query";
  */
 export const COVERS_WEEK = (week: string, u = "u") => `(${u}.access_ends_at at time zone 'America/Toronto')::date > ${week}::date`;
 
-export const DELIVERABLE_SQL = `(
+/*
+ * Held lists (plan 2026-11-26-001, Unit 3): a trial is deliverable only with a
+ * saved card or a sponsor (HAS_CARD_OR_SPONSORED_SQL). Without one, the list
+ * is picked but held: the member gets a titles-only teaser instead
+ * (send-job.ts `sendHeldTeaser`). A week replaced by a newer held list
+ * (`cora_user_weeks.superseded_at`, stamped when Cora picks the newer one) is
+ * never delivered, whatever the account's state later, so saving a card
+ * unlocks only the newest held list.
+ */
+export const DELIVERABLE_SQL = `((
   exists (select 1 from orders o where o.user_id = u.id and o.week_of = $2 and o.status in ('charged', 'sent'))
-  or (u.status = 'trial' and u.cancel_requested_at is null and (u.sponsor_id is not null or u.free_lists_used < $3))
+  or (u.status = 'trial' and u.cancel_requested_at is null and (u.sponsor_id is not null or (u.free_lists_used < $3 and ${HAS_CARD_SQL("u")})))
   or (u.status = 'active' and (u.sponsor_id is not null
        or (u.plan = 'monthly' and (u.cancel_requested_at is null or u.access_ends_at is null or ${COVERS_WEEK("$2")}))))
   or (u.status = 'cancelled' and u.plan = 'monthly' and u.first_charge_at is not null and u.stripe_subscription is not null
        and u.access_ends_at is not null and ${COVERS_WEEK("$2")})
-)`;
+) and not exists (select 1 from cora_user_weeks sw where sw.user_id = u.id and sw.week_of = $2 and not sw.dry_run and sw.superseded_at is not null))`;
 
 /**
  * Delivers one user's list for a week; returns how many ideas were delivered

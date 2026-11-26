@@ -13,6 +13,7 @@ import { mergePending, type MergeModel } from "./merge";
 import { pickThree, type Fitted } from "./pick";
 import { scorePool, WEIGHTS, type Figures, type Scored } from "./score";
 import { whoGetsAList } from "./who-gets-a-list";
+import { HAS_CARD_OR_SPONSORED_SQL } from "@/lib/billing/has-card";
 
 /**
  * The Monday Cora job (spec B.7 "The job", plan Unit 11). It takes the week's
@@ -269,20 +270,37 @@ async function rebuildContent(q: Query, week: string) {
   );
 }
 
-/** One user's picks, or the reason there are none, in one statement: exactly one set per user per week. */
+/**
+ * One user's picks, or the reason there are none, in one statement: exactly one set per user per week.
+ *
+ * The statement writes only while this worker holds the week's lease (holder and kind of run), like every
+ * other write here. For a trial with no card and no sponsor, a picked or short week replaces every earlier
+ * held list (plan 2026-11-26-001, Unit 3): the same statement stamps `superseded_at` (the job clock) on each
+ * earlier undelivered week, so the member has at most one held list and a card saved later unlocks only the
+ * newest. It runs only when this statement inserted the week (a re-run changes nothing), and never in a dry run.
+ */
+export const RECORD_PICKS_SQL = `with lease as (
+         select 1 from cora_weeks where week_of = $2::date and holder = $9::text and status = 'running' and dry_run = $7::boolean
+       ),
+       cw as (
+         insert into cora_user_weeks (user_id, week_of, outcome, eligible_count, picked_count, note, dry_run)
+         select $1::uuid, $2::date, $3::text, $4::int, $5::int, $6::text, $7::boolean where exists (select 1 from lease)
+         on conflict (user_id, week_of) do nothing returning user_id
+       ),
+       k as (
+         insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run)
+         select $1, $2, p.position, p.id, p.personal, p.fit, p.reason, $7
+         from cw, jsonb_to_recordset($8::jsonb) as p(position int, id uuid, personal int, fit int, reason text)
+         on conflict do nothing
+       )
+       update cora_user_weeks set superseded_at = coalesce($10::timestamptz, now())
+       where user_id = $1 and week_of < $2 and not dry_run and delivered_at is null and superseded_at is null
+         and not $7 and $3 in ('picked', 'short') and exists (select 1 from cw)
+         and exists (select 1 from users u where u.id = $1 and u.status = 'trial' and not ${HAS_CARD_OR_SPONSORED_SQL("u")})`;
+
 async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, scored: Scored[], byId: Map<string, PoolRow>, breaker: { failures: number }) {
   const record = async (outcome: string, eligible: number, picks: { position: number; id: string; personal: number; fit: number; reason: string }[], note = "") => {
-    await q(
-      `with cw as (
-         insert into cora_user_weeks (user_id, week_of, outcome, eligible_count, picked_count, note, dry_run)
-         values ($1, $2, $3, $4, $5, $6, $7) on conflict (user_id, week_of) do nothing returning user_id
-       )
-       insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run)
-       select $1, $2, p.position, p.id, p.personal, p.fit, p.reason, $7
-       from cw, jsonb_to_recordset($8::jsonb) as p(position int, id uuid, personal int, fit int, reason text)
-       on conflict do nothing`,
-      [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks)],
-    );
+    await q(RECORD_PICKS_SQL, [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks), o.holder, o.now.toISOString()]);
   };
 
   const eligible = eligiblePlays(

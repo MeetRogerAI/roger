@@ -3,8 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { HeldIdeas } from "@/components/app/held-ideas";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { OrderBox, WeekIdeas } from "@/components/app/week-ideas";
+import { heldHeading } from "@/lib/app/held";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
@@ -24,7 +26,7 @@ async function Home() {
   return (
     <div className="space-y-10">
       <header>
-        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : "Your first list is on its way"}</h1>
+        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : home.held ? heldHeading(home.held.count) : "Your first list is on its way"}</h1>
         {home.statusLine !== home.missBanner && (
           <p className="mt-3 text-small text-ink-2">
             {home.statusLine}
@@ -67,6 +69,8 @@ async function Home() {
           )}
           <WeekIdeas week={home.week!} ideas={home.ideas} />
         </>
+      ) : home.held ? (
+        <HeldIdeas titles={home.held.titles} />
       ) : (
         <div className="rounded-[8px] border border-rule bg-surface p-6">
           <p className="text-title">Your ideas arrive on Monday morning.</p>

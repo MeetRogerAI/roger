@@ -1,13 +1,16 @@
 import { isAtOrPast, torontoDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
-import { statusLine, type StatusFacts } from "@/lib/app/status";
+import { HELD_WEEK_SQL, heldTitles } from "@/lib/app/held";
+import { PAYMENT_PATH, statusLine, type StatusFacts } from "@/lib/app/status";
 import { weekIdeas } from "@/lib/app/week";
-import { HAS_CARD_SQL } from "@/lib/billing/has-card";
+import { HAS_CARD_OR_SPONSORED_SQL, HAS_CARD_SQL } from "@/lib/billing/has-card";
 import { amount, money, type Currency } from "@/lib/billing/prices";
 import { sendFirstPaidNext } from "@/lib/billing/quote";
 import { contributionStatus, processContributions } from "@/lib/billing/contribution";
 import type { AdjustmentGateway, BillingGateway } from "@/lib/billing/subscriptions";
-import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
+import { adminAlert, alertAdmins, MAX_ATTEMPTS, sendToUser, type MailDeps } from "@/lib/mail/send";
+import { appUrl } from "@/lib/mail/layout";
+import { firstListHeldEmail } from "@/lib/mail/templates/held";
 import { mondayListEmail, noIdeasThisWeekEmail, noRunThisWeekEmail, orderNextEmail } from "@/lib/mail/templates/monday";
 import type { V3Settings } from "@/lib/v3-settings";
 import { deliverWeek } from "./deliver";
@@ -100,9 +103,42 @@ async function sentAlready(q: Query, userId: string, kind: string, sinceRef: str
   return rows.length > 0;
 }
 
+/** The teaser's notification kind; ref = the week, so each new held list gets its own teaser and a re-run never repeats one. */
+export const HELD_KIND = "first_list_held";
+
+/**
+ * A held list's teaser (plan 2026-11-26-001, Unit 3). One statement decides
+ * and stamps: if the week is held for this user (HELD_WEEK_SQL: a real,
+ * finished week, not delivered or superseded, for a trial with no card and no
+ * sponsor), `first_teaser_at` is set to the job clock unless already set (a
+ * later teaser never moves it). Only then is the email sent, titles only,
+ * through the notifications claim (at most once per week). The decision is
+ * made from stored state on every pass, so a send that failed is tried again
+ * by the next one (the Monday send, or the hourly `teaser_unsent`). Nothing is
+ * delivered and no free list is used.
+ */
+export async function sendHeldTeaser(q: Query, d: SendDeps, userId: string, week: string): Promise<"sent" | "already" | "skipped" | "failed" | "not_held"> {
+  const [u] = await q<{ id: string; email: string }>(
+    `update users u set first_teaser_at = coalesce(u.first_teaser_at, coalesce($3::timestamptz, now()))
+     from cora_user_weeks cw, cora_weeks w
+     where u.id = $1 and cw.user_id = $1 and cw.week_of = $2::date and ${HELD_WEEK_SQL}
+     returning u.id, u.email`,
+    [userId, week, d.now.toISOString()],
+  );
+  if (!u) return "not_held";
+  const titles = await heldTitles(q, userId, week);
+  if (!titles.length) return "not_held";
+  return sendToUser({ id: u.id, email: u.email }, HELD_KIND, week, firstListHeldEmail({ week, titles, paymentUrl: appUrl(PAYMENT_PATH) }), d).catch(() => "failed" as const);
+}
+
+/** A trial waiting for its card: its list is held, and it gets the teaser instead. */
+const heldFor = (u: Pick<U, "status" | "has_card" | "sponsored">) => u.status === "trial" && !u.has_card && !u.sponsored;
+
 /** Delivers one user's list if nothing is owed, then makes sure its emails went. Returns whether anything was delivered now. */
 export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string): Promise<boolean> {
   if (u.outcome !== "picked" && u.outcome !== "short") return false;
+  // No card yet: the titles-only teaser, never the list (the statement re-checks the card, so a card saved since is delivered below).
+  if (heldFor(u) && (await sendHeldTeaser(q, d, u.id, week)) !== "not_held") return false;
   const { delivered } = await deliverWeek(q, u.id, week, d.settings.freeRuns, d.now);
   const [now] = await usersFor(q, week, [u.id]);
   if (!now?.has_delivered) return false;
@@ -206,9 +242,11 @@ export async function deliverLate(q: Query, d: SendDeps): Promise<number> {
   let n = 0;
   for (const { week } of weeks) {
     if (!isAtOrPast(d.now, week, d.settings.sendAt)) continue;
+    // Never a superseded (replaced) held list, and never an account with no card and no sponsor: their teaser is the hourly `teaser_unsent`.
     const waiting = await q<{ user_id: string }>(
-      `select distinct k.user_id from picks k
-       where k.week_of = $1::date and not k.dry_run
+      `select distinct k.user_id from picks k join users u on u.id = k.user_id
+       where k.week_of = $1::date and not k.dry_run and not (u.status = 'trial' and not ${HAS_CARD_OR_SPONSORED_SQL("u")})
+         and not exists (select 1 from cora_user_weeks sw where sw.user_id = k.user_id and sw.week_of = k.week_of and not sw.dry_run and sw.superseded_at is not null)
          and (k.delivered_at is null
               or not exists (select 1 from notifications n where n.recipient = k.user_id::text and n.kind in ('monday_list', 'order_receipt') and n.ref = $2 and n.status in ('sent', 'skipped')))`,
       [week, week],
@@ -223,4 +261,42 @@ export async function deliverLate(q: Query, d: SendDeps): Promise<number> {
     }
   }
   return n;
+}
+
+/** How many teasers one hourly pass sends at most. */
+export const MAX_TEASERS = 50;
+
+/**
+ * The hourly `teaser_unsent` task (plan 2026-11-26-001, Unit 3): the Monday
+ * send stops trying at about 13:00, so a teaser that failed all Monday is sent
+ * here. Each trial with no card whose newest held list (of the past 8 days,
+ * past the send time) has no teaser sent, and none given up on after
+ * MAX_ATTEMPTS, gets it. At most MAX_TEASERS a pass; stops at the deadline.
+ */
+export async function sendUnsentTeasers(q: Query, d: SendDeps & { deadline?: number }): Promise<number> {
+  const due = await q<{ user_id: string; week: string }>(
+    `select h.user_id, h.week from (
+       select distinct on (cw.user_id) cw.user_id, cw.week_of, to_char(cw.week_of, 'YYYY-MM-DD') as week
+       from cora_user_weeks cw join users u on u.id = cw.user_id join cora_weeks w on w.week_of = cw.week_of
+       where ${HELD_WEEK_SQL} and cw.week_of between $1::date - 8 and $1::date
+       order by cw.user_id, cw.week_of desc
+     ) h
+     where not exists (select 1 from notifications n where n.recipient = h.user_id::text and n.kind = $2 and n.ref = h.week
+                         and (n.status in ('sent', 'skipped') or n.attempts >= $3))
+     order by h.week_of, h.user_id
+     limit $4`,
+    [torontoDate(d.now), HELD_KIND, MAX_ATTEMPTS, MAX_TEASERS],
+  );
+  let sent = 0;
+  for (const { user_id, week } of due) {
+    // Not before the Monday send time: the Monday send goes first.
+    if (!isAtOrPast(d.now, week, d.settings.sendAt)) continue;
+    if (d.deadline && Date.now() >= d.deadline) break;
+    const r = await sendHeldTeaser(q, d, user_id, week).catch((e) => {
+      console.error("[hourly] teaser", e instanceof Error ? e.message : e);
+      return "failed" as const;
+    });
+    if (r === "sent") sent++;
+  }
+  return sent;
 }

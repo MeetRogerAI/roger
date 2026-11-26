@@ -28,7 +28,7 @@ import { finishCancellations } from "@/lib/billing/cancel";
 import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
 import { applyDueSwitches } from "@/lib/billing/switch";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
-import { deliverLate } from "@/lib/cora/send-job";
+import { deliverLate, sendUnsentTeasers } from "@/lib/cora/send-job";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -72,6 +72,8 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "close_failed_week_orders", run: (q, d) => closeFailedWeekOrders(q, { query: d.query, transport: d.transport, sleep: d.sleep }) },
   // A list whose charge settled after Monday is delivered then.
   { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, adjust: d.adjust, query: d.query, transport: d.transport, sleep: d.sleep }) },
+  // Plan 2026-11-26-001, Unit 3. A held list's titles-only teaser (no card yet) that the Monday send could not send.
+  { name: "teaser_unsent", run: (q, d, c) => sendUnsentTeasers(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
   // The contributor rule: misses settled (forgiven, or the adjustment), then any Stripe items due (a carried one after its renewal).
   { name: "contributions", run: (q, d) => processContributions(q, d) },
   // Stripe deletes of dropped adjustment items that failed, until Stripe confirms them.

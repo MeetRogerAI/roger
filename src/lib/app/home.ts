@@ -5,6 +5,7 @@ import { amount, money, type Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
 import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 import { adjustmentLine, statusLine, statusLink, type StatusFacts } from "./status";
+import { heldTeaser, type HeldTeaser } from "./held";
 import { bricks, latestWeek, weekIdeas, type WeekIdea } from "./week";
 
 /** What the signed-in pages need about one user, read once per request. */
@@ -18,6 +19,8 @@ export type Home = {
   missBanner: string | null;
   week: string | null;
   ideas: WeekIdea[];
+  /** No card yet: the newest held list's titles (plan 2026-11-26-001, Unit 3). Titles only; never details. */
+  held: HeldTeaser | null;
   bricks: { marked: number; confirmed: number };
   /** One at a time, past the free lists: the coming Monday and whether it is ordered. */
   order: { week: string; ordered: boolean; price: string } | null;
@@ -90,5 +93,6 @@ export async function loadHome(q: Query, userId: string, s: V3Settings, now: Dat
   }
   // Spec B.9 notice 4: after a second miss, a banner on /app as well as the strip.
   const banner = adjustmentLine(contribution, s, u.currency ?? "USD");
-  return { status: u.status, plan: u.plan, statusLine: line, statusLink: statusLink(facts), missBanner: banner, week: shown, ideas, bricks: await bricks(q, userId), order: orderBox };
+  const held = !week && !ideas.length && u.status === "trial" && !u.has_card && !u.sponsored ? await heldTeaser(q, userId) : null;
+  return { status: u.status, plan: u.plan, statusLine: line, statusLink: statusLink(facts), missBanner: banner, week: shown, ideas, held, bricks: await bricks(q, userId), order: orderBox };
 }

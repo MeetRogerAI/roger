@@ -250,6 +250,51 @@ describe("review follow-ups (11c)", () => {
     expect(await count()).toBe(before - 2);
   });
 
+  it("a no-card trial's new held list supersedes its earlier undelivered weeks, at the job clock, in the pick statement (plan 2026-11-26-001, Unit 3)", async () => {
+    await query("update users set status = 'trial' where id in ($1, $2)", [a, b]);
+    await query("update users set trial_started_at = '2026-11-20T15:00:00Z' where id = $1", [b]); // b has a card
+    for (const u of [a, b, c]) {
+      await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-11-23', 'picked', 3)", [u]);
+      await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, delivered_at) values ($1, '2026-11-16', 'picked', 3, '2026-11-16T12:05:00Z')", [u]);
+    }
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    expect(await picksOf(a)).toHaveLength(3);
+    const stamps = async (u: string) =>
+      (await query<{ week: string; superseded_at: string | null }>("select to_char(week_of, 'YYYY-MM-DD') as week, superseded_at::text from cora_user_weeks where user_id = $1 order by week_of", [u])).map(
+        (r) => [r.week, r.superseded_at],
+      );
+    // Only the undelivered earlier week of the no-card trial; never a delivered week, the new week, a member with a card, or an active member.
+    expect(await stamps(a)).toEqual([
+      ["2026-11-16", null],
+      ["2026-11-23", "2026-11-30 06:05:00+00"],
+      [WEEK, null],
+    ]);
+    expect((await stamps(b)).every(([, s]) => s === null)).toBe(true);
+    expect((await stamps(c)).every(([, s]) => s === null)).toBe(true);
+  });
+
+  it("a dry run never supersedes", async () => {
+    await query("update users set status = 'trial' where id = $1", [a]);
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-11-23', 'picked', 3)", [a]);
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: off, dryRun: true })).toMatchObject({ status: "ready" });
+    expect(await query("select 1 from picks where user_id = $1 and dry_run", [a])).toHaveLength(3);
+    expect(await query("select superseded_at from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: null }]);
+  });
+
+  it("the pick statement writes nothing, and supersedes nothing, for a worker that no longer holds the lease", async () => {
+    const { RECORD_PICKS_SQL } = await import("./job");
+    await query("update users set status = 'trial' where id = $1", [a]);
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-11-23', 'picked', 3)", [a]);
+    await query("insert into cora_weeks (week_of, holder, lease_until, phase) values ($1, 'current-holder', now() + interval '5 minutes', 'scored')", [WEEK]);
+    const args = (holder: string) => [a, WEEK, "picked", 3, 0, "", false, "[]", holder, ONE_AM.toISOString()];
+    await query(RECORD_PICKS_SQL, args("old-holder"));
+    expect(await query("select 1 from cora_user_weeks where user_id = $1 and week_of = $2", [a, WEEK])).toHaveLength(0);
+    expect(await query("select superseded_at from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: null }]);
+    await query(RECORD_PICKS_SQL, args("current-holder"));
+    expect(await query("select 1 from cora_user_weeks where user_id = $1 and week_of = $2", [a, WEEK])).toHaveLength(1);
+    expect(await query("select superseded_at::text from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: "2026-11-30 06:05:00+00" }]);
+  });
+
   it("remembers a member's contribution after their play is replaced, so they are never picked it", async () => {
     await runCoraJob(query, deps(), { now: ONE_AM, settings: live });
     await query("update plays set pool_play_id = null where user_id = $1", [a]);
