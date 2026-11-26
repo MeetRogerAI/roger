@@ -17,7 +17,7 @@ const transport: Transport = async (m) => {
 };
 const counter: Counter = async () => 1;
 const draft: SignupDraft = {
-  answers: { work: "real_estate", role: "Agent", uses: "most_weeks", agents: ["grok-bot"], agentOther: "", count: "1-2", help: ["Listings"], software: "if_shown" },
+  answers: { work: "real_estate", role: "Agent", uses: "most_weeks", agents: ["grok-bot"], agentOther: "", primary: "", level: 3, count: "1-2", help: ["Listings"], software: "if_shown" },
   path: "new",
   continuedAnyway: false,
   source: "re",

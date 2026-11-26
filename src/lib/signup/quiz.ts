@@ -3,7 +3,7 @@ import { categories } from "@/data/categories";
 import { isZackAgent } from "@/lib/zack/agents";
 
 /**
- * The sign-up quiz (spec B.4): six questions on one screen. The answers become
+ * The sign-up quiz (spec B.4): seven questions on one screen. The answers become
  * the profile Cora matches on, and they set one of three paths. The quiz
  * never blocks anyone.
  */
@@ -20,7 +20,11 @@ export const quizSchema = z
     // Question 3 is "choose any": people often run more than one agent.
     agents: z.array(z.string().trim().min(1).max(40)).min(1).max(12),
     agentOther: z.string().trim().max(60).default(""),
+    // The one ticked agent marked primary: the first ticked unless the person picks another.
+    primary: z.string().trim().max(40).default(""),
     count: z.enum(agentCounts),
+    // Question 5: their AI agent level, 0 to 8 (src/data/agent-levels.ts).
+    level: z.coerce.number().int().min(0).max(8),
     help: z.array(z.enum(categories)).max(categories.length).default([]),
     software: z.enum(newSoftware),
   })
@@ -51,7 +55,9 @@ export function parseQuiz(fd: FormData, agentSlugs: readonly string[]):
     uses: fd.get("uses") ?? undefined,
     agents: [...new Set(fd.getAll("agent"))],
     agentOther: fd.get("agentOther") ?? "",
+    primary: fd.get("primary") ?? "",
     count: fd.get("count") ?? undefined,
+    level: fd.get("level") || undefined,
     help: fd.getAll("help"),
     software: fd.get("software") ?? undefined,
   };
@@ -69,17 +75,21 @@ export function parseQuiz(fd: FormData, agentSlugs: readonly string[]):
   if (!r.data.agents.every((a) => offered.includes(a))) return { ok: false, errors: { agent: messages.agent } };
   // Kept in the order the quiz lists them; "Not sure yet" alongside a named agent adds nothing.
   const named = offered.filter((a) => a !== "not_sure" && r.data.agents.includes(a));
-  return { ok: true, answers: { ...r.data, agents: named.length ? named : ["not_sure"] } };
+  const agents = named.length ? named : ["not_sure"];
+  // A primary that isn't ticked (or is "Not sure yet") is ignored, and the default applies.
+  const primary = r.data.primary !== "not_sure" && agents.includes(r.data.primary) ? r.data.primary : "";
+  return { ok: true, answers: { ...r.data, agents, primary } };
 }
 
 /**
  * The one agent the account is set up for first (users.agent, which picks the
- * Zack file): the first chosen agent that has its own Zack file, else the
- * first chosen, with "Another one" standing for the name typed. Members can
- * switch agent on /app/zack.
+ * Zack file): the one marked primary, else the first chosen agent that has its
+ * own Zack file, else the first chosen, with "Another one" standing for the
+ * name typed. Members can switch agent on /app/zack.
  */
-export function primaryAgent(a: Pick<QuizAnswers, "agents" | "agentOther">): string {
-  const first = a.agents.find(isZackAgent) ?? a.agents[0] ?? "not_sure";
+export function primaryAgent(a: Pick<QuizAnswers, "agents" | "agentOther" | "primary">): string {
+  const marked = a.primary && a.agents.includes(a.primary) ? a.primary : undefined;
+  const first = marked ?? a.agents.find(isZackAgent) ?? a.agents[0] ?? "not_sure";
   return first === "other" ? a.agentOther : first;
 }
 
@@ -90,5 +100,6 @@ const messages: Record<string, string> = {
   agent: "Choose at least one.",
   agentOther: "Which AI agent?",
   count: "Choose one.",
+  level: "Choose the one closest to you.",
   software: "Choose one.",
 };

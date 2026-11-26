@@ -553,16 +553,17 @@ Five short screens. Progress is saved after each, so a person who leaves can ret
 
 **When sign-up is open.** *(1.2)* `/start` works on production for anyone who has the link from the day B1 ships; it does not wait for the new marketing pages, and nothing on the Circles pages links to it. The privacy and terms pages, draft or final, are live and linked from `/start` that day. With `v3.signupOpen` off, `/start` shows a short, honest "not open yet" note and an email field that saves a `leads` row and sends nothing; existing accounts keep working, and every sign-up action checks the switch again. On production it stays off until the go-live gate in the launch list is met (Zack 2.0 and Cora 2.0 approved, live Stripe keys and prices, the seed runs imported, privacy and terms linked), and an admin turns it on after `v3.cycleLive`.
 
-**1. The quiz (`/start`).** Six questions, one screen. The answers are saved as the user's profile, which Cora uses for matching (B.7).
+**1. The quiz (`/start`).** Seven questions *(1.3)*, one screen. A missing answer keeps everything already entered and marks the unanswered questions. The answers are saved as the user's profile, which Cora uses for matching (B.7).
 
 | # | Question | Answers |
 |---|---|---|
 | 1 | What do you do? | "I work in real estate" or "Something else", then one line: role and kind of business |
 | 2 | Do you use AI agents for work today? | Not yet / Most weeks / Every day |
-| 3 | Which AI agents do you use, or plan to? | Choose any *(1.3)*: the list in `src/data/zack.ts`, "Another one" (with a text field), "Not sure yet". The account is set up first for the first chosen agent that has a Zack file; members can switch on `/app/zack`. |
+| 3 | Which AI agents do you use, or plan to? | Choose any *(1.3)*: the list in `src/data/zack.ts`, "Another one" (with a text field), "Not sure yet". A star marks the primary agent: the first one ticked, or another the user picks with "Make primary". The account is set up first for the primary agent; members can switch on `/app/zack`. |
 | 4 | How many agents, bots or scheduled routines do you run? | None / 1–2 / 3–5 / 6 or more |
-| 5 | What do you most want help with? | Choose any, from the fixed category list (B.5) |
-| 6 | How do you feel about trying new software for work? | I avoid it / I'll try it if someone shows me / I try new tools often |
+| 5 | Which level sounds most like you today? *(1.3)* | One of the AI agent levels 0 to 8 (Non-user to Self-evolving), each shown with what the system does and the user's role (`src/data/agent-levels.ts`, from "Roger AI Agent Levels and Check Charts v1.0") |
+| 6 | What do you most want help with? | Choose any, from the fixed category list (B.5) |
+| 7 | How do you feel about trying new software for work? | I avoid it / I'll try it if someone shows me / I try new tools often |
 
 **Routing.** The quiz sets one of three paths. It never blocks anyone.
 
