@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { paymentCspHeaders } from "./src/lib/payment-csp";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
@@ -20,9 +21,13 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  // Previews are public (no Vercel login, so sign-in works like production) but never indexed.
   async headers() {
-    return process.env.VERCEL_ENV === "preview" ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }] : [];
+    return [
+      // Previews are public (no Vercel login, so sign-in works like production) but never indexed.
+      ...(process.env.VERCEL_ENV === "preview" ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }] : []),
+      // The Payment step's CSP, on its routes only (report-only for now; see src/lib/payment-csp.ts).
+      ...paymentCspHeaders(),
+    ];
   },
   async redirects() {
     return [

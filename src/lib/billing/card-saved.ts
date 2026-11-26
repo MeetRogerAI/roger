@@ -34,6 +34,9 @@ export const SAVE_PROBLEM = `We hit a problem saving your card. We’ll finish i
 /** The Payment page's flag for an address Stripe could not place for tax (`/start/payment?error=address`). */
 export const ADDRESS_ERROR_FLAG = "address";
 
+/** What the Payment page shows above the form for that flag (Unit 6). */
+export const ADDRESS_MESSAGE = "Stripe couldn’t use that billing address to work out the tax. Check your country and postal code, then add your card again.";
+
 /** Where a card save result sends the person. */
 export function cardSavePath(r: CardSaveResult): string {
   switch (r.outcome) {
