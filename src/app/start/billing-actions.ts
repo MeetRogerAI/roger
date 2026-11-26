@@ -23,9 +23,11 @@ export async function savePlan(_prev: PlanState, fd: FormData): Promise<PlanStat
   if (field(fd, "consent") !== "yes") {
     return { status: "error", errors: { consent: "Tick the box to agree, so Zack can run for you each week." } };
   }
-  if (!(await finishSignup(query, session.userId))) redirect("/app");
+  // The job clock, passed explicitly (never the database's now()): the consent time and the free-tool claim use the same moment.
+  const now = new Date();
+  if (!(await finishSignup(query, session.userId, now))) redirect("/app");
   try {
-    const r = await sendSignupWelcome(query, session.userId, { settings: await readV3Settings() });
+    const r = await sendSignupWelcome(query, session.userId, { settings: await readV3Settings(), now });
     if (r === "failed") console.error("[start/plan] welcome email not sent; the hourly task retries it");
   } catch (e) {
     console.error("[start/plan] welcome email not sent; the hourly task retries it", e instanceof Error ? e.message : e);

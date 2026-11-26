@@ -250,7 +250,7 @@ describe("review follow-ups (11c)", () => {
     expect(await count()).toBe(before - 2);
   });
 
-  it("a no-card trial's new held list supersedes its earlier undelivered weeks, at the job clock, in the pick statement (plan 2026-11-26-001, Unit 3)", async () => {
+  it("a no-card trial's earlier undelivered weeks are superseded when the new week becomes ready, at the job clock (plan 2026-11-26-001, Unit 3)", async () => {
     await query("update users set status = 'trial' where id in ($1, $2)", [a, b]);
     await query("update users set trial_started_at = '2026-11-20T15:00:00Z' where id = $1", [b]); // b has a card
     for (const u of [a, b, c]) {
@@ -263,7 +263,7 @@ describe("review follow-ups (11c)", () => {
       (await query<{ week: string; superseded_at: string | null }>("select to_char(week_of, 'YYYY-MM-DD') as week, superseded_at::text from cora_user_weeks where user_id = $1 order by week_of", [u])).map(
         (r) => [r.week, r.superseded_at],
       );
-    // Only the undelivered earlier week of the no-card trial; never a delivered week, the new week, a member with a card, or an active member.
+    // Only the undelivered earlier week of the no-card trial; never a delivered week, the new week, a member with a card who had a list, or an active member.
     expect(await stamps(a)).toEqual([
       ["2026-11-16", null],
       ["2026-11-23", "2026-11-30 06:05:00+00"],
@@ -271,6 +271,24 @@ describe("review follow-ups (11c)", () => {
     ]);
     expect((await stamps(b)).every(([, s]) => s === null)).toBe(true);
     expect((await stamps(c)).every(([, s]) => s === null)).toBe(true);
+  });
+
+  it("supersedes nothing while the new week is still being picked: the pick statement never does", async () => {
+    await query("update users set status = 'trial' where id = $1", [a]);
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-11-23', 'picked', 3)", [a]);
+    // A run whose picks are made, stopped before the ready step (the week fails later, say).
+    await query("insert into cora_weeks (week_of, holder, lease_until, phase) values ($1, 'h', now() + interval '5 minutes', 'scored')", [WEEK]);
+    const { RECORD_PICKS_SQL } = await import("./job");
+    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 3, 0, "", false, "[]", "h"]);
+    expect(await query("select 1 from cora_user_weeks where user_id = $1 and week_of = $2", [a, WEEK])).toHaveLength(1);
+    expect(await query("select superseded_at from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: null }]);
+  });
+
+  it("a trial whose card was saved after its list was held, with nothing delivered yet, also has the older week superseded at ready", async () => {
+    await query("update users set status = 'trial', trial_started_at = '2026-11-30T05:30:00Z' where id = $1", [a]);
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-11-23', 'picked', 3)", [a]);
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    expect(await query("select superseded_at::text from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: "2026-11-30 06:05:00+00" }]);
   });
 
   it("a dry run never supersedes", async () => {
@@ -281,18 +299,28 @@ describe("review follow-ups (11c)", () => {
     expect(await query("select superseded_at from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: null }]);
   });
 
-  it("the pick statement writes nothing, and supersedes nothing, for a worker that no longer holds the lease", async () => {
-    const { RECORD_PICKS_SQL } = await import("./job");
+  it("the pick statement and the ready step write nothing, and supersede nothing, for a worker that no longer holds the lease", async () => {
+    const { RECORD_PICKS_SQL, SUPERSEDE_AT_READY_SQL } = await import("./job");
     await query("update users set status = 'trial' where id = $1", [a]);
     await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-11-23', 'picked', 3)", [a]);
-    await query("insert into cora_weeks (week_of, holder, lease_until, phase) values ($1, 'current-holder', now() + interval '5 minutes', 'scored')", [WEEK]);
-    const args = (holder: string) => [a, WEEK, "picked", 3, 0, "", false, "[]", holder, ONE_AM.toISOString()];
+    await query("insert into cora_weeks (week_of, holder, lease_until, phase) values ($1, 'current-holder', now() + interval '5 minutes', 'picked')", [WEEK]);
+    const args = (holder: string) => [a, WEEK, "picked", 3, 0, "", false, "[]", holder];
     await query(RECORD_PICKS_SQL, args("old-holder"));
     expect(await query("select 1 from cora_user_weeks where user_id = $1 and week_of = $2", [a, WEEK])).toHaveLength(0);
-    expect(await query("select superseded_at from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: null }]);
     await query(RECORD_PICKS_SQL, args("current-holder"));
     expect(await query("select 1 from cora_user_weeks where user_id = $1 and week_of = $2", [a, WEEK])).toHaveLength(1);
-    expect(await query("select superseded_at::text from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: "2026-11-30 06:05:00+00" }]);
+    const superseded = async () => (await query<{ s: string | null }>("select superseded_at::text as s from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a]))[0].s;
+    expect(await superseded()).toBeNull();
+    expect(await query(SUPERSEDE_AT_READY_SQL, [WEEK, "old-holder", ONE_AM.toISOString()])).toEqual([]);
+    expect(await superseded()).toBeNull();
+    expect(await week()).toMatchObject({ status: "running" });
+    expect(await query(SUPERSEDE_AT_READY_SQL, [WEEK, "current-holder", ONE_AM.toISOString()])).toHaveLength(1);
+    expect(await superseded()).toBe("2026-11-30 06:05:00+00");
+    expect(await week()).toMatchObject({ status: "ready" });
+    // Run again (a second worker, or a retry): the week is no longer running, so nothing more is written.
+    await query("update cora_user_weeks set superseded_at = null where user_id = $1", [a]);
+    expect(await query(SUPERSEDE_AT_READY_SQL, [WEEK, "current-holder", ONE_AM.toISOString()])).toEqual([]);
+    expect(await superseded()).toBeNull();
   });
 
   it("remembers a member's contribution after their play is replaced, so they are never picked it", async () => {

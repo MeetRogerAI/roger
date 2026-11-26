@@ -32,8 +32,9 @@ export const MAX_WELCOMES = 50;
 /**
  * Step 3's state change: consent (the first one stays on record), monthly,
  * and a trial with no card. Only an account still signing up moves; returns
- * whether this call moved it. `now` is the job clock (tests); the server
- * action leaves it to the database.
+ * whether this call moved it. `now` is the job clock; the server action
+ * passes it. The database's now() is only a fallback for callers that have
+ * no clock.
  */
 export async function finishSignup(q: Query, userId: string, now?: Date): Promise<boolean> {
   const rows = await q(
@@ -67,15 +68,16 @@ export async function sendSignupWelcome(q: Query, userId: string, d: WelcomeDeps
 }
 
 /**
- * The hourly `welcome_unsent` task: a trial with no card yet that consented
- * after WELCOME_SWEEP_FROM and has no welcome sent (and none given up on after
- * MAX_ATTEMPTS) gets the free-tool claim re-run and the welcome sent. At most
- * MAX_WELCOMES a pass; stops at the pass's deadline.
+ * The hourly `welcome_unsent` task: a trial that consented after
+ * WELCOME_SWEEP_FROM and has no welcome sent (and none given up on after
+ * MAX_ATTEMPTS) gets the free-tool claim re-run and the welcome sent, whether
+ * or not it has saved a card since (a card saved before the retry must not
+ * lose the welcome). At most MAX_WELCOMES a pass; stops at the pass's deadline.
  */
 export async function sendUnsentWelcomes(q: Query, d: WelcomeDeps & { deadline?: number }): Promise<number> {
   const due = await q<{ id: string }>(
     `select u.id from users u
-     where u.status = 'trial' and u.trial_started_at is null and u.consent_at >= $1::timestamptz
+     where u.status = 'trial' and u.consent_at >= $1::timestamptz
        and not exists (
          select 1 from notifications n where n.recipient = u.id::text and n.kind = 'welcome' and n.ref = 'signup'
            and (n.status in ('sent', 'skipped') or n.attempts >= $2))

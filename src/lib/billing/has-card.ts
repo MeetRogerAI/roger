@@ -19,10 +19,13 @@ export const CARDED_STATUSES = ["active", "held", "cancelled"] as const;
 
 /** SQL: the account `alias` (a users row) has a saved card. */
 export const HAS_CARD_SQL = (alias = "u") =>
-  `(${alias}.status in ('active', 'held', 'cancelled') or (${alias}.status = 'trial' and ${alias}.trial_started_at is not null))`;
+  `(${alias}.status in (${CARDED_STATUSES.map((s) => `'${s}'`).join(", ")}) or (${alias}.status = 'trial' and ${alias}.trial_started_at is not null))`;
 
 /** SQL: the account `alias` has a saved card, or is sponsored and needs none. */
 export const HAS_CARD_OR_SPONSORED_SQL = (alias = "u") => `(${HAS_CARD_SQL(alias)} or ${alias}.sponsor_id is not null)`;
+
+/** SQL: the account `alias` is a trial still waiting for its card: no card and no sponsor (mirrors isNoCardTrial). */
+export const NO_CARD_TRIAL_SQL = (alias = "u") => `(${alias}.status = 'trial' and not ${HAS_CARD_OR_SPONSORED_SQL(alias)})`;
 
 export type CardFacts = {
   status: string;

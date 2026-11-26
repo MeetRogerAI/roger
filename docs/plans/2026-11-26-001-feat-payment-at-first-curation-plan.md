@@ -131,10 +131,10 @@ Added by planning:
   - Most gates already allow `trial`: the Zack key, `/app`, Cora's `loadUsers`, onboarding and settings.
   - Rationale: adding a status would touch about fifteen allow-lists, and missing one breaks onboarding silently. A predicate is safer: **"has card" = `trial_started_at is not null`**. It is audited where a trial was assumed to have a card: delivery, charge, quote, billing page, status line and admin. Sponsored trials (`sponsor_id` set) count as "no card needed".
 - **A held list is picked but not deliverable.** ("Held list" is a list state. It is unrelated to the existing `users.status = 'held'` payment hold, which this change does not use.) `DELIVERABLE_SQL` adds "trial requires a card or a sponsor". Cora picks as normal (undelivered picks are already not "sent", so replaced teaser ideas stay resendable — R10, no change to Cora rule 1).
-  - **Superseding happens at pick time.** When Cora records a picked or short week for a no-card trial user, the same lease-guarded statement stamps `superseded_at` on every earlier undelivered week for that user. At any moment a no-card user therefore has at most one held list: the newest picked week, whether or not its teaser has been sent yet.
+  - **Superseding happens when the newer week becomes ready** (changed from "at pick time" by review fix F1; see As-built notes, "Review fixes (Units 1–3)"). The lease-guarded statement that moves a Cora week to `ready` stamps `superseded_at` on every undelivered week older than the member's newest week of a ready or sent Cora week. At any moment a no-card user therefore has at most one held list: the newest one Cora finished, whether or not its teaser has been sent yet. A newer week that fails after its picks supersedes nothing.
   - The send job, finding a no-card trial user with a picked or short week, sends the teaser instead of the list and stamps `users.first_teaser_at` (job clock, `coalesce`).
   - `deliverLate`, the unlock and the charge job all skip superseded weeks. This closes the trap where the hourly job would deliver a replaced teaser the moment the card is saved.
-  - **A card saved between Cora's pick (01:00) and the send (07:00) unlocks this week's list (W)**, delivered at once with its list email. W-1 was already superseded at pick time, so there is one list that day, no repeated ideas, and one free list counted. The send job then finds W delivered and sends nothing more.
+  - **A card saved between Cora's pick (01:00) and the send (07:00) unlocks this week's list (W)**, delivered at once with its list email. W-1 was already superseded when W became ready, so there is one list that day, no repeated ideas, and one free list counted. The send job then finds W delivered and sends nothing more.
 - **Card collection uses Stripe's embedded setup-mode Checkout Session** (`ui_mode: 'elements'`, Payment Element, cards only, Link and wallets off), mounted in Roger's page.
   - Rationale: it keeps the existing session plumbing. That means `getSetupSession`, `completeCardSetup`, `checkout.session.completed` (already subscribed on the preview webhook), `customer_update: {address, name}` writing the address to the customer for Stripe Tax, and the `metadata.purpose` routing.
   - Roger's own name, country and postal code inputs feed the session through `updateBillingAddress` (Endive's strict billing-details rule). The Payment Element's own address fields are set to `never`.
@@ -239,7 +239,7 @@ flowchart TB
 - Modify: `src/lib/zack/sharing-effect.ts`
 - Modify: `src/lib/app/billing.ts` (`canUpdateCard`, no-card cancel)
 - Modify: `src/lib/billing/card-setup.ts` (`startCardUpdate` guard)
-- Modify: `src/lib/admin/users.ts` (`addRunForUser`, `giveExtraFreeList` refuse no-card trials)
+- Modify: `src/lib/admin/users.ts` (`giveExtraFreeList` refuses no-card trials; `addRunForUser` accepts them, review fix F3)
 - Modify: `src/lib/cora/who-gets-a-list.ts`, `src/lib/cora/context.ts` (`hasCard` fact)
 - Test: `db/schema.pglite.test.ts`, `src/lib/billing/quote.test.ts`, `src/lib/app/status.test.ts`, `src/lib/admin/ops.test.ts`, `src/lib/app/billing.test.ts`, `src/lib/billing/card-setup.test.ts`, `src/lib/admin/users.test.ts`
 
@@ -260,7 +260,7 @@ flowchart TB
   - `sharing-effect` (no "no earlier than" date without a card)
   - **`canUpdateCard` in `src/lib/app/billing.ts` and `startCardUpdate` in `src/lib/billing/card-setup.ts`.** Today they key on `stripe_customer`, and Payment creates the customer, so a no-card user who left Payment could save a card through "Update card" without unlocking. Both require the predicate; otherwise `no_card_yet`.
   - Cancel on `/app/billing` for a no-card trial: closes the account with no card to remove, using the "You have not been charged" confirmation.
-  - The admin "add a run" and "give extra free list" actions refuse no-card trials with a clear message ("Waiting for the member's card"). This is simpler than inventing deferred counting.
+  - The admin "give extra free list" action refuses no-card trials with a clear message ("Waiting for the member's card"). This is simpler than inventing deferred counting. "Add a run" is allowed for a no-card trial (review fix F3): a run counts nothing before a card, and Zack's own key accepts the member's runs anyway.
 - Add `hasCard` to the `who-gets-a-list.ts` `ListFacts` (selected in `context.ts` `loadUsers`) for the admin reason text.
 - Release note: run `db/setup.mjs` on production, preview and the scenario database before deploying.
 
@@ -273,7 +273,7 @@ flowchart TB
 - Edge case: a sponsored trial with no card counts as "has card or sponsored".
 - Error path: a no-card trial with a `stripe_customer` → `canUpdateCard` is false and `startCardUpdate` returns `no_card_yet`.
 - Happy path: cancel for a no-card trial → closed, no Stripe calls beyond what exists, the "not charged" confirmation sent.
-- Error path: the admin "extra free list" and "add a run" actions on a no-card trial are refused with the waiting message.
+- Error path: the admin "extra free list" action on a no-card trial is refused with the waiting message; "add a run" is stored as for any trial.
 
 **Verification:** the schema applies cleanly; no code path treats a no-card trial as quotable or chargeable.
 
@@ -333,7 +333,7 @@ flowchart TB
 
 **Files:**
 - Modify: `src/lib/cora/deliver.ts` (`DELIVERABLE_SQL`: a trial needs a card or a sponsor; skip superseded weeks)
-- Modify: `src/lib/cora/job.ts` (`record()`: for a no-card trial user, the same lease- and `dry_run`-guarded statement supersedes earlier undelivered weeks)
+- Modify: `src/lib/cora/job.ts` (the lease- and `dry_run`-guarded ready step supersedes a no-card trial's earlier undelivered weeks; moved from `record()` by review fix F1)
 - Modify: `src/lib/cora/send-job.ts`:
   - In `deliverAndTell`, a held branch: send the teaser and stamp `first_teaser_at`. Respect the lease and `dry_run`.
   - `deliverLate` excludes superseded weeks and never delivers to users with no card.
@@ -356,7 +356,7 @@ flowchart TB
 
 **Test scenarios:**
 - Happy path: a no-card trial user with a picked week → the send job sends `first_list_held` with three titles and no reasons or steps. Picks stay undelivered, `free_lists_used` stays 0, and `first_teaser_at` = job clock.
-- Happy path: the following Monday, Cora picks a new week → the previous week is `superseded_at`-stamped in the same pick statement, a new teaser goes out at the send, and `first_teaser_at` is unchanged.
+- Happy path: the following Monday, Cora picks a new week → the previous week is `superseded_at`-stamped when the new week becomes ready (review fix F1), a new teaser goes out at the send, and `first_teaser_at` is unchanged.
 - Edge case: the previous week's ideas are eligible again for Cora (undelivered ⇒ not sent) and can appear in the new teaser.
 - Edge case: a `short` outcome (1–2 ideas) sends a teaser with that many titles.
 - Edge case: a dry run never sends a teaser and never stamps `first_teaser_at` or `superseded_at`.
@@ -658,7 +658,7 @@ Record the result in the plan. If it fails, switch this unit and Unit 5 to the d
   - `trial_started_at` is stamped only after the tax location is valid.
   - The promo coupon is stored before the status flip in the same completion.
 - **API surface parity:**
-  - The admin "add a run for this user" and "give extra free list" actions refuse no-card trials ("Waiting for the member's card"), as decided in Unit 1.
+  - The admin "give extra free list" action refuses no-card trials ("Waiting for the member's card"), as decided in Unit 1. "Add a run for this user" is allowed for them, like a run Zack sends (review fix F3).
   - Pilot links follow the new path.
 - **Integration coverage:** the race and retry cases in Units 3 and 5 on PGlite, and the end-to-end scenarios in Unit 10.
 - **Unchanged invariants:**
@@ -828,3 +828,17 @@ Run 2026-11-26 against the Stripe sandbox (`sk_test`, API `2026-11-18.endive`, `
 - **Packages:** `@stripe/stripe-js` ^10.4.0 and `@stripe/react-stripe-js` ^7.1.0 added (not yet imported; Unit 6).
 - **Tests:** `gateway.test.ts` (session params, client secret, expiry; previews from spike-shaped invoices: ON, QC, US, pending, `failed_tax_calculation` fallback, coupon errors; `findPromotion` mapping), `promo.test.ts` (valid code and the discounted preview; one table-driven test of twelve refusal reasons, each logged; reservations; per-user and per-IP limits), `preview.test.ts` (CA$316.40, US no tax, pending, coupon, invalid locations, cache hits not counted, cache keys and TTL, eviction, the limit), `location.test.ts`, and `card-setup.test.ts` (one customer and one session reused; complete, expired, missing and currency-changed sessions replaced; the `Promise.all` two-tab race ends with one stored, open session; `not_allowed` for carded, signup, active, closed and sponsored accounts; `not_found`; the checkout limit and the existing message; reuse not counted; discard).
 - **Not done here (by design):** no server actions, page or CSP (Unit 6); no completion or reservation writes (Unit 5); `classify()` is unchanged (Unit 8, see the spike note).
+
+### Review fixes (Units 1–3)
+
+- **F1, supersede at ready (approach chosen: move the stamp, not a predicate).** `RECORD_PICKS_SQL` no longer supersedes anything (it only records the week and its picks, lease-guarded; its job-clock parameter is gone). The ready step in `job.ts` is now `SUPERSEDE_AT_READY_SQL`: one statement moves the week to `ready` (holder and `status = 'running'` checked) and, only if it did and the week is not a dry run, stamps `superseded_at` (job clock, `coalesce($3, now())`) on every undelivered picked or short week older than the member's newest picked or short week of a `ready`/`sent` Cora week (this week counts as ready; the CTE's own update is not visible to the rest of the statement). A week that fails after its picks therefore supersedes nothing, and the older held list stays teaser-able and unlockable. The 01:00–07:00 rule holds: W becomes ready at about 01:00 and supersedes W-1 then. A predicate ("`superseded_at` counts only when a newer week is ready") was rejected: every reader (`HELD_WEEK_SQL`, `DELIVERABLE_SQL`, `deliverLate`, the unlock and charge job to come) would need the join, and missing one reopens the trap.
+  - **Scope:** trials with no card (`NO_CARD_TRIAL_SQL`) and, via `FIRST_LIST_PENDING_SQL` (`deliver.ts`: unsponsored trial with no delivered pick and no delivered week), a trial whose card was saved after its list was held but before anything was delivered. Without the second part a card saved while Cora is still picking W would leave W-1 live next to W.
+  - **Card saved while Cora is still picking:** the stamp moved later, so a new window opened (W-1 not yet superseded while W runs). `DELIVERABLE_SQL`'s trial branch now also requires `not (FIRST_LIST_PENDING and NEWER_WEEK_PICKING)`: a trial's first list waits while a newer real week of theirs has picks in a Cora week still `running`. When W becomes ready, W-1 is superseded and W is delivered (free list 1, no repeated ideas); if W fails, W-1 is deliverable again. Carded members with a delivered list are unaffected.
+- **F2:** covered by F1. An older week re-run after a newer held week (JobOptions.week) is itself superseded at its own ready step, because it is older than the member's newest ready week.
+- **F3:** `addRunForUser` accepts a no-card trial (runs count nothing before a card; Zack's own key accepts them). `giveExtraFreeList` still refuses with `WAITING_FOR_CARD`. Unit 1 bullets, test scenarios and System-Wide Impact updated.
+- **F4:** `welcome_unsent` (`sendUnsentWelcomes`) selects trials with or without a card (still `consent_at >= WELCOME_SWEEP_FROM`, no welcome sent, skipped or given up on), so a card saved before the retry no longer loses the welcome.
+- **F5:** `savePlan` takes `now = new Date()` once and passes it to `finishSignup` (consent time) and `sendSignupWelcome` (free-tool claim). `finishSignup` keeps the `now()` fallback. There is no clock helper for "now" in `src/lib/clock.ts` beyond `jobNow` (as-of runs), so the action uses `new Date()`.
+- **F6:** `sendHeldTeaser` logs a send that throws (`[send] teaser`, user, week, message) before returning `failed`.
+- **F7:** `has-card.ts` exports `NO_CARD_TRIAL_SQL(alias)`, used by `HELD_WEEK_SQL`, `deliverLate` and the supersede. `HAS_CARD_SQL`'s status list is built from `CARDED_STATUSES`. `send-job.ts` `heldFor` uses `isNoCardTrial` (the row now carries `trial_started_at`). `deliver.ts` exports `NOT_SUPERSEDED_SQL(user, week)`, used by `DELIVERABLE_SQL` and `deliverLate`. The has-card test checks SQL and TS agree for `NO_CARD_TRIAL_SQL` across every status × card × sponsor case.
+- **F8:** the redundant `promo_reservations_code` index was removed from `db/schema.sql` (never applied; the unique `(promotion_code, user_id)` serves lookups by code).
+- **F9 tests:** week page for a superseded earlier week (plain empty state, no titles, no Payment link); `sendUnsentTeasers` skips a held week 9 days old and a sponsored no-card member; the `first_teaser_at` race is deterministic (both racers share a clock, then a later pass returns `already` and leaves the stamp); a newer week failing after picks leaves the older list teaser-able and unlockable; an older re-run leaves only the newest live; a card saved during Cora's run gets W, not W-1; a dry ready step supersedes nothing; the stale-holder test covers the ready step; `addRunForUser` for a no-card trial; welcome retry for a trial that saved a card; consent time from the action's clock; `sendHeldTeaser` logs a throwing send.

@@ -61,6 +61,21 @@ describe("/app/week/[date] for a held list", () => {
     expect(html).not.toContain("Your first 3 ideas are ready");
   });
 
+  it("shows the plain empty state for an earlier, superseded held week: no titles and no Payment link", async () => {
+    const PREV = "2026-12-07";
+    await db.query!("insert into cora_weeks (week_of, status, phase) values ($1, 'sent', 'ready')", [PREV]);
+    await db.query!("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, superseded_at) values ($1, $2, 'picked', 1, '2026-12-14T06:05:00Z')", [db.userId, PREV]);
+    const [p] = await db.query!<{ id: string }>(
+      "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen, figures) values ('Replaced idea', 'Sales', 'Secret.', '1. Secret step.', 'Secret install.', $1, $1, '{}') returning id",
+      [PREV],
+    );
+    await db.query!("insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason) values ($1, $2, 1, $3, 70, 3, 'Secret reason.')", [db.userId, PREV, p.id]);
+    const html = await render(PREV);
+    expect(html).toContain("There are no ideas for you for that week.");
+    expect(html).not.toMatch(/Replaced idea|Inbox triage|Your first|Secret/);
+    expect(html).not.toContain('href="/start/payment"');
+  });
+
   it("shows the plain empty state for another week", async () => {
     const html = await render("2026-12-07");
     expect(html).toContain("There are no ideas for you for that week.");

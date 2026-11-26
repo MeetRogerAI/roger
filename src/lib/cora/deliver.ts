@@ -34,23 +34,49 @@ import { HAS_CARD_SQL } from "@/lib/billing/has-card";
  */
 export const COVERS_WEEK = (week: string, u = "u") => `(${u}.access_ends_at at time zone 'America/Toronto')::date > ${week}::date`;
 
+/** SQL: the week `week` of the user `user` (SQL expressions) is not superseded, that is not a replaced held list. */
+export const NOT_SUPERSEDED_SQL = (user: string, week: string) =>
+  `not exists (select 1 from cora_user_weeks sw where sw.user_id = ${user} and sw.week_of = ${week} and not sw.dry_run and sw.superseded_at is not null)`;
+
+/**
+ * SQL: the account `alias` is an unsponsored trial still waiting for its
+ * first list (nothing ever delivered). A trial with no card always is; so is
+ * one whose card was saved since its list was held and not delivered yet.
+ */
+export const FIRST_LIST_PENDING_SQL = (alias = "u") =>
+  `(${alias}.status = 'trial' and ${alias}.sponsor_id is null
+    and not exists (select 1 from picks dk where dk.user_id = ${alias}.id and not dk.dry_run and dk.delivered_at is not null)
+    and not exists (select 1 from cora_user_weeks dw where dw.user_id = ${alias}.id and not dw.dry_run and dw.delivered_at is not null))`;
+
+/** SQL: Cora is still picking a newer real week for the account `alias` than `week` (it has picks in a week still running). */
+export const NEWER_WEEK_PICKING_SQL = (alias: string, week: string) =>
+  `exists (select 1 from cora_user_weeks nw join cora_weeks nk on nk.week_of = nw.week_of
+     where nw.user_id = ${alias}.id and nw.week_of > ${week} and not nw.dry_run and nw.outcome in ('picked', 'short') and nk.status = 'running' and not nk.dry_run)`;
+
 /*
  * Held lists (plan 2026-11-26-001, Unit 3): a trial is deliverable only with a
  * saved card or a sponsor (HAS_CARD_OR_SPONSORED_SQL). Without one, the list
  * is picked but held: the member gets a titles-only teaser instead
  * (send-job.ts `sendHeldTeaser`). A week replaced by a newer held list
- * (`cora_user_weeks.superseded_at`, stamped when Cora picks the newer one) is
- * never delivered, whatever the account's state later, so saving a card
- * unlocks only the newest held list.
+ * (`cora_user_weeks.superseded_at`, stamped when the newer week becomes ready,
+ * job.ts SUPERSEDE_AT_READY_SQL) is never delivered, whatever the account's
+ * state later, so saving a card unlocks only the newest held list.
+ *
+ * A trial's first list also waits while Cora is still picking a newer week for
+ * it: a card saved during Cora's run must not unlock the older list when the
+ * newer one (which may repeat its ideas, as undelivered picks are not "sent")
+ * is about to replace it. Once the newer week is ready the older one is
+ * superseded; if the newer week fails, the older list is deliverable again.
  */
 export const DELIVERABLE_SQL = `((
   exists (select 1 from orders o where o.user_id = u.id and o.week_of = $2 and o.status in ('charged', 'sent'))
-  or (u.status = 'trial' and u.cancel_requested_at is null and (u.sponsor_id is not null or (u.free_lists_used < $3 and ${HAS_CARD_SQL("u")})))
+  or (u.status = 'trial' and u.cancel_requested_at is null and (u.sponsor_id is not null or (u.free_lists_used < $3 and ${HAS_CARD_SQL("u")}))
+       and not (${FIRST_LIST_PENDING_SQL("u")} and ${NEWER_WEEK_PICKING_SQL("u", "$2")}))
   or (u.status = 'active' and (u.sponsor_id is not null
        or (u.plan = 'monthly' and (u.cancel_requested_at is null or u.access_ends_at is null or ${COVERS_WEEK("$2")}))))
   or (u.status = 'cancelled' and u.plan = 'monthly' and u.first_charge_at is not null and u.stripe_subscription is not null
        and u.access_ends_at is not null and ${COVERS_WEEK("$2")})
-) and not exists (select 1 from cora_user_weeks sw where sw.user_id = u.id and sw.week_of = $2 and not sw.dry_run and sw.superseded_at is not null))`;
+) and ${NOT_SUPERSEDED_SQL("u.id", "$2")})`;
 
 /**
  * Delivers one user's list for a week; returns how many ideas were delivered

@@ -728,7 +728,8 @@ alter table cora_user_weeks add column if not exists superseded_at timestamptz;
 
 -- 2026-11-26, payment at first list, Unit 1: Roger counts promotion code uses
 -- itself, because a coupon applied directly never counts a redemption in
--- Stripe. One row per code and member, written in the card-save claim.
+-- Stripe. One row per code and member, written in the card-save claim. The
+-- unique (promotion_code, user_id) index also serves lookups by code alone.
 create table if not exists promo_reservations (
   id bigserial primary key,
   promotion_code text not null,
@@ -737,4 +738,3 @@ create table if not exists promo_reservations (
   reserved_at timestamptz not null,
   unique (promotion_code, user_id)
 );
-create index if not exists promo_reservations_code on promo_reservations (promotion_code);

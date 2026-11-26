@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import { HELD_WEEK_SQL, heldTitles } from "@/lib/app/held";
 import { PAYMENT_PATH, statusLine, type StatusFacts } from "@/lib/app/status";
 import { weekIdeas } from "@/lib/app/week";
-import { HAS_CARD_OR_SPONSORED_SQL, HAS_CARD_SQL } from "@/lib/billing/has-card";
+import { HAS_CARD_SQL, isNoCardTrial, NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import { amount, money, type Currency } from "@/lib/billing/prices";
 import { sendFirstPaidNext } from "@/lib/billing/quote";
 import { contributionStatus, processContributions } from "@/lib/billing/contribution";
@@ -13,7 +13,7 @@ import { appUrl } from "@/lib/mail/layout";
 import { firstListHeldEmail } from "@/lib/mail/templates/held";
 import { mondayListEmail, noIdeasThisWeekEmail, noRunThisWeekEmail, orderNextEmail } from "@/lib/mail/templates/monday";
 import type { V3Settings } from "@/lib/v3-settings";
-import { deliverWeek } from "./deliver";
+import { deliverWeek, NOT_SUPERSEDED_SQL } from "./deliver";
 
 /**
  * The Monday send (spec B.8 step 2): each user with picks and nothing owed
@@ -49,6 +49,7 @@ type U = {
   ending_at: string | null;
   switched: boolean;
   has_card: boolean;
+  trial_started_at: string | null;
   first_teaser_at: string | null;
   outcome: string;
   run_arrived: boolean;
@@ -64,7 +65,7 @@ async function usersFor(q: Query, week: string, onlyIds: string[] | null = null)
             u.quote, u.first_charge_at::text, u.access_ends_at::text, u.hold_reason, u.renewal_failed_at::text,
             case when u.plan_change_to = 'per_run' and u.cancel_requested_at is not null then u.access_ends_at::text end as switching_at,
             case when u.status = 'active' and u.cancel_requested_at is not null and u.plan_change_to is distinct from 'per_run' then u.access_ends_at::text end as ending_at,
-            u.switched_from_per_run_at is not null as switched, ${HAS_CARD_SQL("u")} as has_card, u.first_teaser_at::text, cw.outcome,
+            u.switched_from_per_run_at is not null as switched, ${HAS_CARD_SQL("u")} as has_card, u.trial_started_at::text, u.first_teaser_at::text, cw.outcome,
             exists (select 1 from runs r where r.user_id = u.id and r.week_of = $1 and not r.is_test and r.status in ('received', 'accepted', 'flagged')) as run_arrived,
             o.status as order_status, o.amount_cents as order_cents, o.receipt_url,
             exists (select 1 from picks k where k.user_id = u.id and k.week_of = $1 and not k.dry_run and k.delivered_at is not null) as has_delivered
@@ -128,11 +129,14 @@ export async function sendHeldTeaser(q: Query, d: SendDeps, userId: string, week
   if (!u) return "not_held";
   const titles = await heldTitles(q, userId, week);
   if (!titles.length) return "not_held";
-  return sendToUser({ id: u.id, email: u.email }, HELD_KIND, week, firstListHeldEmail({ week, titles, paymentUrl: appUrl(PAYMENT_PATH) }), d).catch(() => "failed" as const);
+  return sendToUser({ id: u.id, email: u.email }, HELD_KIND, week, firstListHeldEmail({ week, titles, paymentUrl: appUrl(PAYMENT_PATH) }), d).catch((e) => {
+    console.error("[send] teaser", userId, week, e instanceof Error ? e.message : e);
+    return "failed" as const;
+  });
 }
 
-/** A trial waiting for its card: its list is held, and it gets the teaser instead. */
-const heldFor = (u: Pick<U, "status" | "has_card" | "sponsored">) => u.status === "trial" && !u.has_card && !u.sponsored;
+/** A trial waiting for its card (has-card.ts `isNoCardTrial`): its list is held, and it gets the teaser instead. */
+const heldFor = (u: Pick<U, "status" | "trial_started_at" | "sponsored">) => isNoCardTrial({ status: u.status, trialStartedAt: u.trial_started_at, sponsored: u.sponsored });
 
 /** Delivers one user's list if nothing is owed, then makes sure its emails went. Returns whether anything was delivered now. */
 export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string): Promise<boolean> {
@@ -245,8 +249,8 @@ export async function deliverLate(q: Query, d: SendDeps): Promise<number> {
     // Never a superseded (replaced) held list, and never an account with no card and no sponsor: their teaser is the hourly `teaser_unsent`.
     const waiting = await q<{ user_id: string }>(
       `select distinct k.user_id from picks k join users u on u.id = k.user_id
-       where k.week_of = $1::date and not k.dry_run and not (u.status = 'trial' and not ${HAS_CARD_OR_SPONSORED_SQL("u")})
-         and not exists (select 1 from cora_user_weeks sw where sw.user_id = k.user_id and sw.week_of = k.week_of and not sw.dry_run and sw.superseded_at is not null)
+       where k.week_of = $1::date and not k.dry_run and not ${NO_CARD_TRIAL_SQL("u")}
+         and ${NOT_SUPERSEDED_SQL("k.user_id", "k.week_of")}
          and (k.delivered_at is null
               or not exists (select 1 from notifications n where n.recipient = k.user_id::text and n.kind in ('monday_list', 'order_receipt') and n.ref = $2 and n.status in ('sent', 'skipped')))`,
       [week, week],

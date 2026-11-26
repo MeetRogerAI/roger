@@ -9,6 +9,7 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import { deliverWeek } from "./deliver";
+import { RECORD_PICKS_SQL, SUPERSEDE_AT_READY_SQL } from "./job";
 import { deliverLate, runSendJob, sendHeldTeaser, sendUnsentTeasers } from "./send-job";
 
 /**
@@ -177,11 +178,31 @@ describe("the Monday send for a trial with no card", () => {
   it("two send passes at once on the same user and week: one teaser, one stamp", async () => {
     const a = await member("a@example.com");
     await picked(a);
-    const r = await Promise.all([sendHeldTeaser(query, deps(), a, WEEK), sendHeldTeaser(query, deps(new Date("2026-12-14T12:06:00Z")), a, WEEK)]);
+    const r = await Promise.all([sendHeldTeaser(query, deps(), a, WEEK), sendHeldTeaser(query, deps(), a, WEEK)]);
     expect(r.filter((x) => x === "sent")).toHaveLength(1);
     expect(teasers("a@example.com")).toHaveLength(1);
-    expect(["2026-12-14 12:05:00+00", "2026-12-14 12:06:00+00"]).toContain((await userRow(a)).first_teaser_at);
+    expect((await userRow(a)).first_teaser_at).toBe("2026-12-14 12:05:00+00");
+    // A later pass, after the first one stamped: the stamp stays at the first clock, and no second teaser goes.
+    expect(await sendHeldTeaser(query, deps(new Date("2026-12-14T12:06:00Z")), a, WEEK)).toBe("already");
+    expect((await userRow(a)).first_teaser_at).toBe("2026-12-14 12:05:00+00");
+    expect(teasers("a@example.com")).toHaveLength(1);
     expect(await deliveredIn(a, WEEK)).toBe(0);
+  });
+
+  it("logs a teaser send that throws, and reports it failed", async () => {
+    const a = await member("a@example.com");
+    await picked(a);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const throwing: Transport = async () => {
+      throw new Error("socket closed");
+    };
+    try {
+      const r = await sendHeldTeaser(query, { ...deps(), transport: throwing }, a, WEEK);
+      expect(r).toBe("failed");
+      expect(errors.mock.calls.some((c) => String(c[0]).includes("teaser") && c.some((x) => String(x).includes("socket closed")))).toBe(true);
+    } finally {
+      errors.mockRestore();
+    }
   });
 
   it("never sends a teaser or stamps anything for a dry-run week, a superseded week, or a user with a card", async () => {
@@ -272,12 +293,110 @@ describe("the hourly teaser_unsent task", () => {
     expect(await query("select ref from notifications where recipient = $1", [a])).toEqual([{ ref: WEEK }]);
   });
 
+  it("leaves a held week older than 8 days alone, and never teases a sponsored member with no card", async () => {
+    const a = await member("a@example.com");
+    await week(PREV);
+    await picked(a, PREV);
+    const s = await member("s@example.com", { sponsored: true });
+    await picked(s);
+    // Wednesday 2026-12-16: PREV (2026-12-07) is 9 days old.
+    expect(await sendUnsentTeasers(query, deps(new Date("2026-12-16T15:00:00Z")))).toBe(0);
+    expect(await sendUnsentTeasers(query, deps())).toBe(1); // a's PREV, 7 days old on the 14th; never s
+    expect(sent.map((m) => m.to[0])).toEqual(["a@example.com"]);
+  });
+
   it("gives up after the last attempt", async () => {
     const a = await member("a@example.com");
     await picked(a);
     failing = true;
     for (let i = 0; i < 5; i++) await sendUnsentTeasers(query, deps(new Date(SEVEN_AM.getTime() + i * 3_600_000)));
     expect(await query("select attempts, status from notifications where recipient = $1", [a])).toEqual([{ attempts: 3, status: "failed" }]);
+  });
+});
+
+describe("superseding at ready (review fixes F1, F2)", () => {
+  const H = "worker-1";
+  const picksJson = (offset: number) => JSON.stringify([0, 1, 2].map((i) => ({ position: i + 1, id: plays[i + offset], personal: 70, fit: 3, reason: REASON })));
+  /** Cora is picking `w` (running, this worker's lease) and records the member's picks there. */
+  async function coraPicks(userId: string, w: string, offset: number) {
+    await query(
+      `insert into cora_weeks (week_of, status, phase, holder, lease_until) values ($1, 'running', 'picked', $2, now() + interval '5 minutes')
+       on conflict (week_of) do update set status = 'running', phase = 'picked', holder = $2, lease_until = now() + interval '5 minutes'`,
+      [w, H],
+    );
+    await query(RECORD_PICKS_SQL, [userId, w, "picked", 6, 3, "", false, picksJson(offset), H]);
+  }
+  const ready = (w: string, now: Date) => query(SUPERSEDE_AT_READY_SQL, [w, H, now.toISOString()]);
+  const supersededAt = async (id: string, w: string) =>
+    (await query<{ s: string | null }>("select superseded_at::text as s from cora_user_weeks where user_id = $1 and week_of = $2", [id, w]))[0]?.s ?? null;
+
+  it("a newer week that fails after its picks leaves the older held list teaser-able and unlockable", async () => {
+    const a = await member("a@example.com");
+    await week(PREV);
+    await picked(a, PREV);
+    await query("delete from cora_weeks where week_of = $1", [WEEK]);
+    await coraPicks(a, WEEK, 3);
+    expect(await supersededAt(a, PREV)).toBeNull();
+    await query("update cora_weeks set status = 'failed' where week_of = $1", [WEEK]);
+    expect(await heldTeaser(query, a)).toEqual({ week: PREV, titles: TITLES.slice(0, 3), count: 3 });
+    expect(await sendUnsentTeasers(query, deps(new Date("2026-12-14T19:00:00Z")))).toBe(1);
+    expect(teasers("a@example.com")[0].text).toContain("Inbox triage");
+    // The card is saved: the older list is the one unlocked.
+    await query("update users set trial_started_at = '2026-12-14T20:00:00Z' where id = $1", [a]);
+    expect(await deliverWeek(query, a, PREV, 2, new Date("2026-12-14T20:00:00Z"))).toEqual({ delivered: 3, freeListNumber: 1 });
+  });
+
+  it("a newer week that becomes ready supersedes the older held list at the job clock; the new one is the held list", async () => {
+    const a = await member("a@example.com");
+    await week(PREV);
+    await picked(a, PREV);
+    await query("delete from cora_weeks where week_of = $1", [WEEK]);
+    await coraPicks(a, WEEK, 3);
+    expect(await ready(WEEK, new Date("2026-12-14T06:05:00Z"))).toHaveLength(1);
+    expect(await supersededAt(a, PREV)).toBe("2026-12-14 06:05:00+00");
+    expect(await supersededAt(a, WEEK)).toBeNull();
+    expect(await heldTeaser(query, a)).toMatchObject({ week: WEEK, titles: TITLES.slice(3, 6) });
+  });
+
+  it("an older week re-run after a newer held week is itself superseded: only the newest list is live", async () => {
+    const a = await member("a@example.com");
+    await picked(a); // WEEK, ready, held
+    await coraPicks(a, PREV, 3);
+    expect(await ready(PREV, new Date("2026-12-14T15:00:00Z"))).toHaveLength(1);
+    expect(await supersededAt(a, PREV)).toBe("2026-12-14 15:00:00+00");
+    expect(await supersededAt(a, WEEK)).toBeNull();
+    expect(await heldTeaser(query, a)).toMatchObject({ week: WEEK });
+    expect(await sendHeldTeaser(query, deps(), a, PREV)).toBe("not_held");
+    expect(await sendHeldTeaser(query, deps(), a, WEEK)).toBe("sent");
+  });
+
+  it("a card saved while Cora is still picking a newer week waits for it; once ready, the newer list is the one delivered", async () => {
+    const a = await member("a@example.com");
+    await week(PREV);
+    await picked(a, PREV);
+    await query("delete from cora_weeks where week_of = $1", [WEEK]);
+    await coraPicks(a, WEEK, 0); // the same ideas again: undelivered picks are not "sent"
+    await query("update users set trial_started_at = '2026-12-14T05:30:00Z' where id = $1", [a]);
+    expect(await deliverWeek(query, a, PREV, 2, new Date("2026-12-14T05:30:00Z"))).toEqual({ delivered: 0, freeListNumber: null });
+    expect(await deliverLate(query, deps(new Date("2026-12-14T05:45:00Z")))).toBe(0);
+    await ready(WEEK, new Date("2026-12-14T06:05:00Z"));
+    expect(await supersededAt(a, PREV)).toBe("2026-12-14 06:05:00+00");
+    await runSendJob(query, deps(), { week: WEEK });
+    expect(await deliveredIn(a, PREV)).toBe(0);
+    expect(await deliveredIn(a, WEEK)).toBe(3);
+    expect(await userRow(a)).toMatchObject({ free_lists_used: 1 });
+    expect(to("a@example.com").map((m) => m.subject)).toEqual(["Your three ideas for the week of Monday, December 14"]);
+  });
+
+  it("the ready step supersedes nothing for a dry week", async () => {
+    const a = await member("a@example.com");
+    await week(PREV);
+    await picked(a, PREV);
+    await query("delete from cora_weeks where week_of = $1", [WEEK]);
+    await query("insert into cora_weeks (week_of, status, phase, holder, dry_run) values ($1, 'running', 'picked', $2, true)", [WEEK, H]);
+    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 6, 3, "", true, picksJson(3), H]);
+    expect(await ready(WEEK, SEVEN_AM)).toHaveLength(1);
+    expect(await supersededAt(a, PREV)).toBeNull();
   });
 });
 

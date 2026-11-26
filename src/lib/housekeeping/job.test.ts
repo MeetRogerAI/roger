@@ -103,9 +103,16 @@ describe("welcome_unsent (plan 2026-11-26-001, Unit 2)", () => {
     expect(sent[0].text).toContain("When your first list is ready we’ll ask for your card.");
   });
 
-  it("leaves alone accounts from before this release, trials with a card, accounts still signing up, and ones already welcomed", async () => {
-    await trial("old@example.com", "2026-11-20T10:00:00Z");
+  it("welcomes a trial that saved its card before the retry ran", async () => {
     await trial("card@example.com", "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z");
+    expect(await pass()).toEqual({ welcome_unsent: 1 });
+    expect(await pass()).toEqual({ welcome_unsent: 0 });
+    expect(sent.map((m) => [m.to[0], m.subject])).toEqual([["card@example.com", "Welcome to Roger"]]);
+  });
+
+  it("leaves alone accounts from before this release, accounts still signing up, and ones already welcomed", async () => {
+    await trial("old@example.com", "2026-11-20T10:00:00Z");
+    await trial("oldcard@example.com", "2026-11-20T10:00:00Z", "2026-11-20T11:00:00Z");
     await query("insert into users (email, name, status, consent_at) values ('signup@example.com', 'S', 'signup', '2026-12-01T10:00:00Z')");
     const done = await trial("done@example.com");
     await query("insert into notifications (recipient, kind, ref, status) values ($1, 'welcome', 'signup', 'sent')", [done]);

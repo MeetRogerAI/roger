@@ -1,6 +1,6 @@
 import { isRealDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
-import { HAS_CARD_OR_SPONSORED_SQL } from "@/lib/billing/has-card";
+import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 
 /**
  * Held lists (plan 2026-11-26-001, Unit 3; origin R8, R10). A trial with no
@@ -25,7 +25,7 @@ export type HeldTeaser = { week: string; titles: string[]; count: number };
 export const HELD_WEEK_SQL = `(cw.user_id = u.id and w.week_of = cw.week_of
   and not cw.dry_run and cw.outcome in ('picked', 'short') and cw.delivered_at is null and cw.superseded_at is null
   and not w.dry_run and w.status in ('ready', 'sent')
-  and u.status = 'trial' and not ${HAS_CARD_OR_SPONSORED_SQL("u")})`;
+  and ${NO_CARD_TRIAL_SQL("u")})`;
 
 /** The titles of one held week, in order; empty when the week is not held for this user. Titles only. */
 export async function heldTitles(q: Query, userId: string, week: string): Promise<string[]> {
@@ -42,7 +42,12 @@ export async function heldTitles(q: Query, userId: string, week: string): Promis
   return rows.map((r) => r.title);
 }
 
-/** The newest held week's titles (there is at most one: older ones are superseded when Cora picks), or null. Titles only. */
+/**
+ * The newest held week's titles, or null. Titles only. Older held weeks are
+ * superseded when a newer week becomes ready (job.ts SUPERSEDE_AT_READY_SQL),
+ * so there is at most one; while a newer week is still being picked, the
+ * older one stays the member's held list.
+ */
 export async function heldTeaser(q: Query, userId: string): Promise<HeldTeaser | null> {
   const [h] = await q<{ week: string }>(
     `select to_char(cw.week_of, 'YYYY-MM-DD') as week

@@ -91,18 +91,19 @@ export async function sendNudge(q: Query, d: MailDeps, by: string, userId: strin
  * sends, it counts for the list it arrives in time for by the job clock:
  * up to Sunday's cutoff, the coming Monday; after it, the Monday a week
  * later. It replaces a run already stored for that week. The caller hands
- * it to intake.
+ * it to intake. A trial with no card yet is accepted, as Zack's own key
+ * accepts its runs: a run counts nothing before a card is saved, and its list
+ * is held until then.
  */
 export async function addRunForUser(q: Query, by: string, userId: string, body: string, o: { cutoff: string; now: Date }): Promise<Done & { stored?: Stored }> {
   const checked = checkReport(body, "run");
   if (!checked.ok) return no(checked.error);
-  const [u] = await q<{ id: string; email: string; sharing: "share" | "match_only" | "off"; agent: string; status: string; card: boolean }>(
-    `select id, email, sharing, agent, status, ${HAS_CARD_OR_SPONSORED_SQL("u")} as card from users u where id = $1`,
+  const [u] = await q<{ id: string; email: string; sharing: "share" | "match_only" | "off"; agent: string; status: string }>(
+    `select id, email, sharing, agent, status from users u where id = $1`,
     [userId],
   );
   if (!u) return no("No such user.");
   if (u.status === "closed" || u.status === "signup") return no("This account can’t receive runs.");
-  if (u.status === "trial" && !u.card) return no(WAITING_FOR_CARD);
   const stored = await storeReport(q, u, checked, { route: "admin", test: false, cutoff: o.cutoff, now: o.now });
   await logAdminAction(q, { by, userId, action: "add_run", detail: { runId: stored.id, week: stored.week_of, replaced: stored.replaced, kind: stored.kind } });
   return { ok: true, message: `Stored for the list on ${stored.week_of}${stored.replaced ? ", replacing the earlier one" : ""}. Intake reads it now.`, stored };

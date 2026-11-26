@@ -100,6 +100,17 @@ describe("savePlan (Step 3, Product and Pricing)", () => {
     expect(welcomes()).toHaveLength(1);
   });
 
+  it("stamps the consent time from the action's clock, not the database's now()", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-01T10:00:00Z"));
+    try {
+      await outcome(() => savePlan(idle, consentForm("yes")));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(new Date((await row()).consent_at as string).toISOString()).toBe("2026-12-01T10:00:00.000Z");
+  });
+
   it("keeps the first consent time", async () => {
     await current("update users set consent_at = '2026-11-20T10:00:00Z'");
     await outcome(() => savePlan(idle, consentForm("yes")));

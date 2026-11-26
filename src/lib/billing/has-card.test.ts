@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { loadUsers } from "@/lib/cora/context";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
-import { HAS_CARD_OR_SPONSORED_SQL, HAS_CARD_SQL, hasCard, hasCardOrSponsored, isNoCardTrial } from "./has-card";
+import { CARDED_STATUSES, HAS_CARD_OR_SPONSORED_SQL, HAS_CARD_SQL, hasCard, hasCardOrSponsored, isNoCardTrial, NO_CARD_TRIAL_SQL } from "./has-card";
 
 let query: Query;
 beforeEach(async () => {
@@ -26,15 +26,22 @@ describe("has card (plan 2026-11-26-001, Unit 1)", () => {
         `cus_${i}`,
       ]);
     }
-    const rows = await query<{ email: string; card: boolean; covered: boolean }>(
-      `select email, ${HAS_CARD_SQL("u")} as card, ${HAS_CARD_OR_SPONSORED_SQL("u")} as covered from users u order by email`,
+    const rows = await query<{ email: string; card: boolean; covered: boolean; waiting: boolean }>(
+      `select email, ${HAS_CARD_SQL("u")} as card, ${HAS_CARD_OR_SPONSORED_SQL("u")} as covered, ${NO_CARD_TRIAL_SQL("u")} as waiting from users u order by email`,
     );
     for (const [i, c] of cases.entries()) {
       const r = rows.find((x) => x.email === `u${i}@example.com`)!;
       const facts = { status: c.status, trialStartedAt: c.started, sponsored: c.sponsored };
       expect(r.card, JSON.stringify(c)).toBe(hasCard(facts));
       expect(r.covered, JSON.stringify(c)).toBe(hasCardOrSponsored(facts));
+      expect(r.waiting, JSON.stringify(c)).toBe(isNoCardTrial(facts));
     }
+    // Exactly one combination waits for a card: a trial with no card and no sponsor.
+    expect(rows.filter((r) => r.waiting)).toHaveLength(1);
+  });
+
+  it("the SQL status list is built from CARDED_STATUSES", () => {
+    expect(HAS_CARD_SQL("x")).toContain(`x.status in (${CARDED_STATUSES.map((s) => `'${s}'`).join(", ")})`);
   });
 
   it("a trial has a card only once trial_started_at is set; active, held and cancelled always count; signup and closed never", () => {
