@@ -6,7 +6,7 @@ type Owed = { higher: string; difference: string; invoiceDate: string };
 /** For an email: when the month it is owed for has already ended, it is named instead of "this month". */
 type OwedMail = Owed & { ended?: { periodEnd: string } | null };
 
-/** Spec B.9 notice 4 (the second miss): this month at the higher rate, with the fix and the option to switch plans. */
+/** Spec B.9 notice 4 (the second miss): this month at the higher rate, with the fix. No plan switch (monthly only, plan 2026-11-26-001 Unit 9). */
 export function secondMissText(o: Owed): string {
   return `This is your second missed week this month, so this month is billed at ${o.higher}. The difference of ${o.difference} will be on your invoice of ${longDate(o.invoiceDate)}.`;
 }
@@ -30,7 +30,7 @@ export function secondMissEmail(o: OwedMail): Rendered {
     paragraphs: [
       o.ended ? carriedMissText({ ...o, periodEnd: o.ended.periodEnd, reason: "two_misses" }) : secondMissText(o),
       MISSED_FIX,
-      `If a weekly report doesn’t suit you, you can switch to one list at a time on the billing page (${appUrl("/app/billing")}). If you cancel before that invoice, the difference isn’t collected.`,
+      `If you cancel on the billing page (${appUrl("/app/billing")}) before that invoice, the difference isn’t collected.`,
     ],
     button: { label: "Check Zack", url: appUrl("/app/zack") },
   });

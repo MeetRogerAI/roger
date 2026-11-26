@@ -1,7 +1,6 @@
-import { weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { contributionStatus } from "@/lib/billing/contribution";
-import { amount, money, type Currency } from "@/lib/billing/prices";
+import type { Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
 import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 import { adjustmentLine, statusLine, statusLink, type StatusFacts } from "./status";
@@ -15,15 +14,13 @@ export type Home = {
   statusLine: string;
   /** The link that goes with the status line (a held list's Payment page), if any. */
   statusLink: { href: string; label: string } | null;
-  /** The second-miss banner (spec B.9 notice 4), with the fix and the option to switch plans. */
+  /** The second-miss banner (spec B.9 notice 4), with the fix. */
   missBanner: string | null;
   week: string | null;
   ideas: WeekIdea[];
   /** No card yet: the newest held list's titles (plan 2026-11-26-001, Unit 3). Titles only; never details. */
   held: HeldTeaser | null;
   bricks: { marked: number; confirmed: number };
-  /** One at a time, past the free lists: the coming Monday and whether it is ordered. */
-  order: { week: string; ordered: boolean; price: string } | null;
 };
 
 type U = {
@@ -83,16 +80,11 @@ export async function loadHome(q: Query, userId: string, s: V3Settings, now: Dat
     now,
   };
   const line = statusLine(facts, s);
-  let orderBox: Home["order"] = null;
-  const canOrder = u.plan === "per_run" && !u.stripe_subscription && (u.status === "active" || (u.status === "trial" && u.free_lists_used >= s.freeRuns));
-  if (canOrder) {
-    const next = weekOf(now, s.runCutoff);
-    const [o] = await q<{ status: string }>(`select status from orders where user_id = $1 and week_of = $2`, [userId, next]);
-    const cur = u.currency ?? "USD";
-    orderBox = { week: next, ordered: o?.status === "ordered", price: money(amount(s, "per_run", cur), cur) };
-  }
   // Spec B.9 notice 4: after a second miss, a banner on /app as well as the strip.
   const banner = adjustmentLine(contribution, s, u.currency ?? "USD");
   const held = !week && !ideas.length && u.status === "trial" && !u.has_card && !u.sponsored ? await heldTeaser(q, userId) : null;
-  return { status: u.status, plan: u.plan, statusLine: line, statusLink: statusLink(facts), missBanner: banner, week: shown, ideas, held, bricks: await bricks(q, userId), order: orderBox };
+  // One call to action for a held list (plan 2026-11-26-001, Unit 9): the held block's button. The line's own link
+  // stays only for the rare moment the line asks for the card with no held titles to show.
+  const link = held ? null : statusLink(facts);
+  return { status: u.status, plan: u.plan, statusLine: line, statusLink: link, missBanner: banner, week: shown, ideas, held, bricks: await bricks(q, userId) };
 }

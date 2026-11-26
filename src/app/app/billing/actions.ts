@@ -59,11 +59,16 @@ export async function undoCancelAction(): Promise<BillingState> {
   return answer(await undoCancel(query, d, { userId: s.userId }));
 }
 
-/** Between monthly and one list at a time; the page showed the effect beside the button. */
+/**
+ * A switch to monthly. Monthly is the only plan (plan 2026-11-26-001, Unit 9;
+ * origin R1): the page offers no switch, and a switch to one list at a time
+ * posted here anyway is refused before anything is read or written. The
+ * per-run code stays dormant (Scope Boundaries).
+ */
 export async function switchAction(_prev: BillingState, fd: FormData): Promise<BillingState> {
   const s = await requireUserForAction();
   const to = field(fd, "to");
-  if (to !== "monthly" && to !== "per_run") return { status: "error", message: "Choose a plan." };
+  if (to !== "monthly") return { status: "error", message: "Monthly is the only plan." };
   if (!(await mutationAllowed(s.userId))) return TOO_MANY;
   const d = await deps();
   if (!d) return OFF;

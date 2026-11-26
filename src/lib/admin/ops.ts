@@ -6,6 +6,7 @@ import { addDays, currentMonday, wallParts, wallToInstant } from "@/lib/clock";
 import { loadUsers } from "@/lib/cora/context";
 import { eligiblePlays } from "@/lib/cora/eligible";
 import type { Query } from "@/lib/db-query";
+import { HELD_WEEK_SQL } from "@/lib/app/held";
 import { nextMonthly } from "@/lib/app/status";
 import { noCardClocks, trialClocks } from "@/lib/housekeeping/trial";
 import type { V3Settings } from "@/lib/v3-settings";
@@ -18,13 +19,14 @@ import type { V3Settings } from "@/lib/v3-settings";
  */
 
 /** Why a user needs attention. */
-export type Attention = "no_run" | "flagged_run" | "rejected_run" | "held" | "trial_closing" | "few_eligible";
+export type Attention = "no_run" | "flagged_run" | "rejected_run" | "held" | "held_no_card" | "trial_closing" | "few_eligible";
 
 export const ATTENTION_LABELS: Record<Attention, string> = {
   no_run: "No run by Sunday 8:00 PM",
   flagged_run: "Run flagged",
   rejected_run: "Run rejected",
   held: "Payment held",
+  held_no_card: "First list held, no card",
   trial_closing: "Trial closes within 5 days",
   few_eligible: "Fewer than 3 eligible plays",
 };
@@ -91,10 +93,12 @@ export type OpsRow = {
   eligible: number | null;
   /** When the trial closes, if it is heading that way. */
   closesAt: string | null;
+  /** A trial with no card whose first list is held (app/held.ts HELD_WEEK_SQL): waiting for the card. */
+  heldNoCard: boolean;
   attention: Attention[];
 };
 
-type Facts = Pick<OpsRow, "status" | "holdReason" | "plan" | "sharing" | "order" | "run" | "eligible" | "closesAt" | "freeListsUsed">;
+type Facts = Pick<OpsRow, "status" | "holdReason" | "plan" | "sharing" | "order" | "run" | "eligible" | "closesAt" | "freeListsUsed"> & Partial<Pick<OpsRow, "heldNoCard">>;
 
 /**
  * Who is expected to send a run this week: a live account with Zack on. One
@@ -117,6 +121,8 @@ export function attentionFor(f: Facts, o: { now: Date; week: string; freeRuns: n
   if (f.run?.status === "flagged") out.push("flagged_run");
   if (f.run?.status === "rejected") out.push("rejected_run");
   if (f.status === "held") out.push("held");
+  // Plan 2026-11-26-001, Unit 9 (origin R27): every no-card member with a held list, however recent. No age threshold.
+  if (f.heldNoCard) out.push("held_no_card");
   if (f.closesAt && Date.parse(f.closesAt) - o.now.getTime() <= CLOSING_SOON_DAYS * 86_400_000) out.push("trial_closing");
   if (f.eligible !== null && f.eligible < FEW_ELIGIBLE && (f.status === "trial" || f.status === "active")) out.push("few_eligible");
   return out;
@@ -194,6 +200,7 @@ type Row = {
   last_signin: string | null;
   last_opened: string | null;
   last_first_week: string | null;
+  held_no_card: boolean;
 };
 
 const ROW_SQL = `
@@ -208,7 +215,8 @@ const ROW_SQL = `
          (select count(*)::int from picks p where p.user_id = u.id and p.week_of = $1 and not p.dry_run and p.delivered_at is not null) as delivered,
          (select max(s.created_at)::text from sessions s where s.user_id = u.id) as last_signin,
          (select max(p.opened_at)::text from picks p where p.user_id = u.id) as last_opened,
-         (select to_char(c.week_of, 'YYYY-MM-DD') from charge_attempts c where c.user_id = u.id and c.purpose = 'first_charge' order by c.claimed_at desc limit 1) as last_first_week
+         (select to_char(c.week_of, 'YYYY-MM-DD') from charge_attempts c where c.user_id = u.id and c.purpose = 'first_charge' order by c.claimed_at desc limit 1) as last_first_week,
+         exists (select 1 from cora_user_weeks cw join cora_weeks w on w.week_of = cw.week_of where ${HELD_WEEK_SQL}) as held_no_card
   from users u
   left join orders o on o.user_id = u.id and o.week_of = $1
   left join runs r on r.user_id = u.id and r.week_of = $1 and not r.is_test and r.status <> 'deleted'
@@ -283,6 +291,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       eligible: eligible.has(r.id) ? eligible.get(r.id)! : null,
       closesAt: closesAt(r, o.settings, noListCloses),
       freeListsUsed: r.free_lists_used,
+      heldNoCard: r.held_no_card,
     };
     out.push({
       ...base,

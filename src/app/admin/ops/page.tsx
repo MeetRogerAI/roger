@@ -139,7 +139,7 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
                           Add a run for this user
                         </Link>
                         <ExcuseForm userId={r.id} week={excuseWeek} />
-                        {r.status === "trial" && !r.switched && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
+                        {r.status === "trial" && !r.switched && (r.hasCard || r.sponsored) && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
                         <NudgeForm userId={r.id} templates={NUDGES} />
                         {r.stripeCustomer && (
                           <a href={stripeCustomerUrl(r.stripeCustomer, mode)} target="_blank" rel="noreferrer" className="tlink block">

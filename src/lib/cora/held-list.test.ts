@@ -408,7 +408,9 @@ describe("/app for a trial with no card", () => {
     const home = await loadHome(query, a, settings, SEVEN_AM);
     expect(home).toMatchObject({ ideas: [], week: null, held: { week: WEEK, titles: TITLES.slice(0, 3), count: 3 } });
     expect(JSON.stringify(home)).not.toMatch(/Secret|Fits the sales work/);
-    expect(home?.statusLink).toEqual({ href: "/start/payment", label: "Add your card" });
+    // One call to action (Unit 9): the held block's button, not a second link on the status line.
+    expect(home?.statusLink).toBeNull();
+    expect(home?.statusLine).toBe("Your first ideas are ready — add a card to see them.");
   });
 
   it("shows no held list to a member with a card", async () => {

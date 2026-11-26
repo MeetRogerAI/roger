@@ -46,7 +46,11 @@ export function WeekIdeas({ week, ideas }: { week: string; ideas: WeekIdea[] }) 
   );
 }
 
-/** One at a time: order or cancel the coming Monday's list (spec B.9). */
+/**
+ * One at a time: order or cancel the coming Monday's list (spec B.9).
+ * Dormant: monthly is the only plan (plan 2026-11-26-001, Unit 9), so no page
+ * renders it. Kept with orders.ts until the per-run cleanup after launch.
+ */
 export function OrderBox({ week, weekLabel, ordered, price }: { week: string; weekLabel: string; ordered: boolean; price: string }) {
   const [state, setState] = useState<{ ordered: boolean; message: string }>({ ordered, message: "" });
   const [pending, start] = useTransition();

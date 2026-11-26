@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { CardSavedNotice } from "@/components/app/card-saved-notice";
 import { HeldIdeas } from "@/components/app/held-ideas";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
-import { OrderBox, WeekIdeas } from "@/components/app/week-ideas";
+import { WeekIdeas } from "@/components/app/week-ideas";
 import { heldHeading } from "@/lib/app/held";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
@@ -53,12 +53,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/app">["searchP
             To fix it, check that Zack still runs each week and can reach Roger.{" "}
             <Link href="/app/zack" className="tlink">
               Check Zack
-            </Link>{" "}
-            or{" "}
-            <Link href="/app/billing" className="tlink">
-              switch to one list at a time
             </Link>
-            .
           </p>
         </div>
       )}
@@ -84,8 +79,6 @@ async function Home({ searchParams }: { searchParams: PageProps<"/app">["searchP
           </Link>
         </div>
       )}
-
-      {home.order && <OrderBox week={home.order.week} weekLabel={longDate(home.order.week)} ordered={home.order.ordered} price={home.order.price} />}
 
       <p className="text-small text-ink-2">
         Ideas you’ve set up: {home.bricks.marked}

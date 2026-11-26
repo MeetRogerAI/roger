@@ -236,7 +236,8 @@ describe("4 (P2): a first charge held because its amount changed", () => {
     const view = await loadBilling(query, m.id, { settings, now: SIX_AM });
     expect(view?.nextCharge).toContain("US$240");
     expect(view?.nextCharge).toContain("Tuesday, December 15");
-    expect(view?.offer).toMatchObject({ allowed: false, why: expect.stringContaining("amount changed") });
+    // Monthly only (plan 2026-11-26-001, Unit 9): the page offers no switch; switchPlan itself still says why not.
+    expect(view).not.toHaveProperty("offer");
     expect(await switchPlan(query, deps(SIX_AM), { userId: m.id, to: "per_run" })).toMatchObject({ ok: false, message: expect.stringContaining("amount changed") });
   });
 
