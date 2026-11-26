@@ -240,10 +240,26 @@ describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
     expect(by(fresh).attention).toEqual(["held_no_card"]);
     expect(by(older).attention).toContain("held_no_card");
     for (const id of [carded, sponsored, superseded, dry, none]) expect(by(id).attention).not.toContain("held_no_card");
+    expect(by(superseded).heldNoCard).toBe(false);
     const needs = filterOps(rows, { attention: true }).map((r) => r.id);
     expect(needs).toEqual(expect.arrayContaining([fresh, older]));
     expect(ATTENTION_LABELS.held_no_card).toBe("First list held, no card");
     expect(statusKey(by(fresh))).toBe("trial_no_card");
+  });
+
+  it("held_no_card is false for a no-card member whose only weeks are delivered or superseded (review fixes Unit 9, F7)", async () => {
+    await query("insert into cora_weeks (week_of, status) values ('2026-11-30', 'sent'), ('2026-12-07', 'sent') on conflict do nothing");
+    const delivered = await user("delivered-nc@example.com", { consent_at: "2026-11-25T12:00:00Z", first_teaser_at: "2026-11-30T12:05:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, delivered_at) values ($1, '2026-12-07', 'picked', 3, '2026-12-08T12:00:00Z')", [delivered]);
+    const both = await user("both-nc@example.com", { consent_at: "2026-11-25T12:00:00Z", first_teaser_at: "2026-11-30T12:05:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, superseded_at) values ($1, '2026-11-30', 'picked', 3, '2026-12-07T12:05:00Z')", [both]);
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, delivered_at) values ($1, '2026-12-07', 'picked', 3, '2026-12-08T12:00:00Z')", [both]);
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    for (const id of [delivered, both]) {
+      const r = rows.find((x) => x.id === id)!;
+      expect(r.heldNoCard).toBe(false);
+      expect(r.attention).not.toContain("held_no_card");
+    }
   });
 
   it("a leftover one-at-a-time account still has a row, with no error (Unit 9)", async () => {

@@ -44,10 +44,10 @@ export default async function InterestPage() {
           Sign-up funnel
         </h2>
         <p className="mt-2 text-small text-ink-2">
-          By the week the account was made (Toronto, weeks start Monday): how many of those people have reached each step so far. Sponsored members are left out.
+          The last 26 weeks, by the week the account was made (Toronto, weeks start Monday): how many of those people have reached each step so far. Sponsored members and admin accounts are left out.
         </p>
-        {i.funnel.length === 0 ? (
-          <p className="mt-3 text-small text-ink-2">Nobody has signed up yet.</p>
+        {i.funnel.every((f) => f.signedUp === 0) ? (
+          <p className="mt-3 text-small text-ink-2">Nobody has signed up in the last 26 weeks.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
             <table aria-labelledby="funnel-h" className="w-full min-w-[36rem] border-collapse text-left text-small tabular-nums">

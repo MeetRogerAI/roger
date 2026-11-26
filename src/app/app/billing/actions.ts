@@ -32,7 +32,15 @@ const OFF: BillingState ={ status: "error", message: "Billing isn’t switched o
 async function deps(): Promise<PlanDeps | null> {
   const plans = stripePlans();
   if (!plans) return null;
-  return { plans, gw: stripeBilling() ?? undefined, adjust: stripeAdjustments() ?? undefined, settings: await readV3Settings(), now: new Date() };
+  return {
+    plans,
+    gw: stripeBilling() ?? undefined,
+    adjust: stripeAdjustments() ?? undefined,
+    // A no-card trial's stored Payment session is settled around its cancel (review fixes Unit 9, F5).
+    card: stripeGateway() ?? undefined,
+    settings: await readV3Settings(),
+    now: new Date(),
+  };
 }
 
 function answer(r: PlanResult): BillingState {

@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
-import { loadInterest } from "./interest";
+import { FUNNEL_WEEKS, loadInterest } from "./interest";
 
 let query: Query;
+/** Thursday 2026-12-10: the current sign-up week starts Monday 2026-12-07. */
+const NOW = new Date("2026-12-10T15:00:00Z");
+const zero = (week: string) => ({ week, signedUp: 0, zackConnected: 0, firstTeaser: 0, cardSaved: 0, firstCharge: 0 });
 
 async function user(email: string, cols: Record<string, unknown> = {}): Promise<string> {
   const c = { status: "trial", plan: "monthly", ...cols };
@@ -42,24 +45,54 @@ describe("the sign-up funnel (plan 2026-11-26-001, Unit 9; origin R30)", () => {
     await user("f@example.com", { created_at: "2026-12-07T15:00:00Z" });
     await user("s@example.com", { created_at: at, sponsor_id: "00000000-0000-4000-8000-000000000001", zack_key_created_at: at });
 
-    const { funnel, plans } = await loadInterest(query);
-    expect(funnel).toEqual([
+    const { funnel, plans } = await loadInterest(query, { now: NOW, admins: [] });
+    expect(funnel.slice(0, 3)).toEqual([
       { week: "2026-12-07", signedUp: 1, zackConnected: 0, firstTeaser: 0, cardSaved: 0, firstCharge: 0 },
       { week: "2026-11-30", signedUp: 5, zackConnected: 4, firstTeaser: 3, cardSaved: 2, firstCharge: 1 },
+      zero("2026-11-23"),
     ]);
     // The per-run plan count is gone (monthly only).
     expect(plans).not.toHaveProperty("perRun");
     expect(plans).toMatchObject({ monthly: 1, sponsored: 1 });
   });
 
-  it("is empty with nobody signed up", async () => {
-    expect((await loadInterest(query)).funnel).toEqual([]);
+  it("with nobody signed up: the 26 calendar weeks, all zero", async () => {
+    const { funnel } = await loadInterest(query, { now: NOW, admins: [] });
+    expect(funnel).toHaveLength(FUNNEL_WEEKS);
+    expect(funnel.every((f) => f.signedUp === 0 && f.zackConnected === 0 && f.cardSaved === 0)).toBe(true);
+    expect(funnel[0].week).toBe("2026-12-07");
+  });
+
+  it("is 26 calendar weeks up to this one, with a zero row for an empty week, and nothing older (review fixes Unit 9, F6)", async () => {
+    // Week 1 of 26 starts Monday 2026-06-15 (25 weeks before 2026-12-07), at midnight Toronto (04:00 UTC in June).
+    await user("first@example.com", { created_at: "2026-06-15T04:00:00Z" });
+    await user("before@example.com", { created_at: "2026-06-15T03:59:00Z" });
+    await user("old@example.com", { created_at: "2026-01-05T15:00:00Z" });
+    await user("now@example.com", { created_at: "2026-12-09T15:00:00Z" });
+    const { funnel } = await loadInterest(query, { now: NOW, admins: [] });
+    expect(funnel.map((f) => f.week)).toHaveLength(FUNNEL_WEEKS);
+    expect(funnel[0]).toMatchObject({ week: "2026-12-07", signedUp: 1 });
+    // An empty week in between still has its row.
+    expect(funnel[1]).toEqual(zero("2026-11-30"));
+    expect(funnel[FUNNEL_WEEKS - 1]).toMatchObject({ week: "2026-06-15", signedUp: 1 });
+    expect(funnel.reduce((n, f) => n + f.signedUp, 0)).toBe(2);
+    // Weeks are consecutive Mondays.
+    for (let k = 1; k < funnel.length; k++) expect(Date.parse(funnel[k - 1].week) - Date.parse(funnel[k].week)).toBe(7 * 86_400_000);
+  });
+
+  it("leaves out admin accounts and deleted runs (review fixes Unit 9, F6)", async () => {
+    const at = "2026-12-08T15:00:00Z";
+    await user("Admin@Example.com", { created_at: at, zack_key_created_at: at });
+    const d = await user("deleted@example.com", { created_at: at });
+    await query("insert into runs (user_id, week_of, route, agent, sharing, raw_text, status) values ($1, '2026-12-07', 'connector', 'hark', 'share', 'x', 'deleted')", [d]);
+    const { funnel } = await loadInterest(query, { now: NOW, admins: ["admin@example.com"] });
+    expect(funnel[0]).toEqual({ week: "2026-12-07", signedUp: 1, zackConnected: 0, firstTeaser: 0, cardSaved: 0, firstCharge: 0 });
   });
 
   it("still loads with a leftover one-at-a-time account (preview only)", async () => {
     await user("p@example.com", { status: "active", plan: "per_run", created_at: "2026-11-30T15:00:00Z", trial_started_at: "2026-11-30T16:00:00Z" });
-    const i = await loadInterest(query);
-    expect(i.funnel).toEqual([{ week: "2026-11-30", signedUp: 1, zackConnected: 0, firstTeaser: 0, cardSaved: 1, firstCharge: 0 }]);
+    const i = await loadInterest(query, { now: NOW, admins: [] });
+    expect(i.funnel[1]).toEqual({ week: "2026-11-30", signedUp: 1, zackConnected: 0, firstTeaser: 0, cardSaved: 1, firstCharge: 0 });
     expect(i.plans).toEqual({ monthly: 0, trial: 0, sponsored: 0 });
   });
 });

@@ -93,6 +93,14 @@ describe("for an admin", () => {
     expect(await current("select admin_email, action from admin_actions")).toEqual([{ admin_email: "admin@example.com", action: "extra_free_list" }]);
   });
 
+  it("refuses an extra free list for a no-card trial posted anyway (the button is hidden), changing nothing (review fixes Unit 9, F7)", async () => {
+    admin = "admin@example.com";
+    const [nc] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used) values ('nc@example.com', 'Nc', 'trial', 1) returning id");
+    expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: nc.id }))).toMatchObject({ status: "error", message: "Waiting for the member’s card." });
+    expect(await current<{ free_lists_used: number }>("select free_lists_used from users where id = $1", [nc.id])).toEqual([{ free_lists_used: 1 }]);
+    expect(await current("select 1 from admin_actions")).toEqual([]);
+  });
+
   it("refuses a sample play without the tick, and a malformed id", async () => {
     admin = "admin@example.com";
     expect(await actions.chooseSampleAction({ status: "idle" }, form({ playId }))).toMatchObject({ status: "error", message: expect.stringMatching(/I have read this play/) });

@@ -143,6 +143,17 @@ describe("the billing actions act only on the signed-in account", () => {
     expect(await status(theirs)).toMatchObject({ plan: "per_run" });
   });
 
+  it("cancel settles a no-card trial's open Payment session with the card gateway (review fixes Unit 9, F5)", async () => {
+    const [x] = await current<{ id: string }>("insert into users (email, status, plan, currency, stripe_customer) values ('nc@example.com', 'trial', 'monthly', 'USD', 'cus_nc') returning id");
+    const s = await card.createEmbeddedSetupSession({ userId: x.id, customer: "cus_nc", currency: "USD", returnUrl: "https://roger.test/r" });
+    await current("update users set setup_session = $2 where id = $1", [x.id, s.id]);
+    signedIn = x.id;
+    expect(await outcome(() => cancelAction({ status: "idle" }, form({})))).toMatchObject({ value: { status: "done" } });
+    expect(await status(x.id)).toMatchObject({ status: "cancelled" });
+    expect(card.expired).toEqual([s.id]);
+    expect((await current<{ setup_session: string | null }>("select setup_session from users where id = $1", [x.id]))[0].setup_session).toBeNull();
+  });
+
   it("opens Stripe's card page for the caller's own customer, marked as a card update", async () => {
     const r = await outcome(() => updateCardAction());
     expect(r).toMatchObject({ redirect: expect.stringContaining("https://checkout.stripe.test/") });

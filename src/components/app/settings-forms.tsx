@@ -60,10 +60,11 @@ export function ProfileForm({ values, zones, perRun }: { values: ProfileValues; 
               <span className="block text-ink-2">Switched off, your ideas still arrive on this site each Monday.</span>
             </span>
           </label>
+          {/* A leftover per-run account (preview only) can still switch off its Friday reminder; nothing here promises an order (review fixes Unit 9, F3). */}
           {perRun ? (
             <label className="flex gap-3">
               <input type="checkbox" name="pref_friday_prompt" defaultChecked={shown.prefs.friday_prompt} className="mt-1 size-4 accent-accent" />
-              <span>The reminder to order next Monday’s list</span>
+              <span>The Friday reminder email</span>
             </label>
           ) : (
             <input type="hidden" name="pref_friday_prompt" value={shown.prefs.friday_prompt ? "on" : ""} />

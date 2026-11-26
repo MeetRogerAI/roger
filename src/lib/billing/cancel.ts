@@ -6,7 +6,10 @@ import { planChangedEmail } from "@/lib/mail/templates/plan-changed";
 import { longDate } from "@/lib/mail/templates/welcome";
 import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnCancelScheduled, adjustmentOnCancelUndone, ANCHOR, ISO, placeAdjustments } from "./adjustment";
+import { completeStoredSession, discardSetupSession } from "./card-setup";
 import { chargeInFlight } from "./claims";
+import type { CardGateway } from "./gateway";
+import { isNoCardTrialUser } from "./has-card";
 import { settlePeriod } from "./contribution";
 import { periodAt } from "./period";
 import type { AdjustmentGateway, BillingGateway, PlanGateway, SubscriptionInfo } from "./subscriptions";
@@ -34,7 +37,15 @@ import type { AdjustmentGateway, BillingGateway, PlanGateway, SubscriptionInfo }
  * scheduled end is Stripe's to keep, so Stripe is asked first; the webhook
  * re-reads the subscription and writes the same state if our write is lost.
  */
-export type PlanDeps = { plans: PlanGateway; gw?: BillingGateway; adjust?: AdjustmentGateway; settings: V3Settings; now: Date } & MailDeps;
+export type PlanDeps = {
+  plans: PlanGateway;
+  gw?: BillingGateway;
+  adjust?: AdjustmentGateway;
+  /** The card gateway: a no-card trial's stored Payment session is settled around its cancellation (review fixes Unit 9, F5). */
+  card?: CardGateway;
+  settings: V3Settings;
+  now: Date;
+} & MailDeps;
 /** `busy`: nothing changed for a reason that passes (a charge in flight, Stripe unreachable); try again later. */
 export type PlanResult = { ok: true; message: string } | { ok: false; message: string; busy?: boolean };
 
@@ -102,7 +113,19 @@ export async function cancelPlan(q: Query, d: PlanDeps, o: { userId: string; rea
   if (isCancelling(u)) return { ok: false, message: "Your plan is already cancelled." };
   if (await chargeInFlight(q, u.id)) return { ok: false, message: BUSY, busy: true };
   const reason = cleanReason(o.reason);
-  if (!u.stripe_subscription) return endNow(q, d, u, reason);
+  // A trial still waiting for its card may have the Payment page open (a stored setup session): settled first.
+  const noCard = Boolean(d.card) && !u.stripe_subscription && (await isNoCardTrialUser(q, u.id));
+  if (noCard) {
+    const saved = await completeStoredSession(q, d.card!, u.id, { getSettings: async () => d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }).catch((e) => {
+      console.error("[billing] stored session before a cancel", u.id, e instanceof Error ? e.message : e);
+      return "error" as const;
+    });
+    // Stripe could not be read: never cancel over a card that may be saved there.
+    if (saved === "error") return { ok: false, message: UNREACHABLE, busy: true };
+    // The member confirmed their card in Stripe: it is saved and the list unlocked, so nothing is cancelled.
+    if (saved === "done") return { ok: true, message: CARD_SAVED_NOT_CANCELLED };
+  }
+  if (!u.stripe_subscription) return endNow(q, d, u, reason, noCard);
   if (u.status === "held" || u.renewal_invoice) {
     // Stripe says whether the renewal is really unpaid; a stale failure is cleared and the plan ends with its month.
     let open;
@@ -130,7 +153,7 @@ export async function cancelPlan(q: Query, d: PlanDeps, o: { userId: string; rea
  * with no subscription, the deliverable rule covers no later week (a list
  * held for a first charge is never delivered), only a paid order's.
  */
-async function endNow(q: Query, d: PlanDeps, u: PlanUser, reason: string | null): Promise<PlanResult> {
+async function endNow(q: Query, d: PlanDeps, u: PlanUser, reason: string | null, noCard = false): Promise<PlanResult> {
   const rows = await q<{ id: string }>(
     `with u as (
        update users set status = 'cancelled', hold_reason = null, cancel_requested_at = $2, access_ends_at = $2, cancel_reason = $3,
@@ -144,8 +167,29 @@ async function endNow(q: Query, d: PlanDeps, u: PlanUser, reason: string | null)
     [u.id, d.now.toISOString(), reason],
   );
   if (!rows.length) return { ok: false, message: BUSY, busy: true };
+  if (noCard && d.card) await retireStoredSession(q, d.card, u.id);
   await finishCancellation(q, d, u.id);
   return { ok: true, message: "Your account is cancelled, and nothing more will be charged." };
+}
+
+/** What a no-card trial is told when its card was saved in Stripe just before the cancel. */
+export const CARD_SAVED_NOT_CANCELLED = "Your card was saved just now, so your trial wasn’t cancelled and your first list is unlocked. To cancel anyway, cancel again.";
+
+/**
+ * After a no-card trial's cancel (review fixes Unit 9, F5; the closing lesson
+ * in docs/solutions/logic-errors): the stored Payment session is expired in
+ * Stripe and cleared, so an open tab cannot save a card on a cancelled
+ * account. A card confirmed in the moment before the expiry is not saved by
+ * Roger (the account is cancelled; the completion answers "closed") and the
+ * cancellation's card removal (finishCancellation, right after) takes it off
+ * the customer. Best effort: a failure is logged.
+ */
+async function retireStoredSession(q: Query, card: CardGateway, userId: string): Promise<void> {
+  try {
+    if ((await discardSetupSession(q, card, userId)) === "complete") console.warn("[billing] a card was confirmed as the trial was cancelled; removed with the cancellation", userId);
+  } catch (e) {
+    console.warn("[billing] stored session after a cancel", userId, e instanceof Error ? e.message : e);
+  }
 }
 
 /** A monthly subscriber: Stripe ends the subscription with the paid month; the account stays active ("cancelling") until then. */

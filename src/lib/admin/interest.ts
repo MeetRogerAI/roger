@@ -1,3 +1,4 @@
+import { adminEmails } from "@/lib/auth/admin-emails";
 import type { Query } from "@/lib/db-query";
 
 /**
@@ -35,25 +36,37 @@ export type FunnelWeek = {
 export const FUNNEL_WEEKS = 26;
 
 /**
- * Sponsored members never need a card, so they are left out: the funnel
- * measures the card asked for at the first list (Strategy v3.1 decision 38,
- * reversed by this plan).
+ * The last FUNNEL_WEEKS calendar weeks (Toronto, Monday to Sunday) up to the
+ * week of `$1` (now), one row each, a week nobody signed up in included with
+ * zeros (review fixes Unit 9, F6). Left out: sponsored members (never asked
+ * for a card: the funnel measures the card asked for at the first list,
+ * Strategy v3.1 decision 38, reversed by this plan) and admin accounts (`$2`,
+ * ADMIN_EMAILS, as `closeAccount` identifies them). A deleted run does not
+ * count as Zack connected.
  */
 export const FUNNEL_SQL = `
-  select to_char(date_trunc('week', u.created_at at time zone 'America/Toronto'), 'YYYY-MM-DD') as week,
-         count(*)::int as "signedUp",
-         count(*) filter (where u.zack_key_created_at is not null
-           or exists (select 1 from runs r where r.user_id = u.id and not r.is_test and r.route in ('connector', 'upload')))::int as "zackConnected",
-         count(*) filter (where u.first_teaser_at is not null)::int as "firstTeaser",
-         count(*) filter (where u.trial_started_at is not null)::int as "cardSaved",
-         count(*) filter (where u.first_charge_at is not null)::int as "firstCharge"
-  from users u
-  where u.sponsor_id is null
-  group by 1
-  order by 1 desc
-  limit ${FUNNEL_WEEKS}`;
+  with weeks as (
+    select (date_trunc('week', $1::timestamptz at time zone 'America/Toronto') - g * interval '1 week')::date as wk
+    from generate_series(0, ${FUNNEL_WEEKS - 1}) g
+  ),
+  cohort as (
+    select date_trunc('week', u.created_at at time zone 'America/Toronto')::date as wk, u.id, u.zack_key_created_at, u.first_teaser_at, u.trial_started_at, u.first_charge_at
+    from users u
+    where u.sponsor_id is null and lower(u.email) <> all($2::text[])
+      and u.created_at >= ((select min(wk) from weeks)::timestamp at time zone 'America/Toronto')
+  )
+  select to_char(w.wk, 'YYYY-MM-DD') as week,
+         count(c.id)::int as "signedUp",
+         count(c.id) filter (where c.zack_key_created_at is not null
+           or exists (select 1 from runs r where r.user_id = c.id and not r.is_test and r.status <> 'deleted' and r.route in ('connector', 'upload')))::int as "zackConnected",
+         count(c.id) filter (where c.first_teaser_at is not null)::int as "firstTeaser",
+         count(c.id) filter (where c.trial_started_at is not null)::int as "cardSaved",
+         count(c.id) filter (where c.first_charge_at is not null)::int as "firstCharge"
+  from weeks w left join cohort c on c.wk = w.wk
+  group by w.wk
+  order by w.wk desc`;
 
-export async function loadInterest(q: Query): Promise<Interest> {
+export async function loadInterest(q: Query, o: { now?: Date; admins?: string[] } = {}): Promise<Interest> {
   const notReady = await q<{ email: string; createdAt: string }>(
     `select email, created_at::text as "createdAt" from leads where kind = 'not_ready' order by created_at desc limit 500`,
   );
@@ -71,6 +84,6 @@ export async function loadInterest(q: Query): Promise<Interest> {
             count(*) filter (where sponsor_id is not null and status in ('trial', 'active'))::int as sponsored
      from users`,
   );
-  const funnel = await q<FunnelWeek>(FUNNEL_SQL);
+  const funnel = await q<FunnelWeek>(FUNNEL_SQL, [(o.now ?? new Date()).toISOString(), o.admins ?? adminEmails()]);
   return { notReady, notOpen: open?.n ?? 0, cancelReasons, plans, funnel };
 }

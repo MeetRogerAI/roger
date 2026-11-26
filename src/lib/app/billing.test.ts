@@ -136,6 +136,17 @@ describe("a trial with no card yet: what the billing page says (plan 2026-11-26-
     expect(v?.nextCharge).toBe(CARD_LATER);
   });
 
+  it("a leftover switched one-at-a-time member with a held list is never told 'No card yet' nor sent to Payment (review fixes Unit 9, F7)", async () => {
+    const id = await noCard("sw@example.com");
+    await query("update users set switched_from_per_run_at = '2026-11-20T15:00:00Z', free_lists_used = 2 where id = $1", [id]);
+    await held(id);
+    const v = await loadBilling(query, id, { settings, now: SATURDAY, plans });
+    expect(v?.cardLink).toBeNull();
+    expect(v?.nextCharge).not.toBe(NO_CARD_YET);
+    expect(v?.nextCharge).not.toBe(CARD_LATER);
+    expect(v?.cancel?.label).toBe("Cancel my account");
+  });
+
   it("a sponsored trial and a trial with a card are never asked for one here", async () => {
     const s = await noCard("s@example.com", { sponsored: true });
     await held(s);
