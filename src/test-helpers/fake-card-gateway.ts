@@ -17,7 +17,11 @@ export const FAKE_TAX: Record<string, { rate: number; name: string }> = { CA: { 
 /** The fake monthly prices, in cents (the sandbox's: US$200, CA$280). */
 export const FAKE_MONTHLY_CENTS: Record<Currency, number> = { USD: 20000, CAD: 28000 };
 
-export type FakePromo = Partial<Omit<PromoFacts, "coupon">> & { code: string; coupon?: Partial<NonNullable<PromoFacts["coupon"]>> | null };
+/** Stripe's refusal of an amount-off coupon with no amount in the invoice's currency (assumed shape, Unit 8 review F6). */
+export const currencyMismatch = (coupon: string, currency: string) =>
+  Object.assign(new Error(`Coupon ${coupon} does not support the currency ${currency.toLowerCase()}.`), { type: "StripeInvalidRequestError", param: "discounts[0][coupon]" });
+
+export type FakePromo =Partial<Omit<PromoFacts, "coupon">> & { code: string; coupon?: Partial<NonNullable<PromoFacts["coupon"]>> | null };
 
 /**
  * Promotion codes and the monthly preview, shared by the unit-test fake and
@@ -80,7 +84,11 @@ export function fakePaymentStripe(o: { monthlyCents?: Record<Currency, number>; 
     if (c.redeemBy != null && c.redeemBy <= Math.floor(clock().getTime() / 1000)) {
       throw Object.assign(new Error(`Coupon ${c.id} is expired and cannot be applied.`), { type: "StripeInvalidRequestError", code: "coupon_expired", param: "discounts" });
     }
-    return c.percentOff != null ? Math.round((subtotal * c.percentOff) / 100) : Math.min(subtotal, c.amountOff?.[currency.toLowerCase()] ?? 0);
+    if (c.percentOff != null) return Math.round((subtotal * c.percentOff) / 100);
+    const off = c.amountOff?.[currency.toLowerCase()];
+    // An amount-off coupon without this currency (assumed shape; see isCouponCurrencyMismatch).
+    if (off == null) throw currencyMismatch(c.id, currency);
+    return Math.min(subtotal, off);
   };
 
   const previewMonthly: CardGateway["previewMonthly"] = async (args) => {
@@ -92,7 +100,9 @@ export function fakePaymentStripe(o: { monthlyCents?: Record<Currency, number>; 
       if (!c || !c.valid) throw new CouponUnavailable(`No such coupon: '${args.coupon}'`);
       // Stripe's coupon_expired: past its redeem_by.
       if (c.redeemBy != null && c.redeemBy <= Math.floor(clock().getTime() / 1000)) throw new CouponUnavailable(`Coupon ${c.id} is expired and cannot be applied.`);
-      discount = c.percentOff != null ? Math.round((subtotal * c.percentOff) / 100) : Math.min(subtotal, c.amountOff?.[args.currency.toLowerCase()] ?? 0);
+      const off = c.amountOff?.[args.currency.toLowerCase()];
+      if (c.percentOff == null && off == null) throw new CouponUnavailable(currencyMismatch(c.id, args.currency).message);
+      discount = c.percentOff != null ? Math.round((subtotal * c.percentOff) / 100) : Math.min(subtotal, off ?? 0);
     }
     const base = { currency: args.currency, subtotalCents: subtotal, discountCents: discount };
     if (taxPending.has(args.postal)) return { ...base, tax: "pending", taxCents: 0, taxName: null, taxRate: null, totalCents: subtotal - discount };

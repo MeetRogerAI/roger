@@ -42,7 +42,7 @@ describe.skipIf(!url)("CARD_SAVE_CLAIM_SQL on a real Postgres", () => {
     try {
       const now = new Date().toISOString();
       // $1 user, $2 clock, $3 currency, $4 country, $5 pending code, $6 promotion code id, $7 max, $8 Stripe's redeemed, $9 first-time, $10 fingerprint.
-      const claim = (userId: string) => q<{ verdict: string; saved: boolean }>(CARD_SAVE_CLAIM_SQL, [userId, now, "USD", "US", "RACE", code, 1, 0, false, null]);
+      const claim = (userId: string) => q<{ verdict: string; saved: boolean }>(CARD_SAVE_CLAIM_SQL, [userId, now, "USD", "US", "RACE", code, 1, 0, false, null, "once", null]);
       const first = await Promise.all(ids.map(claim));
       const verdicts = first.map((r) => r[0].verdict);
       // Whoever lost the slot after its count (lost_race, nothing written) counts again and is refused.

@@ -612,6 +612,40 @@ describe("the promo code locked in at card save", () => {
     expect(await reservations()).toEqual([]);
   });
 
+  // Unit 8 review F6: an amount-off code with no amount in the account's currency is never locked in.
+  it("an amount-off code without the account's currency (the currency changed after Apply) is refused at save", async () => {
+    gw.payment.addPromotion({ code: "TENUSD", coupon: { percentOff: null, amountOff: { usd: 1000 } } });
+    const a = await member("a@example.com");
+    await pending(a, "TENUSD");
+    await completeCardSetup(query, gw, await savedCard(a), opts());
+    expect(await userRow(a)).toMatchObject({ trial_started_at: NOW_TEXT, promo_code: null, promo_coupon: null, promo_refused_at: NOW_TEXT });
+    expect(await reservations()).toEqual([]);
+  });
+
+  // Unit 8 review F5: the coupon's duration is stored with the pending code and refreshed from Stripe at save.
+  it("stores the coupon's duration with the pending code and at save; Remove and a refusal clear it", async () => {
+    gw.payment.addPromotion({ code: "THREE", coupon: { id: "co_3", duration: "repeating", durationInMonths: 3 } });
+    const a = await member("a@example.com");
+    expect((await choosePromoCode(query, gw, { userId: a, ip: "203.0.113.9", code: "three", currency: "CAD" })).ok).toBe(true);
+    const terms = async () => (await query<{ d: string | null; m: number | null }>("select promo_duration as d, promo_duration_months as m from users where id = $1", [a]))[0];
+    expect(await terms()).toEqual({ d: "repeating", m: 3 });
+    await clearPendingPromo(query, a);
+    expect(await terms()).toEqual({ d: null, m: null });
+    // Stored without a duration (an older selection): the save writes Stripe's.
+    await setPendingPromo(query, a, { code: "THREE", couponId: "co_3", label: "Three" });
+    expect(await terms()).toEqual({ d: null, m: null });
+    await completeCardSetup(query, gw, await savedCard(a), opts());
+    expect(await userRow(a)).toMatchObject({ promo_coupon: "co_3", promo_refused_at: null });
+    expect(await terms()).toEqual({ d: "repeating", m: 3 });
+    // A refused code at save clears it.
+    gw.payment.addPromotion({ code: "ONCE", coupon: { id: "co_1" } });
+    const b = await member("b@example.com");
+    await setPendingPromo(query, b, { code: "ONCE", couponId: "co_1", label: "Once", duration: "once", durationInMonths: null });
+    gw.payment.promotions.get("ONCE")!.active = false;
+    await completeCardSetup(query, gw, await savedCard(b), opts());
+    expect((await query("select promo_duration from users where id = $1", [b]))[0]).toEqual({ promo_duration: null });
+  });
+
   it("the pending selection: chosen and removed only before the card is saved", async () => {
     gw.payment.addPromotion({ code: "WELCOME20" });
     const a = await member("a@example.com");

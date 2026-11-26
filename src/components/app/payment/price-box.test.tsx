@@ -33,11 +33,27 @@ describe("PriceBox", () => {
     expect(t).toContain("Due today: US$0.");
   });
 
-  it("a discount line names the code's label and, for a once-only code, that it is the first month only", () => {
+  // Unit 8 review F5: how long the discount lasts, and the regular monthly amount after one that ends.
+  it("a once-only discount: its label and 'off your first month', the first month's total, then the regular month", () => {
     const p = { ...ontario, discountCents: 5600, taxCents: 2912, totalCents: 25312 };
-    const t = text(renderToStaticMarkup(<PriceBox price={p} promo={promo} />));
-    expect(t).toMatch(/Launch 20% first month only\s*−\s*CA\$56/);
-    expect(t).toContain("Total per month CA$253.12");
+    const html = renderToStaticMarkup(<PriceBox price={p} promo={promo} />);
+    const t = text(html);
+    expect(t).toMatch(/Launch 20% CA\$56 off your first month\s*−\s*CA\$56/);
+    expect(t).toContain("First month CA$253.12");
+    expect(t).toContain("Then CA$316.40 a month");
+    expect(t).toContain("CA$253.12 first month · Details");
+    expect(html).toMatch(/aria-live="polite"[^>]*>First month CA\$253.12. Then CA\$316.40 a month/);
+  });
+
+  it("a discount for some months says for how many; one that lasts says every month, with no 'Then' line", () => {
+    const p = { ...ontario, discountCents: 5600, taxCents: 2912, totalCents: 25312 };
+    const three = text(renderToStaticMarkup(<PriceBox price={p} promo={{ ...promo, duration: "repeating", durationInMonths: 3 }} />));
+    expect(three).toContain("CA$56 off a month for your first 3 months");
+    expect(three).toContain("Then CA$316.40 a month");
+    const always = text(renderToStaticMarkup(<PriceBox price={p} promo={{ ...promo, duration: "forever" }} />));
+    expect(always).toContain("CA$56 off every month");
+    expect(always).toContain("Total per month CA$253.12");
+    expect(always).not.toContain("Then");
   });
 
   it("the USD / CAD toggle is a labelled group of pressed buttons, at least 44px tall", () => {

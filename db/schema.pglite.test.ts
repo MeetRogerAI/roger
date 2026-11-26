@@ -87,7 +87,7 @@ describe("schema.sql on Postgres", () => {
 
   it("has the payment-at-first-list columns, and keeps one promo reservation per code and member (plan 2026-11-26-001, Unit 1)", async () => {
     const cols = await columns();
-    for (const c of ["users.first_teaser_at", "users.setup_session", "users.promo_code", "users.promo_coupon", "users.promo_label", "cora_user_weeks.superseded_at", "users.promo_refused_at", "users.unlock_attempted_at"]) {
+    for (const c of ["users.first_teaser_at", "users.setup_session", "users.promo_code", "users.promo_coupon", "users.promo_label", "cora_user_weeks.superseded_at", "users.promo_refused_at", "users.unlock_attempted_at", "charge_attempts.coupon", "users.promo_ended_label", "users.promo_duration", "users.promo_duration_months"]) {
       expect(cols).toContain(c);
     }
     const [{ id }] = (await db.query<{ id: string }>("insert into users (email) values ('promo@example.com') returning id")).rows;

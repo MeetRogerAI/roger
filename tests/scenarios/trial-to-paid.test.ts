@@ -136,11 +136,16 @@ describe("the charge cron re-runs after the second free list", () => {
 });
 
 describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
-  async function promoMember(email: string) {
+  type PromoCoupon = NonNullable<Parameters<World["stripe"]["payment"]["addPromotion"]>[0]["coupon"]>;
+  async function promoMember(
+    email: string,
+    o: { currency?: "CAD" | "USD"; country?: "CA" | "US"; code?: string; coupon?: PromoCoupon; duration?: "once" | "repeating" | "forever" | null } = {},
+  ) {
     await w.at("2026-12-02T16:00:00Z");
-    const m = await signUp(w, { email, currency: "CAD", country: "CA" });
-    const p = w.stripe.payment.addPromotion({ code: "WELCOME20", coupon: { id: "co_20", percentOff: 20 } });
-    await w.query("update users set promo_code = $2, promo_coupon = $3, promo_label = 'WELCOME20' where id = $1", [m.id, p.code, p.coupon!.id]);
+    const m = await signUp(w, { email, currency: o.currency ?? "CAD", country: o.country ?? "CA" });
+    const code = o.code ?? "WELCOME20";
+    const p = w.stripe.payment.addPromotion({ code, coupon: o.coupon ?? { id: "co_20", percentOff: 20 } });
+    await w.query("update users set promo_code = $2, promo_coupon = $3, promo_label = $2, promo_duration = $4 where id = $1", [m.id, p.code, p.coupon!.id, o.duration === undefined ? "once" : o.duration]);
     for (const week of WEEKS.slice(0, 2)) {
       await w.at(toronto(addDays(week, -1), "15:00"));
       await sendRun(w, m);
@@ -154,7 +159,7 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
     // CA$280 less 20% = CA$224, plus 13% HST = CA$253.12.
     const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
     expect(paidNext.text).toContain("CA$253.12");
-    expect(paidNext.text).toContain("That includes your promo code WELCOME20: CA$56 off.");
+    expect(paidNext.text).toContain("That includes your promo code WELCOME20: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included.");
     await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
     await sendRun(w, m);
     expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ charged: 1 });
@@ -174,6 +179,56 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
     await passHours(w, toronto(addDays(WEEKS[2], 1), "08:00"));
     expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon)).toEqual([null]);
     expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", totalCents: 31640 });
+    expect(await userRow(w, m.id)).toMatchObject({ status: "active" });
+  });
+
+  // Review F7: an amount-off coupon in each currency, told and charged alike.
+  it.each([
+    // CA$280 less CA$56 = CA$224, plus 13% HST = CA$253.12.
+    ["CAD", "CA", { usd: 4000, cad: 5600 }, 25312, 5600],
+    // US$200 less US$40, no tax collected: US$160.
+    ["USD", "US", { usd: 4000, cad: 5600 }, 16000, 4000],
+  ] as const)("an amount-off code in %s: the told amount is the charge", async (currency, country, amountOff, told, off) => {
+    const m = await promoMember(`amt-${country.toLowerCase()}@example.com`, { currency, country, code: "TAKE40", coupon: { id: "co_amt", percentOff: null, amountOff: { ...amountOff } }, duration: "forever" });
+    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
+    expect(paidNext.text).toContain(dollars(told, currency));
+    expect(paidNext.text).toContain(`That includes your promo code TAKE40: ${dollars(off, currency)} off every month.`);
+    await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
+    await sendRun(w, m);
+    expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ charged: 1 });
+    expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", currency, totalCents: told, discountCents: off });
+    expect((await w.query<{ amount_cents: number }>("select amount_cents from charge_attempts where user_id = $1", [m.id]))[0].amount_cents).toBe(told);
+  });
+
+  // Review F7: a coupon whose redeem_by passes after the second-list email, through the reminder and the charge.
+  it("a coupon that expires (redeem_by) after the second-list email: the reminder tells the full price, and the charge matches it", async () => {
+    const m = await promoMember("ivy@example.ca");
+    expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).toContain("CA$253.12");
+    // Expires on the Friday before the third Monday, before the 48-hour reminder.
+    w.stripe.payment.coupons.get("co_20")!.redeemBy = Math.floor(toronto("2026-12-18", "12:00").getTime() / 1000);
+    await passHours(w, toronto("2026-12-20", "15:00"), 6);
+    const reminder = w.mail(m.email).find((x) => x.subject === "Your first charge could be on Monday")!;
+    expect(reminder.text).toContain("CA$316.40");
+    expect(reminder.text).not.toContain("promo code");
+    expect((await w.query("select promo_coupon from users where id = $1", [m.id]))[0]).toEqual({ promo_coupon: null });
+    await sendRun(w, m);
+    expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ charged: 1 });
+    expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon)).toEqual([null]);
+    expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", totalCents: 31640 });
+  });
+
+  it("a coupon that expires (redeem_by) after the reminder: held and told the discount ended, charged the full price the next day", async () => {
+    const m = await promoMember("jo@example.ca");
+    await passHours(w, toronto("2026-12-20", "15:00"), 6);
+    expect(w.mail(m.email).find((x) => x.subject === "Your first charge could be on Monday")!.text).toContain("CA$253.12");
+    w.stripe.payment.coupons.get("co_20")!.redeemBy = Math.floor(toronto("2026-12-20", "18:00").getTime() / 1000);
+    await sendRun(w, m);
+    expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ held_amount: 1 });
+    const changed = w.mail(m.email).find((x) => x.subject === "Your first charge amount changed")!;
+    expect(changed.text).toContain("(WELCOME20) has ended");
+    expect(changed.text).toContain("CA$316.40");
+    await passHours(w, toronto(addDays(WEEKS[2], 1), "08:00"));
+    expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon)).toEqual([null]);
     expect(await userRow(w, m.id)).toMatchObject({ status: "active" });
   });
 });

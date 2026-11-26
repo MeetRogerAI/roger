@@ -6,11 +6,13 @@ import { longDate } from "./welcome";
 export function subscribedEmail(o: { amountCents: number | null; currency: Currency; /** A one-at-a-time member's first monthly charge: not a third list. */ switched?: boolean }): Rendered {
   const paid = o.amountCents != null ? `${moneyCents(o.amountCents, o.currency)}, tax included` : "your first month";
   const list = o.switched ? "This week’s list" : "Your third list";
+  // A promo that covers the whole first invoice (Unit 8 review F7): Stripe starts the subscription and charges nothing.
+  const charged = o.amountCents === 0 ? "Your first month is covered by your promo code, so nothing was charged." : `We charged ${paid}.`;
   return renderEmail({
     subject: "You’re subscribed",
     preview: `${list} is ready.`,
     heading: "You’re subscribed.",
-    paragraphs: [`We charged ${paid}. ${list} is ready now, and a new one arrives every Monday.`, "You can cancel any time on the billing page, in one click."],
+    paragraphs: [`${charged} ${list} is ready now, and a new one arrives every Monday.`, "You can cancel any time on the billing page, in one click."],
     button: { label: "Open this week’s list", url: appUrl("/app") },
   });
 }

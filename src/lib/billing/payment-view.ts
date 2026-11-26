@@ -1,3 +1,4 @@
+import { discountEnds, discountWords, thenWords, type DiscountTerms } from "./discount-words";
 import type { BillingCountry, MonthlyPreview } from "./gateway";
 import { checkBillingLocation, OUTSIDE_COVERAGE } from "./location";
 import { money, moneyCents, type Currency } from "./prices";
@@ -30,12 +31,34 @@ export function basePreview(currency: Currency, subtotalCents: number, promo: Pr
   return { currency, subtotalCents, discountCents: discount, tax: "pending", taxCents: 0, taxName: null, taxRate: null, totalCents: subtotalCents - discount };
 }
 
-/** "first month only", "first 3 months", or "" for a discount that lasts. */
-export function discountDuration(p: PromoView | null): string {
-  if (!p) return "";
-  if (p.duration === "once") return "first month only";
-  if (p.duration === "repeating" && p.durationInMonths) return p.durationInMonths === 1 ? "first month only" : `first ${p.durationInMonths} months`;
-  return "";
+const termsOf = (p: PromoView): DiscountTerms => ({ duration: p.duration, months: p.durationInMonths });
+
+/**
+ * Under the discount's label, how long it lasts (Unit 8 review F5): "CA$56 off your first month", "CA$56 off a
+ * month for your first 3 months", "CA$56 off every month". "" when there is no discount or its period is unknown.
+ */
+export function discountDuration(p: PromoView | null, price: Pick<MonthlyPreview, "discountCents" | "currency">): string {
+  if (!p || price.discountCents <= 0 || discountEnds(termsOf(p)) == null) return "";
+  return discountWords(price.discountCents, price.currency, termsOf(p));
+}
+
+/**
+ * The regular monthly total, before any discount: the plan price plus its tax at the preview's rate (Stripe names
+ * the rate of every tax it charges). With the tax still to come, or a discount that leaves nothing taxed (so no
+ * rate is known), the plan price and `taxToCome`.
+ */
+export function fullMonthly(p: MonthlyPreview): { cents: number; taxToCome: boolean } {
+  if (p.tax === "pending") return { cents: p.subtotalCents, taxToCome: true };
+  if (p.taxRate != null) return { cents: p.subtotalCents + Math.round((p.subtotalCents * p.taxRate) / 100), taxToCome: false };
+  if (p.discountCents >= p.subtotalCents) return { cents: p.subtotalCents, taxToCome: true };
+  return { cents: p.subtotalCents, taxToCome: false };
+}
+
+/** For a discount that ends (once, or for some months): "Then CA$316.40 a month". Null otherwise. */
+export function thenLine(p: PromoView | null, price: MonthlyPreview): string | null {
+  if (!p || price.discountCents <= 0 || !discountEnds(termsOf(p))) return null;
+  const full = fullMonthly(price);
+  return thenWords(full.cents, price.currency, full.taxToCome);
 }
 
 /** Before a billing address: the tax line's words (origin R16). */

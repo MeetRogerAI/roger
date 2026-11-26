@@ -5,7 +5,8 @@ import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import { runHourly } from "@/lib/housekeeping/job";
 import { runChargeJob } from "./charge-job";
-import { chargeFirst, repairPaidUsers, retryNow, settleFromInvoice, type ChargeDeps } from "./first-charge";
+import { currencyMismatch } from "@/test-helpers/fake-card-gateway";
+import { chargeFirst, previewFirst, repairPaidUsers, retryNow, settleFromInvoice, type ChargeDeps } from "./first-charge";
 import type { BillingGateway, ChargeResult, FoundSubscription } from "./subscriptions";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -35,6 +36,7 @@ function fakeStripe() {
   const gone = new Set<string>();
   const previewCoupons: (string | null)[] = [];
   const createCoupons: (string | null)[] = [];
+  const keyParams = new Map<string, string>();
   let total = 23000;
   const amount = (coupon?: string | null) => total - (coupon ? (couponOff.get(coupon) ?? 0) : 0);
   const gw: BillingGateway & {
@@ -65,9 +67,15 @@ function fakeStripe() {
     async subscriptions(customer) {
       return subs.get(customer) ?? [];
     },
-    async createSubscription({ customer, claimId, idempotencyKey, coupon }) {
+    async createSubscription({ customer, claimId, idempotencyKey, coupon, price, extra }) {
       keys.push(idempotencyKey);
       createCoupons.push(coupon ?? null);
+      // Stripe refuses a key reused with other parameters.
+      const sent = JSON.stringify([customer, price, extra ?? null, coupon ?? null, claimId]);
+      if ((keyParams.get(idempotencyKey) ?? sent) !== sent) {
+        throw Object.assign(new Error("Keys for idempotent requests can only be used with the same parameters they were first used with."), { type: "StripeIdempotencyError" });
+      }
+      keyParams.set(idempotencyKey, sent);
       if (coupon && gone.has(coupon)) return { kind: "coupon_gone", error: `No such coupon: '${coupon}'` };
       const total = amount(coupon);
       const next = script.shift() ?? { kind: "succeeded", object: "", amountCents: total, currency: "USD" };
@@ -411,9 +419,16 @@ describe("the promo locked in at card save (plan 2026-11-26-001, Unit 8)", () =>
   });
 
   it("holds when the told quote had no coupon but the preview carries one (the coupon is part of the told amount)", async () => {
-    await query("update users set quote = $1", [JSON.stringify({ totalCents: TOLD, currency: "USD", price: "price_monthly_usd" })]);
+    await query("update users set quote = $1", [JSON.stringify({ totalCents: TOLD, currency: "USD", price: "price_monthly_usd", coupon: null })]);
     expect(await chargeFirst(query, deps(), uid, WEEK)).toBe("held_amount");
     expect(gw.keys).toEqual([]);
+  });
+
+  // Review F4: a quote told before Unit 8 has no coupon field; only its amount is compared.
+  it("a quote from before Unit 8 (no coupon field) with the same amount is charged, not held", async () => {
+    await query("update users set quote = $1", [JSON.stringify({ totalCents: TOLD, currency: "USD", price: "price_monthly_usd" })]);
+    expect(await chargeFirst(query, deps(), uid, WEEK)).toBe("charged");
+    expect(gw.createCoupons).toEqual(["co_20"]);
   });
 
   it("a coupon deleted before the charge: held for the changed amount, told, the promo dropped; 24 hours later charged the full price", async () => {
@@ -506,7 +521,9 @@ describe("a week whose delivered list was a free list (plan 2026-11-26-001, Unit
   it("is never charged that Monday, by the job's re-runs or a direct call", async () => {
     await deliver(true);
     for (const t of ["2026-12-14T12:15:00Z", "2026-12-14T13:05:00Z", "2026-12-14T17:55:00Z"]) {
-      expect(await runChargeJob(query, deps(at(t)), { week: WEEK })).toMatchObject({ first: { charged: 0 } });
+      // `skipped: 0`: the job's own `due` query leaves the member out (Unit 8 review F7: each layer has its own test;
+      // the direct call below is chargeFirst's).
+      expect(await runChargeJob(query, deps(at(t)), { week: WEEK })).toMatchObject({ first: { charged: 0, skipped: 0 } });
     }
     expect(await chargeFirst(query, deps(), uid, WEEK)).toBe("skipped");
     expect(gw.keys).toEqual([]);
@@ -519,5 +536,156 @@ describe("a week whose delivered list was a free list (plan 2026-11-26-001, Unit
     expect(gw.keys).toHaveLength(1);
     expect(gw.count()).toBe(1);
     expect(await user()).toMatchObject({ status: "active" });
+  });
+});
+
+describe("review fixes (plan 2026-11-26-001, Unit 8)", () => {
+  const TOLD = 18400;
+  const promo = async () =>
+    (await query<{ coupon: string | null; label: string | null; ended: string | null }>("select promo_coupon as coupon, promo_label as label, promo_ended_label as ended from users where id = $1", [uid]))[0];
+  const claims = () => query<{ attempt: number; outcome: string; coupon: string | null; amount_cents: number | null }>("select attempt, outcome, coupon, amount_cents from charge_attempts order by attempt");
+  const age = () => query("update charge_attempts set claimed_at = now() - interval '16 minutes'");
+
+  beforeEach(async () => {
+    gw.couponOff.set("co_20", 4600);
+    await query("update users set promo_code = 'WELCOME20', promo_coupon = 'co_20', promo_label = 'WELCOME20', promo_duration = 'once', quote = $1", [
+      JSON.stringify({ totalCents: TOLD, currency: "USD", price: "price_monthly_usd", coupon: "co_20", discountCents: 4600 }),
+    ]);
+  });
+
+  describe("F1: the claim records its coupon; a takeover repeats exactly that", () => {
+    it("records the coupon on the claim", async () => {
+      gw.script.push("crash_before");
+      await expect(chargeFirst(query, deps(), uid, WEEK)).rejects.toThrow("before Stripe");
+      expect(await claims()).toEqual([{ attempt: 1, outcome: "claimed", coupon: "co_20", amount_cents: TOLD }]);
+    });
+
+    it.each([
+      ["changed to another coupon", "'co_other'"],
+      ["dropped", "null"],
+    ])("an unknown claim whose member's coupon was %s meanwhile: the takeover sends the claimed coupon, same key, no idempotency error", async (_what, value) => {
+      gw.script.push({ kind: "unknown", error: "timeout" });
+      expect(await chargeFirst(query, deps(), uid, WEEK)).toBe("unknown");
+      await query(`update users set promo_coupon = ${value}`);
+      await age();
+      await runHourly(query, deps(at("2026-12-14T12:00:00Z")));
+      expect(gw.createCoupons).toEqual(["co_20", "co_20"]);
+      expect(gw.keys[0]).toBe(gw.keys[1]);
+      expect(await claims()).toEqual([{ attempt: 1, outcome: "succeeded", coupon: "co_20", amount_cents: TOLD }]);
+      expect(await user()).toMatchObject({ status: "active" });
+    });
+
+    it("the fake refuses a reused key with other parameters, as Stripe does (so the test above would catch a changed coupon)", async () => {
+      const o = { customer: "cus_1", price: "price_monthly_usd", claimId: "c1", userId: uid, idempotencyKey: "first_charge:c1:1" };
+      await gw.createSubscription({ ...o, coupon: "co_20" });
+      await expect(gw.createSubscription({ ...o, coupon: null })).rejects.toMatchObject({ type: "StripeIdempotencyError" });
+    });
+
+    it("a quote's preview while a claim is open never drops the coupon; the takeover finds it gone and ends the claim with the hold", async () => {
+      gw.script.push("crash_before");
+      await expect(chargeFirst(query, deps(), uid, WEEK)).rejects.toThrow("before Stripe");
+      gw.gone.add("co_20");
+      const r = await previewFirst(query, gw, { id: uid, promo_coupon: "co_20", stripe_customer: "cus_1" }, "price_monthly_usd", null);
+      expect(r).toMatchObject({ coupon: null, preview: { totalCents: 23000 } });
+      expect(await promo()).toMatchObject({ coupon: "co_20", ended: null });
+      await age();
+      await runHourly(query, deps(at("2026-12-14T12:00:00Z")));
+      expect(gw.createCoupons).toEqual(["co_20", "co_20"]);
+      expect(await claims()).toEqual([{ attempt: 1, outcome: "error", coupon: "co_20", amount_cents: TOLD }]);
+      expect(await user()).toMatchObject({ status: "held", hold_reason: "amount_changed" });
+      expect(await promo()).toEqual({ coupon: null, label: null, ended: null });
+      expect(sent.find((m) => m.subject === "Your first charge amount changed")!.text).toContain("(WELCOME20) has ended");
+    });
+  });
+
+  describe("F2: coupon gone at create for a member who can no longer be charged", () => {
+    it.each([
+      ["cancelled", "update users set status = 'cancelled', cancel_requested_at = now()"],
+      ["closed", "update users set status = 'closed'"],
+      ["asked to cancel", "update users set cancel_requested_at = now()"],
+    ])("%s between the claim and the answer: the claim ends as an error with an admin alert; the member is not held", async (_what, change) => {
+      const real = gw.createSubscription.bind(gw);
+      const racing = {
+        ...gw,
+        createSubscription: async (o: Parameters<BillingGateway["createSubscription"]>[0]) => {
+          gw.gone.add("co_20");
+          await query(change);
+          return real(o);
+        },
+      };
+      expect(await chargeFirst(query, deps(SIX_AM, { gw: racing }), uid, WEEK)).toBe("error");
+      expect(await claims()).toEqual([{ attempt: 1, outcome: "error", coupon: "co_20", amount_cents: TOLD }]);
+      const [c] = await query<{ error: string }>("select error from charge_attempts");
+      expect(c.error).toMatch(/^The user can no longer be charged\. Coupon no longer applies/);
+      expect((await user()).hold_reason).toBeNull();
+      expect(subjects()).toEqual(["[Roger] A first charge claim ended: the member can no longer be charged"]);
+      // Nothing is left for the takeover.
+      await age();
+      await runHourly(query, deps(at("2026-12-14T12:00:00Z")));
+      expect(gw.keys).toHaveLength(1);
+    });
+  });
+
+  describe("F3: the discount-ended line survives a failed pass", () => {
+    it("the full-price preview fails after the drop: the next pass's hold email still says the discount ended", async () => {
+      gw.gone.add("co_20");
+      let fail = true;
+      const flaky = {
+        ...gw,
+        preview: async (o: Parameters<BillingGateway["preview"]>[0]) => {
+          if (!o.coupon && fail) {
+            fail = false;
+            throw new Error("Stripe timed out");
+          }
+          return gw.preview(o);
+        },
+      };
+      await expect(chargeFirst(query, deps(SIX_AM, { gw: flaky }), uid, WEEK)).rejects.toThrow("timed out");
+      expect(await promo()).toEqual({ coupon: null, label: null, ended: "WELCOME20" });
+      expect(sent).toEqual([]);
+      expect(await chargeFirst(query, deps(at("2026-12-14T11:15:00Z")), uid, WEEK)).toBe("held_amount");
+      expect(sent[0].subject).toBe("Your first charge amount changed");
+      expect(sent[0].text).toContain("(WELCOME20) has ended");
+      expect(sent[1].text).toContain("(WELCOME20) no longer applies");
+      expect((await promo()).ended).toBeNull();
+    });
+
+    it("a charge that goes through forgets a kept label", async () => {
+      await query("update users set promo_ended_label = 'OLD'");
+      expect(await chargeFirst(query, deps(), uid, WEEK)).toBe("charged");
+      expect((await promo()).ended).toBeNull();
+    });
+  });
+
+  describe("F6: an amount-off coupon without the member's currency reaches the charge", () => {
+    it("is treated like a coupon that is gone: dropped, held and told the full price, and later passes do not throw", async () => {
+      const mismatch = {
+        ...gw,
+        preview: async (o: Parameters<BillingGateway["preview"]>[0]) => {
+          if (o.coupon) throw currencyMismatch(o.coupon, "USD");
+          return gw.preview(o);
+        },
+      };
+      expect(await chargeFirst(query, deps(SIX_AM, { gw: mismatch }), uid, WEEK)).toBe("held_amount");
+      expect(await promo()).toEqual({ coupon: null, label: null, ended: null });
+      expect(await user()).toMatchObject({ status: "held", hold_reason: "amount_changed" });
+      expect(sent[0].text).toContain("(WELCOME20) has ended");
+      await runChargeJob(query, deps(at("2026-12-14T11:15:00Z"), { gw: mismatch }), { week: WEEK });
+      expect(gw.keys).toEqual([]);
+    });
+  });
+
+  describe("F7: a promo that covers the whole first invoice", () => {
+    it("starts the subscription with nothing charged, as told (0 is the told amount), and says so", async () => {
+      gw.couponOff.set("co_free", 23000);
+      await query("update users set promo_coupon = 'co_free', promo_label = 'FREEMONTH', quote = $1", [
+        JSON.stringify({ totalCents: 0, currency: "USD", price: "price_monthly_usd", coupon: "co_free", discountCents: 23000 }),
+      ]);
+      expect(await runChargeJob(query, deps(), { week: WEEK })).toMatchObject({ first: { charged: 1 } });
+      expect(await claims()).toEqual([{ attempt: 1, outcome: "succeeded", coupon: "co_free", amount_cents: 0 }]);
+      expect(await user()).toMatchObject({ status: "active" });
+      expect(subjects()).toEqual(["You’re subscribed"]);
+      expect(sent[0].text).toContain("Your first month is covered by your promo code, so nothing was charged.");
+    });
   });
 });

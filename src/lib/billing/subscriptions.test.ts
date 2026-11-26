@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { describe, expect, it } from "vitest";
+import { isCouponGone } from "./gateway";
 import { classify, stripeBilling } from "./subscriptions";
 
 /**
@@ -60,6 +61,15 @@ describe("stripeBilling with a locked-in coupon", () => {
     }
     // Without a coupon in the call, a resource_missing is not a coupon problem.
     expect(await stripeBilling(stubStripe({ createError: invalid("resource_missing", "customer", "No such customer") }).s)!.createSubscription(create)).toMatchObject({ kind: "error" });
+  });
+
+  // Review F6 (shape assumed, not seen in the sandbox): an amount-off coupon without the invoice's currency.
+  it("answers coupon_gone for an amount-off coupon without the invoice's currency; other invalid requests are not", async () => {
+    const mismatch = invalid("", "discounts[0][coupon]", "Coupon co_10usd does not support the currency cad.");
+    expect(isCouponGone(mismatch)).toBe(true);
+    expect(await stripeBilling(stubStripe({ createError: mismatch }).s)!.createSubscription({ ...create, coupon: "co_10usd" })).toMatchObject({ kind: "coupon_gone" });
+    expect(isCouponGone(invalid("", "currency", "Invalid currency: xyz"))).toBe(false);
+    expect(isCouponGone(Object.assign(new Error("The coupon currency does not match"), {}))).toBe(false);
   });
 
   it("maps Endive's failed_tax_calculation on create to a tax address problem (held, admin alert)", async () => {

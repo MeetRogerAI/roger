@@ -3,6 +3,7 @@ import type { Query } from "@/lib/db-query";
 import type { CardGateway, MonthlyPreview } from "./gateway";
 import { isNoCardTrial } from "./has-card";
 import { checkBillingLocation } from "./location";
+import { asDuration } from "./discount-words";
 import type { PromoView } from "./payment-view";
 import { basePreview, TAX_UNAVAILABLE } from "./payment-view";
 import { quoteMonthly, type PreviewCache } from "./preview";
@@ -28,6 +29,9 @@ export type PaymentAccount = {
   promoCode: string | null;
   promoCoupon: string | null;
   promoLabel: string | null;
+  /** The pending coupon's duration, stored with the code (Unit 8 review F5). */
+  promoDuration: PromoView["duration"];
+  promoDurationMonths: number | null;
   held: HeldTeaser;
 };
 
@@ -47,8 +51,11 @@ export async function paymentAccount(q: Query, userId: string): Promise<PaymentA
     promo_code: string | null;
     promo_coupon: string | null;
     promo_label: string | null;
+    promo_duration: string | null;
+    promo_duration_months: number | null;
   }>(
-    `select name, status, trial_started_at, sponsor_id is not null as sponsored, currency, stripe_customer, promo_code, promo_coupon, promo_label
+    `select name, status, trial_started_at, sponsor_id is not null as sponsored, currency, stripe_customer, promo_code, promo_coupon, promo_label,
+       promo_duration, promo_duration_months
      from users where id = $1`,
     [userId],
   );
@@ -63,14 +70,16 @@ export async function paymentAccount(q: Query, userId: string): Promise<PaymentA
     promoCode: u.promo_code,
     promoCoupon: u.promo_coupon,
     promoLabel: u.promo_label,
+    promoDuration: asDuration(u.promo_duration),
+    promoDurationMonths: u.promo_duration_months,
     held,
   };
 }
 
 /** The pending code as stored on the account (no amounts: the page then shows no discount amount). Null when none is pending. */
-export function storedPromoView(a: Pick<PaymentAccount, "promoCode" | "promoLabel">): PromoView | null {
+export function storedPromoView(a: Pick<PaymentAccount, "promoCode" | "promoLabel"> & Partial<Pick<PaymentAccount, "promoDuration" | "promoDurationMonths">>): PromoView | null {
   if (!a.promoCode) return null;
-  return { code: a.promoCode, label: a.promoLabel ?? a.promoCode, duration: null, durationInMonths: null, percentOff: null, amountOffCents: null };
+  return { code: a.promoCode, label: a.promoLabel ?? a.promoCode, duration: a.promoDuration ?? null, durationInMonths: a.promoDurationMonths ?? null, percentOff: null, amountOffCents: null };
 }
 
 export const PROMO_GONE = "That code no longer applies, so the price is the regular one.";

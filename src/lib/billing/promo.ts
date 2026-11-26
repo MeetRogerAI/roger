@@ -53,11 +53,16 @@ export const PROMO_INVALID = "That code isn’t valid.";
  * Only a trial still waiting for its card can change it; once the card is
  * saved the selection is fixed. Returns whether it was stored.
  */
-export async function setPendingPromo(q: Query, userId: string, p: Pick<Promotion, "code" | "couponId" | "label">): Promise<boolean> {
+export async function setPendingPromo(
+  q: Query,
+  userId: string,
+  p: Pick<Promotion, "code" | "couponId" | "label"> & Partial<Pick<Promotion, "duration" | "durationInMonths">>,
+): Promise<boolean> {
+  // The coupon's duration is kept with it (Unit 8 review F5), for the Price Box and the first-charge emails.
   const rows = await q(
-    `update users u set promo_code = $2, promo_coupon = $3, promo_label = $4, promo_refused_at = null
+    `update users u set promo_code = $2, promo_coupon = $3, promo_label = $4, promo_duration = $5, promo_duration_months = $6, promo_refused_at = null
      where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")} returning u.id`,
-    [userId, p.code, p.couponId, p.label],
+    [userId, p.code, p.couponId, p.label, p.duration ?? null, p.durationInMonths ?? null],
   );
   return rows.length > 0;
 }
@@ -65,7 +70,7 @@ export async function setPendingPromo(q: Query, userId: string, p: Pick<Promotio
 /** "Remove" on the Payment page: no code pending. Only before the card is saved. */
 export async function clearPendingPromo(q: Query, userId: string): Promise<boolean> {
   const rows = await q(
-    `update users u set promo_code = null, promo_coupon = null, promo_label = null
+    `update users u set promo_code = null, promo_coupon = null, promo_label = null, promo_duration = null, promo_duration_months = null
      where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")} returning u.id`,
     [userId],
   );

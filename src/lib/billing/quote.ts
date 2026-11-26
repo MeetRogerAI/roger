@@ -2,7 +2,8 @@ import { addDays, cutoffInstant, wallToInstant, weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps, type SendResult } from "@/lib/mail/send";
 import type { Rendered } from "@/lib/mail/layout";
-import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail } from "@/lib/mail/templates/quote";
+import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail, type DiscountLine } from "@/lib/mail/templates/quote";
+import { asDuration, discountEnds, type DiscountTerms } from "./discount-words";
 import type { V3Settings } from "@/lib/v3-settings";
 import { previewFirst, sharingAtCutoff } from "./first-charge";
 import { carriedDifferenceCents } from "./adjustment";
@@ -27,9 +28,18 @@ export type Quote = {
   extraCents?: number;
   at: string;
   week: string;
-  /** The coupon locked in at card save that the amount was previewed with (plan 2026-11-26-001, Unit 8). */
+  /**
+   * The coupon locked in at card save that the amount was previewed with (plan 2026-11-26-001, Unit 8). Absent on
+   * a quote told before Unit 8: such a quote's coupon is not compared (it was told with none).
+   */
   coupon?: string | null;
+  /** The discount on the first charge (`totalCents` is the first charge, after it). */
   discountCents?: number;
+  /**
+   * For a discount that ends (once, or for some months): the monthly amount after it, tax included, as told in the
+   * email. Words only: never compared with the charge.
+   */
+  recurringCents?: number;
 };
 export type QuoteDeps = { gw: BillingGateway; settings: V3Settings; now: Date } & MailDeps;
 
@@ -44,12 +54,19 @@ type U = {
   quote: Quote | null;
   promo_coupon: string | null;
   promo_label: string | null;
+  promo_duration: string | null;
+  promo_duration_months: number | null;
 };
 
 async function load(q: Query, userId: string): Promise<U | null> {
-  const [u] = await q<U>(`select id, email, status, plan, currency, stripe_customer, trial_started_at::text, quote, promo_coupon, promo_label from users where id = $1`, [userId]);
+  const [u] = await q<U>(
+    `select id, email, status, plan, currency, stripe_customer, trial_started_at::text, quote, promo_coupon, promo_label, promo_duration, promo_duration_months from users where id = $1`,
+    [userId],
+  );
   return u ?? null;
 }
+
+const termsOf = (u: Pick<U, "promo_duration" | "promo_duration_months">): DiscountTerms => ({ duration: asDuration(u.promo_duration), months: u.promo_duration_months });
 
 /**
  * Only a monthly trial user with a saved card, before their first charge, is
@@ -83,7 +100,17 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   if (!price) return null;
   const extra = extraCents > 0 ? { amountCents: extraCents, currency } : null;
   const { preview: p, coupon } = await previewFirst(q, d.gw, { id: u.id, promo_coupon: u.promo_coupon, stripe_customer: u.stripe_customer! }, price, extra);
-  return { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week, coupon, discountCents: coupon ? (p.discountCents ?? 0) : 0 };
+  const discountCents = coupon ? (p.discountCents ?? 0) : 0;
+  const quote: Quote = { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week, coupon, discountCents };
+  // A discount that ends: the regular month after it (the plan price with tax, no coupon, no first-month extra), for the email's words.
+  if (coupon && discountCents > 0 && discountEnds(termsOf(u))) {
+    try {
+      quote.recurringCents = (await d.gw.preview({ customer: u.stripe_customer!, price, extra: null, coupon: null })).totalCents;
+    } catch (e) {
+      console.warn("[quote] the amount after the discount could not be previewed", { userId: u.id, message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return quote;
 }
 
 const same = (a: Quote | null, b: Quote) =>
@@ -94,12 +121,15 @@ const same = (a: Quote | null, b: Quote) =>
       a.price === b.price &&
       (a.extraCents ?? 0) === b.extraCents &&
       a.week === b.week &&
-      (a.coupon ?? null) === (b.coupon ?? null),
+      // A quote told before Unit 8 has no coupon field: not compared (Unit 8 review F4).
+      (a.coupon === undefined || (a.coupon ?? null) === (b.coupon ?? null)),
   );
 
-/** The discount line for an email stating the first charge: the locked-in promo's label and amount off. */
-const discountOf = (u: U, quote: Quote) =>
-  quote.coupon && (quote.discountCents ?? 0) > 0 ? { label: u.promo_label ?? "Promo code", amountCents: quote.discountCents! } : null;
+/** The discount line for an email stating the first charge: the locked-in promo's label, amount off, period and the amount after. */
+const discountOf = (u: U, quote: Quote): DiscountLine =>
+  quote.coupon && (quote.discountCents ?? 0) > 0
+    ? { label: u.promo_label ?? "Promo code", amountCents: quote.discountCents!, ...termsOf(u), thenCents: quote.recurringCents ?? null }
+    : null;
 
 /** Sends an email stating an amount, and stores that amount as told only if it was sent. */
 async function tell(q: Query, d: QuoteDeps, u: U, kind: string, ref: string, quote: Quote, message: Rendered): Promise<SendResult> {

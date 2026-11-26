@@ -278,7 +278,25 @@ export function isIdempotencyMismatch(e: unknown): boolean {
 export function isCouponGone(e: unknown): boolean {
   const err = e as StripeErrorish;
   if (err?.code === "coupon_expired") return true;
-  return err?.code === "resource_missing" && (err.param ?? "").startsWith("discounts");
+  if (err?.code === "resource_missing" && (err.param ?? "").startsWith("discounts")) return true;
+  return isCouponCurrencyMismatch(e);
+}
+
+/**
+ * An amount-off coupon with no amount in the invoice's currency (Unit 8
+ * review F6). Lock-in refuses such a code (`judgePromotion`: wrong_currency),
+ * so this is only a coupon changed in Stripe since, or a currency changed
+ * after the card save. Not seen in the sandbox (no live calls in that
+ * review): matched loosely as an invalid request on the discount whose
+ * message names the currency, and treated like a coupon that is gone (the
+ * full price is told before charging) rather than failing every pass.
+ * Confirm the exact shape in the sandbox before relying on more.
+ */
+export function isCouponCurrencyMismatch(e: unknown): boolean {
+  const err = e as StripeErrorish;
+  const invalidRequest = err?.type === "StripeInvalidRequestError" || err?.rawType === "invalid_request_error";
+  const aboutDiscount = (err?.param ?? "").startsWith("discounts") || /coupon/i.test(err?.message ?? "");
+  return invalidRequest && aboutDiscount && /currenc/i.test(err?.message ?? "");
 }
 
 /** The invalid-request codes that mean Stripe could not work the tax out for this location. */

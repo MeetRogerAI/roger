@@ -113,10 +113,10 @@ describe("/start/payment", () => {
     const f = db.gw!.payment.addPromotion({ code: "SAVE20", coupon: { name: "Launch 20%" } });
     await db.query!("update users set promo_code = 'SAVE20', promo_coupon = $1, promo_label = 'Launch 20%'", [f.coupon!.id]);
     const { text } = await render();
-    expect(text).toMatch(/Launch 20%.*first month only\s*−\s*CA\$56/);
+    expect(text).toMatch(/Launch 20%.*CA\$56 off your first month\s*−\s*CA\$56/);
+    expect(text).toContain("Then CA$280 + tax a month");
     expect(text).toContain("Code SAVE20 applied");
   });
-
   it("drops a pending code that does not apply in the account's currency, and says so", async () => {
     const f = db.gw!.payment.addPromotion({ code: "TENUSD", coupon: { amountOff: { usd: 1000 }, percentOff: null } });
     await db.query!("update users set promo_code = 'TENUSD', promo_coupon = $1, promo_label = 'Ten off'", [f.coupon!.id]);

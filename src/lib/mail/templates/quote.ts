@@ -1,14 +1,27 @@
+import { discountEnds, discountWords, type DiscountTerms } from "@/lib/billing/discount-words";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 import { longDate } from "./welcome";
 
 type Amount = { week: string; amountCents: number; currency: Currency };
-/** The promo locked in at card save: its label and the amount it takes off the first charge. */
-export type DiscountLine = { label: string; amountCents: number } | null;
+/**
+ * The promo locked in at card save: its label, the amount it takes off the first charge, how long it lasts, and
+ * (for one that ends) the monthly amount after it, tax included.
+ */
+export type DiscountLine = ({ label: string; amountCents: number; thenCents?: number | null } & Partial<DiscountTerms>) | null;
 
-/** The discount line, when a locked-in promo applies to the first charge (plan 2026-11-26-001, Unit 8). */
-export const discountLine = (d: DiscountLine | undefined, currency: Currency): string[] =>
-  d && d.amountCents > 0 ? [`That includes your promo code ${d.label}: ${moneyCents(d.amountCents, currency)} off.`] : [];
+/**
+ * The discount line, when a locked-in promo applies to the first charge (plan 2026-11-26-001, Unit 8): "That
+ * includes your promo code LABEL: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included."
+ * The period only when the coupon's duration is known; the amount after only for a discount that ends. Drafted
+ * copy for Peter's sign-off (S18).
+ */
+export const discountLine = (d: DiscountLine | undefined, currency: Currency): string[] => {
+  if (!d || d.amountCents <= 0) return [];
+  const terms: DiscountTerms = { duration: d.duration ?? null, months: d.months ?? null };
+  const after = discountEnds(terms) && d.thenCents != null ? ` After that, it’s ${moneyCents(d.thenCents, currency)} a month, tax included.` : "";
+  return [`That includes your promo code ${d.label}: ${discountWords(d.amountCents, currency, terms)}.${after}`];
+};
 
 /** Spec B.13 email 7 (monthly): after the second free list, the date and the exact amount of the first charge. */
 export function firstPaidNextEmail(o: Amount & { discount?: DiscountLine }): Rendered {

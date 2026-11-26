@@ -375,7 +375,8 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
  *
  * $1 user, $2 job clock, $3 currency, $4 country, $5 pending code as read,
  * $6 promotion code id (null when Stripe refused it), $7 max redemptions,
- * $8 Stripe's times redeemed, $9 first-time only, $10 card fingerprint.
+ * $8 Stripe's times redeemed, $9 first-time only, $10 card fingerprint,
+ * $11 the coupon's duration (once, repeating, forever) and $12 its months.
  */
 export const CARD_SAVE_CLAIM_SQL = `
 with u as (
@@ -425,6 +426,9 @@ upd as (
     promo_code = case when (select v from verdict) = 'refused' then null else promo_code end,
     promo_coupon = case when (select v from verdict) = 'refused' then null else promo_coupon end,
     promo_label = case when (select v from verdict) = 'refused' then null else promo_label end,
+    -- The locked-in coupon's duration as Stripe has it now (Unit 8 review F5); kept as stored if not known.
+    promo_duration = case (select v from verdict) when 'refused' then null when 'reserved' then coalesce($11::text, promo_duration) else promo_duration end,
+    promo_duration_months = case (select v from verdict) when 'refused' then null when 'reserved' then coalesce($12::int, promo_duration_months) else promo_duration_months end,
     promo_refused_at = case when (select v from verdict) = 'refused' then coalesce($2::timestamptz, now()) end
   where id = $1 and exists (select 1 from u) and (select v from verdict) <> 'lost_race'
   returning id
@@ -468,6 +472,8 @@ async function claimCardSave(q: Query, gw: CardGateway, userId: string, s: { cus
       promo?.timesRedeemed ?? 0,
       promo?.firstTimeOnly ?? false,
       s.cardFingerprint ?? null,
+      promo?.duration ?? null,
+      promo?.durationInMonths ?? null,
     ]);
     if (r?.verdict === "refused") console.info("[card] promo code not applied at card save", { userId });
     if (r?.saved) return "saved";

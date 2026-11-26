@@ -232,4 +232,63 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
     expect(sent[0].text).not.toContain("promo code");
     expect((await query<{ quote: unknown }>("select quote from users"))[0].quote).toMatchObject({ totalCents: 22600, coupon: null, discountCents: 0 });
   });
+
+  // Review F5: how long the discount lasts, in both emails, and the regular month after one that ends.
+  it.each([
+    ["once", null, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$226 a month, tax included.", 22600],
+    ["repeating", 1, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$226 a month, tax included.", 22600],
+    ["repeating", 3, "That includes your promo code WELCOME20: US$40 off a month for your first 3 months. After that, it’s US$226 a month, tax included.", 22600],
+    ["forever", null, "That includes your promo code WELCOME20: US$40 off every month.", undefined],
+  ])("a %s discount (%s months): both emails word it, and the quote notes the amount after", async (duration, months, line, recurring) => {
+    await query("update users set promo_duration = $1, promo_duration_months = $2", [duration, months]);
+    expect(await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid)).toBe(true);
+    expect(await sendFirstChargeReminders(query, pdeps(SATURDAY))).toBe(1);
+    expect(sent).toHaveLength(2);
+    for (const m of sent) {
+      expect(m.text).toContain("US$180.80");
+      expect(m.text).toContain(line);
+    }
+    const q = (await query<{ quote: Record<string, unknown> }>("select quote from users"))[0].quote;
+    expect(q).toMatchObject({ totalCents: 18080, coupon: "co_20", discountCents: 4000 });
+    expect(q.recurringCents).toBe(recurring);
+    // The amount after is a plain preview (no coupon); the charge is still the told, discounted amount.
+    expect(await chargeFirst(query, pdeps(MONDAY_CHARGE), uid, WEEK)).toBe("charged");
+    expect(created).toEqual(["co_20"]);
+  });
+
+  it("the amount after the discount cannot be previewed: the email still goes, without that sentence", async () => {
+    await query("update users set promo_duration = 'once'");
+    const flaky: BillingGateway = { ...promoGw, preview: async (o) => (o.coupon ? promoGw.preview(o) : Promise.reject(new Error("Stripe down"))) };
+    expect(await sendFirstPaidNext(query, { ...deps(MONDAY_BEFORE), gw: flaky }, uid)).toBe(true);
+    expect(sent[0].text).toContain("That includes your promo code WELCOME20: US$40 off your first month.");
+    expect(sent[0].text).not.toContain("After that");
+  });
+
+  // Review F4: a quote told before Unit 8 has no coupon field, so a coupon alone never makes it "changed".
+  it("a quote from before Unit 8 (no coupon field) at the same amount is not told again", async () => {
+    await query("update users set quote = $1", [JSON.stringify({ totalCents: 18080, currency: "USD", price: "price_monthly_usd", extraCents: 0, at: "2026-12-07T15:00:00Z", week: WEEK })]);
+    expect(await noticeQuoteChange(query, pdeps(new Date("2026-12-09T15:00:00Z")), uid)).toBe(false);
+    expect(sent).toEqual([]);
+    // With the field, a different coupon is a change.
+    await query("update users set quote = quote || '{\"coupon\": null}'::jsonb");
+    expect(await noticeQuoteChange(query, pdeps(new Date("2026-12-09T15:00:00Z")), uid)).toBe(true);
+  });
+
+  // Review F7: an expired coupon (past redeem_by) at the quote, then at the charge.
+  it("a coupon past its redeem_by at the reminder: the full price is told, and the charge matches it", async () => {
+    await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid);
+    const expired: BillingGateway = {
+      ...promoGw,
+      preview: async (o) => {
+        if (o.coupon) throw Object.assign(new Error(`Coupon ${o.coupon} is expired and cannot be applied.`), { type: "StripeInvalidRequestError", code: "coupon_expired", param: "discounts" });
+        return promoGw.preview(o);
+      },
+    };
+    expect(await sendFirstChargeReminders(query, { ...deps(SATURDAY), gw: expired })).toBe(1);
+    expect(sent[1].text).toContain("US$226");
+    expect(sent[1].text).not.toContain("promo code");
+    expect(await promo()).toEqual({ coupon: null, label: null });
+    expect(await chargeFirst(query, { ...deps(MONDAY_CHARGE), gw: expired }, uid, WEEK)).toBe("charged");
+    expect(created).toEqual([null]);
+  });
 });

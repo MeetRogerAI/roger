@@ -2,7 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 import type { MonthlyPreview } from "@/lib/billing/gateway";
-import { discountDuration, dueToday, taxLine, totalText, type PromoView } from "@/lib/billing/payment-view";
+import { discountDuration, dueToday, taxLine, thenLine, totalText, type PromoView } from "@/lib/billing/payment-view";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 
 /**
@@ -35,7 +35,10 @@ export function PriceBox({
   const tax = taxLine(price);
   const total = totalText(price);
   const due = dueToday(currency);
-  const duration = discountDuration(promo);
+  const duration = discountDuration(promo, price);
+  // A discount that ends: the total shown is the first month's, and the regular monthly amount follows it.
+  const then = thenLine(promo, price);
+  const totalLabel = then ? "First month" : "Total per month";
   return (
     <aside aria-labelledby={`${id}-title`} className="rounded-[8px] border border-rule bg-surface">
       <button
@@ -45,7 +48,7 @@ export function PriceBox({
         onClick={() => setOpen((v) => !v)}
         className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left md:hidden"
       >
-        <span className="font-semibold tabular-nums">{total} / month</span>
+        <span className="font-semibold tabular-nums">{then ? `${total} first month` : `${total} / month`}</span>
         <span className="text-small text-ink-2">· {open ? "Hide details" : "Details"}</span>
       </button>
       <div id={`${id}-details`} className={`${open ? "block" : "hidden"} border-t border-rule px-4 py-5 md:block md:border-t-0 md:px-5`}>
@@ -88,10 +91,11 @@ export function PriceBox({
             <dd className={price.tax === "pending" ? "max-w-[11rem] text-right text-ink-2" : "tabular-nums"}>{tax.value}</dd>
           </div>
           <div className="flex justify-between gap-4 border-t border-rule pt-3 font-semibold text-ink">
-            <dt>Total per month</dt>
+            <dt>{totalLabel}</dt>
             <dd className="tabular-nums">{total}</dd>
           </div>
         </dl>
+        {then && <p className="mt-1 text-right text-meta text-ink-2">{then}</p>}
 
         {promoSlot && <div className="mt-4">{promoSlot}</div>}
 
@@ -105,7 +109,8 @@ export function PriceBox({
         )}
       </div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">
-        Total per month {total}
+        {totalLabel} {total}
+        {then ? `. ${then}` : ""}
       </p>
     </aside>
   );

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { basePreview, billingErrors, canQuote, discountDuration, dueToday, postalError, taxLine, totalText } from "./payment-view";
+import type { MonthlyPreview } from "./gateway";
+import { basePreview, billingErrors, canQuote, discountDuration, dueToday, fullMonthly, postalError, taxLine, thenLine, totalText } from "./payment-view";
 
 /** Plan 2026-11-26-001, Unit 6: the Payment page's words and sums. */
 
@@ -42,11 +43,38 @@ describe("price lines", () => {
     expect(taxLine(basePreview("CAD", 28000, null))).toEqual({ label: "Tax", value: "Calculated from your billing address" });
   });
 
-  it("words a limited discount honestly", () => {
+  // Unit 8 review F5: the period and amount, and the regular amount after a discount that ends.
+  describe("words each discount duration honestly", () => {
     const p = { code: "A", label: "A", duration: "once" as const, durationInMonths: null, percentOff: 20, amountOffCents: null };
-    expect(discountDuration(p)).toBe("first month only");
-    expect(discountDuration({ ...p, duration: "repeating", durationInMonths: 3 })).toBe("first 3 months");
-    expect(discountDuration({ ...p, duration: "forever" })).toBe("");
+    // CA$280 less 20% = CA$224, HST 13% = CA$29.12, total CA$253.12; the regular month is CA$316.40.
+    const on: MonthlyPreview = { currency: "CAD", subtotalCents: 28000, discountCents: 5600, tax: "calculated", taxCents: 2912, taxName: "HST", taxRate: 13, totalCents: 25312 };
+    it.each([
+      ["once", null, "CA$56 off your first month", "Then CA$316.40 a month"],
+      ["repeating", 1, "CA$56 off your first month", "Then CA$316.40 a month"],
+      ["repeating", 3, "CA$56 off a month for your first 3 months", "Then CA$316.40 a month"],
+      ["forever", null, "CA$56 off every month", null],
+      [null, null, "", null],
+    ] as const)("%s %s → %s / %s", (duration, months, words, then) => {
+      const promo = { ...p, duration, durationInMonths: months };
+      expect(discountDuration(promo, on)).toBe(words);
+      expect(thenLine(promo, on)).toBe(then);
+    });
+
+    it("before an address the amount after reads '+ tax'; the US has none; nothing without a discount", () => {
+      expect(thenLine(p, basePreview("CAD", 28000, p))).toBe("Then CA$280 + tax a month");
+      const us: MonthlyPreview = { currency: "USD", subtotalCents: 20000, discountCents: 4000, tax: "calculated", taxCents: 0, taxName: null, taxRate: null, totalCents: 16000 };
+      expect(thenLine(p, us)).toBe("Then US$200 a month");
+      expect(discountDuration(p, { ...on, discountCents: 0 })).toBe("");
+      expect(thenLine(p, { ...on, discountCents: 0 })).toBeNull();
+      expect(thenLine(null, on)).toBeNull();
+    });
+
+    it("a first month free (discount = the price): no tax is charged, so the regular month reads '+ tax'", () => {
+      const free: MonthlyPreview = { ...on, discountCents: 28000, taxCents: 0, taxName: null, taxRate: null, totalCents: 0 };
+      expect(discountDuration({ ...p, percentOff: 100 }, free)).toBe("CA$280 off your first month");
+      expect(fullMonthly(free)).toEqual({ cents: 28000, taxToCome: true });
+      expect(thenLine(p, free)).toBe("Then CA$280 + tax a month");
+    });
   });
 
   it("Due today names the currency (never a bare $)", () => {

@@ -757,3 +757,18 @@ alter table users add column if not exists promo_refused_at timestamptz;
 -- last try, and skips those tried in the last 50 minutes, so members whose
 -- unlock keeps failing cannot take every place in a pass.
 alter table users add column if not exists unlock_attempted_at timestamptz;
+
+-- 2026-11-26, payment at first list, Unit 8 review fixes: charge_attempts.coupon
+-- is the coupon the claimed subscription create was sent with, so a takeover
+-- repeats exactly that call (same parameters, same idempotency key) even if
+-- the member's promo_coupon changed meanwhile. users.promo_ended_label names
+-- a locked-in discount Stripe stopped applying (dropped at a preview), kept
+-- until the amount-changed hold or the first charge, so the email can say the
+-- discount ended even if the hold comes on a later pass. promo_duration
+-- (once, repeating or forever) and promo_duration_months are the coupon's
+-- duration, stored with the pending code and at card save, for the Price Box
+-- and the first-charge emails.
+alter table charge_attempts add column if not exists coupon text;
+alter table users add column if not exists promo_ended_label text;
+alter table users add column if not exists promo_duration text;
+alter table users add column if not exists promo_duration_months integer;

@@ -152,6 +152,8 @@ export function fakeStripe(now: () => Date): FakeStripe {
   const sessions = new Map<string, SetupSession>();
   const scripts = new Map<string, ("ok" | "soft" | "hard")[]>();
   const replays = new Map<string, ChargeResult>();
+  /** The parameters each subscription-create idempotency key was first used with. */
+  const keyParams = new Map<string, string>();
   const itemKeys = new Map<string, string>();
   const calls: Call[] = [];
   const payment = fakePaymentStripe({
@@ -292,7 +294,13 @@ export function fakeStripe(now: () => Date): FakeStripe {
     },
     async createSubscription({ customer, price: p, extra, coupon, claimId, userId, idempotencyKey }) {
       call("subscriptions.create", { customer, price: p, extra: extra ?? null, coupon: coupon ?? null, claimId, userId, idempotencyKey, payment_behavior: "error_if_incomplete", off_session: true, automatic_tax: true });
-      // Stripe replays the stored answer for a reused key, declines included.
+      // Stripe refuses a key reused with other parameters (StripeIdempotencyError), and replays the stored answer
+      // for a reused key with the same ones, declines included.
+      const sent = JSON.stringify([customer, p, extra ?? null, coupon ?? null, claimId, userId]);
+      if ((keyParams.get(idempotencyKey) ?? sent) !== sent) {
+        throw Object.assign(new Error("Keys for idempotent requests can only be used with the same parameters they were first used with."), { type: "StripeIdempotencyError" });
+      }
+      keyParams.set(idempotencyKey, sent);
       const replay = replays.get(idempotencyKey);
       if (replay) return replay;
       let discountCents = 0;
