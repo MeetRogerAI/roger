@@ -51,6 +51,18 @@ export type SharedCopy = {
   zackWarning: string;
   /** The questions, in the groups /faq shows. Answers name amounts. */
   questions: QuestionGroup[];
+  /**
+   * The labels of the header's links, which the footer repeats. The header and
+   * footer are one component for every version, and src/lib/site/chrome.ts
+   * holds their addresses.
+   */
+  nav: { howItWorks: string; pricing: string; library: string; faq: string; about: string };
+  /** The footer's own labels, and the place named beside the contact email. */
+  footer: { place: string; agents: string; privacy: string; terms: string };
+  /** The not-found page: what happened, and the link home. The start button follows. */
+  notFound: { title: string; line: string; home: string };
+  /** The browser title and the description search and shared links show. */
+  meta: { title: string; description: string; headline: string };
 };
 
 // --- What each block takes ---

@@ -153,6 +153,10 @@ const questions: V1QuestionGroup[] = [
   },
 ];
 
+// The homepage headline and sub-line, which the browser title, the search description and the social card repeat.
+const headline = "Your AI agents, smarter every Monday.";
+const subLine = "Roger makes your AI agents smarter every week, with ideas that worked for other real estate users.";
+
 /** Everything but /agents and /zack. The vocabulary rule applies to all of it except `zackWarning`. */
 export const v1 = {
   // --- The strings shared behaviour needs (SharedCopy) ---
@@ -176,6 +180,32 @@ export const v1 = {
   zackWarning:
     "Check your report for client names or private details before pasting. It is read by Roger’s team and by Cora, Roger’s ranking agent, and is never published.",
   questions,
+  /** Header links. The footer shows the same five under the same labels. */
+  nav: {
+    howItWorks: "How it works",
+    pricing: "Pricing",
+    library: "Use cases",
+    faq: "FAQ",
+    about: "About",
+  },
+  footer: {
+    place: "Roger, Toronto",
+    /** The link to /agents. The spec's "agents" is "AI agents" here (vocabulary rule; approved by Peter). */
+    agents: "For people who run AI agents",
+    privacy: "Privacy",
+    terms: "Terms",
+  },
+  notFound: {
+    title: "That page isn’t here",
+    line: "The link may be old or mistyped.",
+    home: "Go to the homepage",
+  },
+  /** The browser title, the search description and the social card's one line: the homepage headline and sub-line. */
+  meta: {
+    title: `Roger: ${headline}`,
+    headline,
+    description: subLine,
+  },
 
   // --- Shared blocks ---
   priceBlock: {
@@ -230,8 +260,8 @@ export const v1 = {
   // --- Pages ---
   home: {
     hero: {
-      headline: "Your AI agents, smarter every Monday.",
-      sub: "Roger makes your AI agents smarter every week, with ideas that worked for other real estate users.",
+      headline,
+      sub: subLine,
       secondary: { label: "See how it works", href: "#how" },
     },
     problem: {

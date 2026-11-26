@@ -156,6 +156,12 @@ The spec's copy states the higher rate in US dollars only. A subscriber in Canad
 
 A test fails if a line gives the US higher rate without the Canadian one beside it.
 
+### 2.4 The footer link to `/agents`
+
+| Where | Spec wording | v1 wording | Why | Status |
+|---|---|---|---|---|
+| Footer, the link to `/agents` | "For people who run agents" | "For people who run AI agents" | The footer is on every page, and the vocabulary rule says "agent" never appears without "AI" in front outside `/agents` and `/zack`, because readers in real estate are also called agents. | Approved by Peter, November 26, 2026 |
+
 ## 3. Wording the spec describes but does not write
 
 The spec says what these sections hold, without giving the words. The wording below is new, built from the spec's own sentences where one exists, and states nothing the spec does not. Peter may want to read it.
@@ -181,6 +187,9 @@ The spec says what these sections hold, without giving the words. The wording be
 | Sample card | "Paste to install", "Copy prompt and playbook", "Written on", "Cora’s scores", "Not scored yet" (shown only when a play has some of its five scores and not others), "The playbook". The two help lines are the app's own: "The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions." and "Words like “skill” or “routine” may have another name on your AI agent." |
 | `/pricing` headings | "Pricing", "What is included", "Monthly or one at a time, explained", "How contributing works", "No refunds" |
 | `/about` | "About" |
+| Footer, beside the contact email | "Roger, Toronto" (as the footer reads today) |
+| Not-found page | "That page isn’t here" (as today), "The link may be old or mistyped.", "Go to the homepage", then the start button. Today's line ends "(error 404). Try one of these:" and lists old offers; under v1 the list is gone and the number with it. |
+| Browser title, search description and social card | Title: "Roger: Your AI agents, smarter every Monday." Description: the homepage sub-line. The social card shows "Roger" and the headline only. All three repeat the homepage's own headline and sub-line. |
 | `/zack` | "Run Zack on yourself first", "Pick your agent", "Your email", "Run Zack once", "Paste the report back", "Agent not listed?", "Start from the Hark file and ask your own agent to adapt it.", "Your top plays" |
 
 **`/how-it-works`** (spec A.8 lists the sections; none of its text is written)
@@ -219,6 +228,7 @@ The Trigger note says only "What starts it." The spec names the part without say
 - **Which six questions each page shows.** Homepage: "I don’t use AI agents yet. Can I start?", "What do I have to do each week?", "What does Zack read?", "Who sees my plays?", "What does it cost?", "When is my card charged?". `/agents`: "Which AI agents does Roger work with?", "What leaves my account?", "Can I see and change what Zack does?", "I compete with other people on Roger. What if I don’t want to share?", "Will an idea work on my AI agent if it came from a different one?", "When is my card charged?". `/faq` shows all eighteen.
 - **The weekly group session** is left out of "What is included". The spec shows it only once that part of the product is live.
 - **Typography.** Straight apostrophes and quotation marks in the spec are typographic ones on the site, as elsewhere in the repo.
+- **`robots.txt` allows one API address.** Spec A.2 keeps crawlers out of `/api`. v1 does that, and allows `/api/zack/instructions` alone. That is the address a user's own AI agent fetches during Zack setup, and many agents' fetch tools obey `robots.txt`: with all of `/api` disallowed, such a tool would refuse the fetch and setup would stop. The longer rule wins, so every other `/api` address stays disallowed. The address returns nothing without a user's Zack key. The app is disallowed as `/app/` and `/app$`, not `/app`, because `/app` alone would also cover `/apple-icon`.
 
 ## 5. Noted, not changed
 

@@ -35,11 +35,34 @@ describe("indexing", () => {
     expect(robots().rules).toEqual({ userAgent: "*", allow: "/", disallow: ["/thanks/", "/for/", "/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds"] });
   });
 
-  it("keeps the hidden legacy pages disallowed under a version, and allows them on the legacy site", () => {
+  it("disallows the hidden legacy pages, the app, the admin, sign-up and the API under a version, and allows the legacy pages on the legacy site", () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    for (site of ["v1", "v2", "v3"] as const) {
+      expect(robots().rules, site).toEqual({
+        userAgent: "*",
+        allow: ["/", "/api/zack/instructions"],
+        disallow: ["/thanks/", "/for/", "/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds", "/app/", "/app$", "/admin", "/start", "/api"],
+      });
+      expect(robots().sitemap, site).toMatch(/sitemap\.xml$/);
+    }
+    site = "legacy";
+    expect(robots().rules).toEqual({ userAgent: "*", allow: "/", disallow: ["/thanks/", "/for/"] });
+  });
+
+  it("under a version, keeps crawlers out of the app and the API but not /apple-icon or the Zack instructions", () => {
     vi.stubEnv("VERCEL_ENV", "production");
     site = "v1";
-    expect(robots().rules).toMatchObject({ disallow: ["/thanks/", "/for/", "/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds"] });
-    site = "legacy";
-    expect(robots().rules).toMatchObject({ disallow: ["/thanks/", "/for/"] });
+    const rules = robots().rules as { allow: string[]; disallow: string[] };
+    // RFC 9309: the longest matching rule decides, and Allow wins a tie. "*" is any run of characters, "$" the end of the address.
+    const matches = (rule: string, at: string) => {
+      const toEnd = rule.endsWith("$");
+      const body = (toEnd ? rule.slice(0, -1) : rule).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+      return new RegExp(`^${body}${toEnd ? "$" : ""}`).test(at);
+    };
+    const longest = (list: string[], at: string) => Math.max(-1, ...list.filter((rule) => matches(rule, at)).map((rule) => rule.length));
+    const allowed = (at: string) => longest(rules.allow, at) >= longest(rules.disallow, at);
+
+    for (const at of ["/", "/pricing", "/apple-icon", "/apple-icon.png", "/approach", "/api/zack/instructions", "/api/zack/instructions?agent=claude"]) expect(allowed(at), at).toBe(true);
+    for (const at of ["/app", "/app/", "/app/zack", "/admin", "/admin/sample", "/start", "/start/plan", "/api", "/api/zack/runs", "/api/zack", "/api/checkout", "/apply", "/packs/solopreneur"]) expect(allowed(at), at).toBe(false);
   });
 });

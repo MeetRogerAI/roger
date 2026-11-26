@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CirclesHome } from "@/components/circles/home";
 import { SiteNotBuilt } from "@/components/site/not-built";
+import { siteMeta } from "@/lib/site/chrome";
 import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import Image from "next/image";
 import Link from "next/link";
@@ -27,11 +28,12 @@ export const metadata: Metadata = site === "circles" ? {
   alternates: { canonical: "/" },
   openGraph: { url: "/", title: "Stop figuring out AI agents alone.", description: "Eight people. Any agents. A better week of work." },
 } : isBuiltVersion(site) ? {
-  // The placeholder home stays out of search until the version's home is built.
-  title: { absolute: "Roger" },
+  // The placeholder home stays out of search until the version's home is built (U5).
+  title: { absolute: siteMeta(site).title },
+  description: siteMeta(site).description,
   robots: { index: false, follow: false },
   alternates: { canonical: "/" },
-  openGraph: { url: "/" },
+  openGraph: { url: "/", title: siteMeta(site).headline, description: siteMeta(site).description },
 } : {
   title: { absolute: "Roger: what people’s AI agents actually do" },
   description:

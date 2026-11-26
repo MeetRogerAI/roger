@@ -19,8 +19,11 @@ describe("sitemap", () => {
     expect(sitemap().map((e) => e.priority)).toEqual([1, 0.6, 0.6, 0.6]);
   });
 
-  it("lists no Circles, legacy or unbuilt page under a version", () => {
-    for (site of ["v1", "v2", "v3"] as const) expect(paths(), site).toEqual(["/library"]);
+  it("lists exactly the spec's eleven paths under a version", () => {
+    for (site of ["v1", "v2", "v3"] as const) {
+      expect(paths(), site).toEqual(["/", "/agents", "/pricing", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"]);
+      expect(sitemap().map((e) => e.priority), site).toEqual([1, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6]);
+    }
   });
 
   it("keeps the legacy site's list", () => {

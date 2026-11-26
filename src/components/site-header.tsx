@@ -5,12 +5,19 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Toque } from "./toque";
 import { ActionLink, type ActionKind } from "./action-link";
-// Type only: the served site is resolved on the server and arrives as a prop.
+import { StartLink } from "./site/shared/start-link";
+import { useSignedInHint } from "@/lib/auth/signed-in-hint";
+// Types only: the served site and a version's chrome are resolved on the server and arrive as props.
+import type { SiteChrome } from "@/lib/site/chrome";
 import type { ServedSite } from "@/lib/site/version";
 
+type NavLink = { href: string; label: string };
+
 type NavSet = {
-  links: { href: string; label: string }[];
+  links: NavLink[];
   cta: { kind?: ActionKind; href?: string; label: string; short: string; picksFor?: "work" | "home" } | null;
+  /** A site version only (spec A.3): "Sign in" beside the start button, and what a signed-in visitor sees in place of both. */
+  account?: { signIn: NavLink; openApp: NavLink };
 };
 
 const library: NavSet = {
@@ -44,11 +51,11 @@ const circles: NavSet = {
   cta: { href: "/apply", label: "Apply for a founding Circle", short: "Apply" },
 };
 
-/** A site version's header until its own is built: the one page that exists, and the start button (spec A.3). */
-const built: NavSet = {
-  links: [{ href: "/library", label: "Use cases" }],
-  cta: { href: "/start", label: "Get two free Monday lists", short: "Start free" },
-};
+/** A site version's header (spec A.3): its five links, "Sign in" and the start button, in the version's own words. */
+function built(chrome: SiteChrome | null | undefined): NavSet {
+  if (!chrome) throw new Error("A site version's header needs its chrome: pass getSiteChrome() from the root layout.");
+  return { links: chrome.links, cta: chrome.start, account: { signIn: chrome.signIn, openApp: chrome.openApp } };
+}
 
 /** Sign-up, sign-in and the member app (spec A.3): no header button, and nothing pointing back at the Circles pages. */
 const accountPages = ["/start", "/signin", "/auth", "/app"];
@@ -59,7 +66,8 @@ export function isUnlisted(path: string, site: ServedSite) {
   return path === "/zack" && (site === "circles" || site === "legacy");
 }
 
-export function navFor(path: string, site: ServedSite): NavSet {
+/** `chrome` is a site version's own header content; Circles, the legacy site and the pages that keep their header need none. */
+export function navFor(path: string, site: ServedSite, chrome?: SiteChrome | null): NavSet {
   if (accountPages.some((p) => path === p || path.startsWith(`${p}/`))) return { links: [], cta: null };
   if (site === "legacy") {
     if (path.startsWith("/companies")) return company;
@@ -73,12 +81,73 @@ export function navFor(path: string, site: ServedSite): NavSet {
   // The admin keeps the header it has under Circles whichever site is served (plan R4).
   if (path.startsWith("/admin")) return { ...circles, cta: null };
   if (site === "circles") return path.startsWith("/apply") ? { ...circles, cta: null } : circles;
-  return built;
+  return built(chrome);
 }
 
-export function SiteHeader({ site }: { site: ServedSite }) {
+/**
+ * The right of a site version's header. The page is prerendered signed out,
+ * and the browser swaps in "Open Roger" once it has read the signed-in hint
+ * cookie, so no page waits on a session check. The signed-out pair stays in
+ * place, hidden, to hold its width: nothing beside it moves on the swap.
+ */
+function AccountLinks({ cta, account }: { cta: NonNullable<NavSet["cta"]>; account: NonNullable<NavSet["account"]> }) {
+  const signedIn = useSignedInHint();
+  return (
+    <span className="grid items-center justify-items-end">
+      <span className={`col-start-1 row-start-1 flex items-center gap-4 sm:gap-5 ${signedIn ? "invisible" : ""}`} aria-hidden={signedIn || undefined}>
+        {/* On the narrowest phones there is no room beside the button: the menu carries it there. */}
+        <Link href={account.signIn.href} className="whitespace-nowrap rounded px-0.5 py-1 text-small text-ink-2 transition-colors duration-[180ms] hover:text-ink max-[359px]:hidden">
+          {account.signIn.label}
+        </Link>
+        <span className="header-cta">
+          <StartLink className="btn btn-m">
+            <span className="hidden xl:inline">{cta.label}</span>
+            <span className="xl:hidden">{cta.short}</span>
+          </StartLink>
+        </span>
+      </span>
+      {signedIn && (
+        <Link href={account.openApp.href} className="btn btn-m col-start-1 row-start-1">
+          {account.openApp.label}
+        </Link>
+      )}
+    </span>
+  );
+}
+
+/** The last row of a site version's menu on a phone: "Sign in", or "Open Roger" for a signed-in visitor. */
+function MenuAccountLink({ account, onClick }: { account: NonNullable<NavSet["account"]>; onClick: () => void }) {
+  const link = useSignedInHint() ? account.openApp : account.signIn;
+  return (
+    <li>
+      <Link href={link.href} className="flex min-h-12 items-center text-title" onClick={onClick}>
+        {link.label}
+      </Link>
+    </li>
+  );
+}
+
+/** The rows of the menu on a phone: the header's links, then a site version's account row. Exported for its test: the menu opens on a click, so no static render shows it. */
+export function PhoneMenu({ nav, onNavigate }: { nav: NavSet; onNavigate: () => void }) {
+  return (
+    <nav aria-label="Main" className="wrap py-3">
+      <ul>
+        {nav.links.map((l) => (
+          <li key={l.href}>
+            <Link href={l.href} className="flex min-h-12 items-center text-title" onClick={onNavigate}>
+              {l.label}
+            </Link>
+          </li>
+        ))}
+        {nav.account && <MenuAccountLink account={nav.account} onClick={onNavigate} />}
+      </ul>
+    </nav>
+  );
+}
+
+export function SiteHeader({ site, chrome }: { site: ServedSite; chrome?: SiteChrome | null }) {
   const path = usePathname() || "/";
-  const nav = navFor(path, site);
+  const nav = navFor(path, site, chrome);
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === path;
@@ -130,7 +199,8 @@ export function SiteHeader({ site }: { site: ServedSite }) {
         </nav>
 
         <div className={`ml-auto flex items-center gap-2 lg:ml-0 ${nav.cta ? "" : "lg:hidden"}`}>
-          {nav.cta && (
+          {nav.cta && nav.account && <AccountLinks cta={nav.cta} account={nav.account} />}
+          {nav.cta && !nav.account && (
             <span className="header-cta">
               {nav.cta.href ? (
                 <Link href={nav.cta.href} className="btn btn-m">
@@ -165,17 +235,7 @@ export function SiteHeader({ site }: { site: ServedSite }) {
 
       {open && (
         <div id="mobile-menu" ref={menuRef} className="bg-ground-2 lg:hidden">
-          <nav aria-label="Main" className="wrap py-3">
-            <ul>
-              {nav.links.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className="flex min-h-12 items-center text-title" onClick={() => setOpen(false)}>
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <PhoneMenu nav={nav} onNavigate={() => setOpen(false)} />
         </div>
       )}
     </header>

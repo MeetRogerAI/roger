@@ -1,13 +1,15 @@
-import { bySite, getServedSite } from "@/lib/site/version";
+import { siteMeta } from "@/lib/site/chrome";
+import { bySite, getServedSite, isBuiltVersion } from "@/lib/site/version";
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const site = getServedSite();
+const meta = isBuiltVersion(site) ? siteMeta(site) : null;
 
 export const alt = bySite(site, {
   circles: "Roger Circles: Stop figuring out AI agents alone.",
-  built: "Roger",
+  built: meta?.title ?? "Roger",
   legacy: "Roger: what people’s AI agents do. Real use cases from Muse, Grok Bot, Hark and more, read every morning in Toronto.",
 });
 export const size = { width: 1200, height: 630 };
@@ -31,12 +33,17 @@ export default async function Image() {
       { name: "Mona Sans", data: regular, style: "normal", weight: 400 },
     ] },
   );
-  // A site version's card is the name alone until its own card is built.
-  if (site !== "legacy") return new ImageResponse(
-    <div style={{ display: "flex", alignItems: "center", width: "100%", height: "100%", padding: "64px 72px", background: "#0c0c0e", color: "#f5f5f7", fontFamily: "Mona Sans" }}>
-      <div style={{ display: "flex", fontSize: 88, fontWeight: 600, letterSpacing: -4 }}>Roger</div>
+  // A site version's card: the name and the homepage headline. No numbers and no claims.
+  if (meta) return new ImageResponse(
+    <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: "100%", height: "100%", padding: "64px 72px", background: "#0c0c0e", color: "#f5f5f7", fontFamily: "Mona Sans" }}>
+      <div style={{ display: "flex", fontSize: 30, color: "#e8a97f" }}>Roger</div>
+      <div style={{ display: "flex", maxWidth: 930, fontSize: 88, fontWeight: 600, lineHeight: 1.04, letterSpacing: -4 }}>{meta.headline}</div>
+      <div style={{ display: "flex", height: 30 }} />
     </div>,
-    { ...size, fonts: [{ name: "Mona Sans", data: semibold, style: "normal", weight: 600 }] },
+    { ...size, fonts: [
+      { name: "Mona Sans", data: semibold, style: "normal", weight: 600 },
+      { name: "Mona Sans", data: regular, style: "normal", weight: 400 },
+    ] },
   );
   const src = `data:image/jpeg;base64,${photo.toString("base64")}`;
 
