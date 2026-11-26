@@ -35,13 +35,33 @@
     --ground:#fbfbfd; --ground-2:#f3f3f5; --surface:#ffffff; --ink:#1d1d1f; --ink-2:#5d5d63;
     --rule:#e2e2e6; --rule-strong:#c7c7cd; --accent:#9a5226; --accent-wash:#f6ece4;
     --ok:#1f6f4a; --ok-wash:#e6f3ec; --wait:#7a5a00; --wait-wash:#fbf1d0; --chg:#2a5d9a; --chg-wash:#e6eef8;
+    --part:#8a4a1c; --part-wash:#f8e7d8;
   }
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+    --ground:#151517; --ground-2:#1e1e21; --surface:#1b1b1e; --ink:#ececf0; --ink-2:#a3a3ab;
+    --rule:#2e2e33; --rule-strong:#45454c; --accent:#e0915e; --accent-wash:#2b2019;
+    --ok:#7fd1a8; --ok-wash:#173326; --wait:#e8c766; --wait-wash:#332b12; --chg:#8fb6ec; --chg-wash:#18263a;
+    --part:#f0a874; --part-wash:#3a2517; color-scheme:dark}}
+  :root[data-theme="dark"]{
+    --ground:#151517; --ground-2:#1e1e21; --surface:#1b1b1e; --ink:#ececf0; --ink-2:#a3a3ab;
+    --rule:#2e2e33; --rule-strong:#45454c; --accent:#e0915e; --accent-wash:#2b2019;
+    --ok:#7fd1a8; --ok-wash:#173326; --wait:#e8c766; --wait-wash:#332b12; --chg:#8fb6ec; --chg-wash:#18263a;
+    --part:#f0a874; --part-wash:#3a2517; color-scheme:dark}
+  .areas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:14px}
+  .area{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:18px 20px;min-width:0}
+  .area header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .area h3{font-size:19px;letter-spacing:-.015em;margin:0}
+  .area h4{font-size:12.5px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);margin:16px 0 6px}
+  .area ul,.area ol{margin:0;padding-left:20px;font-size:14.5px}
+  .area li{margin:5px 0}
+  .area .rows{margin:14px 0 0;font-size:13px;color:var(--ink-2)}
+  .st.partial{background:var(--part-wash);color:var(--part)}
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
   body{margin:0;background:var(--ground);color:var(--ink);
     font-family:"Mona Sans",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1180px;margin:0 auto;padding:40px 20px 80px}
+  .wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .eyebrow{font-size:13px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:0}
   h1{font-size:clamp(30px,4.6vw,46px);line-height:1.05;letter-spacing:-.035em;font-weight:650;margin:8px 0 10px;text-wrap:balance}
   .lead{font-size:18px;color:var(--ink-2);max-width:62ch;margin:0}
@@ -84,7 +104,7 @@
   <p class="eyebrow">Roger v3 · launch list</p>
   <h1>What Peter still has to supply, and the defaults waiting for his yes</h1>
   <p class="lead">The build spec leaves 14 things only Peter can provide and 12 choices made on his behalf; the B1 build added eight more owner-only go-live items (S15 to S22). Nothing here is finished until its row says so.</p>
-  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Updated November 23, 2026 for spec version 1.2 and the B1 build (section 3) · Updated November 25, 2026 for spec version 1.3 (one list now US$200 or CA$280, the same as a month) · Source: <code>artifacts/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
+  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Updated November 23, 2026 for spec version 1.2 and the B1 build (section 3) · Updated November 25, 2026 for spec version 1.3 (one list now US$200 or CA$280, the same as a month) · Updated November 26, 2026: go-live status by area (section 0), progress on S13, S15, S16 and S17, and the sign-up changes (section 3) · Source: <code>artifacts/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
 
   <div class="tiles" aria-label="Progress">
     <div class="tile"><b id="n-open">21</b><span>items still to supply</span></div>
@@ -102,6 +122,119 @@
       <li>Every default is built as written. When Peter confirms or changes one, Claude Code records it here and, if it changed, updates the spec and the code together.</li>
     </ol>
   </div>
+
+  <section aria-labelledby="h-areas">
+    <h2 id="h-areas">0. Where go-live stands, by area</h2>
+    <p class="sub">Updated November 26, 2026. The seven owner-only areas Peter and Claude Code are working through one at a time. Each card lists what is finished and what is left, and names the rows below that hold the detail.</p>
+    <div class="areas">
+
+      <article class="area">
+        <header><h3>1. Vercel</h3><span class="st done">Done</span></header>
+        <h4>Finished</h4>
+        <ul>
+          <li>Merges to <code>main</code> deploy meetroger.ai again (Vercel GitHub app installed on the MeetRogerAI org).</li>
+          <li>A long-lived <code>preview</code> branch serves <b>preview.meetroger.ai</b> (also <code>roger-git-preview-helix3.vercel.app</code>), kept in step with <code>main</code> after each merge.</li>
+          <li>Preview settings: its own database, Stripe test key, the six test price ids, webhook secret, Resend key, <code>ADMIN_EMAILS</code>, admin and cron secrets.</li>
+          <li>Vercel's login wall is off, so preview signs people in exactly like production. Previews are never indexed by search engines (robots rule and <code>X-Robots-Tag</code>, PR #51).</li>
+        </ul>
+        <h4>Left</h4>
+        <ul><li>Nothing in Vercel itself. Two checks move to go-live: the Monday cron jobs show in Vercel, and the AI Gateway reads a run (S15).</li></ul>
+      </article>
+
+      <article class="area">
+        <header><h3>2. Stripe</h3><span class="st partial">Under way</span></header>
+        <h4>Finished (test mode)</h4>
+        <ul>
+          <li>Products and six prices: monthly US$200 / CA$280, higher rate US$400 / CA$560, one list US$200 / CA$280, all before tax.</li>
+          <li>Tax settings: prices exclude tax; tax is added on top.</li>
+          <li>Webhook to preview on API version <code>2026-11-18.endive</code>, checked end to end (an event arrived and was recorded). On Nov 26 the missing <code>checkout.session.completed</code> event was added; without it the card step could not finish.</li>
+          <li>Stripe CLI logged in on Peter's machine (upgrade before Feb 8, 2027). Decision: this Stripe account is Roger's.</li>
+        </ul>
+        <h4>Left</h4>
+        <ul>
+          <li><b>Now:</b> a full test sign-up on preview with card 4242 4242 4242 4242, then check the Canadian test invoice shows HST as its own line.</li>
+          <li>Live mode: products and six live prices (Claude Code can script this), the live webhook to <code>https://meetroger.ai/api/stripe/webhook</code>, and the live key, price ids and webhook secret in Vercel Production.</li>
+          <li>Live dashboard settings Peter sets by hand: failed renewals end <b>unpaid</b> (not cancelled) when retries run out; Stripe's own customer emails off (failed payments, renewals, expiring cards, receipts); Radar on.</li>
+          <li>Tax: the HST registration active in Stripe Tax; the accountant's word on US customers and on the product tax category.</li>
+          <li>Optional: delete leftover webhooks from old projects (an active "the120" endpoint).</li>
+        </ul>
+        <p class="rows">Rows: S4, S13, S16</p>
+      </article>
+
+      <article class="area">
+        <header><h3>3. Neon (database)</h3><span class="st done">Done</span></header>
+        <h4>Finished</h4>
+        <ul>
+          <li>Upgraded to the Launch plan, which ended the "exceeded the quota" outage and settles the plan question in S17.</li>
+          <li>A schema-only <code>preview</code> branch, connected to preview. Sign-up is switched on there only (<code>v3.signupOpen</code>); production stays closed.</li>
+        </ul>
+        <h4>Left</h4>
+        <ul><li>Optional: a third branch for the scenario tests (S17). They run on an in-process database meanwhile.</li></ul>
+      </article>
+
+      <article class="area">
+        <header><h3>4. Accounts</h3><span class="st partial">Under way</span></header>
+        <h4>Finished</h4>
+        <ul>
+          <li>Resend: new account, meetroger.ai verified at Namecheap, keys in Vercel. Senders "Roger support &lt;support@meetroger.ai&gt;" and library@meetroger.ai. Google Workspace mail untouched.</li>
+          <li>Admins (Peter's decision, Nov 25): <code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code>.</li>
+          <li>Email-link sign-in tested on preview: Roger's own email arrives from the support address.</li>
+        </ul>
+        <h4>Left</h4>
+        <ul>
+          <li>Delete the Resend key that appeared in a screenshot, if not done yet.</li>
+          <li>Admins need a Roger account first: Peter signs up on preview to test <code>/admin</code>; at go-live both admin addresses sign up on production.</li>
+          <li>Optional: "Sign in with Google" (a Google OAuth client with <code>https://meetroger.ai/auth/google/callback</code>, keys in Vercel). Hidden until then.</li>
+        </ul>
+        <p class="rows">Rows: S5, S13, S21</p>
+      </article>
+
+      <article class="area">
+        <header><h3>5. Content</h3><span class="st open">To do</span></header>
+        <h4>Left</h4>
+        <ul>
+          <li>Approve Zack 2.0 (Claude, Duet, Grok Bot, Hark) and Cora 2.0: drafts are in the repo.</li>
+          <li>Confirm the category list (D10, closes S3).</li>
+          <li>The starter setup file: supply <code>Real estate Grok Bot Setup.md</code>, read version 1, publish it, and give the Grok Bot download link.</li>
+          <li>Wording sign-offs: the ~30 automatic emails and the sign-up screens ("tax included" or "plus tax", the no-ideas note, the higher-rate invoice line).</li>
+          <li>Privacy and terms: a read, the AI provider's position on training, then remove the "draft" label.</li>
+          <li>For the public v3 site: the letter without Circles, headshot and signature, testimonial attributions and a quote from Grace, the group session day, time and link, the demo video and the "one real week" figures.</li>
+          <li>New: the Levels documents (Zack 2.1, Cora 2.1, dashboard) are in the repo; nothing is built from them yet. The quiz records each person's level, but Cora does not use it yet.</li>
+        </ul>
+        <p class="rows">Rows: S1, S2, S3, S6 to S12, S18</p>
+      </article>
+
+      <article class="area">
+        <header><h3>6. Decisions</h3><span class="st open">To do</span></header>
+        <h4>Left</h4>
+        <ul>
+          <li>Take the pending Next.js security release before real cards, or wait (S19).</li>
+          <li>Remove the shared admin password once both admins have signed in by email on production (S21).</li>
+          <li>Privacy points (S22): admin reads of runs are not logged; a deleted member's email stays in the admin log; retention gaps for idle one-at-a-time and held members; pooled plays after a run is deleted; withdrawal; how long leads, notifications and Stripe events are kept.</li>
+          <li>Cora's six literal readings and three unbuilt Cora 2.0 changes (S20).</li>
+          <li>Eleven defaults waiting for a yes (section 2).</li>
+        </ul>
+        <p class="rows">Rows: S19 to S22, D1 to D12</p>
+      </article>
+
+      <article class="area">
+        <header><h3>7. Go-live</h3><span class="st open">To do</span></header>
+        <h4>Left, in order</h4>
+        <ol>
+          <li>Content approved (Zack 2.0, Cora 2.0, categories).</li>
+          <li>On preview: the test sign-up and charge, then the seven checks that need a live environment (webhook, Monday crons, the model reading a run, a Cora dry run).</li>
+          <li>Next.js decision; <code>db/setup.mjs</code> run on production.</li>
+          <li>Live Stripe in place; a Canadian test invoice shows HST on its own line.</li>
+          <li>The 13 pilot runs read by the model, imported on production, pilots linked, a Cora dry run read by an admin.</li>
+          <li>Privacy and terms linked from sign-up.</li>
+          <li>The public v3 site: meetroger.ai is still the Circles preview. The v3 pages, the "Start free" header and the switch that hides Circles (spec Part A, <code>v3Mode</code>) are not built yet. This is the largest build left.</li>
+          <li>Check no subscription is on the higher price by mistake; turn on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</li>
+          <li>After launch: both admins sign in by email, then the shared password is removed.</li>
+        </ol>
+      </article>
+
+    </div>
+  </section>
 
   <section aria-labelledby="h-supply">
     <h2 id="h-supply">1. Items Peter needs to supply</h2>
@@ -241,7 +374,7 @@
             <td><span class="ver">B1</span></td>
             <td>Build against Stripe test keys. Never commit a key to the repo.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.<br>2026-11-23, build: everything that reads these is built. The exact list: <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_WEBHOOK_SECRET</code> (test values on Preview, live on Production); the six price ids <code>STRIPE_PRICE_MONTHLY_USD</code>, <code>_MONTHLY_CAD</code>, <code>_MONTHLY_HIGHER_USD</code>, <code>_MONTHLY_HIGHER_CAD</code>, <code>_RUN_USD</code>, <code>_RUN_CAD</code> (US$200, CA$280, US$400, CA$560, US$200, CA$280, before tax, each in test and live mode; the run prices were US$100 and CA$140 until 2026-11-25); <code>ADMIN_EMAILS</code> (Peter's and Ehab's sign-in addresses); <code>EMAIL_FROM_SUPPORT</code> ("Roger support &lt;support@meetroger.ai&gt;", a verified Resend sender). The webhook endpoint, its events and the dashboard settings are S16.</td>
+            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.<br>2026-11-23, build: everything that reads these is built. The exact list: <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_WEBHOOK_SECRET</code> (test values on Preview, live on Production); the six price ids <code>STRIPE_PRICE_MONTHLY_USD</code>, <code>_MONTHLY_CAD</code>, <code>_MONTHLY_HIGHER_USD</code>, <code>_MONTHLY_HIGHER_CAD</code>, <code>_RUN_USD</code>, <code>_RUN_CAD</code> (US$200, CA$280, US$400, CA$560, US$200, CA$280, before tax, each in test and live mode; the run prices were US$100 and CA$140 until 2026-11-25); <code>ADMIN_EMAILS</code> (Peter's and Ehab's sign-in addresses); <code>EMAIL_FROM_SUPPORT</code> ("Roger support &lt;support@meetroger.ai&gt;", a verified Resend sender). The webhook endpoint, its events and the dashboard settings are S16.<br>2026-11-25, Peter: the admins are <code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code> (in place of Peter and Ehab). By 2026-11-26 on <b>Preview</b>: the test <code>STRIPE_SECRET_KEY</code>, the six test price ids, <code>STRIPE_WEBHOOK_SECRET</code>, <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>. On <b>Production</b>: <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>, <code>SITE_URL</code>, <code>DATABASE_URL</code>; no Stripe values yet. Resend: meetroger.ai verified; the sender defaults to "Roger support &lt;support@meetroger.ai&gt;". Still to do: a test sign-up that saves a card on preview, <code>/admin</code> opened by both admins, and the live Stripe values on Production.</td>
           </tr>
           <tr data-id="S14" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S14</td>
@@ -261,7 +394,7 @@
             <td><span class="ver">B1</span></td>
             <td>Runs with a <code>roger-run</code> block are read by code without the model; everything else waits.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build. The 13 seed runs have no <code>roger-run</code> block, so they need the model (plan Unit 9, "Not verified"). Also confirm the plan allows the 10-minute Monday schedules and 300-second functions.<br>2026-11-23: the Vercel CLI here is logged in (helix3/roger); Peter installed the Vercel GitHub app on the MeetRogerAI org and the project is reconnected, so merges to <code>main</code> deploy again. B1 deployed to production with <code>v3.cycleLive</code> and <code>v3.signupOpen</code> off.</td>
+            <td class="notes">Added 2026-11-23 from the B1 build. The 13 seed runs have no <code>roger-run</code> block, so they need the model (plan Unit 9, "Not verified"). Also confirm the plan allows the 10-minute Monday schedules and 300-second functions.<br>2026-11-23: the Vercel CLI here is logged in (helix3/roger); Peter installed the Vercel GitHub app on the MeetRogerAI org and the project is reconnected, so merges to <code>main</code> deploy again. B1 deployed to production with <code>v3.cycleLive</code> and <code>v3.signupOpen</code> off.<br>By 2026-11-26: the <code>preview</code> branch and <b>preview.meetroger.ai</b> are set up with their own Neon branch and settings; Vercel Authentication is off so preview signs in like production; previews are never indexed (PR #51). Still to check: the AI Gateway reads a run on preview, the cron jobs show in Vercel, and a Cora dry run completes.</td>
           </tr>
           <tr data-id="S16" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S16</td>
@@ -271,7 +404,7 @@
             <td><span class="ver">B1</span></td>
             <td>Build and test against fakes and Stripe test mode.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build (plan Units 12 to 15). The preview webhook needs an address that is not behind Vercel's deployment protection.</td>
+            <td class="notes">Added 2026-11-23 from the B1 build (plan Units 12 to 15). The preview webhook needs an address that is not behind Vercel's deployment protection.<br>By 2026-11-26, test mode: the webhook to preview.meetroger.ai exists on <code>2026-11-18.endive</code> and was checked end to end (an event arrived and was recorded in <code>stripe_events</code>). On 2026-11-26 <code>checkout.session.completed</code> was added to it; it had been left out, which would have stopped the card step from finishing. Vercel's protection is now off, so the address needs no bypass. Still to do: the live endpoint and its secret; in live mode, failed renewals end unpaid, Stripe's customer emails off, Radar on; the HST line on a Canadian test invoice.</td>
           </tr>
           <tr data-id="S17" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S17</td>
@@ -281,7 +414,7 @@
             <td><span class="ver">B1</span></td>
             <td>Scenario tests run against an in-process Postgres with fakes (<code>tests/scenarios/</code>).</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build. The switch to the sandbox and this branch is documented at the top of <code>tests/scenarios/helpers.ts</code> and still to be wired.</td>
+            <td class="notes">Added 2026-11-23 from the B1 build. The switch to the sandbox and this branch is documented at the top of <code>tests/scenarios/helpers.ts</code> and still to be wired.<br>By 2026-11-26, Peter: the project is on Neon's Launch plan (this settles the plan question), and a schema-only <code>preview</code> branch serves preview.meetroger.ai. Still open: the scenario-test branch and <code>SCENARIO_DATABASE_URL</code>.</td>
           </tr>
           <tr data-id="S18" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S18</td>
@@ -494,13 +627,14 @@
         </tbody>
       </table>
     </div>
+    <p class="sub" style="margin-top:20px"><b>Sign-up changes, November 25 and 26 (PRs #51 to #55, all merged; 967 tests pass).</b> Question 3 takes several agents, with a star for the primary agent and "Make primary". A new question 5 asks for the AI agent level, 0 to 8 (<code>src/data/agent-levels.ts</code>); help with is 6 and new software is 7. The quiz shows one question per screen with a progress bar, Next and Back, and keeps every answer when one is missing. Typing a role picks "Something else". Step 2 asks for first and last name and does not ask again for an email this browser already typed into Roger. Sign-up, sign-in and the app show no Circles header button. Spec 1.3 records all of this.</p>
     <p class="sub" style="margin-top:20px"><b>The go-live gate, in order.</b></p>
     <ol class="sub">
       <li>S1, S2, S3 approved; S13, S15, S16 in place on Preview; the scenario tests run once against the sandbox (S17) and the checks marked "needs the live environment" in the first-pass record are walked on preview.</li>
       <li>S19 decided. Run <code>db/setup.mjs</code> on production (an owner step).</li>
       <li>Live keys and prices (S13) and the live webhook (S16) on Production; a Canadian test invoice shows HST as its own row.</li>
       <li>The 13 seed runs imported on production (S14), pilots' records linked, a Cora dry run read by an admin.</li>
-      <li>Privacy and terms linked from <code>/start</code> (S10); the Circles banner hidden on app pages and the header change agreed with the marketing builder.</li>
+      <li>Privacy and terms linked from <code>/start</code> (S10); the Circles banner hidden on app pages and the header change agreed with the marketing builder. Since 2026-11-26 sign-up, sign-in and the app show no Circles header; the public v3 site (spec Part A, <code>v3Mode</code>) is still to be built.</li>
       <li>An admin turns on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</li>
       <li>After both admins have signed in by email on production: S21.</li>
     </ol>
