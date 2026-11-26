@@ -41,6 +41,9 @@ export function discountDuration(p: PromoView | null): string {
 /** Before a billing address: the tax line's words (origin R16). */
 export const TAX_PENDING = "Calculated from your billing address";
 
+/** Stripe could not work out the tax for a valid billing address (the page asks again later). */
+export const TAX_UNAVAILABLE = "We couldn’t work out the tax just now. It will be added to your total.";
+
 /** The tax line: its label and its amount ("HST 13%" / CA$36.40; "No sales tax"; or pending). */
 export function taxLine(p: MonthlyPreview): { label: string; value: string } {
   if (p.tax === "pending") return { label: "Tax", value: TAX_PENDING };

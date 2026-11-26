@@ -9,14 +9,14 @@ const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "
 
 describe("PromoField", () => {
   it("starts as a quiet text link, not a field", () => {
-    const html = renderToStaticMarkup(<PromoField promo={null} onApply={noop} onRemove={async () => {}} />);
+    const html = renderToStaticMarkup(<PromoField promo={null} onApply={noop} onRemove={async () => null} />);
     expect(text(html)).toContain("Have a promo code?");
     expect(html).not.toContain("<input");
     expect(html).toContain('class="tlink');
   });
 
   it("opened: one labelled field and an Apply button, never a form (it must not submit or reset the card form)", () => {
-    const html = renderToStaticMarkup(<PromoField promo={null} onApply={noop} onRemove={async () => {}} initiallyOpen />);
+    const html = renderToStaticMarkup(<PromoField promo={null} onApply={noop} onRemove={async () => null} initiallyOpen />);
     expect(html).toMatch(/<label[^>]*>Promo code<\/label>/);
     expect(html).toMatch(/autocomplete="off"/i);
     expect(text(html)).toContain("Apply");
@@ -30,7 +30,7 @@ describe("PromoField", () => {
         <PromoField
           promo={{ code: "SAVE20", label: "Launch 20%", duration: "once", durationInMonths: null, percentOff: 20, amountOffCents: null }}
           onApply={noop}
-          onRemove={async () => {}}
+          onRemove={async () => null}
         />,
       ),
     );

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CONFIRM_FAILED, confirmCard, oneAtATime, returnPath, type CardCheckout } from "./confirm-card";
+import { CONFIRM_FAILED, confirmCard, exclusive, returnPath, type CardCheckout } from "./confirm-card";
 
 /** Plan 2026-11-26-001, Unit 6 (origin R23): "Start free trial" with Stripe mocked. */
 
@@ -47,27 +47,46 @@ describe("confirmCard", () => {
   });
 });
 
-describe("oneAtATime (double press)", () => {
+describe("confirmCard: an expired session", () => {
+  it("is flagged from the session's status or Stripe's message, so the page opens a fresh one", async () => {
+    const byStatus = { ...checkout({ confirm: "declined" }), status: { type: "expired" } };
+    expect(await confirmCard(byStatus, f)).toMatchObject({ ok: false, expired: true });
+    const c = checkout();
+    c.confirm = vi.fn(async () => ({ type: "error" as const, error: { message: "This Checkout Session has expired." } }));
+    expect(await confirmCard(c, f)).toMatchObject({ ok: false, expired: true, message: "This Checkout Session has expired." });
+    expect(await confirmCard(checkout({ confirm: "declined" }), f)).not.toHaveProperty("expired");
+  });
+});
+
+describe("exclusive (one change at a time)", () => {
   it("a second press while the first is with Stripe makes no second confirm", async () => {
     const c = checkout();
-    const submit = oneAtATime((x: typeof f) => confirmCard(c, x));
+    const lock = exclusive();
+    const submit = (x: typeof f) => lock.run("confirm", () => confirmCard(c, x), (r) => r.ok);
     const [a, b] = await Promise.all([submit(f), submit(f)]);
     expect(a).toEqual({ ok: true });
     expect(b).toBeNull();
     expect(c.confirm).toHaveBeenCalledTimes(1);
-    // After success the page is leaving: nothing more is sent.
+    // After success the page is leaving: nothing more is sent, not even another kind of change.
     expect(await submit(f)).toBeNull();
+    expect(await lock.run("currency", async () => "x")).toBeNull();
   });
 
   it("after a decline the button works again (entries kept by the caller)", async () => {
     const c = checkout({ confirm: "declined" });
-    const submit = oneAtATime((x: typeof f) => confirmCard(c, x));
+    const lock = exclusive();
+    const submit = (x: typeof f) => lock.run("confirm", () => confirmCard(c, x), (r) => r.ok);
     expect(await submit(f)).toMatchObject({ ok: false });
     expect(await submit(f)).toMatchObject({ ok: false });
     expect(c.confirm).toHaveBeenCalledTimes(2);
   });
-});
 
+  it("releases after a throw", async () => {
+    const lock = exclusive();
+    await expect(lock.run("promo", async () => Promise.reject(new Error("x")))).rejects.toThrow("x");
+    expect(lock.held()).toBeNull();
+  });
+});
 it("goes to the return page with the session id", () => {
   expect(returnPath("cs_test_1")).toBe("/start/payment/done?session_id=cs_test_1");
 });

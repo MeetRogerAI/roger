@@ -18,16 +18,14 @@ export function PriceBox({
   promo,
   onCurrency,
   currencyBusy = false,
-  currencyLocked = false,
   promoSlot,
   notice,
 }: {
   price: MonthlyPreview;
   promo: PromoView | null;
   onCurrency?: (c: Currency) => void;
+  /** Another change on the page is in flight: the toggle waits. */
   currencyBusy?: boolean;
-  /** No toggle once the card is saved (the page is not shown then; kept for clarity). */
-  currencyLocked?: boolean;
   promoSlot?: ReactNode;
   notice?: string | null;
 }) {
@@ -55,22 +53,20 @@ export function PriceBox({
           <h2 id={`${id}-title`} className="text-title">
             Summary
           </h2>
-          {!currencyLocked && (
-            <div role="group" aria-label="Currency" className="inline-flex rounded-full border border-rule bg-ground-2 p-1">
-              {(["USD", "CAD"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={currency === value}
-                  disabled={currencyBusy}
-                  onClick={() => value !== currency && onCurrency?.(value)}
-                  className={`min-h-11 min-w-14 cursor-pointer rounded-full px-3 text-meta font-semibold disabled:cursor-wait ${currency === value ? "bg-ink text-ground" : "text-ink-2 hover:text-ink"}`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          )}
+          <div role="group" aria-label="Currency" className="inline-flex rounded-full border border-rule bg-ground-2 p-1">
+            {(["USD", "CAD"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={currency === value}
+                disabled={currencyBusy}
+                onClick={() => value !== currency && onCurrency?.(value)}
+                className={`min-h-11 min-w-14 cursor-pointer rounded-full px-3 text-meta font-semibold disabled:cursor-wait ${currency === value ? "bg-ink text-ground" : "text-ink-2 hover:text-ink"}`}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
         </div>
 
         <dl className="mt-5 space-y-3 text-small">

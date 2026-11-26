@@ -3,19 +3,25 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/access";
-import { cardSavePath } from "@/lib/billing/card-saved";
 import { CHECKOUT_LIMITED, discardSetupSession, finishCardSave, openEmbeddedSetup, type EmbeddedSetup } from "@/lib/billing/card-setup";
 import { stripeGateway, type CardGateway, type MonthlyPreview } from "@/lib/billing/gateway";
 import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
-import { paymentAccount, paymentPrice, pendingPromoView, type PaymentAccount } from "@/lib/billing/payment-page";
+import {
+  finishedSavePath,
+  paymentAccount,
+  paymentPrice,
+  paymentReturnUrl,
+  pendingPromoView,
+  planCents,
+  storedPromoView,
+  type PaymentAccount,
+} from "@/lib/billing/payment-page";
 import type { PromoView } from "@/lib/billing/payment-view";
-import { amount, type Currency } from "@/lib/billing/prices";
+import type { Currency } from "@/lib/billing/prices";
 import { choosePromoCode, clearPendingPromo, PROMO_INVALID } from "@/lib/billing/promo";
 import { query } from "@/lib/db-query";
-import { appUrl } from "@/lib/mail/layout";
 import { clientIp } from "@/lib/rate-limit";
 import { readV3Settings } from "@/lib/v3-settings";
-import { getV3SettingsForDisplay } from "@/lib/v3-settings-display";
 
 /**
  * The Payment page's actions (plan 2026-11-26-001, Unit 6). Server actions
@@ -27,11 +33,20 @@ import { getV3SettingsForDisplay } from "@/lib/v3-settings-display";
  * (`quoteMonthly`, `choosePromoCode`, `openEmbeddedSetup`).
  */
 
-export type Location = { country?: unknown; postal?: unknown };
+/** What the browser sends for the tax line (checked here, never trusted). */
+export type BillingLocationInput = { country?: unknown; postal?: unknown };
 export type Refused = { ok: false; message: string };
-/** `promo` absent: unchanged; null: no code pending (removed, or dropped because it no longer applies). */
-export type Priced = { ok: true; price: MonthlyPreview; promo?: PromoView | null; notice?: string };
-export type SessionOpened = { ok: true; sessionId: string; clientSecret: string };
+/**
+ * `promo` absent: unchanged; null: no code pending (removed, or dropped because it no longer applies).
+ * `taxRetry`: Stripe could not work out the tax for a valid location; the page asks again later.
+ */
+export type Priced = { ok: true; price: MonthlyPreview; promo?: PromoView | null; notice?: string; taxRetry?: boolean };
+/** The account's currency and price, as the server holds them (`price.currency` is `currency`). */
+export type Current = Priced & { currency: Currency };
+/** A card session for the form, with the account's currency and price (always applied by the page). */
+export type SessionOpened = Current & { sessionId: string; clientSecret: string };
+/** A failed currency change: the account's currency and price when they could be read, so the page never shows a stale currency. */
+export type SessionRefused = Refused & { current?: Current };
 
 const SIGNED_OUT = "Your sign-in has ended. Sign in again to add your card.";
 const NOT_HERE = "There’s no card to add here. Go back to Roger.";
@@ -51,12 +66,9 @@ async function guard(): Promise<Guarded | Refused> {
   return { ok: true, account, gw, ip: clientIp(await headers()) };
 }
 
-/** The plan price in cents for display before Stripe's preview (the settings' amount). */
-async function planCents(currency: Currency): Promise<number> {
-  return Math.round(amount(await getV3SettingsForDisplay(), "monthly", currency) * 100);
-}
+const joinNotices = (...n: (string | undefined)[]) => n.filter(Boolean).join(" ") || undefined;
 
-async function priced(g: Guarded, currency: Currency, promo: PromoView | null, coupon: string | null, loc: Location = {}): Promise<Priced> {
+async function priced(g: Guarded, currency: Currency, promo: PromoView | null, coupon: string | null, loc: BillingLocationInput = {}): Promise<Priced> {
   const r = await paymentPrice(query, g.gw, {
     userId: g.account.userId,
     ip: g.ip,
@@ -67,7 +79,15 @@ async function priced(g: Guarded, currency: Currency, promo: PromoView | null, c
     country: loc.country,
     postal: loc.postal,
   });
-  return { ok: true, price: r.price, promo: r.promo, notice: r.notice };
+  return { ok: true, price: r.price, promo: r.promo, notice: r.notice, ...(!r.rateLimited && r.taxRetry ? { taxRetry: true } : {}) };
+}
+
+/** The account's price in `currency`, with the pending code looked up again (a code that does not apply in that currency is dropped, with a notice). */
+async function accountPrice(g: Guarded, currency: Currency, loc: BillingLocationInput): Promise<Current> {
+  const account = { ...g.account, currency };
+  const pending = await pendingPromoView(query, g.gw, account);
+  const p = await priced({ ...g, account }, currency, pending.promo, pending.promo ? account.promoCoupon : null, loc);
+  return { ...p, notice: joinNotices(pending.notice, p.notice), currency };
 }
 
 /**
@@ -77,56 +97,70 @@ async function priced(g: Guarded, currency: Currency, promo: PromoView | null, c
  */
 async function finishSaved(userId: string, gw: CardGateway, sessionId: string): Promise<never> {
   const r = await finishCardSave(query, gw, sessionId, { expectUserId: userId, getSettings: readV3Settings });
-  redirect(r.outcome === "pending" ? `/start/payment/done?session_id=${encodeURIComponent(sessionId)}` : r.outcome === "not_yours" ? "/app" : cardSavePath(r));
+  redirect(finishedSavePath(sessionId, r));
 }
 
-function sessionAnswer(r: EmbeddedSetup): SessionOpened | Refused {
-  if (r.ok) return { ok: true, sessionId: r.sessionId, clientSecret: r.clientSecret };
+function refusal(r: Exclude<EmbeddedSetup, { ok: true }>): Refused {
   if (r.reason === "rate_limited") return { ok: false, message: CHECKOUT_LIMITED };
   if (r.reason === "not_allowed" || r.reason === "not_found") return { ok: false, message: NOT_HERE };
   return { ok: false, message: TRY_AGAIN };
 }
 
-async function open(g: Guarded): Promise<SessionOpened | Refused> {
-  const r = await openEmbeddedSetup(query, g.gw, { userId: g.account.userId, ip: g.ip, returnUrl: paymentReturnUrl() });
-  if (!r.ok && r.reason === "complete") return finishSaved(g.account.userId, g.gw, r.sessionId);
-  return sessionAnswer(r);
-}
+const openSetup = (g: Guarded) => openEmbeddedSetup(query, g.gw, { userId: g.account.userId, ip: g.ip, returnUrl: paymentReturnUrl() });
 
-/** Where Stripe sends the person after confirming (Unit 5's return page). */
-function paymentReturnUrl(): string {
-  return `${appUrl("/start/payment/done")}?session_id={CHECKOUT_SESSION_ID}`;
+/** The account's currency and price as stored now (after a failed change), or undefined when they cannot be read. */
+async function currentState(g: Guarded, loc: BillingLocationInput): Promise<Current | undefined> {
+  try {
+    const account = await paymentAccount(query, g.account.userId);
+    if (!account) return undefined;
+    return await accountPrice({ ...g, account }, account.currency, loc);
+  } catch (e) {
+    console.warn("[payment] current price read failed", { message: (e as Error)?.message });
+    return undefined;
+  }
 }
 
 /**
  * The USD / CAD toggle (origin R15). Allowed until the card is saved (the
  * guard). The open card session is in the old currency, so it is closed
- * (`discardSetupSession`) and a new one opened; a session that completed in
- * the meantime is finished instead. The pending promo code is kept: the card
- * save re-checks it in the new currency.
+ * (`discardSetupSession`), the account currency saved and a new session
+ * opened in it; a session that completed in the meantime is finished
+ * instead. `openEmbeddedSetup` opens in the stored currency, so the currency
+ * is written before the open. From the page's view the change is all or
+ * nothing: on success it gets the new session with the new currency and
+ * price; on any failure (refused, rate-limited, Stripe down, a throw) it gets
+ * the account's currency and price as stored now (`current`), which it
+ * applies, and its Retry opens a session in that currency. The pending promo
+ * code is looked up again in the new currency; one that does not apply there
+ * is dropped, with `PROMO_GONE`.
  */
-export async function setPaymentCurrency(
-  wanted: unknown,
-  loc: Location = {},
-): Promise<(Priced & SessionOpened & { currency: Currency }) | Refused> {
+export async function setPaymentCurrency(wanted: unknown, loc: BillingLocationInput = {}): Promise<SessionOpened | SessionRefused> {
   if (wanted !== "USD" && wanted !== "CAD") return { ok: false, message: "Choose US or Canadian dollars." };
   const currency: Currency = wanted;
   const g = await guard();
   if (!g.ok) return g;
-  if (currency !== g.account.currency) {
-    const d = await discardSetupSession(query, g.gw, g.account.userId);
-    if (d === "complete") {
-      const [u] = await query<{ setup_session: string | null }>(`select setup_session from users where id = $1`, [g.account.userId]);
-      if (u?.setup_session) return finishSaved(g.account.userId, g.gw, u.setup_session);
+  let completed: string | null = null;
+  let opened: EmbeddedSetup | null = null;
+  try {
+    if (currency !== g.account.currency) {
+      const d = await discardSetupSession(query, g.gw, g.account.userId);
+      if (d === "complete") {
+        const [u] = await query<{ setup_session: string | null }>(`select setup_session from users where id = $1`, [g.account.userId]);
+        completed = u?.setup_session ?? null;
+      }
+      if (!completed) await query(`update users u set currency = $2 where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")}`, [g.account.userId, currency]);
     }
-    await query(`update users u set currency = $2 where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")}`, [g.account.userId, currency]);
+    if (!completed) {
+      opened = await openSetup(g);
+      if (!opened.ok && opened.reason === "complete") completed = opened.sessionId;
+    }
+  } catch (e) {
+    console.error("[payment] currency change failed", { message: (e as Error)?.message });
   }
-  const s = await open(g);
-  if (!s.ok) return s;
-  const account = { ...g.account, currency };
-  const promo = await pendingPromoView(g.gw, account);
-  const p = await priced({ ...g, account }, currency, promo, account.promoCoupon, loc);
-  return { ...p, ...s, currency };
+  if (completed) return finishSaved(g.account.userId, g.gw, completed);
+  if (opened?.ok) return { ...(await accountPrice(g, opened.currency, loc)), sessionId: opened.sessionId, clientSecret: opened.clientSecret };
+  const refused = opened && !opened.ok ? refusal(opened) : { ok: false as const, message: TRY_AGAIN };
+  return { ...refused, current: await currentState(g, loc) };
 }
 
 /**
@@ -141,9 +175,7 @@ export async function quoteTax(country: unknown, postal: unknown): Promise<Price
   // No promo lookup on every keystroke: Stripe's preview carries the discount. The stored code only
   // matters here if the preview fails (the plan price is then shown without a discount amount).
   const a = g.account;
-  const stored: PromoView | null = a.promoCode
-    ? { code: a.promoCode, label: a.promoLabel ?? a.promoCode, duration: null, durationInMonths: null, percentOff: null, amountOffCents: null }
-    : null;
+  const stored = storedPromoView(a);
   const r = await paymentPrice(query, g.gw, {
     userId: a.userId,
     ip: g.ip,
@@ -154,13 +186,13 @@ export async function quoteTax(country: unknown, postal: unknown): Promise<Price
     country,
     postal,
   });
-  if (r.rateLimited) return { ok: false, message: r.notice! };
+  if (r.rateLimited) return { ok: false, message: r.notice };
   // The promo is sent back only when it changed (dropped because Stripe no longer accepts it).
-  return { ok: true, price: r.price, ...(stored && !r.promo ? { promo: null } : {}), notice: r.notice };
+  return { ok: true, price: r.price, ...(stored && !r.promo ? { promo: null } : {}), notice: r.notice, ...(r.taxRetry ? { taxRetry: true } : {}) };
 }
 
 /** "Have a promo code?" → Apply (origin R17). Checked by Stripe and Roger; any refusal reads the same. */
-export async function applyPromo(code: unknown, loc: Location = {}): Promise<Priced | Refused> {
+export async function applyPromo(code: unknown, loc: BillingLocationInput = {}): Promise<Priced | Refused> {
   if (typeof code !== "string" || !code.trim()) return { ok: false, message: "Enter a code." };
   const g = await guard();
   if (!g.ok) return g;
@@ -178,16 +210,24 @@ export async function applyPromo(code: unknown, loc: Location = {}): Promise<Pri
 }
 
 /** "Remove": back to the full price. */
-export async function removePromo(loc: Location = {}): Promise<Priced | Refused> {
+export async function removePromo(loc: BillingLocationInput = {}): Promise<Priced | Refused> {
   const g = await guard();
   if (!g.ok) return g;
   await clearPendingPromo(query, g.account.userId);
   return priced(g, g.account.currency, null, null, loc);
 }
 
-/** The card form's session again (Stripe failed to load it, or it expired while the page was open). */
-export async function openSession(): Promise<SessionOpened | Refused> {
+/**
+ * The card form's session again (Stripe failed to load it, it expired while
+ * the page was open, or a currency change failed), with the account's
+ * currency and price, which the page applies: the session is always in the
+ * account's stored currency.
+ */
+export async function openSession(loc: BillingLocationInput = {}): Promise<SessionOpened | Refused> {
   const g = await guard();
   if (!g.ok) return g;
-  return open(g);
+  const r = await openSetup(g);
+  if (!r.ok && r.reason === "complete") return finishSaved(g.account.userId, g.gw, r.sessionId);
+  if (!r.ok) return refusal(r);
+  return { ...(await accountPrice(g, r.currency, loc)), sessionId: r.sessionId, clientSecret: r.clientSecret };
 }

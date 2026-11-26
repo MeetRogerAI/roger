@@ -8,7 +8,9 @@ import type { PromoView } from "@/lib/billing/payment-view";
  * link that opens one field and an Apply button. The code is checked on the
  * server; any refusal reads the same generic line, and the field keeps what
  * was typed. An applied code shows with a Remove control. Not a form: it sits
- * beside the card form and must never submit or reset it.
+ * beside the card form and must never submit or reset it. Focus follows the
+ * change: to Remove after Apply, back to "Have a promo code?" after Remove.
+ * `disabled`: another change on the page is in flight.
  */
 export function PromoField({
   promo,
@@ -20,7 +22,8 @@ export function PromoField({
   promo: PromoView | null;
   /** Resolves to an error message, or null when the code was applied. */
   onApply: (code: string) => Promise<string | null>;
-  onRemove: () => Promise<void>;
+  /** Resolves to an error message, or null when the code was removed. */
+  onRemove: () => Promise<string | null>;
   disabled?: boolean;
   initiallyOpen?: boolean;
 }) {
@@ -29,7 +32,11 @@ export function PromoField({
   const [state, setState] = useState<"idle" | "checking" | "removing">("idle");
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const removeButton = useRef<HTMLButtonElement>(null);
+  const openLink = useRef<HTMLButtonElement>(null);
   const opened = useRef(false);
+  // Where focus goes once the change has rendered.
+  const focusNext = useRef<"remove" | "link" | null>(null);
   const id = useId();
 
   useEffect(() => {
@@ -37,8 +44,15 @@ export function PromoField({
     if (open && opened.current) input.current?.focus();
   }, [open]);
 
+  useEffect(() => {
+    const target = focusNext.current === "remove" ? removeButton.current : focusNext.current === "link" ? openLink.current : null;
+    if (!target) return;
+    focusNext.current = null;
+    target.focus();
+  }, [promo, open, state]);
+
   async function apply() {
-    if (state !== "idle") return;
+    if (state !== "idle" || disabled) return;
     if (!code.trim()) {
       setError("Enter a code.");
       input.current?.focus();
@@ -47,39 +61,70 @@ export function PromoField({
     setState("checking");
     setError(null);
     const message = await onApply(code).catch(() => "We couldn’t check that code. Try again.");
-    setState("idle");
     if (message) {
+      setState("idle");
       setError(message);
       input.current?.focus();
-    } else setCode("");
+      return;
+    }
+    setCode("");
+    opened.current = false;
+    setOpen(false);
+    focusNext.current = "remove";
+    setState("idle");
   }
 
   async function remove() {
-    if (state !== "idle") return;
+    if (state !== "idle" || disabled) return;
     setState("removing");
-    await onRemove().catch(() => {});
+    setError(null);
+    const message = await onRemove().catch(() => "We couldn’t remove the code. Try again.");
+    if (message) {
+      setError(message);
+      focusNext.current = "remove";
+    } else {
+      opened.current = false;
+      setOpen(false);
+      focusNext.current = "link";
+    }
     setState("idle");
   }
 
   if (promo) {
     return (
-      <p className="flex flex-wrap items-center justify-between gap-2 text-small">
-        <span>
-          Code <strong className="font-semibold">{promo.code}</strong> applied
-        </span>
-        <button type="button" onClick={remove} disabled={disabled || state !== "idle"} className="tlink min-h-11 cursor-pointer disabled:cursor-wait">
-          {state === "removing" ? "Removing…" : "Remove"}
-        </button>
-      </p>
+      <div className="text-small">
+        <p className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Code <strong className="font-semibold">{promo.code}</strong> applied
+          </span>
+          <button
+            ref={removeButton}
+            type="button"
+            onClick={remove}
+            disabled={disabled || state !== "idle"}
+            aria-describedby={error ? `${id}-error` : undefined}
+            className="tlink min-h-11 cursor-pointer disabled:cursor-wait"
+          >
+            {state === "removing" ? "Removing…" : "Remove"}
+          </button>
+        </p>
+        {error && (
+          <p id={`${id}-error`} role="alert" className="mt-2 text-error">
+            {error}
+          </p>
+        )}
+      </div>
     );
   }
 
   if (!open) {
     return (
       <button
+        ref={openLink}
         type="button"
         onClick={() => {
           opened.current = true;
+          setError(null);
           setOpen(true);
         }}
         className="tlink min-h-11 cursor-pointer text-small"

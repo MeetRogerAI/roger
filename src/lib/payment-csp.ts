@@ -3,7 +3,11 @@
  * scoped to `/start/payment` and its return page only (no CSP exists
  * elsewhere, and this release does not introduce a site-wide one). Stripe.js
  * and its frames come from js.stripe.com; its API calls go to api.stripe.com;
- * 3D Secure frames come from hooks.stripe.com.
+ * 3D Secure frames come from hooks.stripe.com; Stripe's fraud signals frame
+ * and beacon from m.stripe.network; images (including q.stripe.com) from
+ * *.stripe.com. No report-to or report-uri yet: Roger has no endpoint to
+ * receive reports, so violations show in the browser console only (plan,
+ * Unit 6 review fixes).
  *
  * Shipped as `Content-Security-Policy-Report-Only` for now: Next.js inlines
  * its own bootstrap scripts, and with Cache Components the page's static
@@ -18,8 +22,8 @@ export function paymentCsp(dev = process.env.NODE_ENV === "development"): string
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} https://js.stripe.com https://*.js.stripe.com`,
     "style-src 'self' 'unsafe-inline'",
-    "frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com",
-    `connect-src 'self' https://api.stripe.com${dev ? " ws: wss:" : ""}`,
+    "frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://m.stripe.network",
+    `connect-src 'self' https://api.stripe.com https://m.stripe.network${dev ? " ws: wss:" : ""}`,
     "img-src 'self' data: https://*.stripe.com",
     "font-src 'self'",
     "object-src 'none'",

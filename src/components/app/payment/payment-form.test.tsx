@@ -36,7 +36,7 @@ vi.mock("@stripe/react-stripe-js/checkout", () => ({
 const { CardForm, PaymentForm } = await import("./payment-form");
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const fields = { name: "Ana Lee", country: "CA", postal: "" };
-const base = { fields, setFields: () => {}, onRetry: () => {}, supportEmail: "hello@meetroger.ai" };
+const base = { fields, setFields: () => {}, onRetry: () => {}, onConfirm: async () => null, supportEmail: "hello@meetroger.ai" };
 const success = { type: "success", checkout: { updateBillingAddress: vi.fn(), confirm: vi.fn() } } as never;
 /** The submit button's attributes, minus its class (whose `disabled:` variants would match). */
 const button = (html: string) => html.match(/<button type="submit"[^>]*>/)![0].replace(/class="[^"]*"/, "");

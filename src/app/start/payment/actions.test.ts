@@ -39,6 +39,8 @@ vi.mock("@/lib/mail/send", async (orig) => {
 const actions = await import("./actions");
 const { openEmbeddedSetup } = await import("@/lib/billing/card-setup");
 const { PROMO_INVALID } = await import("@/lib/billing/promo");
+const { PROMO_GONE } = await import("@/lib/billing/payment-page");
+const { TAX_UNAVAILABLE } = await import("@/lib/billing/payment-view");
 const WEEK = "2026-12-14";
 const RETURN = "https://roger.test/start/payment/done?session_id={CHECKOUT_SESSION_ID}";
 
@@ -133,6 +135,15 @@ describe("quoteTax", () => {
     expect(db.gw!.payment.previews).toHaveLength(0);
   });
 
+  it("when Stripe cannot work out the tax, says it will be added and asks the page to try again later", async () => {
+    db.gw!.previewMonthly = async () => {
+      throw new Error("Stripe is down");
+    };
+    // A postal code no other test asks for (answers are cached across tests).
+    const r = await actions.quoteTax("CA", "H2X 1Y4");
+    expect(r).toEqual({ ok: true, price: expect.objectContaining({ tax: "pending", totalCents: 28000 }), notice: TAX_UNAVAILABLE, taxRetry: true });
+  });
+
   it("refuses past the hourly limit; cached answers are not counted", async () => {
     const codes = Array.from({ length: 41 }, (_, i) => `K1A ${i % 10}${"ABCEGHJKLM"[Math.floor(i / 10)]}${i % 10}`);
     for (const c of codes.slice(0, 40)) expect(await actions.quoteTax("CA", c), c).toMatchObject({ ok: true, price: { tax: "calculated" } });
@@ -160,6 +171,33 @@ describe("setPaymentCurrency", () => {
   it("without a location shows the plan price in the new currency, tax to come", async () => {
     const r = await actions.setPaymentCurrency("USD");
     expect(r).toMatchObject({ ok: true, currency: "USD", price: { subtotalCents: 20000, tax: "pending" } });
+  });
+
+  it("when the new session cannot be opened, answers with the account's currency and price as stored (never a stale one), and a retry opens in it", async () => {
+    const first = await openEmbeddedSetup(db.query!, db.gw!, { userId: db.userId!, ip: "203.0.113.9", returnUrl: RETURN });
+    if (!first.ok) throw new Error(first.reason);
+    const create = db.gw!.createEmbeddedSetupSession;
+    db.gw!.createEmbeddedSetupSession = async () => {
+      throw new Error("Stripe is down");
+    };
+    const r = await actions.setPaymentCurrency("USD", { country: "US", postal: "10001" });
+    expect(r).toMatchObject({ ok: false, message: "We couldn’t open the card form. Try again in a moment.", current: { ok: true, currency: "USD", price: { currency: "USD", subtotalCents: 20000 } } });
+    const [u] = await db.query!<{ currency: string }>(`select currency from users`);
+    expect(u.currency).toBe("USD");
+
+    db.gw!.createEmbeddedSetupSession = create;
+    const again = await actions.openSession({ country: "US", postal: "10001" });
+    expect(again).toMatchObject({ ok: true, currency: "USD", price: { currency: "USD", subtotalCents: 20000, tax: "calculated" } });
+    if (!again.ok) throw new Error(again.message);
+    expect(db.gw!.sessions.get(again.sessionId)).toMatchObject({ currency: "USD" });
+  });
+
+  it("drops a pending code that does not apply in the new currency and says so, even without a location", async () => {
+    db.gw!.payment.addPromotion({ code: "TENCAD", coupon: { amountOff: { cad: 1000 }, percentOff: null } });
+    expect(await actions.applyPromo("TENCAD")).toMatchObject({ ok: true, promo: { code: "TENCAD" } });
+    const r = await actions.setPaymentCurrency("USD");
+    expect(r).toMatchObject({ ok: true, currency: "USD", promo: null, notice: PROMO_GONE, price: { currency: "USD", discountCents: 0, totalCents: 20000 } });
+    expect(await db.query!(`select promo_code, promo_coupon from users`)).toEqual([{ promo_code: null, promo_coupon: null }]);
   });
 
   it("finishes the card save instead when the stored session completed meanwhile", async () => {

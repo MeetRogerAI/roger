@@ -117,6 +117,16 @@ describe("/start/payment", () => {
     expect(text).toContain("Code SAVE20 applied");
   });
 
+  it("drops a pending code that does not apply in the account's currency, and says so", async () => {
+    const f = db.gw!.payment.addPromotion({ code: "TENUSD", coupon: { amountOff: { usd: 1000 }, percentOff: null } });
+    await db.query!("update users set promo_code = 'TENUSD', promo_coupon = $1, promo_label = 'Ten off'", [f.coupon!.id]);
+    const { text } = await render();
+    expect(text).toContain("That code no longer applies, so the price is the regular one.");
+    expect(text).not.toContain("Code TENUSD applied");
+    expect(text).toContain("Total per month CA$280 + tax");
+    expect(await db.query!("select promo_code from users")).toEqual([{ promo_code: null }]);
+  });
+
   const away: [string, () => Promise<unknown>][] = [
     ["a card already saved", () => db.query!("update users set trial_started_at = now()")],
     ["no held list", () => db.query!("delete from picks").then(() => db.query!("delete from cora_user_weeks"))],

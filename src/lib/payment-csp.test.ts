@@ -21,9 +21,11 @@ describe("Payment CSP", () => {
     );
     expect(d["default-src"]).toEqual(["'self'"]);
     expect(d["script-src"]).toEqual(["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://*.js.stripe.com"]);
-    expect(d["frame-src"]).toEqual(["https://js.stripe.com", "https://*.js.stripe.com", "https://hooks.stripe.com"]);
-    expect(d["connect-src"]).toEqual(["'self'", "https://api.stripe.com"]);
+    expect(d["frame-src"]).toEqual(["https://js.stripe.com", "https://*.js.stripe.com", "https://hooks.stripe.com", "https://m.stripe.network"]);
+    expect(d["connect-src"]).toEqual(["'self'", "https://api.stripe.com", "https://m.stripe.network"]);
+    // *.stripe.com covers q.stripe.com (Stripe's tracking pixel).
     expect(d["img-src"]).toEqual(["'self'", "data:", "https://*.stripe.com"]);
+    expect(paymentCsp(false)).not.toMatch(/report-(to|uri)/);
     expect(d["frame-ancestors"]).toEqual(["'none'"]);
     expect(d["base-uri"]).toEqual(["'self'"]);
     expect(d["form-action"]).toEqual(["'self'"]);

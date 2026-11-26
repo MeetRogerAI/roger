@@ -15,47 +15,68 @@ import { checkBillingLocation } from "@/lib/billing/location";
 
 type Result = { type: "success" } | { type: "error"; error: { message: string } };
 
-/** The part of Stripe's Checkout Elements actions this needs (`useCheckoutElements().checkout`). */
+/** The part of Stripe's Checkout Elements value this needs (`useCheckoutElements().checkout`): its actions and the session's status. */
 export type CardCheckout = {
   updateBillingAddress(a: StripeCheckoutContact | null): Promise<Result>;
   confirm(args?: { redirect?: "always" | "if_required" }): Promise<Result>;
+  status?: { type: string };
 };
 
 export const CONFIRM_FAILED = "We couldn’t save your card. Check the details and try again.";
 
-export async function confirmCard(checkout: CardCheckout, f: { name: string; country: string; postal: string }): Promise<{ ok: true } | { ok: false; message: string }> {
+export type ConfirmResult = { ok: true } | { ok: false; message: string; expired?: boolean };
+
+/**
+ * Stripe's errors carry no code for a session that has expired or closed
+ * (`AnyBuyerError` has `code: null`), so the session's own status is read
+ * first and the message second.
+ */
+const EXPIRED = /expired|no longer (?:active|available|valid|open)|session (?:is )?(?:closed|not found|missing)|no such checkout/i;
+function isExpired(checkout: CardCheckout, message: string): boolean {
+  return checkout.status?.type === "expired" || EXPIRED.test(message);
+}
+
+export async function confirmCard(checkout: CardCheckout, f: { name: string; country: string; postal: string }): Promise<ConfirmResult> {
   const loc = checkBillingLocation(f.country, f.postal);
   if (!loc.ok) return { ok: false, message: CONFIRM_FAILED };
+  const failed = (message: string): ConfirmResult => (isExpired(checkout, message) ? { ok: false, message: message || CONFIRM_FAILED, expired: true } : { ok: false, message: message || CONFIRM_FAILED });
   try {
     const u = await checkout.updateBillingAddress({ name: f.name.trim(), address: { country: loc.location.country, postal_code: loc.location.postal } });
-    if (u.type === "error") return { ok: false, message: u.error.message || CONFIRM_FAILED };
+    if (u.type === "error") return failed(u.error.message);
     const c = await checkout.confirm({ redirect: "if_required" });
-    if (c.type === "error") return { ok: false, message: c.error.message || CONFIRM_FAILED };
+    if (c.type === "error") return failed(c.error.message);
     return { ok: true };
   } catch (e) {
     console.error("[payment] confirm failed", (e as Error)?.message);
-    return { ok: false, message: CONFIRM_FAILED };
+    return failed("");
   }
 }
 
 /**
- * One call at a time: a second press while the first is still with Stripe
- * returns null without calling. The guard is a plain flag (not React state),
- * so two clicks in the same frame cannot both pass. After success the flag
- * stays set (the page is leaving).
+ * One change at a time on the Payment page: the card confirm, a currency
+ * switch, a promo apply or remove, a fresh card session. `run` answers null
+ * without calling while another holds it. The holder is a plain variable (not
+ * React state), set before any await, so two clicks in the same frame cannot
+ * both pass, and it lives in the page (not the card form), so a remount of
+ * the card form does not forget it. `keep(result)`: the holder is not
+ * released (after a confirmed card the page is leaving).
  */
-export function oneAtATime<A extends unknown[], R extends { ok: boolean }>(fn: (...a: A) => Promise<R>) {
-  let busy = false;
-  return async (...a: A): Promise<R | null> => {
-    if (busy) return null;
-    busy = true;
-    let r: R | undefined;
-    try {
-      r = await fn(...a);
-      return r;
-    } finally {
-      if (!r?.ok) busy = false;
-    }
+export function exclusive() {
+  let holder: string | null = null;
+  return {
+    held: () => holder,
+    async run<R>(name: string, fn: () => Promise<R>, keep?: (r: R) => boolean): Promise<R | null> {
+      if (holder) return null;
+      holder = name;
+      let kept = false;
+      try {
+        const r = await fn();
+        kept = Boolean(keep?.(r));
+        return r;
+      } finally {
+        if (!kept) holder = null;
+      }
+    },
   };
 }
 

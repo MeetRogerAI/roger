@@ -4,11 +4,11 @@ import { CheckoutElementsProvider, PaymentElement, useCheckoutElements, type Str
 import { loadStripe, type Appearance, type Stripe } from "@stripe/stripe-js";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
-import { applyPromo, openSession, quoteTax, removePromo, setPaymentCurrency, type Priced } from "@/app/start/payment/actions";
+import { applyPromo, openSession, quoteTax, removePromo, setPaymentCurrency, type BillingLocationInput, type Priced } from "@/app/start/payment/actions";
 import type { MonthlyPreview } from "@/lib/billing/gateway";
-import { billingErrors, canQuote, COUNTRIES, OTHER_COUNTRY, type PromoView } from "@/lib/billing/payment-view";
+import { billingErrors, canQuote, COUNTRIES, OTHER_COUNTRY, TAX_UNAVAILABLE, type PromoView } from "@/lib/billing/payment-view";
 import type { Currency } from "@/lib/billing/prices";
-import { confirmCard, oneAtATime, returnPath } from "./confirm-card";
+import { confirmCard, exclusive, returnPath, type CardCheckout, type ConfirmResult } from "./confirm-card";
 import { PriceBox } from "./price-box";
 import { PromoField } from "./promo-field";
 import { Trust } from "./trust";
@@ -24,6 +24,12 @@ import { Trust } from "./trust";
  * - Roger's own controlled name, country (Canada or the US) and postal code
  *   fields feed the tax line (debounced, server-side) and are pushed to the
  *   session with `updateBillingAddress` before `confirm`.
+ * - One change at a time (`exclusive`): while the card is being confirmed, the
+ *   currency switched, a promo applied or removed, or a fresh card session
+ *   opened, the toggle, the promo controls, Try again and "Start free trial"
+ *   are all unavailable. Tax quotes wait too: an in-flight quote is dropped
+ *   when a change starts, and the price is asked again after it only if the
+ *   location moved meanwhile. A change's answer is always shown.
  * - No server-action `<form>`: React 19 resets such a form after its action,
  *   which would wipe what was typed (docs/solutions/ui-bugs). The server
  *   actions are called from handlers instead.
@@ -33,9 +39,14 @@ export type PaymentSession = { sessionId: string; clientSecret: string };
 
 type Fields = { name: string; country: string; postal: string };
 type Field = keyof Fields;
+type Busy = "confirm" | "currency" | "promo" | "session" | null;
 
 const QUOTE_DELAY_MS = 400;
-const STRIPE_FAILED = "The card form didn’t load. Check your connection, or turn off any blocker for this page, and try again.";
+export const STRIPE_FAILED = "The card form didn’t load. Check your connection, or turn off any blocker for this page, and try again.";
+export const FORM_CLOSED = "The card form has closed. Try again to open a fresh one.";
+export const FORM_TIMED_OUT = "This form timed out. We’ve opened a fresh one.";
+const UNREACHABLE = "We couldn’t reach Roger. Check your connection and try again.";
+const CURRENCY_FAILED = "We couldn’t change the currency. Try again.";
 
 /** Roger's look inside Stripe's frame (tokens from globals.css). */
 const appearance: Appearance = {
@@ -53,12 +64,17 @@ const appearance: Appearance = {
 };
 const fonts = [{ cssSrc: "https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600&display=swap" }];
 
+/** The location key a price was worked out for ("" without a valid location). */
+const locationKey = (f: Pick<Fields, "country" | "postal">) => (canQuote(f.country, f.postal) ? `${f.country}|${f.postal.replace(/\s+/g, "").toUpperCase()}` : "");
+const locationOf = (f: Fields): BillingLocationInput => (canQuote(f.country, f.postal) ? { country: f.country, postal: f.postal } : {});
+
 export function PaymentForm({
   publishableKey,
   session: initialSession,
   currency: initialCurrency,
   price: initialPrice,
   promo: initialPromo,
+  notice: initialNotice = null,
   name,
   addressError,
   supportEmail,
@@ -68,6 +84,8 @@ export function PaymentForm({
   currency: Currency;
   price: MonthlyPreview;
   promo: PromoView | null;
+  /** A line for the Price Box from the server (a pending code dropped because it does not apply). */
+  notice?: string | null;
   name: string;
   addressError: string | null;
   supportEmail: string;
@@ -75,77 +93,185 @@ export function PaymentForm({
   const [session, setSession] = useState(initialSession);
   const [price, setPrice] = useState(initialPrice);
   const [promo, setPromo] = useState(initialPromo);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(initialNotice);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [currencyBusy, setCurrencyBusy] = useState(false);
+  const [formNotice, setFormNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Busy>(null);
   const [fields, setFields] = useState<Fields>({ name, country: initialCurrency === "CAD" ? "CA" : "US", postal: "" });
+  const [quoteNonce, setQuoteNonce] = useState(0);
+  // One change at a time, held here so a remount of the card form cannot forget it.
+  const [lock] = useState(exclusive);
 
-  // Only the newest price answer is shown (typing, the toggle and the promo all ask).
+  // Only the newest tax quote is shown; a change (or the location going invalid) drops one in flight.
   const seq = useRef(0);
-  const location = { country: fields.country, postal: fields.postal };
-  const quotable = canQuote(fields.country, fields.postal);
+  const dropQuote = () => void seq.current++;
+  // The location the shown price was worked out for, and whether Stripe failed to work out its tax.
+  const pricedFor = useRef("");
+  const taxRetry = useRef(false);
+  const key = locationKey(fields);
 
-  function show(r: Priced) {
+  function show(r: Priced, forKey: string) {
     setPrice(r.price);
     if (r.promo !== undefined) setPromo(r.promo);
     setNotice(r.notice ?? null);
+    pricedFor.current = forKey;
+    taxRetry.current = Boolean(r.taxRetry);
+  }
+
+  /** `owned`: asked from inside a change (before a confirm), which holds the lock, so no other answer can race it. */
+  async function quote(f: Fields, owned = false) {
+    const n = ++seq.current;
+    const k = locationKey(f);
+    const r = await quoteTax(f.country, f.postal).catch(() => null);
+    if (!owned && n !== seq.current) return;
+    if (!r) {
+      pricedFor.current = k;
+      taxRetry.current = true;
+      setNotice(TAX_UNAVAILABLE);
+      return;
+    }
+    if (!r.ok) return setNotice(r.message);
+    show(r, k);
   }
 
   // The tax line follows the billing location, once it is valid (debounced; the server caches and limits).
+  // It waits while a change is in flight, and is asked again after one only if the location moved meanwhile
+  // (or Stripe could not work the tax out last time).
   useEffect(() => {
-    if (!quotable) return;
-    const n = ++seq.current;
-    const t = setTimeout(async () => {
-      const r = await quoteTax(fields.country, fields.postal).catch(() => null);
-      if (n !== seq.current || !r) return;
-      if (!r.ok) return setNotice(r.message);
-      setPrice(r.price);
-      if (r.promo !== undefined) setPromo(r.promo);
-      setNotice(r.notice ?? null);
-    }, QUOTE_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [fields.country, fields.postal, quotable]);
-
-  async function changeCurrency(c: Currency) {
-    if (currencyBusy) return;
-    setCurrencyBusy(true);
-    const n = ++seq.current;
-    const r = await setPaymentCurrency(c, quotable ? location : {}).catch(() => null);
-    setCurrencyBusy(false);
-    if (!r) return setNotice("We couldn’t change the currency. Try again.");
-    if (!r.ok) {
-      // The old session may be closed already: the form waits for a new one (Retry).
-      setSessionError(r.message);
+    if (!key || busy) {
+      dropQuote();
       return;
+    }
+    if (pricedFor.current === key && !taxRetry.current) return;
+    const f = fields;
+    const t = setTimeout(() => void quote(f), QUOTE_DELAY_MS);
+    return () => {
+      clearTimeout(t);
+      dropQuote();
+    };
+    // `fields` is read only for the key's location; the name never asks again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, busy, quoteNonce]);
+
+  // The return page's ?error=address is shown once: the flag leaves the address bar, so a reload does not show it again.
+  useEffect(() => {
+    if (!addressError) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("error")) return;
+    url.searchParams.delete("error");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [addressError]);
+
+  function updateFields(next: (prev: Fields) => Fields) {
+    setFields(next);
+    // Stripe could not work out the tax last time: the next interaction asks once more.
+    if (taxRetry.current) setQuoteNonce((n) => n + 1);
+  }
+
+  /** Runs one change under the page's lock, with the page showing it as busy. Null: another change holds the lock. */
+  function change<R>(kind: Exclude<Busy, null>, fn: () => Promise<R>, keep?: (r: R) => boolean): Promise<R | null> {
+    return lock.run(
+      kind,
+      async () => {
+        setBusy(kind);
+        let kept = false;
+        try {
+          const r = await fn();
+          kept = Boolean(keep?.(r));
+          return r;
+        } finally {
+          if (!kept) setBusy(null);
+        }
+      },
+      keep,
+    );
+  }
+
+  /** A fresh card session, with the account's currency and price (always applied). Call inside the lock. */
+  async function openFresh(): Promise<boolean> {
+    const f = fields;
+    const r = await openSession(locationOf(f)).catch(() => null);
+    if (!r) {
+      setSessionError(UNREACHABLE);
+      return false;
+    }
+    if (!r.ok) {
+      setSessionError(r.message);
+      return false;
     }
     setSession({ sessionId: r.sessionId, clientSecret: r.clientSecret });
     setSessionError(null);
-    if (n === seq.current) show(r);
+    show(r, locationKey(f));
+    return true;
+  }
+
+  async function changeCurrency(c: Currency) {
+    await change("currency", async () => {
+      const f = fields;
+      const k = locationKey(f);
+      setFormNotice(null);
+      const r = await setPaymentCurrency(c, locationOf(f)).catch(() => null);
+      if (r?.ok) {
+        setSession({ sessionId: r.sessionId, clientSecret: r.clientSecret });
+        setSessionError(null);
+        show(r, k);
+        return;
+      }
+      // The server's currency and price, whatever happened: the page never shows a currency the account does not have.
+      if (r && "current" in r && r.current) show(r.current, k);
+      // The old card session may be closed already: the form waits for a fresh one (Try again).
+      setSessionError(r?.message ?? CURRENCY_FAILED);
+    });
   }
 
   async function apply(code: string): Promise<string | null> {
-    const n = ++seq.current;
-    const r = await applyPromo(code, quotable ? location : {});
-    if (!r.ok) return r.message;
-    if (n === seq.current) show(r);
-    else if (r.promo !== undefined) setPromo(r.promo);
-    return null;
+    const r = await change("promo", async () => {
+      const f = fields;
+      const r = await applyPromo(code, locationOf(f)).catch(() => null);
+      if (r?.ok) show(r, locationKey(f));
+      return r;
+    });
+    if (r === null) return "Wait a moment, then try again.";
+    return r.ok ? null : r.message;
   }
 
-  async function remove() {
-    const n = ++seq.current;
-    const r = await removePromo(quotable ? location : {});
-    if (!r.ok) return setNotice(r.message);
-    if (n === seq.current) show(r);
-    else setPromo(null);
+  async function remove(): Promise<string | null> {
+    const r = await change("promo", async () => {
+      const f = fields;
+      const r = await removePromo(locationOf(f)).catch(() => null);
+      if (r?.ok) show(r, locationKey(f));
+      return r;
+    });
+    if (r === null) return "Wait a moment, then try again.";
+    if (!r) return "We couldn’t remove the code. Try again.";
+    return r.ok ? null : r.message;
   }
 
-  async function reopen() {
-    const r = await openSession().catch(() => null);
-    if (!r) return setSessionError("We couldn’t reach Roger. Check your connection and try again.");
-    if (!r.ok) return setSessionError(r.message);
-    setSession({ sessionId: r.sessionId, clientSecret: r.clientSecret });
-    setSessionError(null);
+  /** Try again: a fresh card session (after a closed or expired one, or a failed open). `timedOut`: say the form was replaced. */
+  async function reopen(timedOut: boolean): Promise<void> {
+    await change("session", async () => {
+      setFormNotice(null);
+      if ((await openFresh()) && timedOut) setFormNotice(FORM_TIMED_OUT);
+    });
+  }
+
+  async function confirm(checkout: CardCheckout, f: Fields, sessionId: string): Promise<ConfirmResult | null> {
+    return change(
+      "confirm",
+      async () => {
+        setFormNotice(null);
+        // Stripe could not work the tax out last time: once more before the card is confirmed (the total is still shown with the tax to come if it fails).
+        if (taxRetry.current && canQuote(f.country, f.postal)) await quote(f, true);
+        const r = await confirmCard(checkout, f);
+        if (r.ok) {
+          window.location.assign(returnPath(sessionId));
+          return r;
+        }
+        if (r.expired && (await openFresh())) setFormNotice(FORM_TIMED_OUT);
+        return r;
+      },
+      (r) => r.ok,
+    );
   }
 
   return (
@@ -155,9 +281,9 @@ export function PaymentForm({
           price={price}
           promo={promo}
           onCurrency={changeCurrency}
-          currencyBusy={currencyBusy}
+          currencyBusy={busy !== null}
           notice={notice}
-          promoSlot={<PromoField promo={promo} onApply={apply} onRemove={remove} />}
+          promoSlot={<PromoField promo={promo} onApply={apply} onRemove={remove} disabled={busy !== null} />}
         />
       </div>
       <div className="mt-8 md:col-start-1 md:row-start-1 md:mt-0">
@@ -171,13 +297,16 @@ export function PaymentForm({
           session={session}
           sessionError={sessionError}
           onRetrySession={reopen}
+          onConfirm={confirm}
+          busy={busy}
+          notice={formNotice}
           fields={fields}
-          setFields={setFields}
+          setFields={updateFields}
           supportEmail={supportEmail}
         />
         <Trust supportEmail={supportEmail} />
         <p className="mt-8">
-          <Link href="/app" className="tlink-quiet text-small">
+          <Link href="/app" className="tlink-quiet inline-flex min-h-11 items-center text-small">
             Not now
           </Link>
         </p>
@@ -191,7 +320,10 @@ function StripeCard(props: {
   publishableKey: string | null;
   session: PaymentSession | null;
   sessionError: string | null;
-  onRetrySession: () => Promise<void>;
+  onRetrySession: (timedOut: boolean) => Promise<void>;
+  onConfirm: (c: CardCheckout, f: Fields, sessionId: string) => Promise<ConfirmResult | null>;
+  busy: Busy;
+  notice: string | null;
   fields: Fields;
   setFields: (f: (prev: Fields) => Fields) => void;
   supportEmail: string;
@@ -199,6 +331,8 @@ function StripeCard(props: {
   const { publishableKey, session } = props;
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<{ attempt: number; ok: boolean } | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const retryingNow = useRef(false);
   const stripe = useMemo<Promise<Stripe | null>>(
     () => (publishableKey ? loadStripe(publishableKey).catch(() => null) : Promise.resolve(null)),
     // A retry asks again (stripe-js forgets a failed load).
@@ -212,16 +346,40 @@ function StripeCard(props: {
       live = false;
     };
   }, [stripe, attempt]);
-  const failed = !publishableKey || (loaded?.attempt === attempt && !loaded.ok);
+  const stripeFailed = !publishableKey || (loaded?.attempt === attempt && !loaded.ok);
 
-  async function retry() {
-    setAttempt((a) => a + 1);
-    if (props.sessionError || !session) await props.onRetrySession();
+  /**
+   * Try again: Stripe.js itself failed → load it again; the session is the
+   * problem (none, a failed open, or the provider reports an error, such as
+   * an expired session) → a fresh session from the server, whose new client
+   * secret remounts the card form. One retry at a time.
+   */
+  async function retry(checkoutError: boolean) {
+    if (retryingNow.current) return;
+    retryingNow.current = true;
+    setRetrying(true);
+    try {
+      if (stripeFailed) setAttempt((a) => a + 1);
+      if (!session || props.sessionError || checkoutError || !stripeFailed) await props.onRetrySession(checkoutError && !props.sessionError);
+    } finally {
+      retryingNow.current = false;
+      setRetrying(false);
+    }
   }
 
-  const common = { fields: props.fields, setFields: props.setFields, supportEmail: props.supportEmail, onRetry: retry };
-  if (failed || !session) {
-    return <CardForm {...common} checkout={{ type: "error", error: { message: "" } }} problem={failed ? STRIPE_FAILED : (props.sessionError ?? STRIPE_FAILED)} />;
+  const common = {
+    fields: props.fields,
+    setFields: props.setFields,
+    supportEmail: props.supportEmail,
+    onRetry: retry,
+    retrying,
+    busy: props.busy !== null,
+    pending: props.busy === "confirm",
+    notice: props.notice,
+    onConfirm: props.onConfirm,
+  };
+  if (stripeFailed || !session) {
+    return <CardForm {...common} checkout={{ type: "error", error: { message: "" } }} problem={stripeFailed ? STRIPE_FAILED : (props.sessionError ?? FORM_CLOSED)} />;
   }
   return (
     <CheckoutElementsProvider
@@ -235,7 +393,7 @@ function StripeCard(props: {
             {...common}
             sessionId={session.sessionId}
             checkout={checkout}
-            problem={props.sessionError ?? (checkout.type === "error" ? STRIPE_FAILED : null)}
+            problem={props.sessionError ?? (checkout.type === "error" ? FORM_CLOSED : null)}
             paymentElement={<CardElement onLoadError={() => setLoaded({ attempt, ok: false })} />}
           />
         )}
@@ -265,7 +423,8 @@ function CardElement({ onLoadError }: { onLoadError: () => void }) {
 /**
  * The card form: Roger's name, country and postal code, the Payment Element,
  * any error from Stripe, and "Start free trial". Exported for tests (Stripe
- * mocked); the page renders it through `StripeCard`.
+ * mocked); the page renders it through `StripeCard`, which passes the page's
+ * busy state and its one-at-a-time confirm.
  */
 export function CardForm({
   checkout,
@@ -274,6 +433,11 @@ export function CardForm({
   setFields,
   problem,
   onRetry,
+  retrying = false,
+  busy = false,
+  pending = false,
+  notice = null,
+  onConfirm,
   supportEmail,
   paymentElement,
 }: {
@@ -282,13 +446,21 @@ export function CardForm({
   fields: Fields;
   setFields: (f: (prev: Fields) => Fields) => void;
   problem: string | null;
-  onRetry: () => void;
+  /** `checkoutError`: Stripe's provider reported an error (the session needs replacing). */
+  onRetry: (checkoutError: boolean) => void;
+  retrying?: boolean;
+  /** Another change is in flight (or this confirm): "Start free trial" waits. */
+  busy?: boolean;
+  /** The card is with Stripe. */
+  pending?: boolean;
+  /** A line above the card fields (a timed-out form was replaced). */
+  notice?: string | null;
+  onConfirm: (c: CardCheckout, f: Fields, sessionId: string) => Promise<ConfirmResult | null>;
   supportEmail: string;
   paymentElement?: ReactNode;
 }) {
   const id = useId();
   const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
-  const [pending, setPending] = useState(false);
   const [stripeError, setStripeError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const countryRef = useRef<HTMLSelectElement>(null);
@@ -298,14 +470,11 @@ export function CardForm({
   const all = billingErrors(fields);
   const shown = (f: Field) => (touched[f] ? all[f] : undefined);
   const ready = checkout.type === "success" && !problem && Boolean(sessionId);
-
-  // One confirm at a time, whatever the clicks: the flag is set before any await.
-  const submitOnce = useRef(
-    oneAtATime(async (c: Parameters<typeof confirmCard>[0], f: Fields) => confirmCard(c, f)),
-  );
+  const unavailable = !ready || busy;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     const errors = billingErrors(fields);
     const first = (["name", "country", "postal"] as const).find((f) => errors[f]);
     if (first) {
@@ -313,16 +482,12 @@ export function CardForm({
       focusField(first);
       return;
     }
+    // The button stays focusable while it cannot be used (aria-disabled): a press then does nothing.
     if (checkout.type !== "success" || !ready || !sessionId) return;
-    setPending(true);
     setStripeError(null);
-    const r = await submitOnce.current(checkout.checkout, fields);
-    if (r === null) return; // a second press while the first is with Stripe
-    if (r.ok) {
-      window.location.assign(returnPath(sessionId));
-      return;
-    }
-    setPending(false);
+    const r = await onConfirm(checkout.checkout, fields, sessionId);
+    // Null: another change holds the page. ok: the page is leaving. expired: the page opened a fresh form and says so.
+    if (!r || r.ok || r.expired) return;
     setStripeError(r.message);
     requestAnimationFrame(() => errorRef.current?.focus());
   }
@@ -430,6 +595,11 @@ export function CardForm({
 
       <div>
         <p className="text-small font-medium">Card</p>
+        {notice && !problem && (
+          <p role="status" className="mt-2 text-small text-ink-2">
+            {notice}
+          </p>
+        )}
         <div className="mt-2 min-h-[9rem]">
           {problem ? (
             <div role="alert" className="rounded-[8px] border border-rule-strong bg-ground-2 px-4 py-4 text-small">
@@ -441,8 +611,14 @@ export function CardForm({
                 </a>
                 .
               </p>
-              <button type="button" onClick={onRetry} className="btn btn-m btn-ink mt-4 cursor-pointer">
-                Try again
+              <button
+                type="button"
+                onClick={() => onRetry(checkout.type === "error" && Boolean(sessionId))}
+                disabled={retrying || busy}
+                aria-busy={retrying || undefined}
+                className="btn btn-m btn-ink mt-4 cursor-pointer disabled:cursor-wait"
+              >
+                {retrying ? "Trying again…" : "Try again"}
               </button>
             </div>
           ) : checkout.type === "loading" ? (
@@ -462,10 +638,9 @@ export function CardForm({
 
       <button
         type="submit"
-        disabled={!ready || pending}
-        aria-disabled={!ready || undefined}
+        aria-disabled={unavailable || undefined}
         aria-busy={pending || undefined}
-        className="btn btn-l w-full cursor-pointer disabled:cursor-not-allowed"
+        className="btn btn-l w-full cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
       >
         {pending && <Spinner />}
         Start free trial

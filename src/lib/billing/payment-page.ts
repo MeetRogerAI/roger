@@ -4,11 +4,14 @@ import type { CardGateway, MonthlyPreview } from "./gateway";
 import { isNoCardTrial } from "./has-card";
 import { checkBillingLocation } from "./location";
 import type { PromoView } from "./payment-view";
-import { basePreview } from "./payment-view";
+import { basePreview, TAX_UNAVAILABLE } from "./payment-view";
 import { quoteMonthly, type PreviewCache } from "./preview";
 import { clearPendingPromo } from "./promo";
-import type { Currency } from "./prices";
+import { amount, type Currency } from "./prices";
+import { cardSavePath, type CardSaveResult } from "./card-saved";
+import { appUrl } from "@/lib/mail/layout";
 import type { Counter } from "@/lib/rate-limit";
+import { getV3SettingsForDisplay } from "@/lib/v3-settings-display";
 
 /**
  * The Payment page's server side (plan 2026-11-26-001, Unit 6): who may use
@@ -64,35 +67,59 @@ export async function paymentAccount(q: Query, userId: string): Promise<PaymentA
   };
 }
 
-/**
- * The pending promo code as the Price Box shows it. Stripe is asked again for
- * the discount's shape (percent or amount, once or every month); a code that
- * no longer checks out still shows as applied, with no amount, and the card
- * save re-checks it (Unit 5).
- */
-export async function pendingPromoView(gw: Pick<CardGateway, "findPromotion">, a: PaymentAccount): Promise<PromoView | null> {
+/** The pending code as stored on the account (no amounts: the page then shows no discount amount). Null when none is pending. */
+export function storedPromoView(a: Pick<PaymentAccount, "promoCode" | "promoLabel">): PromoView | null {
   if (!a.promoCode) return null;
-  const fallback: PromoView = { code: a.promoCode, label: a.promoLabel ?? a.promoCode, duration: null, durationInMonths: null, percentOff: null, amountOffCents: null };
-  try {
-    const p = await gw.findPromotion(a.promoCode, a.currency, { customer: a.customer });
-    if (!p.valid || p.couponId !== a.promoCoupon) return fallback;
-    return { code: p.code, label: p.label, duration: p.duration, durationInMonths: p.durationInMonths, percentOff: p.percentOff, amountOffCents: p.amountOffCents };
-  } catch (e) {
-    console.warn("[payment] promo lookup failed", { message: (e as Error)?.message });
-    return fallback;
-  }
+  return { code: a.promoCode, label: a.promoLabel ?? a.promoCode, duration: null, durationInMonths: null, percentOff: null, amountOffCents: null };
 }
-
-export type PaymentPrice = {
-  price: MonthlyPreview;
-  promo: PromoView | null;
-  /** Something the person should read (the code stopped applying, too many checks). */
-  notice?: string;
-  rateLimited?: boolean;
-};
 
 export const PROMO_GONE = "That code no longer applies, so the price is the regular one.";
 export const TOO_MANY_CHECKS = "Too many tries. Wait a while and try again.";
+
+/**
+ * The pending promo code as the Price Box shows it. Stripe is asked again for
+ * the discount's shape (percent or amount, once or every month). A code that
+ * Stripe refuses for the account's currency (an amount-off code in the other
+ * currency, or one that has ended) is cleared from the pending selection and
+ * the page says so (`PROMO_GONE`), with or without a billing location. A code
+ * whose coupon changed, or a failed lookup, still shows as applied with no
+ * amount, and the card save re-checks it (Unit 5).
+ */
+export async function pendingPromoView(
+  q: Query,
+  gw: Pick<CardGateway, "findPromotion">,
+  a: PaymentAccount,
+): Promise<{ promo: PromoView | null; notice?: string }> {
+  const fallback = storedPromoView(a);
+  if (!a.promoCode || !fallback) return { promo: null };
+  try {
+    const p = await gw.findPromotion(a.promoCode, a.currency, { customer: a.customer });
+    if (!p.valid) {
+      await clearPendingPromo(q, a.userId);
+      return { promo: null, notice: PROMO_GONE };
+    }
+    if (p.couponId !== a.promoCoupon) return { promo: fallback };
+    return { promo: { code: p.code, label: p.label, duration: p.duration, durationInMonths: p.durationInMonths, percentOff: p.percentOff, amountOffCents: p.amountOffCents } };
+  } catch (e) {
+    console.warn("[payment] promo lookup failed", { message: (e as Error)?.message });
+    return { promo: fallback };
+  }
+}
+
+/** The Price Box's answer. A refused (rate-limited) preview always carries its notice. */
+export type PaymentPrice = {
+  price: MonthlyPreview;
+  promo: PromoView | null;
+} & (
+  | {
+      rateLimited?: false;
+      /** Something the person should read (the code stopped applying, the tax could not be worked out). */
+      notice?: string;
+      /** Stripe could not work out the tax for a valid location: ask again on the next interaction or before confirming. */
+      taxRetry?: boolean;
+    }
+  | { rateLimited: true; notice: string }
+);
 
 /**
  * The Price Box's lines: without a valid billing location, the plan price
@@ -131,6 +158,32 @@ export async function paymentPrice(
   }
   if (r.ok) return { price: r.preview, promo, notice };
   if (r.reason === "rate_limited") return { price: base(promo), promo, notice: TOO_MANY_CHECKS, rateLimited: true };
-  // invalid_location, unavailable, not_allowed: the plan price, tax still to come.
+  if (r.reason === "unavailable") {
+    return { price: base(promo), promo, notice: [notice, TAX_UNAVAILABLE].filter(Boolean).join(" "), taxRetry: true };
+  }
+  // invalid_location, not_allowed: the plan price, tax still to come.
   return { price: base(promo), promo, notice };
+}
+
+/** The plan price in cents for display before Stripe's preview (the settings' amount). */
+export async function planCents(currency: Currency): Promise<number> {
+  return Math.round(amount(await getV3SettingsForDisplay(), "monthly", currency) * 100);
+}
+
+/** Where Stripe sends the person after confirming (Unit 5's return page). */
+export function paymentReturnUrl(): string {
+  return `${appUrl("/start/payment/done")}?session_id={CHECKOUT_SESSION_ID}`;
+}
+
+/**
+ * Where a stored session that already holds a confirmed card sends the
+ * member, once `finishCardSave` has run (page and actions alike). Never back
+ * to `/start/payment` (that would loop): a pending save waits on the return
+ * page with the session id (`cardSavePath`'s bare return page would bounce
+ * back here), and `not_yours` goes to `/app`.
+ */
+export function finishedSavePath(sessionId: string, r: CardSaveResult): string {
+  if (r.outcome === "pending") return `/start/payment/done?session_id=${encodeURIComponent(sessionId)}`;
+  if (r.outcome === "not_yours") return "/app";
+  return cardSavePath(r);
 }

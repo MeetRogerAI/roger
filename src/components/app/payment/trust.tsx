@@ -2,16 +2,16 @@
  * The trust block beside the card form (plan 2026-11-26-001, Unit 6; origin
  * R20–R21): a padlock with "Secured by Stripe", the card brands Roger takes,
  * the PCI line (accurate for SAQ A; no badge image), and the policy links,
- * which open in a new tab so the form keeps what was typed. No images from
+ * which open in a new tab so the form keeps what was typed (and say so to
+ * screen readers); the support address is a plain mailto. No images from
  * other sites: the marks are inline.
  */
 export const PCI_LINE = "Payments are processed by Stripe, a PCI DSS Level 1 certified provider. Roger never sees your card number.";
 
-/** Roger has no separate refund page for the monthly plan yet; the terms hold the rule (no refunds; cancel any time). */
+/** Roger has no separate refund page for the monthly plan yet; the terms hold the rule (no refunds; cancel any time), so one link names both. */
 const POLICIES = [
-  { href: "/terms", label: "Refund policy" },
+  { href: "/terms", label: "Terms and refunds" },
   { href: "/privacy", label: "Privacy" },
-  { href: "/terms", label: "Terms" },
 ];
 
 export function Trust({ supportEmail }: { supportEmail: string }) {
@@ -29,16 +29,17 @@ export function Trust({ supportEmail }: { supportEmail: string }) {
         </span>
       </p>
       <p className="mt-3">{PCI_LINE}</p>
-      <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+      <ul className="mt-2 flex flex-wrap gap-x-5">
         {POLICIES.map((p) => (
           <li key={p.label}>
-            <a href={p.href} target="_blank" rel="noopener noreferrer" className="tlink-quiet">
+            <a href={p.href} target="_blank" rel="noopener noreferrer" className="tlink-quiet inline-flex min-h-11 items-center">
               {p.label}
+              <span className="sr-only"> (opens in a new tab)</span>
             </a>
           </li>
         ))}
         <li>
-          <a href={`mailto:${supportEmail}`} target="_blank" rel="noopener noreferrer" className="tlink-quiet">
+          <a href={`mailto:${supportEmail}`} className="tlink-quiet inline-flex min-h-11 items-center">
             {supportEmail}
           </a>
         </li>
