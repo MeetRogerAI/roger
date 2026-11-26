@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { v3Defaults } from "@/data/config";
-import { amountNames, amountsFrom, currencyForCountry, fillAmounts, getAmounts, hasBareDollar, money, priceLine, taxNote } from "./amounts";
+import { v1 } from "@/data/site/v1";
+import { amountNames, amountsFrom, currencies, currencyForCountry, fillAmounts, fillCopy, getAmounts, hasBareDollar, money, priceLine } from "./amounts";
+
+// The tax notes are spec copy, so they live in the version's copy file.
+const taxNote = v1.price.tax;
 
 vi.hoisted(() => {
   delete process.env.DATABASE_URL;
@@ -36,18 +40,18 @@ describe("price wording", () => {
   it("writes USD with its code after the amount and the general tax note", () => {
     expect(priceLine("USD", amounts.monthly.USD, "month")).toBe("US$200 / month USD");
     expect(priceLine("USD", amounts.list.USD, "list")).toBe("US$200 / list USD");
-    expect(taxNote("USD")).toBe("plus tax where it applies");
+    expect(taxNote.USD).toBe("plus tax where it applies");
   });
 
   it("writes CAD with its code after the amount and HST", () => {
     expect(priceLine("CAD", amounts.monthly.CAD, "month")).toBe("CA$280 / month CAD");
     expect(priceLine("CAD", amounts.list.CAD, "list")).toBe("CA$280 / list CAD");
-    expect(taxNote("CAD")).toBe("plus HST");
+    expect(taxNote.CAD).toBe("plus HST");
   });
 
   it("never writes a bare dollar sign", () => {
     const written = [
-      ...(["USD", "CAD"] as const).flatMap((c) => [money(c, 1200), priceLine(c, amounts.monthly[c], "month"), priceLine(c, amounts.higher[c], "month"), taxNote(c)]),
+      ...currencies.flatMap((c) => [money(c, 1200), priceLine(c, amounts.monthly[c], "month"), priceLine(c, amounts.higher[c], "month"), taxNote[c]]),
       ...Object.values(amountNames(amounts)),
     ];
     for (const text of written) expect(hasBareDollar(text), text).toBe(false);
@@ -80,6 +84,29 @@ describe("amounts named in copy", () => {
   it("refuses a name that is not an amount", () => {
     expect(() => fillAmounts("{monthlyEur} a month", amounts)).toThrow(/monthlyEur/);
     expect(fillAmounts("No names here.", amounts)).toBe("No names here.");
+  });
+
+  it("leaves the two names of a brick-stack caption for compoundingCaption, and only those", () => {
+    expect(fillAmounts("Week {week}", amounts)).toBe("Week {week}");
+    expect(fillAmounts("{bricks} bricks, {freeLists} free", amounts)).toBe("{bricks} bricks, two free");
+    expect(() => fillAmounts("{weeks}", amounts)).toThrow(/weeks/);
+    expect(() => fillAmounts("{brick}", amounts)).toThrow(/brick/);
+  });
+
+  it("lists both currencies once, USD first", () => {
+    expect(currencies).toEqual(["USD", "CAD"]);
+  });
+
+  it("names the last free list, which follows the setting too", () => {
+    expect(fillAmounts("we email you after your {lastFreeList} list", amounts)).toBe("we email you after your second list");
+    expect(fillAmounts("{lastFreeList}", amountsFrom({ ...v3Defaults, freeRuns: 3 }))).toBe("third");
+  });
+
+  it("fills a whole copy object, keeping its shape", () => {
+    const copy = { start: "Get {freeLists} free Monday lists", steps: [{ body: "Charged with your {firstPaidList} list." }], tags: ["home"], count: 3 };
+    expect(fillCopy(copy, amounts)).toEqual({ start: "Get two free Monday lists", steps: [{ body: "Charged with your third list." }], tags: ["home"], count: 3 });
+    expect(copy.start).toBe("Get {freeLists} free Monday lists");
+    expect(() => fillCopy({ deep: [{ line: "{nope}" }] }, amounts)).toThrow(/nope/);
   });
 });
 

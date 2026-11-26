@@ -26,18 +26,26 @@ export const isSiteVersion = (value: unknown): value is SiteVersion => versions.
 export const isBuiltVersion = (site: ServedSite): site is BuiltVersion => site !== "circles" && site !== "legacy";
 
 /**
+ * True only where the environment is known not to be live: a Vercel preview or
+ * development deployment, or, with no VERCEL_ENV at all, local development and
+ * tests. Anything else is false, a production build made off Vercel included,
+ * so whatever asks this fails closed.
+ */
+export function isKnownNonProduction({ vercelEnv, nodeEnv }: { vercelEnv: string | undefined; nodeEnv: string | undefined } = { vercelEnv: process.env.VERCEL_ENV, nodeEnv: process.env.NODE_ENV }): boolean {
+  if (vercelEnv) return vercelEnv === "preview" || vercelEnv === "development";
+  return nodeEnv === "development" || nodeEnv === "test";
+}
+
+/**
  * Production serves `live` whatever the override says. Outside production a
  * valid SITE_VERSION wins. Without one, `preview` is served only where the
- * environment is known not to be live: a Vercel preview or development
- * deployment, or, with no VERCEL_ENV at all, local development and tests.
- * Anything else, such as a production build made off Vercel, serves `live`.
+ * environment is known not to be live (isKnownNonProduction). Anything else,
+ * such as a production build made off Vercel, serves `live`.
  */
 export function resolveSiteVersion({ vercelEnv, nodeEnv, override, live, preview }: { vercelEnv: string | undefined; nodeEnv: string | undefined; override: string | undefined; live: SiteVersion; preview: SiteVersion }): SiteVersion {
   if (vercelEnv === "production") return live;
   if (isSiteVersion(override)) return override;
-  if (vercelEnv === "preview" || vercelEnv === "development") return preview;
-  if (!vercelEnv && (nodeEnv === "development" || nodeEnv === "test")) return preview;
-  return live;
+  return isKnownNonProduction({ vercelEnv, nodeEnv }) ? preview : live;
 }
 
 /** The site this build or request serves. */

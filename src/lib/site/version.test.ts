@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { siteConfig } from "@/data/config";
-import { bySite, getServedSite, hiddenLegacyRobots, isBuiltVersion, requireBuiltVersion, resolveSiteVersion } from "./version";
+import { bySite, getServedSite, hiddenLegacyRobots, isBuiltVersion, isKnownNonProduction, requireBuiltVersion, resolveSiteVersion } from "./version";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -50,6 +50,47 @@ describe("resolveSiteVersion", () => {
     expect(resolveSiteVersion({ vercelEnv: undefined, nodeEnv: undefined, override: undefined, live: "circles", preview: "v1" })).toBe("circles");
     expect(resolveSiteVersion({ vercelEnv: "staging", nodeEnv: "development", override: undefined, live: "circles", preview: "v1" })).toBe("circles");
     expect(resolveSiteVersion({ vercelEnv: undefined, nodeEnv: "production", override: "v9", live: "circles", preview: "v1" })).toBe("circles");
+  });
+});
+
+describe("isKnownNonProduction", () => {
+  const nodeEnvs = ["production", "development", "test", undefined];
+
+  it("is true on a Vercel preview or development deployment, whatever NODE_ENV is", () => {
+    for (const vercelEnv of ["preview", "development"]) for (const nodeEnv of nodeEnvs) expect(isKnownNonProduction({ vercelEnv, nodeEnv }), `${vercelEnv} ${nodeEnv}`).toBe(true);
+  });
+
+  it("is false on Vercel production and on any VERCEL_ENV it does not know, whatever NODE_ENV is", () => {
+    for (const vercelEnv of ["production", "staging", "Preview"]) for (const nodeEnv of nodeEnvs) expect(isKnownNonProduction({ vercelEnv, nodeEnv }), `${vercelEnv} ${nodeEnv}`).toBe(false);
+  });
+
+  it("with no VERCEL_ENV, is true only in local development and tests", () => {
+    for (const vercelEnv of [undefined, ""]) {
+      expect(isKnownNonProduction({ vercelEnv, nodeEnv: "development" })).toBe(true);
+      expect(isKnownNonProduction({ vercelEnv, nodeEnv: "test" })).toBe(true);
+      // A production build made off Vercel.
+      expect(isKnownNonProduction({ vercelEnv, nodeEnv: "production" })).toBe(false);
+      expect(isKnownNonProduction({ vercelEnv, nodeEnv: undefined })).toBe(false);
+    }
+  });
+
+  it("reads the environment when given nothing", () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    expect(isKnownNonProduction()).toBe(false);
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(isKnownNonProduction()).toBe(true);
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("NODE_ENV", "production");
+    expect(isKnownNonProduction()).toBe(false);
+  });
+
+  it("is the rule the resolver uses for its default: preview where true, live where false", () => {
+    for (const vercelEnv of ["preview", "development", "staging", "", undefined]) {
+      for (const nodeEnv of nodeEnvs) {
+        const served = resolveSiteVersion({ vercelEnv, nodeEnv, override: undefined, live: "circles", preview: "v1" });
+        expect(served, `${vercelEnv} ${nodeEnv}`).toBe(isKnownNonProduction({ vercelEnv, nodeEnv }) ? "v1" : "circles");
+      }
+    }
   });
 });
 
