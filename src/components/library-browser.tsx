@@ -10,7 +10,8 @@ type For = "all" | "home" | "work";
 
 const PAGE = 60;
 
-export function LibraryBrowser({ items, band }: { items: UseCase[]; band: React.ReactNode }) {
+/** `showOffer` comes from the server parent, which knows the served site; this file runs in the browser. */
+export function LibraryBrowser({ items, band, showOffer = false }: { items: UseCase[]; band: React.ReactNode; showOffer?: boolean }) {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -158,9 +159,9 @@ export function LibraryBrowser({ items, band }: { items: UseCase[]; band: React.
             {results.slice(0, shown).map((u, i) => (
               <Fragment key={u.id}>
                 <li>
-                  <UseCaseRow u={u} shade={i % 2 === 1} />
+                  <UseCaseRow u={u} shade={i % 2 === 1} showOffer={showOffer} />
                 </li>
-                {i === 8 && results.length > 12 && <li className="py-6">{band}</li>}
+                {band && i === 8 && results.length > 12 && <li className="py-6">{band}</li>}
               </Fragment>
             ))}
           </ul>
@@ -178,14 +179,14 @@ export function LibraryBrowser({ items, band }: { items: UseCase[]; band: React.
 }
 
 /** Rendered while the filters wake up, and for anyone without JavaScript: every card, unfiltered. */
-export function LibraryStatic({ items }: { items: UseCase[] }) {
+export function LibraryStatic({ items, showOffer = false }: { items: UseCase[]; showOffer?: boolean }) {
   return (
     <div className="wrap py-12 md:py-16">
       <p className="text-small">{items.length > PAGE ? `Showing the newest ${PAGE} of ${items.length.toLocaleString("en-CA")} use cases.` : `Showing all ${items.length} use cases.`}</p>
       <ul className="mt-6 space-y-1 md:-mx-6">
         {items.slice(0, PAGE).map((u, i) => (
           <li key={u.id}>
-            <UseCaseRow u={u} shade={i % 2 === 1} />
+            <UseCaseRow u={u} shade={i % 2 === 1} showOffer={showOffer} />
           </li>
         ))}
       </ul>

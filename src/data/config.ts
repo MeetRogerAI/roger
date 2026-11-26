@@ -1,3 +1,6 @@
+/** The Circles preview, or a site version built from the marketing spec. */
+export type SiteVersion = "circles" | "v1" | "v2" | "v3";
+
 /**
  * Everything Peter edits by hand lives here. Anything in this file ships to the
  * browser, so never put a secret or the work-balance Payment Link in it.
@@ -6,7 +9,13 @@
  */
 export const siteConfig = {
   productName: "Roger",
-  /** Feature-branch preview. Disable to restore the library-led site. */
+  /**
+   * Which public site is served. `live` is production; `preview` is Vercel
+   * previews, local development and tests. Anywhere else gets `live`. Going live is a change to `live`
+   * and a deploy. Read through src/lib/site/version.ts, never from here.
+   */
+  site: { live: "circles" as SiteVersion, preview: "circles" as SiteVersion },
+  /** Applies while the site above is "circles". Disable to restore the library-led site. */
   flags: { circlesMode: true },
   circles: {
     priceUsd: 200,

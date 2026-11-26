@@ -1,10 +1,10 @@
-import { siteConfig } from "@/data/config";
+import { hiddenLegacyRobots } from "@/lib/site/version";
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
 import { refunds } from "@/data/legal";
 
 export const metadata: Metadata = {
-  ...(siteConfig.flags.circlesMode ? { robots: { index: false, follow: false } } : {}),
+  ...hiddenLegacyRobots(),
   title: "Refunds and the guarantee",
   description: "Working, or you pay nothing: exactly what working means and how to claim a refund.",
   alternates: { canonical: "/refunds" },

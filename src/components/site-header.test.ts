@@ -1,15 +1,70 @@
 import { describe, expect, it } from "vitest";
+import type { ServedSite } from "@/lib/site/version";
+import { footerFor } from "./footer-switch";
 import { navFor } from "./site-header";
+
+const sites: ServedSite[] = ["circles", "v1", "v2", "v3", "legacy"];
+const hidden = ["/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds", "/business", "/families"];
 
 describe("navFor", () => {
   it("shows no header button or Circles links on sign-up, sign-in and the app (spec A.3)", () => {
-    for (const p of ["/start", "/start/plan", "/signin", "/auth/confirm", "/app", "/app/zack"]) {
-      expect(navFor(p), p).toEqual({ links: [], cta: null });
+    for (const site of sites) {
+      for (const p of ["/start", "/start/plan", "/signin", "/auth/confirm", "/app", "/app/zack"]) {
+        expect(navFor(p, site), `${site} ${p}`).toEqual({ links: [], cta: null });
+      }
     }
   });
 
-  it("leaves other pages alone, including /apply", () => {
-    expect(navFor("/").cta).not.toBeNull();
-    expect(navFor("/apply").links.length).toBeGreaterThan(0);
+  it("leaves other Circles pages alone, including /apply", () => {
+    expect(navFor("/", "circles").cta).toEqual({ href: "/apply", label: "Apply for a founding Circle", short: "Apply" });
+    expect(navFor("/apply", "circles").links.length).toBeGreaterThan(0);
+    expect(navFor("/apply", "circles").cta).toBeNull();
+  });
+
+  it("gives /zack no links while it is the Hampton page (covers AE9), and the site header under a version", () => {
+    expect(navFor("/zack", "circles")).toEqual({ links: [], cta: null });
+    expect(navFor("/zack", "legacy")).toEqual({ links: [], cta: null });
+    expect(navFor("/zack", "v1")).toEqual(navFor("/", "v1"));
+  });
+
+  it("is the same under Circles and under a version for the app, the admin and the unlisted pages (R4, R9)", () => {
+    for (const p of ["/admin", "/admin/sample", "/start", "/signin", "/app/zack", "/hampton", "/rlpsignature", "/rlp", "/founders", "/for/x"]) {
+      expect(navFor(p, "v1"), p).toEqual(navFor(p, "circles"));
+    }
+    expect(navFor("/admin", "v1").links.map((l) => l.href)).toEqual(["/#how", "/zack", "/library", "/#questions", "/#letter"]);
+    expect(navFor("/admin", "v1").cta).toBeNull();
+  });
+
+  it("links to no Circles or legacy offer page under a version", () => {
+    for (const site of ["v1", "v2", "v3"] as const) {
+      for (const p of ["/", "/library", "/zack", "/privacy", "/terms", "/companies", "/setup", "/thanks/work"]) {
+        const nav = navFor(p, site);
+        const hrefs = [...nav.links.map((l) => l.href), nav.cta?.href ?? ""];
+        for (const h of hrefs) expect(hidden.some((x) => h.startsWith(x)), `${site} ${p} ${h}`).toBe(false);
+      }
+    }
+    expect(navFor("/", "v1").cta?.href).toBe("/start");
+  });
+
+  it("keeps the legacy site's header as it was", () => {
+    expect(navFor("/", "legacy").cta).toEqual({ href: "/packs/solopreneur", label: "Get the free pack", short: "Free pack" });
+    expect(navFor("/companies", "legacy").cta?.kind).toBe("companyCall");
+    expect(navFor("/admin", "legacy").cta).toBeNull();
+    expect(navFor("/thanks/work", "legacy").links.length).toBeGreaterThan(0);
+  });
+});
+
+describe("footerFor", () => {
+  it("gives unlisted pages the quiet footer under every site", () => {
+    for (const site of sites) {
+      for (const p of ["/for/x", "/rlpsignature", "/hampton", "/founders", "/rlp"]) expect(footerFor(p, site), `${site} ${p}`).toBe("minimal");
+      expect(footerFor("/", site), site).toBe("full");
+    }
+  });
+
+  it("treats /zack as unlisted only while it is the Hampton page", () => {
+    expect(footerFor("/zack", "circles")).toBe("minimal");
+    expect(footerFor("/zack", "legacy")).toBe("minimal");
+    expect(footerFor("/zack", "v1")).toBe("full");
   });
 });

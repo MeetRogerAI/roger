@@ -9,7 +9,10 @@ import { ClientBoot, CodeBanner } from "@/components/client-boot";
 import { Reveals } from "@/components/reveals";
 import { SettingsProvider } from "@/components/settings-provider";
 import { getSettings } from "@/lib/settings";
+import { bySite, getServedSite } from "@/lib/site/version";
 import "./globals.css";
+
+const site = getServedSite();
 
 const mona = Mona_Sans({
   subsets: ["latin"],
@@ -18,13 +21,17 @@ const mona = Mona_Sans({
   display: "swap",
 });
 
-const description =
-  siteConfig.flags.circlesMode ? "Confidential Circles for people who use AI agents heavily for work." : "AI and automation for family-owned companies in Toronto. We map where your company’s hours go in one two-hour session, then build and run the automations every month, on your own systems. Smaller setups for owners and families.";
+// A site version has no description or title of its own until its chrome is built.
+const description = bySite<string | undefined>(site, {
+  circles: "Confidential Circles for people who use AI agents heavily for work.",
+  built: undefined,
+  legacy: "AI and automation for family-owned companies in Toronto. We map where your company’s hours go in one two-hour session, then build and run the automations every month, on your own systems. Smaller setups for owners and families.",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.domain),
   title: {
-    default: siteConfig.flags.circlesMode ? "Roger Circles" : "Roger: AI and automation for family-owned companies · Toronto",
+    default: bySite(site, { circles: "Roger Circles", built: "Roger", legacy: "Roger: AI and automation for family-owned companies · Toronto" }),
     template: "%s · Roger",
   },
   description,
@@ -45,10 +52,11 @@ export const viewport: Viewport = {
 };
 
 function jsonLd() {
-  if (siteConfig.flags.circlesMode) return JSON.stringify({
+  // Circles and a site version share the Organization; only Circles has a description so far.
+  if (site !== "legacy") return JSON.stringify({
     "@context": "https://schema.org", "@type": "Organization", name: siteConfig.productName,
     url: siteConfig.domain, email: siteConfig.contactEmail,
-    description: "Confidential Circles for people who use AI agents heavily for work.",
+    ...(site === "circles" ? { description: "Confidential Circles for people who use AI agents heavily for work." } : {}),
   }).replace(/</g, "\\u003c");
   const work = offerNow("work");
   const home = offerNow("home");
@@ -82,12 +90,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SettingsProvider value={{ setupCall: s.setupCall, setupCheckout: s.setupCheckout, planCheckout: s.planCheckout, companyCall: s.companyCall }}>
           <ClientBoot />
           <Reveals />
-          <SiteHeader />
-          {!siteConfig.flags.circlesMode && <CodeBanner />}
+          <SiteHeader site={site} />
+          {site === "legacy" && <CodeBanner />}
           <main id="main" className="flex-1">
             {children}
           </main>
-          <FooterSwitch full={<SiteFooter />} minimal={<MinimalFooter />} />
+          <FooterSwitch site={site} full={<SiteFooter site={site} />} minimal={<MinimalFooter site={site} />} />
         </SettingsProvider>
       </body>
     </html>

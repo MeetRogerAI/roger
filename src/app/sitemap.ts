@@ -1,11 +1,15 @@
 import type { MetadataRoute } from "next";
 import { siteConfig } from "@/data/config";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 
 const UPDATED = "2026-10-19";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const d = siteConfig.domain;
-  if (siteConfig.flags.circlesMode) return ["/", "/library", "/privacy", "/terms"].map((path) => ({ url: `${d}${path}`, lastModified: "2026-11-14", changeFrequency: "weekly" as const, priority: path === "/" ? 1 : 0.6 }));
+  const site = getServedSite();
+  if (site === "circles") return ["/", "/library", "/privacy", "/terms"].map((path) => ({ url: `${d}${path}`, lastModified: "2026-11-14", changeFrequency: "weekly" as const, priority: path === "/" ? 1 : 0.6 }));
+  // A site version lists only the library until its pages are built.
+  if (isBuiltVersion(site)) return [{ url: `${d}/library`, lastModified: "2026-11-14", changeFrequency: "weekly", priority: 0.6 }];
   return [
     { url: `${d}/`, lastModified: UPDATED, changeFrequency: "weekly", priority: 1 },
     { url: `${d}/business`, lastModified: UPDATED, changeFrequency: "weekly", priority: 0.9 },

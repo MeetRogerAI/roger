@@ -6,9 +6,10 @@ import { WorkshopForm } from "@/components/forms";
 import { VideoLoop } from "@/components/video-loop";
 import { siteConfig } from "@/data/config";
 import { credits } from "@/data/credits";
+import { hiddenLegacyRobots } from "@/lib/site/version";
 
 export const metadata: Metadata = {
-  ...(siteConfig.flags.circlesMode ? { robots: { index: false, follow: false } } : {}),
+  ...hiddenLegacyRobots(),
   title: { absolute: "Free AI agent workshop for your members · Roger" },
   description:
     "In 60 minutes we set up a real AI agent live, start to finish, and show your members what it can take off their plate. Free for Toronto BIAs, associations, chambers and school communities.",

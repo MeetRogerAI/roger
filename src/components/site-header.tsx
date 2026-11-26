@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { siteConfig } from "@/data/config";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Toque } from "./toque";
 import { ActionLink, type ActionKind } from "./action-link";
+// Type only: the served site is resolved on the server and arrives as a prop.
+import type { ServedSite } from "@/lib/site/version";
 
 type NavSet = {
   links: { href: string; label: string }[];
@@ -32,34 +33,52 @@ const company: NavSet = {
   cta: { kind: "companyCall", label: "Book an intro call", short: "Book a call" },
 };
 
+const circles: NavSet = {
+  links: [
+    { href: "/#how", label: "How it works" },
+    { href: "/zack", label: "Run Zack" },
+    { href: "/library", label: "Use cases" },
+    { href: "/#questions", label: "FAQ" },
+    { href: "/#letter", label: "About" },
+  ],
+  cta: { href: "/apply", label: "Apply for a founding Circle", short: "Apply" },
+};
+
+/** A site version's header until its own is built: the one page that exists, and the start button (spec A.3). */
+const built: NavSet = {
+  links: [{ href: "/library", label: "Use cases" }],
+  cta: { href: "/start", label: "Get two free Monday lists", short: "Start free" },
+};
+
 /** Sign-up, sign-in and the member app (spec A.3): no header button, and nothing pointing back at the Circles pages. */
 const accountPages = ["/start", "/signin", "/auth", "/app"];
 
-export function navFor(path: string): NavSet {
-  if (accountPages.some((p) => path === p || path.startsWith(`${p}/`))) return { links: [], cta: null };
-  if (siteConfig.flags.circlesMode && !(path.startsWith("/for/") || ["/rlpsignature", "/hampton", "/zack", "/founders", "/rlp"].includes(path))) {
-    return {
-      links: [
-        { href: "/#how", label: "How it works" },
-        { href: "/zack", label: "Run Zack" },
-        { href: "/library", label: "Use cases" },
-        { href: "/#questions", label: "FAQ" },
-        { href: "/#letter", label: "About" },
-      ],
-      cta: path.startsWith("/apply") || path.startsWith("/admin") ? null : { href: "/apply", label: "Apply for a founding Circle", short: "Apply" },
-    };
-  }
-  if (path.startsWith("/companies")) return company;
-  // A page prepared for one company or group: no navigation, nothing to sell around it
-  if (path.startsWith("/for/") || path === "/rlpsignature" || path === "/hampton" || path === "/founders" || path === "/rlp" || path === "/zack") return { links: [], cta: null };
-  // After paying, the only job left is booking: no button competing with it
-  if (path.startsWith("/thanks") || path.startsWith("/admin")) return { ...library, cta: null };
-  return library;
+/** A page prepared for one company or group. /zack is one only while it is the Hampton page. */
+export function isUnlisted(path: string, site: ServedSite) {
+  if (path.startsWith("/for/") || ["/rlpsignature", "/hampton", "/founders", "/rlp"].includes(path)) return true;
+  return path === "/zack" && (site === "circles" || site === "legacy");
 }
 
-export function SiteHeader() {
+export function navFor(path: string, site: ServedSite): NavSet {
+  if (accountPages.some((p) => path === p || path.startsWith(`${p}/`))) return { links: [], cta: null };
+  if (site === "legacy") {
+    if (path.startsWith("/companies")) return company;
+    // A page prepared for one company or group: no navigation, nothing to sell around it
+    if (isUnlisted(path, site)) return { links: [], cta: null };
+    // After paying, the only job left is booking: no button competing with it
+    if (path.startsWith("/thanks") || path.startsWith("/admin")) return { ...library, cta: null };
+    return library;
+  }
+  if (isUnlisted(path, site)) return { links: [], cta: null };
+  // The admin keeps the header it has under Circles whichever site is served (plan R4).
+  if (path.startsWith("/admin")) return { ...circles, cta: null };
+  if (site === "circles") return path.startsWith("/apply") ? { ...circles, cta: null } : circles;
+  return built;
+}
+
+export function SiteHeader({ site }: { site: ServedSite }) {
   const path = usePathname() || "/";
-  const nav = navFor(path);
+  const nav = navFor(path, site);
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === path;
