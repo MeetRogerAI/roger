@@ -147,6 +147,19 @@ describe("needs attention (spec check 30)", () => {
     expect(row(sponsored).closesAt).toBeNull();
   });
 
+  it("does not flag a never-teasered no-card close while its run waits on Cora, even a run for a later week (review fixes Unit 7, F5)", async () => {
+    // Consent + 21 days = Thursday 2026-12-17: within 5 days of Sunday evening.
+    const waiting = await user("waiting-nocard@example.com", { consent_at: "2026-11-26T12:00:00Z" });
+    // An admin-added run for a week after the coming one, Cora not started.
+    await query("insert into runs (user_id, week_of, route, agent, sharing, raw_text, status) values ($1, '2026-12-21', 'connector', 'hark', 'share', 'x', 'accepted')", [waiting]);
+    const plain = await user("plain-nocard@example.com", { consent_at: "2026-11-26T12:00:00Z" });
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const row = (id: string) => rows.find((r) => r.id === id)!;
+    expect(row(waiting).closesAt).toBe("2026-12-17T12:00:00.000Z");
+    expect(row(waiting).attention).not.toContain("trial_closing");
+    expect(row(plain).attention).toContain("trial_closing");
+  });
+
   it("does not show a trial as closing while its run for the coming week waits on Cora", async () => {
     const waiting = await user("waiting@example.com", { trial_started_at: "2026-11-25T12:00:00Z" });
     await run(waiting, "accepted");

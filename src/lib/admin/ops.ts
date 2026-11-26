@@ -260,13 +260,16 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
   const rows = await q<Row>(ROW_SQL, [week, o.userId ?? null]);
   const eligible = await eligibleCounts(q, week, o.userId ? [o.userId] : undefined);
   const only = o.userId ? [o.userId] : undefined;
+  const noCard = await noCardClocks(q, o.settings, o.now, only);
   const clocks = [
     ...(await trialClocks(q, o.settings, o.now, only)),
     ...(await trialClocks(q, o.settings, o.now, only, "no_charge")),
     // Plan 2026-11-26-001, Unit 7: a trial still waiting for its card closes on its own clock.
-    ...(await noCardClocks(q, o.settings, o.now, only)),
+    ...noCard,
   ];
   const noListCloses = new Map(clocks.map((t) => [t.id, t.closesAt]));
+  // Review fixes (Unit 7), F5: a never-teasered close waits while a run is with Cora, so its date is shown but not flagged.
+  const closeWaits = new Set(noCard.filter((t) => !t.firstTeaserAt && t.runWaiting).map((t) => t.id));
   const out: OpsRow[] = [];
   for (const r of rows) {
     const m = await moneyOf(q, r, o.settings, o.now);
@@ -301,7 +304,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       lastSignIn: r.last_signin,
       lastOpened: r.last_opened,
       note: r.admin_note,
-      attention: attentionFor(base, { now: o.now, week, freeRuns: o.settings.freeRuns }),
+      attention: attentionFor(closeWaits.has(r.id) ? { ...base, closesAt: null } : base, { now: o.now, week, freeRuns: o.settings.freeRuns }),
     });
   }
   return { week, rows: out };

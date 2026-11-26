@@ -13,6 +13,7 @@ import { appUrl } from "@/lib/mail/layout";
 import { firstListHeldEmail } from "@/lib/mail/templates/held";
 import { mondayListEmail, noIdeasThisWeekEmail, noRunThisWeekEmail, orderNextEmail } from "@/lib/mail/templates/monday";
 import type { V3Settings } from "@/lib/v3-settings";
+import { teaserQuiet } from "@/lib/housekeeping/clocks";
 import { deliverWeek, NOT_SUPERSEDED_SQL } from "./deliver";
 
 /**
@@ -117,8 +118,13 @@ export const HELD_KIND = "first_list_held";
  * made from stored state on every pass, so a send that failed is tried again
  * by the next one (the Monday send, or the hourly `teaser_unsent`). Nothing is
  * delivered and no free list is used.
+ *
+ * Review fixes (Unit 7), F2: a member already teasered whose no-card close is
+ * due within a day gets no further teaser ("skipped", nothing stamped or
+ * sent), so it never lands in the same hour as the closing email.
  */
 export async function sendHeldTeaser(q: Query, d: SendDeps, userId: string, week: string): Promise<"sent" | "already" | "skipped" | "failed" | "not_held"> {
+  if (await teaserQuiet(q, d.settings, d.now, userId)) return "skipped";
   const [u] = await q<{ id: string; email: string }>(
     `update users u set first_teaser_at = coalesce(u.first_teaser_at, coalesce($3::timestamptz, now()))
      from cora_user_weeks cw, cora_weeks w

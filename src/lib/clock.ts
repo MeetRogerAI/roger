@@ -52,6 +52,20 @@ export function addDays(date: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d) + days * DAY_MS).toISOString().slice(0, 10);
 }
 
+/**
+ * `days` calendar days after `moment` on a wall clock in `timeZone`, at the
+ * same wall time (seconds kept): across a clock change this is 23 or 25 hours
+ * a day, never a fixed 24. A wall time skipped in spring reads as the instant
+ * an hour later (wallToInstant).
+ */
+export function addWallDays(moment: Date, days: number, timeZone = TORONTO): Date {
+  const p = wallParts(moment, timeZone);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = addDays(isoDate(p.year, p.month, p.day), days);
+  const subMinute = ((moment.getTime() % 60_000) + 60_000) % 60_000;
+  return new Date(wallToInstant(date, `${pad(p.hour)}:${pad(p.minute)}`, timeZone).getTime() + subMinute);
+}
+
 /** "HH:MM" → minutes after midnight. Throws on anything else. */
 export function parseHm(hm: string): number {
   const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hm);

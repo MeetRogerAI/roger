@@ -23,6 +23,7 @@ import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { applyRetention, cleanUpExpired } from "./retention";
 import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
+import { noCardClocks, type NoCardClock } from "./clocks";
 import { sendUnsentWelcomes } from "@/lib/signup/finish";
 import { finishCancellations } from "@/lib/billing/cancel";
 import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
@@ -42,8 +43,31 @@ import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from 
  * by then is left to the next pass. Cheap database-only tasks run first.
  */
 export const PASS_SECONDS = 240;
-export type PassContext = { /** Epoch ms. */ deadline: number; /** The real clock (tests that simulate time pass their own); defaults to now. */ realNow?: Date };
+export type PassContext = {
+  /** Epoch ms. */ deadline: number;
+  /** The real clock (tests that simulate time pass their own); defaults to now. */ realNow?: Date;
+  /** Reads shared by several tasks of one pass (runHourly makes one per pass). */ shared?: Map<string, Promise<unknown>>;
+};
 export type HourlyTask = { name: string; run: (q: Query, d: ChargeDeps, ctx: PassContext) => Promise<unknown> };
+
+/**
+ * The no-card clocks, read once per pass and shared by the nudges, the held
+ * reminders and the close (review fixes Unit 7, F3). Each close re-checks the
+ * account when it writes, and each email goes through the notifications
+ * claim, so a read from earlier in the pass is safe. Without a pass map (a
+ * task run on its own) each task reads its own.
+ */
+function passClocks(q: Query, d: ChargeDeps, c: PassContext): () => Promise<NoCardClock[]> {
+  return () => {
+    if (!c.shared) return noCardClocks(q, d.settings, d.now);
+    let p = c.shared.get("noCardClocks") as Promise<NoCardClock[]> | undefined;
+    if (!p) {
+      p = noCardClocks(q, d.settings, d.now);
+      c.shared.set("noCardClocks", p);
+    }
+    return p;
+  };
+}
 
 export const HOURLY_TASKS: HourlyTask[] = [
   // Expired links, sessions, Google sign-in states and rate counters (the database's clock, never "as of").
@@ -61,14 +85,15 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "welcome_unsent", run: (q, d, c) => sendUnsentWelcomes(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
   // Unit 18. A trial with no run: "Zack hasn't sent a report yet" on days 3, 10 and 17 (from the card, or for a
   // no-card trial with no teaser yet, from consent: plan 2026-11-26-001, Unit 7).
-  { name: "trial_nudges", run: (q, d, c) => sendTrialNudges(q, { ...d, deadline: c.deadline }) },
+  { name: "trial_nudges", run: (q, d, c) => sendTrialNudges(q, { ...d, deadline: c.deadline, noCard: passClocks(q, d, c) }) },
   // Day 21 with no first list (weeks with no list because of Roger not counted): closed, no charge, one email.
   { name: "trial_no_list_close", run: (q, d, c) => closeTrialsWithNoList(q, { ...d, deadline: c.deadline }) },
   // Plan 2026-11-26-001, Unit 7. A no-card trial with a held list: "Your ideas are waiting" on days 2 and 7 after the first teaser.
-  { name: "held_reminders", run: (q, d, c) => sendHeldReminders(q, { ...d, deadline: c.deadline }) },
+  { name: "held_reminders", run: (q, d, c) => sendHeldReminders(q, { ...d, deadline: c.deadline, noCard: passClocks(q, d, c) }) },
   // Unit 7. No card: closed 14 days after the first teaser, or 21 days after consent with no teaser (failed Cora weeks
-  // and no-eligible weeks extend; held lists never do), one closing email.
-  { name: "no_card_close", run: (q, d, c) => closeNoCardTrials(q, { ...d, deadline: c.deadline }) },
+  // and no-eligible weeks extend; held lists never do), one closing email. A card confirmed on the stored Payment
+  // session is saved instead (review fixes Unit 7, F1), so the close is given Stripe's card gateway.
+  { name: "no_card_close", run: (q, d, c) => closeNoCardTrials(q, { ...d, deadline: c.deadline, noCard: passClocks(q, d, c), card: stripeGateway() }) },
   // Sunday 6:00 PM in the member's time zone: upload-route members with no run yet.
   { name: "upload_reminders", run: (q, d, c) => sendUploadReminders(q, { ...d, deadline: c.deadline }) },
   // 48 hours before a first charge: the reminder with the stored date and amount.
@@ -158,7 +183,7 @@ export async function reconcileStripe(q: Query, d: ChargeDeps, c: PassContext, g
 export async function runHourly(q: Query, d: ChargeDeps, tasks: HourlyTask[] = HOURLY_TASKS, o: { deadline?: number } = {}): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   if (!d.settings.cycleLive) return { skipped: "The cycle is not live." };
-  const ctx: PassContext = { deadline: o.deadline ?? Date.now() + PASS_SECONDS * 1000 };
+  const ctx: PassContext = { deadline: o.deadline ?? Date.now() + PASS_SECONDS * 1000, shared: new Map() };
   for (const t of tasks) {
     if (Date.now() >= ctx.deadline) {
       out[t.name] = "out of time: next pass";

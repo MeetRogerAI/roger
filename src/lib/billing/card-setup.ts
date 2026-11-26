@@ -3,6 +3,7 @@ import type { MailDeps } from "@/lib/mail/send";
 import { counterFor, hit, limits, type Counter } from "@/lib/rate-limit";
 import type { V3Settings } from "@/lib/v3-settings";
 import { deliverUnlock, newestDeliveredWeek, UnlockEmailNotSent } from "@/lib/cora/unlock";
+import { CLOSED_NO_CARD } from "@/lib/housekeeping/clocks";
 import type { CardSaveResult } from "./card-saved";
 import { refusePromotion, type CardGateway, type Promotion, type SetupSession } from "./gateway";
 import { hasCard, isNoCardTrial } from "./has-card";
@@ -223,8 +224,52 @@ export async function discardSetupSession(q: Query, gw: CardGateway, userId: str
 }
 
 /**
+ * The stored Payment session, completed if the member has confirmed it
+ * (review fixes Unit 7, F1: the no-card close asks before it closes, and again
+ * after it has closed the session). "none": nothing stored, or not complete.
+ * The completion's own outcome otherwise ("done" when the card is saved; a
+ * list whose email failed still counts as done, the unlock sweep retries it).
+ */
+export async function completeStoredSession(q: Query, gw: CardGateway, userId: string, o: CompleteOptions): Promise<CompleteOutcome | "none"> {
+  const [u] = await q<{ setup_session: string | null }>(`select setup_session from users where id = $1`, [userId]);
+  if (!u?.setup_session) return "none";
+  const s = await readSession(gw, u.setup_session);
+  if (s?.status !== "complete") return "none";
+  try {
+    return await completeCardSetup(q, gw, s.id, { ...o, expectUserId: userId });
+  } catch (e) {
+    if (e instanceof UnlockEmailNotSent) return "done";
+    throw e;
+  }
+}
+
+/** How long after a no-card close a card confirmed on the stored session still reopens the trial. */
+export const REOPEN_DAYS = 7;
+
+/**
+ * Review fixes (Unit 7), F1: an account the no-card close closed (reason
+ * `no_card`, the card never saved) less than REOPEN_DAYS ago, whose stored
+ * session the member confirmed at or after the close, is reopened by the
+ * completion instead of answered "closed": the card is saved and the list
+ * unlocked as for a trial. `$now` is the job clock parameter. Mirrors
+ * `reopenable`.
+ */
+const REOPENABLE_SQL = (now: string) =>
+  `(status = 'closed' and closed_reason = '${CLOSED_NO_CARD}' and trial_started_at is null and sponsor_id is null
+    and access_ends_at > ${now}::timestamptz - interval '${REOPEN_DAYS} days')`;
+
+type ReopenFacts = { status: string; closed_reason: string | null; access_ends_at: string | Date | null; trial_started_at: string | Date | null };
+const reopenable = (u: ReopenFacts, now: Date) =>
+  u.status === "closed" &&
+  u.closed_reason === CLOSED_NO_CARD &&
+  u.trial_started_at == null &&
+  u.access_ends_at != null &&
+  new Date(u.access_ends_at).getTime() > now.getTime() - REOPEN_DAYS * 86_400_000;
+
+/**
  * "closed": the account is no longer one that can save its first card (closed,
- * cancelled before saving one); nothing changes.
+ * cancelled before saving one); nothing changes. A no-card close within
+ * REOPEN_DAYS is reopened instead (review fixes Unit 7, F1).
  */
 export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer" | "not_consented" | "closed";
 
@@ -236,7 +281,7 @@ export type CompleteOptions = {
   now?: Date;
 } & MailDeps;
 
-type CardSaveUser = SignupUser & { setup_session: string | null; promo_code: string | null; promo_coupon: string | null };
+type CardSaveUser = SignupUser & ReopenFacts & { setup_session: string | null; promo_code: string | null; promo_coupon: string | null };
 
 /** Passes at the save claim before giving up for now (each pass after losing a promo slot or a changed selection). */
 const CLAIM_ATTEMPTS = 3;
@@ -273,7 +318,10 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
   // An "Update card" session can never unlock a held list (it has its own completion).
   if (s.purpose === "card_update") return "not_yours";
 
-  const [u] = await q<CardSaveUser>(`select ${USER_COLUMNS}, setup_session, promo_code, promo_coupon from users where stripe_customer = $1`, [s.customer]);
+  const [u] = await q<CardSaveUser>(
+    `select ${USER_COLUMNS}, setup_session, promo_code, promo_coupon, closed_reason, access_ends_at from users where stripe_customer = $1`,
+    [s.customer],
+  );
   if (!u) return "unknown_customer";
   if (o.expectUserId && o.expectUserId !== u.id) return "not_yours";
   if (s.userId !== u.id) return "not_yours";
@@ -286,7 +334,7 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
   if (u.trial_started_at == null) {
     // The account state is checked before anything is changed in Stripe.
     if (u.status === "signup" && !u.consent_at) return "not_consented";
-    if (u.status !== "signup" && u.status !== "trial") return "closed";
+    if (u.status !== "signup" && u.status !== "trial" && !reopenable(u, now)) return "closed";
     await gw.setDefaultCard(s.customer, s.paymentMethod);
     if ((await gw.checkTaxLocation(s.customer)) === "invalid") {
       // This session is used up (complete) and can never save the card: drop it, so the next Payment
@@ -333,7 +381,7 @@ export const CARD_SAVE_CLAIM_SQL = `
 with u as (
   select id from users
   where id = $1 and trial_started_at is null and promo_code is not distinct from $5::text
-    and (status = 'trial' or (status = 'signup' and consent_at is not null))
+    and (status = 'trial' or (status = 'signup' and consent_at is not null) or ${REOPENABLE_SQL("$2")})
   for update
 ),
 others as (
@@ -370,6 +418,9 @@ verdict as (
 upd as (
   update users set
     trial_started_at = coalesce($2::timestamptz, now()), status = 'trial', signup_step = 'done',
+    -- A reopened no-card close (REOPENABLE_SQL): the close's fields go (SET reads the row as it was).
+    closed_reason = case when status = 'closed' then null else closed_reason end,
+    access_ends_at = case when status = 'closed' then null else access_ends_at end,
     currency = $3, country = coalesce($4::text, country),
     promo_code = case when (select v from verdict) = 'refused' then null else promo_code end,
     promo_coupon = case when (select v from verdict) = 'refused' then null else promo_coupon end,
@@ -388,13 +439,13 @@ select (select v from verdict) as verdict, exists (select 1 from upd) as saved`;
  */
 async function claimCardSave(q: Query, gw: CardGateway, userId: string, s: { customer: string | null; country: string | null; currency: Currency | null; cardFingerprint?: string | null }, now: Date): Promise<"saved" | "closed" | "not_consented"> {
   for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt++) {
-    const [u] = await q<{ status: string; consent_at: string | null; currency: Currency | null; trial_started_at: string | null; promo_code: string | null; promo_coupon: string | null }>(
-      `select status, consent_at, currency, trial_started_at, promo_code, promo_coupon from users where id = $1`,
+    const [u] = await q<ReopenFacts & { consent_at: string | null; currency: Currency | null; promo_code: string | null; promo_coupon: string | null }>(
+      `select status, consent_at, currency, trial_started_at, promo_code, promo_coupon, closed_reason, access_ends_at from users where id = $1`,
       [userId],
     );
     if (!u || u.trial_started_at != null) return "saved";
     if (u.status === "signup" && !u.consent_at) return "not_consented";
-    if (u.status !== "signup" && u.status !== "trial") return "closed";
+    if (u.status !== "signup" && u.status !== "trial" && !reopenable(u, now)) return "closed";
     // The user's own last choice wins over the currency an older card tab was opened with.
     const currency: Currency = u.currency ?? s.currency ?? "USD";
 

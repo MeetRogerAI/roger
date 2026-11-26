@@ -3,9 +3,13 @@ import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
-import { sendHeldTeaser } from "@/lib/cora/send-job";
-import { HOURLY_TASKS } from "./job";
-import { closeMoment, closeNoCardTrials, closeTrialsWithNoList, noCardClocks, sendHeldReminders, sendTrialNudges, sendUploadReminders, trialClocks } from "./trial";
+import { sendHeldTeaser, sendUnsentTeasers } from "@/lib/cora/send-job";
+import { completeCardSetup } from "@/lib/billing/card-setup";
+import type { BillingGateway } from "@/lib/billing/subscriptions";
+import { torontoDate } from "@/lib/clock";
+import { fakeGateway } from "@/test-helpers/fake-card-gateway";
+import { HOURLY_TASKS, runHourly } from "./job";
+import { closeMoment, closeNoCardTrials, closeTrialsWithNoList, MAX_SENDS, noCardClocks, sendHeldReminders, sendTrialNudges, sendUploadReminders, trialClocks } from "./trial";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -25,10 +29,14 @@ const settings = mergeV3([{ key: "v3.cycleLive", value: true }]);
 const START = Date.parse("2026-12-01T15:00:00Z");
 const day = (n: number, hours = 0) => new Date(START + n * 86_400_000 + hours * 3_600_000);
 const deps = (now: Date) => ({ settings, now, query, transport, sleep: async () => {} });
-/** Every hourly pass from one moment to another, nudges then the close (as the hourly pass orders them). */
+/**
+ * Every hourly pass from one moment to another, nudges then the close (as the hourly pass orders them). These
+ * tests have no trial waiting for a card, so the nudges are handed an empty no-card clock list (as the hourly
+ * pass hands them its shared read) instead of reading it on each of hundreds of passes.
+ */
 async function passes(from: Date, to: Date) {
   for (let t = from.getTime(); t <= to.getTime(); t += 3_600_000) {
-    await sendTrialNudges(query, deps(new Date(t)));
+    await sendTrialNudges(query, { ...deps(new Date(t)), noCard: async () => [] });
     await closeTrialsWithNoList(query, deps(new Date(t)));
   }
 }
@@ -82,8 +90,7 @@ describe("the trial with no first list (spec check 23)", () => {
     expect(await query("select 1 from charge_attempts")).toEqual([]);
     const [u] = await query<{ closed_reason: string; ended: boolean }>("select closed_reason, access_ends_at is not null as ended from users");
     expect(u).toEqual({ closed_reason: "no_first_list", ended: true });
-    // 552 hourly passes: more time when every file runs at once.
-  }, LONG);
+  });
 
   it("sends only the latest nudge reached when a pass comes late", async () => {
     await user("ana@example.com");
@@ -469,6 +476,291 @@ describe("no-card trials (plan 2026-11-26-001, Unit 7; origin R11)", () => {
     const names = HOURLY_TASKS.map((t) => t.name);
     expect(names.indexOf("held_reminders")).toBeGreaterThan(names.indexOf("trial_no_list_close"));
     expect(names.indexOf("no_card_close")).toBeGreaterThan(names.indexOf("held_reminders"));
+  });
+
+  describe("review fixes (Unit 7)", () => {
+    const tick = (d: Date, ms = -1) => new Date(d.getTime() + ms);
+    const notes = (kind: string) => query<{ ref: string; status: string }>("select ref, status from notifications where kind = $1 order by ref", [kind]);
+    const row = async (id: string) =>
+      (
+        await query<{ status: string; closed_reason: string | null; access_ends_at: Date | null; trial_started_at: Date | null; setup_session: string | null }>(
+          "select status, closed_reason, access_ends_at, trial_started_at, setup_session from users where id = $1",
+          [id],
+        )
+      )[0];
+    const deliveredCount = async (id: string) => (await query("select 1 from picks where user_id = $1 and delivered_at is not null", [id])).length;
+    /** The Payment page's stored embedded session (Unit 4), on the member's own customer. */
+    async function storedSession(gw: ReturnType<typeof fakeGateway>, id: string) {
+      const s = await gw.createEmbeddedSetupSession({ userId: id, customer: "cus_ana", currency: "USD", returnUrl: "https://roger.test/start/payment/done" });
+      await query("update users set setup_session = $2 where id = $1", [id, s.id]);
+      return s.id;
+    }
+    const completeOpts = (now: Date) => ({ getSettings: async () => settings, now, query, transport, sleep: async () => {} });
+
+    describe("F1: a card confirmed in Stripe around the close", () => {
+      it("a stored session already confirmed is completed instead of closed: card saved, list unlocked, no closing email", async () => {
+        const gw = fakeGateway();
+        const id = await noCard("ana@example.com", { stripe_customer: "cus_ana" });
+        await heldWeek(id, "2026-12-07");
+        gw.complete(await storedSession(gw, id));
+        expect(await closeNoCardTrials(query, { ...deps(at(14)), card: gw })).toBe(0);
+        expect(await row(id)).toMatchObject({ status: "trial", closed_reason: null, trial_started_at: at(14) });
+        expect(await deliveredCount(id)).toBe(3);
+        expect(closings()).toEqual([]);
+        expect(await noCardClocks(query, settings, at(15))).toEqual([]);
+      });
+
+      it("an open stored session is expired in Stripe and cleared after the close", async () => {
+        const gw = fakeGateway();
+        const id = await noCard("ana@example.com", { stripe_customer: "cus_ana" });
+        await heldWeek(id, "2026-12-07");
+        const sid = await storedSession(gw, id);
+        expect(await closeNoCardTrials(query, { ...deps(at(14)), card: gw })).toBe(1);
+        expect(await row(id)).toMatchObject({ status: "closed", closed_reason: "no_card", setup_session: null });
+        expect(gw.expired).toEqual([sid]);
+        expect(closings()).toHaveLength(1);
+      });
+
+      it("a card confirmed while the close runs (before the expiry lands) reopens the trial and saves it", async () => {
+        const gw = fakeGateway();
+        const id = await noCard("ana@example.com", { stripe_customer: "cus_ana" });
+        await heldWeek(id, "2026-12-07");
+        await storedSession(gw, id);
+        // Stripe.js confirmed the card just before our expiry reached Stripe.
+        gw.expireSetupSession = async (sid) => gw.complete(sid);
+        expect(await closeNoCardTrials(query, { ...deps(at(14)), card: gw })).toBe(1);
+        expect(await row(id)).toMatchObject({ status: "trial", closed_reason: null, access_ends_at: null, trial_started_at: at(14) });
+        expect(await deliveredCount(id)).toBe(3);
+        // Reopened before the email sweep: no closing email.
+        expect(closings()).toEqual([]);
+      });
+
+      it("the webhook for a card confirmed after the close reopens within 7 days; later the account stays closed", async () => {
+        const gw = fakeGateway();
+        const id = await noCard("ana@example.com", { stripe_customer: "cus_ana" });
+        await heldWeek(id, "2026-12-07");
+        const sid = await storedSession(gw, id);
+        // The expiry fails: the open session stays stored, and the member confirms it two days later.
+        gw.expireSetupSession = async () => {
+          throw new Error("stripe down");
+        };
+        await closeNoCardTrials(query, { ...deps(at(14)), card: gw });
+        expect(await row(id)).toMatchObject({ status: "closed", setup_session: sid });
+        gw.complete(sid);
+        expect(await completeCardSetup(query, gw, sid, completeOpts(at(16)))).toBe("done");
+        expect(await row(id)).toMatchObject({ status: "trial", closed_reason: null, access_ends_at: null, trial_started_at: at(16) });
+        expect(await deliveredCount(id)).toBe(3);
+        await closeNoCardTrials(query, { ...deps(at(16, 1)), card: gw });
+        expect((await row(id)).status).toBe("trial");
+
+        const late = await noCard("ben@example.com", { stripe_customer: "cus_ben" });
+        const s = await gw.createEmbeddedSetupSession({ userId: late, customer: "cus_ben", currency: "USD", returnUrl: "x" });
+        await query("update users set setup_session = $2 where id = $1", [late, s.id]);
+        await closeNoCardTrials(query, { ...deps(at(14)), card: gw });
+        gw.complete(s.id);
+        expect(await completeCardSetup(query, gw, s.id, completeOpts(at(21, 1)))).toBe("closed");
+        expect(await row(late)).toMatchObject({ status: "closed", closed_reason: "no_card", trial_started_at: null });
+      });
+
+      it("a Stripe read that fails before the close leaves it to the next pass", async () => {
+        const gw = fakeGateway();
+        const id = await noCard("ana@example.com", { stripe_customer: "cus_ana" });
+        await heldWeek(id, "2026-12-07");
+        await storedSession(gw, id);
+        const read = gw.getSetupSession;
+        gw.getSetupSession = async () => {
+          throw new Error("timeout");
+        };
+        expect(await closeNoCardTrials(query, { ...deps(at(14)), card: gw })).toBe(0);
+        expect((await row(id)).status).toBe("trial");
+        gw.getSetupSession = read;
+        expect(await closeNoCardTrials(query, { ...deps(at(14, 1)), card: gw })).toBe(1);
+      });
+    });
+
+    describe("F2: the teaser before the close, and Toronto wall-time days", () => {
+      it("skips a teaser (nothing stamped or sent) once a teasered member's close is within a day; a week earlier it goes", async () => {
+        const id = await noCard("ana@example.com");
+        await heldWeek(id, "2026-12-07", { superseded: at(6, 18) });
+        await heldWeek(id, "2026-12-14", { titles: ["B1", "B2", "B3"] });
+        await heldWeek(id, "2026-12-21", { titles: ["C1", "C2", "C3"] });
+        // Monday 2026-12-14, 7:00: the close (12-21 7:05) is a week away.
+        expect(await sendHeldTeaser(query, deps(tick(at(7), -5 * 60_000)), id, "2026-12-14")).toBe("sent");
+        await query("update cora_user_weeks set superseded_at = $1 where week_of = '2026-12-14'", [at(13, 18).toISOString()]);
+        // Monday 2026-12-21, 7:00 and 7:01: the Monday send and the hourly sweep both skip it.
+        expect(await sendHeldTeaser(query, deps(tick(at(14), -5 * 60_000)), id, "2026-12-21")).toBe("skipped");
+        expect(await sendUnsentTeasers(query, deps(tick(at(14), -4 * 60_000)))).toBe(0);
+        expect((await notes("first_list_held")).map((n) => n.ref)).toEqual(["2026-12-14"]);
+        expect((await row(id)).status).toBe("trial");
+      });
+
+      it("never skips a never-teasered member's first teaser, even near its 21-day close", async () => {
+        const id = await noCard("ana@example.com", { first_teaser_at: null, consent_at: at(-21, 2).toISOString() });
+        await heldWeek(id, "2026-12-07");
+        expect(await sendHeldTeaser(query, deps(at(0)), id, "2026-12-07")).toBe("sent");
+      });
+
+      it("spring change (2027-03-14): the day-7 reminder and the 14-day close keep 7:05 AM Toronto", async () => {
+        const teaser = new Date("2027-03-08T12:05:00Z"); // Monday 7:05 AM EST
+        const id = await noCard("ana@example.com", { consent_at: "2027-03-01T15:00:00Z", first_teaser_at: teaser.toISOString() });
+        await heldWeek(id, "2027-03-08");
+        const close = new Date("2027-03-22T11:05:00Z"); // Monday 7:05 AM EDT, not 8:05
+        expect((await noCardClocks(query, settings, new Date("2027-03-10T00:00:00Z")))[0].closesAt).toEqual(close);
+        const day7 = new Date("2027-03-15T11:05:00Z");
+        await sendHeldReminders(query, deps(tick(day7)));
+        expect((await notes("held_reminder")).map((n) => n.ref)).toEqual([`${teaser.toISOString()}:2`]);
+        await sendHeldReminders(query, deps(day7));
+        expect((await notes("held_reminder")).map((n) => n.ref)).toEqual([`${teaser.toISOString()}:2`, `${teaser.toISOString()}:7`]);
+        expect(await closeNoCardTrials(query, deps(tick(close)))).toBe(0);
+        expect(await closeNoCardTrials(query, deps(close))).toBe(1);
+      });
+
+      it("autumn change (2027-11-07): the 14-day and 21-day closes keep their Toronto wall time", async () => {
+        const teasered = await noCard("ana@example.com", { consent_at: "2027-10-18T14:00:00Z", first_teaser_at: "2027-10-25T11:05:00Z" });
+        const fresh = await noCard("ben@example.com", { consent_at: "2027-10-20T14:00:00Z", first_teaser_at: null });
+        const clocks = await noCardClocks(query, settings, new Date("2027-10-30T00:00:00Z"));
+        const closeOf = (id: string) => clocks.find((c) => c.id === id)!.closesAt;
+        expect(closeOf(teasered)).toEqual(new Date("2027-11-08T12:05:00Z")); // 7:05 AM EST
+        expect(closeOf(fresh)).toEqual(new Date("2027-11-10T15:00:00Z")); // 10:00 AM EST
+        expect(await closeNoCardTrials(query, deps(new Date("2027-11-08T12:04:59.999Z")))).toBe(0);
+        expect(await closeNoCardTrials(query, deps(new Date("2027-11-08T12:05:00Z")))).toBe(1);
+        expect(await closeNoCardTrials(query, deps(new Date("2027-11-10T14:59:59.999Z")))).toBe(0);
+        expect(await closeNoCardTrials(query, deps(new Date("2027-11-10T15:00:00Z")))).toBe(1);
+      });
+    });
+
+    it("F3: one hourly pass reads the no-card clocks once for the nudges, the reminders and the close", async () => {
+      const id = await noCard("ana@example.com");
+      await heldWeek(id, "2026-12-07");
+      let reads = 0;
+      const counting: Query = <T,>(text: string, params?: unknown[]) => {
+        if (text.includes("as reminded")) reads++;
+        return query<T>(text, params);
+      };
+      const tasks = HOURLY_TASKS.filter((t) => ["trial_nudges", "trial_no_list_close", "held_reminders", "no_card_close"].includes(t.name));
+      await runHourly(counting, { ...deps(at(2)), gw: {} as BillingGateway }, tasks);
+      expect(reads).toBe(1);
+      expect(waiting()).toHaveLength(1);
+      await runHourly(counting, { ...deps(at(14)), gw: {} as BillingGateway }, tasks);
+      expect(reads).toBe(2);
+      expect((await row(id)).status).toBe("closed");
+    });
+
+    describe("F4: the closing-email sweep", () => {
+      const closedAt = (i: number) => new Date(at(14).getTime() + i * 60_000);
+      async function closedMembers(n: number) {
+        const ids: string[] = [];
+        for (let i = 0; i < n; i++) ids.push(await user(`c${i}@example.com`, { trial_started_at: null, status: "closed", closed_reason: "no_card", access_ends_at: closedAt(i).toISOString() }));
+        return ids;
+      }
+      const recipients = () => new Set(closings().map((m) => m.to[0]));
+
+      it("sends the newest closes first", async () => {
+        await closedMembers(MAX_SENDS + 1);
+        await closeNoCardTrials(query, deps(at(15)));
+        expect(closings()).toHaveLength(MAX_SENDS);
+        expect(recipients().has("c0@example.com")).toBe(false);
+        expect(recipients().has(`c${MAX_SENDS}@example.com`)).toBe(true);
+      });
+
+      it("skips an email whose attempts for today are used up, so it never takes a newer close's place", async () => {
+        const ids = await closedMembers(MAX_SENDS + 1);
+        const newest = ids[MAX_SENDS];
+        const ended = closedAt(MAX_SENDS).toISOString().replace(/\.\d{3}Z$/, "Z");
+        await query("insert into notifications (recipient, kind, ref, status, attempts) values ($1, 'trial_closed', $2, 'failed', 3)", [newest, `no_card:${ended}:${torontoDate(at(15))}`]);
+        await closeNoCardTrials(query, deps(at(15)));
+        expect(closings()).toHaveLength(MAX_SENDS);
+        expect(recipients().has(`c${MAX_SENDS}@example.com`)).toBe(false);
+        expect(recipients().has("c0@example.com")).toBe(true);
+        // The next day brings fresh attempts.
+        await closeNoCardTrials(query, deps(at(16)));
+        expect(recipients().has(`c${MAX_SENDS}@example.com`)).toBe(true);
+      });
+    });
+
+    describe("F6: the clocks' edges", () => {
+      it("go-live after consent: a never-teasered clock and its nudges count from go-live, the nudge still keyed by consent", async () => {
+        await query("insert into settings (key, value) values ('v3.cycleLiveSince', to_jsonb($1::timestamptz))", [day(5).toISOString()]);
+        const id = await noCard("ana@example.com", { consent_at: day(0).toISOString(), first_teaser_at: null });
+        const [c] = await noCardClocks(query, settings, day(6));
+        expect(c.start).toEqual(day(5));
+        expect(c.closesAt).toEqual(day(26));
+        expect(await sendTrialNudges(query, deps(tick(day(8))))).toBe(0);
+        expect(await sendTrialNudges(query, deps(day(8)))).toBe(1);
+        expect((await notes("zack_not_yet")).map((n) => n.ref)).toEqual([`${day(0).toISOString()}:3`]);
+        expect(await closeNoCardTrials(query, deps(tick(day(26))))).toBe(0);
+        expect(await closeNoCardTrials(query, deps(day(26)))).toBe(1);
+        expect(await row(id)).toMatchObject({ status: "closed", closed_reason: "no_first_list" });
+      });
+
+      it("a card saved, or a first teaser stamped, between the clock read and the close statement stops the close", async () => {
+        const ana = await noCard("ana@example.com");
+        const ben = await noCard("ben@example.com", { first_teaser_at: null, consent_at: at(-7).toISOString() });
+        // Ana's close is at(14); Ben's (consent + 21) at(14) too.
+        const racing: Query = async <T,>(text: string, params?: unknown[]) => {
+          if (text.includes("set status = 'closed'")) {
+            await query("update users set trial_started_at = $2 where id = $1 and trial_started_at is null", [ana, at(14).toISOString()]);
+            await query("update users set first_teaser_at = $2 where id = $1 and first_teaser_at is null", [ben, at(14).toISOString()]);
+          }
+          return query<T>(text, params);
+        };
+        expect(await closeNoCardTrials(racing, deps(at(14)))).toBe(0);
+        expect((await row(ana)).status).toBe("trial");
+        expect((await row(ben)).status).toBe("trial");
+        expect(closings()).toEqual([]);
+      });
+
+      it("a reminder whose send failed goes on the next pass, one notification in the end", async () => {
+        const id = await noCard("ana@example.com");
+        await heldWeek(id, "2026-12-07");
+        failNext = 1;
+        await sendHeldReminders(query, deps(at(2)));
+        expect(waiting()).toEqual([]);
+        await sendHeldReminders(query, deps(at(2, 1)));
+        await sendHeldReminders(query, deps(at(2, 2)));
+        expect(waiting()).toHaveLength(1);
+        expect(await notes("held_reminder")).toEqual([{ ref: `${new Date(T).toISOString()}:2`, status: "sent" }]);
+      });
+
+      it("no held list (heldTeaser null): no reminder", async () => {
+        await noCard("ana@example.com");
+        expect(await sendHeldReminders(query, deps(at(7)))).toBe(0);
+        expect(await notes("held_reminder")).toEqual([]);
+      });
+
+      it("nothing one tick before T+2d, T+7d and T+14d", async () => {
+        const id = await noCard("ana@example.com");
+        await heldWeek(id, "2026-12-07");
+        expect(await sendHeldReminders(query, deps(tick(at(2))))).toBe(0);
+        expect(await sendHeldReminders(query, deps(at(2)))).toBe(1);
+        expect(await sendHeldReminders(query, deps(tick(at(7))))).toBe(0);
+        expect(await sendHeldReminders(query, deps(at(7)))).toBe(1);
+        expect(await closeNoCardTrials(query, deps(tick(at(14))))).toBe(0);
+        expect(await closeNoCardTrials(query, deps(at(14)))).toBe(1);
+      });
+
+      it("never teasered: a failed Cora week moves the 21-day close a week", async () => {
+        const id = await noCard("ana@example.com", { consent_at: day(0).toISOString(), first_teaser_at: null });
+        await query("insert into cora_weeks (week_of, status) values ('2026-12-14', 'failed')");
+        expect((await noCardClocks(query, settings, day(15)))[0].closesAt).toEqual(day(28));
+        expect(await closeNoCardTrials(query, deps(day(21)))).toBe(0);
+        expect(await closeNoCardTrials(query, deps(tick(day(28))))).toBe(0);
+        expect(await closeNoCardTrials(query, deps(day(28)))).toBe(1);
+        expect((await row(id)).closed_reason).toBe("no_first_list");
+      });
+
+      it("never teasered: a run an admin added for a later week (not the coming one) holds the close until that week is done", async () => {
+        const id = await noCard("ana@example.com", { consent_at: day(0).toISOString(), first_teaser_at: null });
+        // Close: Tuesday 2026-12-22; the coming Monday is 12-28, the run is for 2027-01-04.
+        await query("insert into runs (user_id, week_of, route, agent, sharing, raw_text, status) values ($1, '2027-01-04', 'upload', 'hark', 'share', 'x', 'accepted')", [id]);
+        expect(await closeNoCardTrials(query, deps(day(21)))).toBe(0);
+        expect((await noCardClocks(query, settings, day(21)))[0].runWaiting).toBe(true);
+        await query("insert into cora_weeks (week_of, status) values ('2027-01-04', 'sent')");
+        await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2027-01-04', 'not_eligible')", [id]);
+        expect(await closeNoCardTrials(query, deps(day(34)))).toBe(1);
+        expect((await row(id)).closed_reason).toBe("no_first_list");
+      });
+    });
   });
 });
 
