@@ -112,6 +112,57 @@ describe("/start/payment/done", () => {
     expect((await render({ session_id: sid })).redirect).toBe("/start/payment?error=address");
   });
 
+  it("never asks Stripe about an id that is not the member's stored session (garbage or foreign)", async () => {
+    await openSession();
+    let reads = 0;
+    const getSetupSession = db.gw!.getSetupSession;
+    db.gw!.getSetupSession = async (id) => (reads++, getSetupSession(id));
+    expect((await render({ session_id: "cs_garbage" })).redirect).toBe("/start/payment");
+    expect((await render({ session_id: "x".repeat(500) })).redirect).toBe("/start/payment");
+    expect(reads).toBe(0);
+  });
+
+  it("a member whose card is saved lands on their week without asking Stripe, whatever id the page was given", async () => {
+    const sid = await openSession();
+    db.gw!.complete(sid);
+    expect((await render({ session_id: sid })).redirect).toBe(`/app/week/${WEEK}?card=saved`);
+    let reads = 0;
+    db.gw!.getSetupSession = async () => (reads++, Promise.reject(new Error("unexpected")));
+    expect((await render({ session_id: "cs_other" })).redirect).toBe(`/app/week/${WEEK}?card=saved`);
+    expect((await render({})).redirect).toBe(`/app/week/${WEEK}?card=saved`);
+    expect(reads).toBe(0);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("limits completions per member: past the limit the page keeps confirming without asking Stripe", async () => {
+    const sid = await openSession();
+    let reads = 0;
+    const getSetupSession = db.gw!.getSetupSession;
+    db.gw!.getSetupSession = async (id) => (reads++, getSetupSession(id));
+    for (let i = 0; i < 31; i++) expect((await render({ session_id: sid, check: "1" })).redirect).toBeNull();
+    expect(reads).toBe(30);
+  });
+
+  it("when the check fails on our side, the last check says it is our problem (not Stripe's) with the support address", async () => {
+    const sid = await openSession();
+    const getSetupSession = db.gw!.getSetupSession;
+    db.gw!.getSetupSession = async () => {
+      throw new Error("Stripe connection reset");
+    };
+    const first = await render({ session_id: sid });
+    expect(first.html).toContain("Confirming your card…");
+    expect(first.html).toContain("e=1");
+    const last = await render({ session_id: sid, check: "10" });
+    expect(last.html).toContain("We hit a problem saving your card. We’ll finish it shortly — or write to us at hello@meetroger.ai.");
+    expect(last.html).not.toContain("Stripe hasn’t confirmed");
+    // Carried from an earlier failed check even when the last one is merely pending (Stripe answers "open").
+    db.gw!.getSetupSession = getSetupSession;
+    const carried = await render({ session_id: sid, check: "10", e: "1" });
+    expect(carried.html).toContain("We hit a problem saving your card.");
+    // Without a failure, the last check is the plain "not confirmed yet".
+    expect((await render({ session_id: sid, check: "10" })).html).toContain("Stripe hasn’t confirmed your card yet.");
+  });
+
   it("goes back to Payment for another member's session, or none", async () => {
     const [other] = await db.query!<{ id: string }>(
       "insert into users (email, name, status, plan, currency, consent_at, signup_step) values ('b@example.com', 'Bo', 'trial', 'monthly', 'USD', now(), 'done') returning id",

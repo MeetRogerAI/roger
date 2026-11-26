@@ -27,6 +27,8 @@ export const limits = {
   // Tax previews follow typing (debounced); identical inputs come from a cache and are not counted.
   taxPerUser: { limit: 40, windowSeconds: 60 * 60 },
   taxPerIp: { limit: 120, windowSeconds: 60 * 60 },
+  // Card-save completions from the return page (Unit 5 review): each asks Stripe; the page re-checks up to 11 times a visit.
+  cardSavePerUser: { limit: 30, windowSeconds: 60 * 60 },
   zackSendsPerKey: { limit: 6, windowSeconds: 24 * 60 * 60 },
   zackBadKeyPerIp: { limit: 10, windowSeconds: 60 },
   leadPerIp: { limit: 5, windowSeconds: 60 * 60 },

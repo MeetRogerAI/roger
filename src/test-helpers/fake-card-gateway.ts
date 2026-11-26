@@ -117,6 +117,8 @@ export function fakeGateway(tax: TaxLocation = "ok") {
   const gw: CardGateway & {
     /** Confirms a session as Stripe.js would; `fingerprint` names the card (default: one card per session). */
     complete(id: string, country?: string, fingerprint?: string): void;
+    /** What `checkTaxLocation` answers from now on (the member fixed their address). */
+    setTax(t: TaxLocation): void;
     sessions: typeof sessions;
     defaults: typeof defaults;
     expired: typeof expired;
@@ -161,6 +163,9 @@ export function fakeGateway(tax: TaxLocation = "ok") {
     complete(id, country = "CA", fingerprint = `fp_${id}`) {
       const s = sessions.get(id)!;
       sessions.set(id, { ...s, status: "complete", paymentMethod: "pm_card", country, cardFingerprint: fingerprint });
+    },
+    setTax(t) {
+      tax = t;
     },
     sessions,
     defaults,

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { RECORD_PICKS_SQL, SUPERSEDE_AT_READY_SQL } from "@/lib/cora/job";
 import { runSendJob } from "@/lib/cora/send-job";
-import { sendPendingUnlocks, UnlockEmailNotSent } from "@/lib/cora/unlock";
+import { MAX_UNLOCKS, sendPendingUnlocks, UnlockEmailNotSent, unlockWeek } from "@/lib/cora/unlock";
 import type { BillingGateway } from "@/lib/billing/subscriptions";
 import { HOURLY_TASKS, runHourly } from "@/lib/housekeeping/job";
 import type { Transport } from "@/lib/mail/send";
@@ -26,8 +26,9 @@ vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 let query: Query;
 let sent: Parameters<Transport>[0][];
 let failing = false;
+let failingTo: ((to: string) => boolean) | null = null;
 const transport: Transport = async (m) => {
-  if (failing && !m.subject.startsWith("[Roger]")) return { ok: false, error: "resend down", retryable: true };
+  if ((failing || failingTo?.(m.to[0])) && !m.subject.startsWith("[Roger]")) return { ok: false, error: "resend down", retryable: true };
   sent.push(m);
   return { ok: true };
 };
@@ -103,6 +104,7 @@ beforeEach(async () => {
   ({ query } = await testDb());
   sent = [];
   failing = false;
+  failingTo = null;
   gw = fakeGateway();
   vi.stubEnv("ADMIN_EMAILS", "admin@example.com");
   plays = [];
@@ -252,13 +254,33 @@ describe("completeCardSetup: the card is saved and the held list unlocked", () =
     const f = gw.payment.addPromotion({ code: "WELCOME20" });
     await setPendingPromo(query, a, { code: "WELCOME20", couponId: f.coupon!.id, label: "Welcome" });
     const sid = await savedCard(a);
-    expect(await completeCardSetup(query, gw, sid, opts())).toBe("address_invalid");
+    const r = await finishCardSave(query, gw, sid, opts({ expectUserId: a }));
+    expect(cardSavePath(r)).toBe("/start/payment?error=address");
     expect(await userRow(a)).toMatchObject({ trial_started_at: null, free_lists_used: 0, promo_code: "WELCOME20" });
     expect(await deliveredIn(a, WEEK)).toBe(0);
     expect(await reservations()).toEqual([]);
     expect(sent).toHaveLength(0);
-    const r = await finishCardSave(query, gw, sid, opts({ expectUserId: a }));
-    expect(cardSavePath(r)).toBe("/start/payment?error=address");
+    // The used-up session is no longer stored, so it is refused from now on (the webhook's copy too).
+    expect(await completeCardSetup(query, gw, sid, opts())).toBe("not_yours");
+  });
+
+  it("after an address Stripe cannot place, Payment opens a fresh session, and the card saved on it unlocks the list", async () => {
+    gw = fakeGateway("invalid");
+    const a = await member("a@example.com");
+    await picked(a);
+    const first = await savedCard(a);
+    expect(await completeCardSetup(query, gw, first, opts({ expectUserId: a }))).toBe("address_invalid");
+    expect((await query<{ setup_session: string | null }>("select setup_session from users where id = $1", [a]))[0].setup_session).toBeNull();
+    // Back on Payment: not "complete" for ever, but a new, usable session.
+    const again = await openEmbeddedSetup(query, gw, { userId: a, ip: "203.0.113.9", returnUrl: "https://x" });
+    expect(again).toMatchObject({ ok: true, reused: false });
+    if (!again.ok) throw new Error("no session");
+    expect(again.sessionId).not.toBe(first);
+    gw.setTax("ok");
+    gw.complete(again.sessionId);
+    expect(await finishCardSave(query, gw, again.sessionId, opts({ expectUserId: a }))).toEqual({ outcome: "done", week: WEEK, promoRefused: false });
+    expect(await userRow(a)).toMatchObject({ trial_started_at: NOW_TEXT, free_lists_used: 1 });
+    expect(lists("a@example.com")).toHaveLength(1);
   });
 });
 
@@ -312,6 +334,60 @@ describe("ownership", () => {
     await query("update users set status = 'closed' where id = $1", [a]);
     expect(await completeCardSetup(query, gw, sid, opts())).toBe("closed");
     expect(gw.defaults.size).toBe(0);
+  });
+
+  it.each([
+    ["closed", "closed"],
+    ["cancelled", "closed"],
+    ["active", "closed"],
+    ["signup without consent", "not_consented"],
+  ] as const)("the account state is checked before any Stripe side effect: %s → %s", async (state, outcome) => {
+    const a = await member("a@example.com");
+    const sid = await savedCard(a);
+    if (state === "signup without consent") await query("update users set status = 'signup', consent_at = null where id = $1", [a]);
+    else await query("update users set status = $2 where id = $1", [a, state]);
+    const calls: string[] = [];
+    const watched = {
+      ...gw,
+      setDefaultCard: async (c: string, pm: string) => void calls.push(`default ${c} ${pm}`),
+      checkTaxLocation: async () => (calls.push("tax"), "ok" as const),
+    };
+    expect(await completeCardSetup(query, watched, sid, opts())).toBe(outcome);
+    expect(calls).toEqual([]);
+    expect(await userRow(a)).toMatchObject({ trial_started_at: null });
+  });
+
+  it("once the card is saved, the member's own earlier session still finishes the unlock after a newer session was stored", async () => {
+    const a = await member("a@example.com");
+    await picked(a);
+    const sid = await savedCard(a);
+    failing = true;
+    await expect(completeCardSetup(query, gw, sid, opts())).rejects.toBeInstanceOf(UnlockEmailNotSent);
+    failing = false;
+    await query("update users set setup_session = 'cs_newer' where id = $1", [a]);
+    // The webhook's retry for the old session: customer and metadata are the member's, so the unlock runs.
+    expect(await completeCardSetup(query, gw, sid, opts())).toBe("done");
+    expect(lists("a@example.com")).toHaveLength(1);
+    // The return page for the old session lands on the week, not back on Payment.
+    expect(await finishCardSave(query, gw, sid, opts({ expectUserId: a }))).toEqual({ outcome: "done", week: WEEK, promoRefused: false });
+    // Still never another member's, and never a card update.
+    const b = await member("b@example.com");
+    expect(await completeCardSetup(query, gw, sid, opts({ expectUserId: b }))).toBe("not_yours");
+    gw.sessions.set(sid, { ...gw.sessions.get(sid)!, userId: b });
+    expect(await completeCardSetup(query, gw, sid, opts())).toBe("not_yours");
+    gw.sessions.set(sid, { ...gw.sessions.get(sid)!, userId: a, purpose: "card_update" });
+    expect(await completeCardSetup(query, gw, sid, opts())).toBe("not_yours");
+  });
+
+  it("a saved card's unlock still runs from the return page when the email failed and no webhook came", async () => {
+    const a = await member("a@example.com");
+    await picked(a);
+    const sid = await savedCard(a);
+    failing = true;
+    await completeCardSetup(query, gw, sid, opts()).catch(() => {});
+    failing = false;
+    expect(await finishCardSave(query, gw, "cs_anything", opts({ expectUserId: a }))).toEqual({ outcome: "done", week: WEEK, promoRefused: false });
+    expect(lists("a@example.com")).toHaveLength(1);
   });
 
   it("a session not confirmed yet is pending", async () => {
@@ -411,6 +487,92 @@ describe("the promo code locked in at card save", () => {
     expect(claims).toBe(2);
     expect(await reservations()).toHaveLength(1);
     expect(await userRow(a)).toMatchObject({ promo_code: "LAST2", trial_started_at: NOW_TEXT });
+  });
+
+  /**
+   * A real lost race on the real claim: a trigger inserts a rival member's
+   * reservation at the same slot from inside the claim's own insert, after the
+   * claim's snapshot counted the others (what a concurrent member committing
+   * in between looks like). The claim must answer lost_race and write nothing,
+   * and its retry must count the rival.
+   */
+  async function rivalTakesSlotOnFirstClaim(rival: string): Promise<{ wrapped: Query; verdicts: string[] }> {
+    const verdicts: string[] = [];
+    let armed = false;
+    const wrapped: Query = async <T,>(text: string, params?: unknown[]) => {
+      if (text === CARD_SAVE_CLAIM_SQL && !armed) {
+        armed = true;
+        await query(`create or replace function rival_slot() returns trigger language plpgsql as $f$
+          begin
+            if new.user_id <> '${rival}'::uuid then
+              insert into promo_reservations (promotion_code, user_id, reserved_at, slot) values (new.promotion_code, '${rival}'::uuid, now(), new.slot);
+            end if;
+            return new;
+          end $f$`);
+        await query("create trigger rival_slot before insert on promo_reservations for each row execute function rival_slot()");
+        try {
+          const rows = await query<T>(text, params);
+          verdicts.push((rows[0] as { verdict: string }).verdict);
+          return rows;
+        } finally {
+          await query("drop trigger rival_slot on promo_reservations");
+        }
+      }
+      const rows = await query<T>(text, params);
+      if (text === CARD_SAVE_CLAIM_SQL) verdicts.push((rows[0] as { verdict: string }).verdict);
+      return rows;
+    };
+    return { wrapped, verdicts };
+  }
+
+  it.each([
+    [1, "refused", null],
+    [2, "reserved", 2],
+  ] as const)("the real claim loses the last slot to a rival (limit %i): lost_race, then %s on the retry", async (limit, retry, ownSlot) => {
+    const f = gw.payment.addPromotion({ code: "LAST", maxRedemptions: limit });
+    const rival = await member("r@example.com");
+    const a = await member("a@example.com");
+    await pending(a, "LAST");
+    const sid = await savedCard(a);
+    const { wrapped, verdicts } = await rivalTakesSlotOnFirstClaim(rival);
+    expect(await completeCardSetup(wrapped, gw, sid, opts())).toBe("done");
+    expect(verdicts).toEqual(["lost_race", retry]);
+    const rows = await reservations();
+    expect(rows.map((r) => [r.user_id, r.slot])).toEqual(ownSlot ? [[rival, 1], [a, ownSlot]] : [[rival, 1]]);
+    expect(new Set(rows.map((r) => r.slot)).size).toBe(rows.length);
+    expect(rows.every((r) => r.promotion_code === f.promotionCodeId)).toBe(true);
+    expect(await userRow(a)).toMatchObject(retry === "refused" ? { promo_code: null, promo_refused_at: NOW_TEXT } : { promo_code: "LAST", promo_refused_at: null });
+  });
+
+  it("when every claim attempt loses, it throws for a retry: the card is not saved and nothing is delivered", async () => {
+    gw.payment.addPromotion({ code: "LAST2", maxRedemptions: 2 });
+    const a = await member("a@example.com");
+    await picked(a);
+    await pending(a, "LAST2");
+    const sid = await savedCard(a);
+    let claims = 0;
+    const losing: Query = async <T,>(text: string, params?: unknown[]) => {
+      if (text === CARD_SAVE_CLAIM_SQL) return (claims++, [{ verdict: "lost_race", saved: false }] as T[]);
+      return query<T>(text, params);
+    };
+    await expect(completeCardSetup(losing, gw, sid, opts())).rejects.toThrow(/kept losing/);
+    expect(claims).toBe(3);
+    expect(await userRow(a)).toMatchObject({ trial_started_at: null, free_lists_used: 0, promo_code: "LAST2" });
+    expect(await deliveredIn(a, WEEK)).toBe(0);
+    expect(sent).toHaveLength(0);
+    // The return page reads it as our problem, not Stripe's.
+    expect(await finishCardSave(losing, gw, sid, opts({ expectUserId: a }))).toEqual({ outcome: "pending", problem: true });
+  });
+
+  it.each(["paid before (first_charge_at)", "a charged order"] as const)("a first-time-only code is refused for a member who has %s", async (history) => {
+    gw.payment.addPromotion({ code: "FIRST", firstTimeOnly: true });
+    const a = await member("a@example.com");
+    await pending(a, "FIRST");
+    if (history === "a charged order") await query("insert into orders (user_id, week_of, status, amount_cents, currency) values ($1, '2026-11-02', 'charged', 20000, 'USD')", [a]);
+    else await query("update users set first_charge_at = '2026-11-02T12:00:00Z' where id = $1", [a]);
+    expect(await completeCardSetup(query, gw, await savedCard(a, { fingerprint: "fp_fresh" }), opts())).toBe("done");
+    expect(await userRow(a)).toMatchObject({ trial_started_at: NOW_TEXT, promo_code: null, promo_refused_at: NOW_TEXT });
+    expect(await reservations()).toEqual([]);
   });
 
   it("a first-time-only code is refused when the same card was used by another member", async () => {
@@ -571,17 +733,103 @@ describe("the hourly unlock_pending sweep", () => {
     expect(sent.filter((m) => m.subject === "Your three ideas for the week of Monday, November 30")).toHaveLength(1);
   });
 
-  it("leaves alone a member with a card who never had a held list, a no-card trial, and a superseded week", async () => {
-    const carded = await member("c@example.com", { teased: false });
-    await query("update users set trial_started_at = '2026-12-01T15:00:00Z' where id = $1", [carded]);
-    await picked(carded);
+  it("leaves alone a no-card trial, a superseded week, and a member whose first list and its email are done", async () => {
     const noCard = await member("n@example.com");
     await picked(noCard);
     const old = await member("o@example.com");
     await coraWeek(PREV);
     await picked(old, PREV, { superseded: "2026-12-14T06:05:00Z" });
     await query("update users set trial_started_at = $2 where id = $1", [old, NOW.toISOString()]);
+    const done = await member("d@example.com");
+    await picked(done);
+    await query("update users set trial_started_at = $2 where id = $1", [done, NOW.toISOString()]);
+    await query("update picks set delivered_at = $2 where user_id = $1", [done, NOW.toISOString()]);
+    await query("update cora_user_weeks set delivered_at = $2 where user_id = $1", [done, NOW.toISOString()]);
+    await query("insert into notifications (recipient, kind, ref, status, attempts) values ($1, 'monday_list', $2, 'sent', 1)", [done, WEEK]);
     expect(await sendPendingUnlocks(query, { settings, now: NOW, query, transport, sleep: async () => {} })).toBe(0);
     expect(sent).toHaveLength(0);
+  });
+
+  it("also unlocks a card saved before any teaser went out (first_teaser_at null) whose first list is held", async () => {
+    const early = await member("e@example.com", { teased: false });
+    await query("update users set trial_started_at = '2026-12-01T15:00:00Z' where id = $1", [early]);
+    await picked(early);
+    expect(await sendPendingUnlocks(query, { settings, now: NOW, query, transport, sleep: async () => {} })).toBe(1);
+    expect(await deliveredIn(early, WEEK)).toBe(3);
+    expect(lists("e@example.com")).toHaveLength(1);
+  });
+
+  it("a first list sent as a one-list order's receipt counts as its email (nothing sent again)", async () => {
+    const a = await member("a@example.com");
+    await picked(a);
+    await query("update users set trial_started_at = $2 where id = $1", [a, NOW.toISOString()]);
+    await query("update picks set delivered_at = $2 where user_id = $1", [a, NOW.toISOString()]);
+    await query("update cora_user_weeks set delivered_at = $2 where user_id = $1", [a, NOW.toISOString()]);
+    await query("insert into notifications (recipient, kind, ref, status, attempts) values ($1, 'order_receipt', $2, 'sent', 1)", [a, WEEK]);
+    expect(await sendPendingUnlocks(query, { settings, now: NOW, query, transport, sleep: async () => {} })).toBe(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("the email is still owed when the list was delivered on an earlier clock than the card's stamp (clocks are not compared)", async () => {
+    const a = await member("a@example.com");
+    await picked(a);
+    // Delivered by a job whose clock reads earlier than the card-save caller's clock.
+    await query("update users set trial_started_at = $2 where id = $1", [a, NOW.toISOString()]);
+    await query("update picks set delivered_at = '2026-12-16T14:00:00Z' where user_id = $1", [a]);
+    await query("update cora_user_weeks set delivered_at = '2026-12-16T14:00:00Z' where user_id = $1", [a]);
+    await query("insert into notifications (recipient, kind, ref, status, attempts) values ($1, 'monday_list', $2, 'failed', 1)", [a, WEEK]);
+    expect(await unlockWeek(query, a, NOW)).toEqual({ week: WEEK, delivered: true });
+    expect(await sendPendingUnlocks(query, { settings, now: new Date("2026-12-16T16:00:00Z"), query, transport, sleep: async () => {} })).toBe(1);
+    expect(lists("a@example.com")).toHaveLength(1);
+    expect(await unlockWeek(query, a, NOW)).toBeNull();
+  });
+
+  it("members whose unlock keeps failing cannot starve the rest: a healthy member is unlocked by the next pass", async () => {
+    const stuck: string[] = [];
+    for (let i = 0; i < MAX_UNLOCKS + 1; i++) {
+      const id = await member(`s${i}@example.com`);
+      await picked(id);
+      // Saved earlier than the healthy member, so the old order (by card time) put them all first.
+      await query("update users set trial_started_at = $2 where id = $1", [id, new Date(NOW.getTime() - (MAX_UNLOCKS + 2 - i) * 60_000).toISOString()]);
+      stuck.push(id);
+    }
+    const healthy = await member("h@example.com");
+    await picked(healthy);
+    await query("update users set trial_started_at = $2 where id = $1", [healthy, NOW.toISOString()]);
+    failingTo = (to) => to.startsWith("s");
+    const d = (now: Date) => ({ settings, now, query, transport, sleep: async () => {} });
+
+    const first = new Date("2026-12-16T16:00:00Z");
+    expect(await sendPendingUnlocks(query, d(first))).toBe(0);
+    const tried = await query<{ n: number }>("select count(*)::int as n from users where unlock_attempted_at = $1", [first.toISOString()]);
+    expect(tried[0].n).toBe(MAX_UNLOCKS);
+    expect(lists("h@example.com")).toHaveLength(0);
+    // A re-run within the cool-down tries only the members not tried yet.
+    expect(await sendPendingUnlocks(query, d(new Date("2026-12-16T16:10:00Z")))).toBe(1);
+    expect(lists("h@example.com")).toHaveLength(1);
+    expect(await deliveredIn(healthy, WEEK)).toBe(3);
+    const retried = await query<{ n: number }>("select count(*)::int as n from users where unlock_attempted_at = '2026-12-16T16:10:00Z'");
+    expect(retried[0].n).toBe(2);
+  });
+
+  it("the next hourly pass takes members never tried before those tried longest ago", async () => {
+    const stuck: string[] = [];
+    for (let i = 0; i < MAX_UNLOCKS + 1; i++) {
+      const id = await member(`s${i}@example.com`);
+      await picked(id);
+      await query("update users set trial_started_at = $2 where id = $1", [id, new Date(NOW.getTime() - (MAX_UNLOCKS + 2 - i) * 60_000).toISOString()]);
+      stuck.push(id);
+    }
+    failingTo = (to) => to.startsWith("s");
+    const d = (now: Date) => ({ settings, now, query, transport, sleep: async () => {} });
+    await sendPendingUnlocks(query, d(new Date("2026-12-16T16:00:00Z")));
+    const healthy = await member("h@example.com");
+    await picked(healthy);
+    await query("update users set trial_started_at = $2 where id = $1", [healthy, NOW.toISOString()]);
+    expect(await sendPendingUnlocks(query, d(new Date("2026-12-16T17:00:00Z")))).toBe(1);
+    expect(lists("h@example.com")).toHaveLength(1);
+    // The stuck member never tried went first too, then those tried longest ago.
+    const [last] = await query<{ unlock_attempted_at: string }>("select unlock_attempted_at::text from users where id = $1", [stuck[MAX_UNLOCKS]]);
+    expect(last.unlock_attempted_at).toBe("2026-12-16 17:00:00+00");
   });
 });

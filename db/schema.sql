@@ -750,3 +750,10 @@ alter table promo_reservations add column if not exists slot integer;
 create unique index if not exists promo_reservations_slot on promo_reservations (promotion_code, slot);
 create index if not exists promo_reservations_fingerprint on promo_reservations (card_fingerprint) where card_fingerprint is not null;
 alter table users add column if not exists promo_refused_at timestamptz;
+
+-- 2026-11-26, payment at first list, Unit 5 review fixes: when the hourly
+-- unlock_pending sweep last tried to unlock this member's list (job clock).
+-- The sweep takes members never tried first, then the longest since their
+-- last try, and skips those tried in the last 50 minutes, so members whose
+-- unlock keeps failing cannot take every place in a pass.
+alter table users add column if not exists unlock_attempted_at timestamptz;

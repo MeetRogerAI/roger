@@ -248,12 +248,15 @@ const CLAIM_ATTEMPTS = 3;
  * any number of times, in any order, at once.
  *
  * - Ownership: the session must be complete, not a card update, on the user's
- *   own Stripe customer, carry the user's id, and be the session stored in
- *   `users.setup_session` (`openEmbeddedSetup`). `expectUserId` is the
- *   signed-in user on the return page.
- * - Before the card is saved (`trial_started_at` null) only: the default card
- *   and the tax location. An address Stripe cannot place → "address_invalid"
- *   and nothing else changes. Then one claim statement (CARD_SAVE_CLAIM_SQL)
+ *   own Stripe customer and carry the user's id; until the card is saved it
+ *   must also be the session stored in `users.setup_session`
+ *   (`openEmbeddedSetup`). `expectUserId` is the signed-in user on the return
+ *   page.
+ * - Before the card is saved (`trial_started_at` null) only: the account
+ *   state (before any Stripe call), the default card and the tax location. An
+ *   address Stripe cannot place → "address_invalid": the used-up session is
+ *   dropped from `users.setup_session` (so Payment opens a fresh one) and
+ *   nothing else changes. Then one claim statement (CARD_SAVE_CLAIM_SQL)
  *   stamps `trial_started_at` (job clock), the currency and country, and locks
  *   in or refuses the pending promo code with its reservation.
  * - After it, on every call (whoever saved the card): the unlock, from stored
@@ -273,14 +276,24 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
   const [u] = await q<CardSaveUser>(`select ${USER_COLUMNS}, setup_session, promo_code, promo_coupon from users where stripe_customer = $1`, [s.customer]);
   if (!u) return "unknown_customer";
   if (o.expectUserId && o.expectUserId !== u.id) return "not_yours";
-  if (s.userId !== u.id || u.setup_session !== s.id) return "not_yours";
+  if (s.userId !== u.id) return "not_yours";
+  // Before the card is saved, only the stored session can save it. After, any of the member's own setup
+  // sessions (customer and metadata checked above, not a card update) may run the unlock, which is
+  // idempotent and decided from stored state: a newer session stored since must not strand the list.
+  if (u.trial_started_at == null && u.setup_session !== s.id) return "not_yours";
 
   const now = o.now ?? new Date();
   if (u.trial_started_at == null) {
+    // The account state is checked before anything is changed in Stripe.
     if (u.status === "signup" && !u.consent_at) return "not_consented";
     if (u.status !== "signup" && u.status !== "trial") return "closed";
     await gw.setDefaultCard(s.customer, s.paymentMethod);
-    if ((await gw.checkTaxLocation(s.customer)) === "invalid") return "address_invalid";
+    if ((await gw.checkTaxLocation(s.customer)) === "invalid") {
+      // This session is used up (complete) and can never save the card: drop it, so the next Payment
+      // visit opens a fresh one instead of handing this one back as "complete" for ever.
+      await q(`update users set setup_session = null where id = $1 and setup_session = $2 and trial_started_at is null`, [u.id, s.id]);
+      return "address_invalid";
+    }
     const claimed = await claimCardSave(q, gw, u.id, s, now);
     if (claimed !== "saved") return claimed;
   }
@@ -390,6 +403,7 @@ async function claimCardSave(q: Query, gw: CardGateway, userId: string, s: { cus
       const found = await gw.findPromotion(u.promo_code, currency, { customer: s.customer, now });
       // The coupon shown on the Payment page is the one locked in; a code now pointing elsewhere is refused.
       if (found.valid && found.couponId === u.promo_coupon) promo = found;
+      // Called only for its log line ("[promo] code refused"); its {valid: false} answer is not needed.
       else if (found.valid) refusePromotion(found.code, "coupon_invalid");
     }
     const [r] = await q<{ verdict: string; saved: boolean }>(CARD_SAVE_CLAIM_SQL, [
@@ -413,15 +427,54 @@ async function claimCardSave(q: Query, gw: CardGateway, userId: string, s: { cus
   throw new Error("The card-save claim kept losing; try again");
 }
 
+type SaveState = { saved: boolean; refused: boolean; setup_session: string | null };
+
+const saveState = async (q: Query, userId: string): Promise<SaveState | null> =>
+  (
+    await q<SaveState>(`select trial_started_at is not null as saved, promo_refused_at is not null as refused, setup_session from users where id = $1`, [userId])
+  )[0] ?? null;
+
+/** Where a member whose card is saved lands: their unlocked week (or none yet), read from stored state. */
+async function savedResult(q: Query, userId: string): Promise<CardSaveResult> {
+  const s = await saveState(q, userId);
+  return { outcome: "done", week: await newestDeliveredWeek(q, userId), promoRefused: Boolean(s?.refused) };
+}
+
 /**
  * What the return page (and Unit 6's Payment action, when `openEmbeddedSetup`
- * answers "complete") does with a session: runs the completion for the
- * signed-in user and reads the result from stored state. A list delivered
- * whose email failed is still "done" (the webhook and the hourly sweep send
- * the email). Any other failure reads as "pending" unless the card is saved
- * already, so the page re-checks rather than showing an error.
+ * answers "complete") does with a session for the signed-in user, read back
+ * from stored state:
+ *
+ * - The card is saved already: no Stripe call. The unlock runs from stored
+ *   state (idempotent; a failure is left to the webhook and the hourly sweep)
+ *   and the member lands on their unlocked week, whichever session id the
+ *   page was given.
+ * - Otherwise the id must be the stored session (`users.setup_session`), or
+ *   it is "not_yours" without asking Stripe; and completions are limited per
+ *   member (`cardSavePerUser`), a limited one reading as "pending".
+ * - Then the completion. A list delivered whose email failed is still "done".
+ *   Any other failure reads as "pending" with `problem` set (the page words it
+ *   as our problem, not Stripe's), unless the card got saved.
  */
-export async function finishCardSave(q: Query, gw: CardGateway, sessionId: string, o: CompleteOptions & { expectUserId: string }): Promise<CardSaveResult> {
+export async function finishCardSave(
+  q: Query,
+  gw: CardGateway,
+  sessionId: string,
+  o: CompleteOptions & { expectUserId: string; counter?: Counter },
+): Promise<CardSaveResult> {
+  const before = await saveState(q, o.expectUserId);
+  if (!before) return { outcome: "not_yours" };
+  if (before.saved) {
+    try {
+      await deliverUnlock(q, { settings: await o.getSettings(), now: o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep }, o.expectUserId);
+    } catch (e) {
+      if (!(e instanceof UnlockEmailNotSent)) console.error("[card] unlock after a saved card failed", { message: (e as Error)?.message });
+    }
+    return savedResult(q, o.expectUserId);
+  }
+  if (!sessionId || sessionId !== before.setup_session) return { outcome: "not_yours" };
+  if (!(await hit(`card-save:user:${o.expectUserId}`, limits.cardSavePerUser, o.now ?? new Date(), o.counter ?? counterFor(q)))) return { outcome: "pending" };
+
   let outcome: CompleteOutcome | "error";
   try {
     outcome = await completeCardSetup(q, gw, sessionId, o);
@@ -431,13 +484,10 @@ export async function finishCardSave(q: Query, gw: CardGateway, sessionId: strin
   }
   if (outcome === "pending") return { outcome: "pending" };
   if (outcome === "address_invalid") return { outcome: "address_invalid" };
-  const [u] = await q<{ saved: boolean; refused: boolean }>(
-    `select trial_started_at is not null as saved, promo_refused_at is not null as refused from users where id = $1`,
-    [o.expectUserId],
-  );
-  if (outcome === "error") return u?.saved ? { outcome: "done", week: await newestDeliveredWeek(q, o.expectUserId), promoRefused: u.refused } : { outcome: "pending" };
-  if (outcome !== "done") return { outcome: "not_yours" };
-  return { outcome: "done", week: await newestDeliveredWeek(q, o.expectUserId), promoRefused: Boolean(u?.refused) };
+  const after = await saveState(q, o.expectUserId);
+  if (outcome === "done" || after?.saved) return savedResult(q, o.expectUserId);
+  if (outcome === "error") return { outcome: "pending", problem: true };
+  return { outcome: "not_yours" };
 }
 
 /**

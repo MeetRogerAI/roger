@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/access";
-import { cardSavePath } from "@/lib/billing/card-saved";
+import { cardSavePath, SAVE_PROBLEM } from "@/lib/billing/card-saved";
 import { finishCardSave } from "@/lib/billing/card-setup";
 import { stripeGateway } from "@/lib/billing/gateway";
 import { query } from "@/lib/db-query";
@@ -29,23 +29,28 @@ const CHECK_EVERY = 3;
  * - not this person's session → back to Payment.
  */
 async function Done({ searchParams }: { searchParams: PageProps<"/start/payment/done">["searchParams"] }) {
-  const { session_id, check } = await searchParams;
+  const { session_id, check, e } = await searchParams;
   // The completion reads the clock and Stripe: always at request time.
   await connection();
   const session = await requireUser("/start/payment/done");
   const id = typeof session_id === "string" ? session_id.trim().slice(0, 200) : "";
   const gw = stripeGateway();
-  if (!id || !gw) redirect("/start/payment");
+  if (!gw) redirect("/start/payment");
 
+  // finishCardSave reads the member first: a saved card lands on its week, and an id that is not the
+  // member's stored session goes back to Payment, both without asking Stripe.
   const r = await finishCardSave(query, gw, id, { expectUserId: session.userId, getSettings: readV3Settings });
   if (r.outcome !== "pending") redirect(cardSavePath(r));
 
   const n = Math.max(0, Math.min(MAX_CHECKS, Number(typeof check === "string" ? check : 0) || 0));
-  return <Confirming next={n < MAX_CHECKS ? `/start/payment/done?session_id=${encodeURIComponent(id)}&check=${n + 1}` : null} />;
+  // A check that failed on our side is remembered across the re-checks, for the last message.
+  const problem = r.problem === true || e === "1";
+  const next = n < MAX_CHECKS ? `/start/payment/done?session_id=${encodeURIComponent(id)}&check=${n + 1}${problem ? "&e=1" : ""}` : null;
+  return <Confirming next={next} problem={problem} />;
 }
 
 /** "Confirming your card…", re-loaded every few seconds (no script needed) until Stripe confirms or the checks run out. */
-function Confirming({ next }: { next: string | null }) {
+function Confirming({ next, problem }: { next: string | null; problem: boolean }) {
   return (
     <>
       {next && <meta httpEquiv="refresh" content={`${CHECK_EVERY};url=${next}`} />}
@@ -55,7 +60,9 @@ function Confirming({ next }: { next: string | null }) {
       <p className="mt-6 max-w-[40rem] text-small text-ink-2">
         {next
           ? "This usually takes a few seconds. This page checks again on its own."
-          : "Stripe hasn’t confirmed your card yet. Refresh this page in a minute, or go back to Payment if you didn’t finish adding your card."}
+          : problem
+            ? SAVE_PROBLEM
+            : "Stripe hasn’t confirmed your card yet. Refresh this page in a minute, or go back to Payment if you didn’t finish adding your card."}
       </p>
       {!next && (
         <p className="mt-8 flex flex-wrap gap-6">
