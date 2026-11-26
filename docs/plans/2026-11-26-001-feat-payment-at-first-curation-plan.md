@@ -658,7 +658,7 @@ Record the result in the plan. If it fails, switch this unit and Unit 5 to the d
   - `trial_started_at` is stamped only after the tax location is valid.
   - The promo coupon is stored before the status flip in the same completion.
 - **API surface parity:**
-  - The admin "add a run for this user" and "give extra free list" actions must work for no-card trials. Extra free list: allowed, and counted only after the card.
+  - The admin "add a run for this user" and "give extra free list" actions refuse no-card trials ("Waiting for the member's card"), as decided in Unit 1.
   - Pilot links follow the new path.
 - **Integration coverage:** the race and retry cases in Units 3 and 5 on PGlite, and the end-to-end scenarios in Unit 10.
 - **Unchanged invariants:**
@@ -695,3 +695,69 @@ Record the result in the plan. If it fails, switch this unit and Unit 5 to the d
 - Spec: `artifacts/Roger v3 - design spec.md` (B.4, B.7, B.8, B.9, B.13)
 - Launch list: `artifacts/launch-list.html` (S13, S16, S18)
 - External: the Stripe docs listed under External References
+
+## As-built notes
+
+### Unit 1 audit
+
+The shared predicate is `src/lib/billing/has-card.ts`: `HAS_CARD_SQL(alias)` / `hasCard()` ("has card": active, held or cancelled, or a trial with `trial_started_at` set) and `HAS_CARD_OR_SPONSORED_SQL(alias)` / `hasCardOrSponsored()` (adds `sponsor_id is not null`). signup and closed never count.
+
+Searched `src/` (including `src/app/api/**`, tests excluded) on 2026-11-26 for: every `"trial"` / `'trial'` status comparison, every `status in (...)` / `[...].includes(status)` list containing trial, and every `stripe_customer` truthiness check. `src/app/api/**` has no direct status checks: the cron routes call the jobs listed below, and the Zack routes go through `src/lib/zack/key.ts`. Before the change the searches matched 107 lines (80 trial-status checks, 27 `stripe_customer` checks), grouped below into 48 rows where one function or page has several. 13 rows are changed in Unit 1 (the predicate, or the facts it feeds); 8 are handled in later units (2, 3, 5, 6, 9); 27 are fine as is (several with a note for Units 7 and 8).
+
+| file:line | what it does | verdict |
+|---|---|---|
+| `src/lib/billing/quote.ts:39` `quotable` | trial + monthly + `stripe_customer` → may be quoted | **needs predicate — done** (`hasCard`; a Stripe customer alone is not a card) |
+| `src/lib/billing/quote.ts:70` `tell` | stores the told quote `where status = 'trial'` | fine as is (only reached through `quotable` or the reminder query) |
+| `src/lib/billing/quote.ts:130` `sendFirstChargeReminders` | trial, `free_lists_used >= freeRuns`, `stripe_customer is not null` | **needs predicate — done** (`HAS_CARD_SQL`, defence in depth: free lists already imply a card once Unit 3 lands) |
+| `src/lib/app/status.ts:95,108` `statusLine` | trial wording (free lists, next paid list) | **needs predicate — done** (`hasCard` / `firstTeaserAt` in `StatusFacts`; new `statusLink` → `/start/payment`) |
+| `src/lib/app/home.ts`, `src/lib/cora/send-job.ts` `facts`, `src/lib/admin/user-detail.ts` | build `StatusFacts` | **done** (select `HAS_CARD_SQL` and `first_teaser_at`; `/app` renders the link) |
+| `src/lib/admin/ops.ts:144-147` `statusKey` | trial / switched → status kind | **needs predicate — done** (new key `trial_no_card`, "Trial · no card" in `src/app/admin/ops/page.tsx`) |
+| `src/lib/admin/ops.ts:239` `moneyOf` | trial money column ("2 free lists left") | **done** ("No card yet") |
+| `src/lib/admin/ops.ts:105,107,121` `expectsRun`, `attentionFor` | trial expects a run; few-eligible attention | fine as is (a no-card trial must still send Zack runs) |
+| `src/lib/zack/sharing-effect.ts:36` | trial with `trialStartedAt` → "no earlier than" first-charge date | **needs predicate — done** (no card → the cutoff wording with no date, even with a stale quote week) |
+| `src/lib/app/billing.ts:119` `canUpdateCard` | `live && stripe_customer` | **needs predicate — done** (`&& has_card`) |
+| `src/lib/billing/card-setup.ts:163-166` `startCardUpdate` | live status + `stripe_customer` → opens hosted update | **needs predicate — done** (`no_card_yet`; action copy in `src/app/app/billing/actions.ts` updated) |
+| `src/lib/app/billing.ts:89` `nextCharge` | monthly trial: told quote / "Nothing until your free lists are done" | handled in Unit 9 ("No card yet" + Payment link) |
+| `src/lib/app/billing.ts:97,130,144` | invoices / renewal / order preview when `stripe_customer` | fine as is (an empty customer has no invoices; the others need a subscription or per-run) |
+| `src/lib/app/billing.ts:106,108` | live list, "Cancel my trial" label | fine as is |
+| `src/lib/billing/cancel.ts:99,138` `cancelPlan` / `endNow` | trial with no subscription ends at once | fine as is (no subscription → `endNow`); confirmation email **changed**: a trial that never saved a card gets "You have not been charged." without "we removed your saved card" (`had_card` = `trial_started_at is not null`, read directly because the predicate counts every cancelled account as carded) |
+| `src/lib/billing/cancel.ts:238,259` `finishCancellation(s)` | removes cards when `stripe_customer` | fine as is (a no-card customer has nothing to detach; kept in case a card reached Stripe before completion) |
+| `src/lib/admin/users.ts:52-70` `giveExtraFreeList` | trial, free lists used > 0 | **needs predicate — done** (`HAS_CARD_OR_SPONSORED_SQL` in the statement; "Waiting for the member’s card.") |
+| `src/lib/admin/users.ts:104-105` `addRunForUser` | refuses closed / signup | **needs predicate — done** (no-card, unsponsored trial → "Waiting for the member’s card.") |
+| `src/lib/admin/users.ts:163` `closeAccount` | ends subscriptions when `stripe_customer` | fine as is |
+| `src/app/admin/ops/page.tsx:142`, `src/app/admin/users/[id]/page.tsx:104` | "Give one extra free list" button for trials | fine as is (the action refuses with the waiting message); hiding it is Unit 9 polish |
+| `src/lib/cora/who-gets-a-list.ts:38` | trial → gets a list if run arrived / sharing off | **done** (`hasCard` fact, reason text only: "…; no card yet, so the list is held until a card is saved"); the hold itself is Unit 3 |
+| `src/lib/cora/context.ts:163` `loadUsers` | statuses Cora considers | fine as is (no-card trials are picked for); **done**: selects `HAS_CARD_OR_SPONSORED_SQL` as `hasCard` |
+| `src/lib/cora/deliver.ts:38` `DELIVERABLE_SQL` | trial on a free list is deliverable | handled in Unit 3 (needs `HAS_CARD_OR_SPONSORED_SQL` + not superseded) |
+| `src/lib/cora/deliver.ts:56,62` | counts the free list for a trial | handled in Unit 3 (only reachable after a card once delivery is gated) |
+| `src/lib/cora/send-job.ts:111` | after the second free list: first-paid-next | fine as is (free lists imply a card; `quotable` also guards) |
+| `src/lib/cora/send-job.ts:162,168` | late-delivery / email bookkeeping for trials | handled in Unit 3 (`deliverLate` excludes superseded weeks and no-card users) |
+| `src/lib/billing/charge-job.ts:34,54` | due first charges / "date moved" note: trial, `free_lists_used >= freeRuns` | fine as is (free lists imply a card); Unit 8 adds the same-Monday free-list guard |
+| `src/lib/billing/claims.ts:31,38,96,97` | first-charge / order claim guards | fine as is (callers gate on free lists); Unit 8 may add `HAS_CARD_SQL` defensively |
+| `src/lib/billing/first-charge.ts:60,61` `chargeFirst` | skip below free lists; error without `stripe_customer` | fine as is (free-list gate first); Unit 8 |
+| `src/lib/billing/first-charge.ts:88,136,175,207,322,342` | hold / settle / repair statements | fine as is (only after a claimed first charge) |
+| `src/lib/billing/reconcile.ts:53,284` | users Stripe is reconciled for | fine as is (trial branch requires `free_lists_used >= freeRuns`) |
+| `src/lib/billing/orders.ts:28,33,62,103,138,179,211` | one at a time | fine as is (dormant per Scope Boundaries; free-list gates) |
+| `src/lib/billing/switch.ts:109,128,147,168,230,249,251,286` | plan switches | handled in Unit 9 (switch offer removed; monthly only) |
+| `src/lib/app/home.ts:84` `canOrder` | per-run order box | fine as is (dormant; free-list gate) |
+| `src/lib/app/onboarding.ts:75` `loadChecklist` | trial/active/held get the checklist | fine as is (no-card trials need onboarding) |
+| `src/lib/zack/key.ts:32` `userForKey` | trial/active/held keys accepted | fine as is (no-card trials must connect Zack) |
+| `src/app/app/zack/actions.ts:48`, `src/app/app/zack/page.tsx:40` | Zack actions for trial/active/held | fine as is |
+| `src/app/app/page.tsx:22`, `src/app/app/settings/*` | redirect only `signup` | fine as is |
+| `src/lib/housekeeping/trial.ts:48` `ON_CLOCK` | 21-day no-list close; requires `trial_started_at` | fine as is (excludes no-card trials by design); Unit 7 adds no-card clocks |
+| `src/lib/housekeeping/trial.ts:60` `WAITING` | no-first-charge clock, `free_lists_used >= 1` | fine as is |
+| `src/lib/housekeeping/trial.ts:245,256` | Zack upload nudges for trial/active | fine as is; Unit 7 extends nudges from `consent_at` |
+| `src/lib/admin/interest.ts:26-29` | plan counts | handled in Unit 9 (funnel) |
+| `src/app/admin/cora/page.tsx:29` | user picker statuses | fine as is (includes trial) |
+| `src/lib/billing/card-setup.ts:49,99,108,116,118` `startCardSetup` / `completeCardSetup` | sign-up card step: `signup` → `trial` | handled in Units 2 and 5 (sign-up ends at Step 3; completion becomes the unlock) |
+| `src/app/start/card/page.tsx:16`, `src/app/start/done/page.tsx:18-30`, `src/app/start/plan/page.tsx:11` | sign-up pages | handled in Units 2 and 6 (deleted or replaced) |
+| `src/lib/auth/email-change.ts:116,144`, `src/lib/admin/users.ts:242` | sync a changed email to the Stripe customer | fine as is |
+| `src/lib/billing/adjustment.ts:439` | active subscribers only | fine as is |
+| `src/lib/signup/pilot.ts:38` | pilot link only for `signup` | fine as is (Unit 2 changes where it lands) |
+
+**Unit 1 deviations and notes**
+- `StatusFacts.hasCard` is required (not optional), so a caller that forgets it fails to compile instead of treating a no-card trial as carded. The statusLine link is a separate `statusLink(facts)`; `/app` renders it after the line. The email and admin callers carry the facts but render text only.
+- The cancel confirmation needed a third wording (above). No other cancel change was needed: a no-card trial has no subscription, so `endNow` closes it with `status = 'cancelled'` (not `closed`), as the trial cancel does today.
+- Admin "extra free list" for a no-card trial: Unit 1 refuses it ("Waiting for the member’s card."), as this unit says. System-Wide Impact ("allowed, and counted only after the card") contradicts that; Unit 1's simpler rule was built.
+- Test fixtures that inserted a trial with a `stripe_customer` and no `trial_started_at` (meaning "card saved" before this change) now set `trial_started_at`: `quote`, `send-job`, `switch`, `cancel`, `admin/users`, `v3-actions`, `admin-check` tests.
+- `sharingEffect` has no sponsor input: a sponsored trial with no card now reads the "first monthly charge" cutoff wording instead of the generic monthly line. `sponsor_id` is never written in production today.

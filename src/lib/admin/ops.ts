@@ -1,5 +1,6 @@
 import { contributionStatus } from "@/lib/billing/contribution";
 import { closeTrialAt } from "@/lib/billing/claims";
+import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 import { amount, money, moneyCents, type Currency } from "@/lib/billing/prices";
 import { addDays, currentMonday, wallParts, wallToInstant } from "@/lib/clock";
 import { loadUsers } from "@/lib/cora/context";
@@ -69,6 +70,8 @@ export type OpsRow = {
   currency: Currency | null;
   freeListsUsed: number;
   stripeCustomer: string | null;
+  /** A card is saved (billing/has-card.ts); a trial without one is waiting for it. */
+  hasCard: boolean;
   cancelRequested: boolean;
   /** A switch to one at a time waiting for the paid month's end (also on cancel_requested_at, but not a cancellation). */
   switching: boolean;
@@ -126,10 +129,10 @@ export function filterOps(rows: OpsRow[], f: OpsFilter): OpsRow[] {
   return rows.filter((r) => (!f.attention || r.attention.length > 0) && (!f.status || statusKey(r) === f.status) && (!f.path || r.path === f.path));
 }
 
-export const STATUS_KEYS = ["signup", "trial", "monthly", "per_run", "switching", "held", "sponsored", "cancelled", "closed"] as const;
+export const STATUS_KEYS = ["signup", "trial", "trial_no_card", "monthly", "per_run", "switching", "held", "sponsored", "cancelled", "closed"] as const;
 
-/** The status column's kind (spec B.12): trial, monthly, one at a time, switching, payment held, sponsored, cancelled. */
-export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "cancelRequested"> & Partial<Pick<OpsRow, "switching" | "switched">>): (typeof STATUS_KEYS)[number] {
+/** The status column's kind (spec B.12): trial (with or without a card), monthly, one at a time, switching, payment held, sponsored, cancelled. */
+export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "cancelRequested"> & Partial<Pick<OpsRow, "switching" | "switched" | "hasCard">>): (typeof STATUS_KEYS)[number] {
   if (r.status === "held") return "held";
   if (r.status === "cancelled" || r.status === "closed" || r.status === "signup") return r.status;
   // Monthly to one at a time, waiting for the paid month's end: a switch, not a cancellation.
@@ -139,6 +142,8 @@ export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "can
   if (r.sponsored) return "sponsored";
   // One at a time to monthly, waiting for the first monthly charge: a paying member, not a trial.
   if (r.status === "trial" && r.switched) return "monthly";
+  // Sign-up ends without a card: a trial waiting for its card (billing/has-card.ts).
+  if (r.status === "trial" && r.hasCard === false) return "trial_no_card";
   if (r.status === "trial") return "trial";
   return r.plan === "per_run" ? "per_run" : "monthly";
 }
@@ -176,6 +181,7 @@ type Row = {
   quote: { totalCents: number; currency: Currency; week: string } | null;
   first_charge_at: string | null;
   trial_started_at: string | null;
+  has_card: boolean;
   admin_note: string;
   order_status: string | null;
   order_cents: number | null;
@@ -194,7 +200,7 @@ const ROW_SQL = `
   select u.id, u.email, u.name, u.path, u.not_ready, u.status, u.hold_reason, u.plan, (u.sponsor_id is not null) as sponsored, u.sharing, u.currency,
          u.free_lists_used, u.stripe_customer, u.stripe_subscription, (u.cancel_requested_at is not null) as cancel_requested, u.quote,
          (u.cancel_requested_at is not null and u.plan_change_to = 'per_run') as switching, (u.switched_from_per_run_at is not null) as switched,
-         u.first_charge_at::text, u.trial_started_at::text, u.admin_note,
+         u.first_charge_at::text, u.trial_started_at::text, ${HAS_CARD_SQL("u")} as has_card, u.admin_note,
          o.status as order_status, o.amount_cents as order_cents,
          r.status as run_status, r.route as run_route, r.received_at::text as run_at,
          cw.outcome as cw_outcome,
@@ -231,6 +237,7 @@ async function moneyOf(q: Query, r: Row, s: V3Settings, now: Date): Promise<{ te
   if (r.status === "held") return { text: `Held: ${(r.hold_reason ?? "").replace(/_/g, " ")}`, missesUsed: null };
   if (r.sponsored) return { text: "Sponsored", missesUsed: null };
   if (r.status === "trial") {
+    if (!r.has_card && !r.switched) return { text: "No card yet", missesUsed: null };
     if (r.plan === "per_run") return { text: r.order_status ? `Order: ${r.order_status}` : "One at a time, no order", missesUsed: null };
     const left = s.freeRuns - r.free_lists_used;
     if (left > 0 && !r.switched) return { text: `${left} free list${left === 1 ? "" : "s"} left`, missesUsed: null };
@@ -279,6 +286,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       sponsored: r.sponsored,
       currency: r.currency,
       stripeCustomer: r.stripe_customer,
+      hasCard: r.has_card,
       cancelRequested: r.cancel_requested,
       switching: r.switching,
       switched: r.switched,

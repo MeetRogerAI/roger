@@ -706,3 +706,35 @@ create index if not exists oauth_states_expiry on oauth_states (expires_at);
 -- (shown on the settings page). Cleared with google_sub on unlink and on any
 -- change of the Roger email address.
 alter table users add column if not exists google_email text;
+
+-- 2026-11-26, payment at first list, Unit 1: sign-up ends without a card. A
+-- trial with trial_started_at null has no card yet ("has card" is
+-- trial_started_at not null, or sponsor_id set). first_teaser_at is when the
+-- first held list's teaser was sent (the no-card close counts from it).
+-- setup_session is the open embedded card session, reused until complete or
+-- expired. promo_code, promo_coupon and promo_label hold the promotion code
+-- locked in at card save (Stripe has no customer-level discounts since
+-- Basil, so the coupon is applied at preview and at subscription create).
+alter table users add column if not exists first_teaser_at timestamptz;
+alter table users add column if not exists setup_session text;
+alter table users add column if not exists promo_code text;
+alter table users add column if not exists promo_coupon text;
+alter table users add column if not exists promo_label text;
+
+-- 2026-11-26, payment at first list, Unit 1: a held week replaced by a newer
+-- one for a no-card trial. Superseded weeks are never delivered (not late,
+-- not at the unlock).
+alter table cora_user_weeks add column if not exists superseded_at timestamptz;
+
+-- 2026-11-26, payment at first list, Unit 1: Roger counts promotion code uses
+-- itself, because a coupon applied directly never counts a redemption in
+-- Stripe. One row per code and member, written in the card-save claim.
+create table if not exists promo_reservations (
+  id bigserial primary key,
+  promotion_code text not null,
+  user_id uuid not null references users (id) on delete cascade,
+  card_fingerprint text,
+  reserved_at timestamptz not null,
+  unique (promotion_code, user_id)
+);
+create index if not exists promo_reservations_code on promo_reservations (promotion_code);

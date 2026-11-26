@@ -6,6 +6,7 @@ import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail } from 
 import type { V3Settings } from "@/lib/v3-settings";
 import { sharingAtCutoff } from "./first-charge";
 import { carriedDifferenceCents } from "./adjustment";
+import { HAS_CARD_SQL, hasCard } from "./has-card";
 import { firstChargePricing, type Currency } from "./prices";
 import type { BillingGateway } from "./subscriptions";
 
@@ -22,15 +23,21 @@ import type { BillingGateway } from "./subscriptions";
 export type Quote = { totalCents: number; currency: Currency; price: string; extraCents?: number; at: string; week: string };
 export type QuoteDeps = { gw: BillingGateway; settings: V3Settings; now: Date } & MailDeps;
 
-type U = { id: string; email: string; status: string; plan: string; currency: Currency | null; stripe_customer: string | null; quote: Quote | null };
+type U = { id: string; email: string; status: string; plan: string; currency: Currency | null; stripe_customer: string | null; trial_started_at: string | null; quote: Quote | null };
 
 async function load(q: Query, userId: string): Promise<U | null> {
-  const [u] = await q<U>(`select id, email, status, plan, currency, stripe_customer, quote from users where id = $1`, [userId]);
+  const [u] = await q<U>(`select id, email, status, plan, currency, stripe_customer, trial_started_at::text, quote from users where id = $1`, [userId]);
   return u ?? null;
 }
 
-/** Only a monthly trial user before their first charge is quoted; held users are handled by the charge and its retries. */
-const quotable = (u: U) => u.plan === "monthly" && u.status === "trial" && Boolean(u.stripe_customer);
+/**
+ * Only a monthly trial user with a saved card, before their first charge, is
+ * quoted; held users are handled by the charge and its retries. A Stripe
+ * customer alone is not a card: the Payment page creates the customer before
+ * the card is saved.
+ */
+export const quotable = (u: Pick<U, "plan" | "status" | "stripe_customer" | "trial_started_at">) =>
+  u.plan === "monthly" && u.status === "trial" && Boolean(u.stripe_customer) && hasCard({ status: u.status, trialStartedAt: u.trial_started_at });
 
 /**
  * From the cutoff of the Monday a quote is for until that Monday ends, the
@@ -121,7 +128,7 @@ export async function sendFirstChargeReminders(q: Query, d: QuoteDeps): Promise<
   const users = await q<{ id: string }>(
     `select u.id from users u
      where u.status = 'trial' and u.plan = 'monthly' and u.free_lists_used >= $1 and u.cancel_requested_at is null
-       and u.stripe_subscription is null and u.stripe_customer is not null and u.sponsor_id is null
+       and u.stripe_subscription is null and u.stripe_customer is not null and u.sponsor_id is null and ${HAS_CARD_SQL("u")}
        and not exists (select 1 from notifications n where n.recipient = u.id::text and n.kind = 'first_charge_reminder' and n.ref = $2 and n.status = 'sent')`,
     [d.settings.freeRuns, week],
   );

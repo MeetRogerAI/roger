@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
-import { completeCardSetup, startCardSetup } from "./card-setup";
+import { completeCardSetup, startCardSetup, startCardUpdate } from "./card-setup";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { claimEvent, handleStripeEvent } from "./webhook";
 
@@ -155,5 +155,23 @@ describe("Stripe webhook handling", () => {
     expect(await handleStripeEvent(query, fakeGateway(), event, { getSettings, query, transport })).toBe("ignored");
     const [row] = await query<{ status: string }>("select status from stripe_events where id = 'evt_3'");
     expect(row.status).toBe("done");
+  });
+});
+
+describe("startCardUpdate for a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  const update = { successUrl: "https://x/app/billing?session_id={CHECKOUT_SESSION_ID}", cancelUrl: "https://x/app/billing" };
+
+  it("refuses with no_card_yet even with a Stripe customer, and opens no session: a card saved there would skip the unlock", async () => {
+    const gw = fakeGateway();
+    await query("update users set status = 'trial', signup_step = 'done', stripe_customer = 'cus_n' where id = $1", [userId]);
+    expect(await startCardUpdate(query, gw, { userId, ...update })).toEqual({ ok: false, reason: "no_card_yet" });
+    expect(gw.sessions.size).toBe(0);
+  });
+
+  it("opens the update for the same trial once its card is saved", async () => {
+    const gw = fakeGateway();
+    await query("update users set status = 'trial', signup_step = 'done', stripe_customer = 'cus_n', trial_started_at = now() where id = $1", [userId]);
+    expect(await startCardUpdate(query, gw, { userId, ...update })).toMatchObject({ ok: true });
+    expect([...gw.sessions.values()].map((s) => s.purpose)).toEqual(["card_update"]);
   });
 });

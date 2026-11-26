@@ -5,6 +5,7 @@ import { welcomeEmail } from "@/lib/mail/templates/welcome";
 import { claimFreeRun } from "@/lib/zack/receive";
 import type { V3Settings } from "@/lib/v3-settings";
 import type { CardGateway } from "./gateway";
+import { hasCard } from "./has-card";
 import type { Currency, Plan } from "./prices";
 
 /**
@@ -160,7 +161,9 @@ export async function startCardUpdate(
   const u = await loadUser(q, o.userId);
   if (!u) return { ok: false, reason: "not_found" };
   if (!["trial", "active", "held"].includes(u.status)) return { ok: false, reason: u.status === "signup" ? "no_card_yet" : "closed" };
-  if (!u.stripe_customer) return { ok: false, reason: "no_card_yet" };
+  // A Stripe customer is not a card: Payment creates the customer before the card is saved, and a
+  // card saved here would skip the unlock (plan 2026-11-26-001, Unit 1).
+  if (!u.stripe_customer || !hasCard({ status: u.status, trialStartedAt: u.trial_started_at })) return { ok: false, reason: "no_card_yet" };
   const session = await gw.createSetupSession({ userId: u.id, customer: u.stripe_customer, currency: u.currency ?? "USD", successUrl: o.successUrl, cancelUrl: o.cancelUrl, purpose: "card_update" });
   return { ok: true, url: session.url };
 }

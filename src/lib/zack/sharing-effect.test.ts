@@ -21,6 +21,15 @@ describe("sharingEffect", () => {
     expect(sharingEffect({ ...o, status: "trial", trialStartedAt: "2026-11-24T15:00:00Z", from: "share", to: "off" })).toContain("no earlier than Monday, December 14");
   });
 
+  it("gives no first-charge date to a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+    const off = sharingEffect({ ...o, status: "trial", trialStartedAt: null, from: "share", to: "off" });
+    expect(off).toContain("before your first monthly charge");
+    expect(off).toContain("US$400");
+    expect(off).not.toContain("no earlier than");
+    // Even with a stale told Monday: no card means no date.
+    expect(sharingEffect({ ...o, status: "trial", trialStartedAt: null, quoteWeek: "2026-12-14", from: "off", to: "share" })).not.toContain("no earlier than");
+  });
+
   it("for one list at a time: no price change; Zack off means no orders", () => {
     expect(sharingEffect({ ...o, plan: "per_run", from: "share", to: "match_only" })).toBeNull();
     expect(sharingEffect({ ...o, plan: "per_run", from: "share", to: "off" })).toContain("can’t be ordered");

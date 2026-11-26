@@ -48,11 +48,11 @@ const SATURDAY = new Date("2026-12-12T15:00:00Z");
 const FIRST = "2026-12-03T11:05:00Z";
 const PERIOD_END = new Date("2027-01-03T11:05:00Z");
 
-async function member(o: { status: string; plan?: string; sub?: string | null; free?: number; first?: string | null }) {
+async function member(o: { status: string; plan?: string; sub?: string | null; free?: number; first?: string | null; noCard?: boolean }) {
   const [u] = await query<{ id: string }>(
-    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor)
-     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7) returning id`,
-    [`m${Math.random().toString(36).slice(2, 8)}@example.com`, o.status, o.plan ?? "monthly", `cus_${Math.random().toString(36).slice(2, 8)}`, o.sub ?? null, o.free ?? 2, o.first ?? null],
+    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor, trial_started_at)
+     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7, $8) returning id`,
+    [`m${Math.random().toString(36).slice(2, 8)}@example.com`, o.status, o.plan ?? "monthly", `cus_${Math.random().toString(36).slice(2, 8)}`, o.sub ?? null, o.free ?? 2, o.first ?? null, o.noCard ? null : "2026-11-16T15:00:00Z"],
   );
   const [c] = await query<{ stripe_customer: string }>(`select stripe_customer from users where id = $1`, [u.id]);
   plans.cards.set(c.stripe_customer, 1);
@@ -97,6 +97,20 @@ describe("cancelling in the trial", () => {
     expect(await claimCharge(query, { userId: id, purpose: "first_charge", weekOf: "2026-12-14", attempt: 1, now: SATURDAY })).toBeNull();
     expect(await claimCharge(query, { userId: id, purpose: "order", weekOf: "2026-12-14", attempt: 1, now: SATURDAY })).toBeNull();
     expect(plans.calls.filter((c) => !c.startsWith("remove_cards"))).toEqual([]);
+  });
+
+  it("a trial with no card yet (sign-up ends without one) ends at once with 'You have not been charged' and no card to remove", async () => {
+    const id = await member({ status: "trial", free: 0, noCard: true });
+    const [{ stripe_customer }] = await query<{ stripe_customer: string }>(`select stripe_customer from users where id = $1`, [id]);
+    plans.cards.set(stripe_customer, 0);
+    expect(await cancelPlan(query, deps(SATURDAY), { userId: id })).toMatchObject({ ok: true, message: expect.stringContaining("nothing more will be charged") });
+    expect(await user(id)).toMatchObject({ status: "cancelled", access_ends_at: "2026-12-12T15:00Z", stripe_subscription: null });
+    expect(subjects()).toEqual(["Your Roger account is cancelled"]);
+    expect(sent[0].text).toContain("You have not been charged.");
+    expect(sent[0].text).not.toContain("removed your saved card");
+    // Nothing is subscribed or charged: at most the (empty) card removal touches Stripe.
+    expect(plans.calls.filter((c) => !c.startsWith("remove_cards"))).toEqual([]);
+    expect(created).toBe(0);
   });
 
   it("is refused while this week's charge is going through, and changes nothing", async () => {

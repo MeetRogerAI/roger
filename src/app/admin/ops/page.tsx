@@ -12,6 +12,7 @@ import { when } from "@/lib/admin/format";
 const STATUS_WORDS: Record<(typeof STATUS_KEYS)[number], string> = {
   signup: "Signing up",
   trial: "Trial",
+  trial_no_card: "Trial · no card",
   monthly: "Monthly",
   per_run: "One at a time",
   switching: "Switching to one at a time",

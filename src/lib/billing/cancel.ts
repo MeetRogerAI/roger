@@ -207,6 +207,11 @@ type Cancelled = {
   access_ends_at: string | null;
   at_once: boolean;
   charged: boolean;
+  /**
+   * A card was ever saved (trial_started_at is "card saved"); a trial that ended before one has none to remove.
+   * Read from the stamp, not has-card.ts: that predicate counts every cancelled account as having a card.
+   */
+  had_card: boolean;
 };
 
 /** Cancelled, or a subscriber cancelling (not switching): who gets the cancellation email. */
@@ -224,7 +229,8 @@ const CHARGED_SQL = (u: string) => `(${u}.first_charge_at is not null or exists 
 export async function finishCancellation(q: Query, d: PlanDeps, userId: string): Promise<void> {
   const [u] = await q<Cancelled>(
     `select id, email, stripe_customer, cards_removed_at::text, ${ISO("cancel_requested_at")} as cancel_requested_at, ${ISO("access_ends_at")} as access_ends_at,
-            (access_ends_at is not null and access_ends_at <= cancel_requested_at + interval '1 minute') as at_once, ${CHARGED_SQL("users")} as charged
+            (access_ends_at is not null and access_ends_at <= cancel_requested_at + interval '1 minute') as at_once, ${CHARGED_SQL("users")} as charged,
+            (trial_started_at is not null) as had_card
      from users where id = $1 and ${CANCELLED_SQL("users")}`,
     [userId],
   );
@@ -240,7 +246,7 @@ export async function finishCancellation(q: Query, d: PlanDeps, userId: string):
   }
   const message =
     u.at_once || !u.access_ends_at
-      ? cancelledEmail({ when: "now", charged: u.charged })
+      ? cancelledEmail({ when: "now", charged: u.charged, card: u.had_card })
       : cancelledEmail({ when: "period_end", accessEnds: torontoDate(new Date(u.access_ends_at)) });
   await sendToUser({ id: u.id, email: u.email }, "cancelled", u.cancel_requested_at, message, d).catch(() => {});
 }

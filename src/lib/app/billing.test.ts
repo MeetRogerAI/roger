@@ -82,3 +82,15 @@ describe("the billing page (spec B.10)", () => {
     expect((await loadBilling(query, id, { settings, now: SATURDAY, plans }))?.cancel?.label).toBe("Cancel my account");
   });
 });
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  it("can't update a card it never saved, even with a Stripe customer, and can still cancel its trial", async () => {
+    // Payment creates the Stripe customer before the card is saved (trial_started_at is "card saved").
+    const id = await member(
+      "insert into users (email, status, plan, currency, stripe_customer, free_lists_used) values ('n@example.com', 'trial', 'monthly', 'USD', 'cus_n', 0) returning id",
+    );
+    expect(await loadBilling(query, id, { settings, now: SATURDAY, plans })).toMatchObject({ canUpdateCard: false, cancel: { label: "Cancel my trial" } });
+    await query("update users set trial_started_at = '2026-11-30T15:00:00Z' where id = $1", [id]);
+    expect((await loadBilling(query, id, { settings, now: SATURDAY, plans }))?.canUpdateCard).toBe(true);
+  });
+});

@@ -25,7 +25,19 @@ async function Home() {
     <div className="space-y-10">
       <header>
         <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : "Your first list is on its way"}</h1>
-        {home.statusLine !== home.missBanner && <p className="mt-3 text-small text-ink-2">{home.statusLine}</p>}
+        {home.statusLine !== home.missBanner && (
+          <p className="mt-3 text-small text-ink-2">
+            {home.statusLine}
+            {home.statusLink && (
+              <>
+                {" "}
+                <Link href={home.statusLink.href} className="tlink">
+                  {home.statusLink.label}
+                </Link>
+              </>
+            )}
+          </p>
+        )}
       </header>
 
       {home.missBanner && (

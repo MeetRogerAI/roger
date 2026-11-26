@@ -98,8 +98,8 @@ const charges = () => billing.created() + orders.paid.length;
 async function member(o: { status: string; plan: string; sub?: string; free?: number; first?: string }) {
   const customer = `cus_${Math.random().toString(36).slice(2, 8)}`;
   const [u] = await query<{ id: string }>(
-    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor)
-     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7) returning id`,
+    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor, trial_started_at)
+     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7, '2026-11-02T15:00:00Z') returning id`,
     [`${customer}@example.com`, o.status, o.plan, customer, o.sub ?? null, o.free ?? 2, o.first ?? null],
   );
   if (o.sub) plans.add(o.sub, customer, PERIOD_END);

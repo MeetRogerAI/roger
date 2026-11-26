@@ -54,7 +54,7 @@ beforeEach(async () => {
   vi.stubEnv("STRIPE_PRICE_MONTHLY_USD", "price_monthly_usd");
   vi.stubEnv("STRIPE_PRICE_MONTHLY_HIGHER_USD", "price_monthly_higher_usd");
   [{ id: uid }] = await query<{ id: string }>(
-    "insert into users (email, name, status, plan, currency, sharing, stripe_customer, free_lists_used, quote) values ('ana@example.com', 'Ana', 'trial', 'monthly', 'USD', 'share', 'cus_1', 2, $1) returning id",
+    "insert into users (email, name, status, plan, currency, sharing, stripe_customer, free_lists_used, quote, trial_started_at) values ('ana@example.com', 'Ana', 'trial', 'monthly', 'USD', 'share', 'cus_1', 2, $1, '2026-11-16T15:00:00Z') returning id",
     [JSON.stringify({ totalCents: 23000, currency: "USD", week: WEEK, price: "price_monthly_usd" })],
   );
 });
@@ -287,6 +287,21 @@ describe("other row actions", () => {
     expect(await query("select route, status from runs")).toEqual([{ route: "admin", status: "received" }]);
     expect(await addRunForUser(query, ADMIN, uid, "   ", { cutoff: settings.runCutoff, now: SIX_AM })).toMatchObject({ ok: false });
     expect((await log()).map((l) => l.action)).toEqual(["add_run"]);
+  });
+
+  it("refuses a run and an extra free list for a trial with no card yet, with the waiting message, and logs nothing", async () => {
+    // A no-card trial with a Stripe customer (Payment opened) and, for the extra list, a list counted (an admin fixed it by hand).
+    await query("update users set trial_started_at = null, free_lists_used = 1 where id = $1", [uid]);
+    const now = new Date("2026-12-10T15:00:00Z");
+    expect(await addRunForUser(query, ADMIN, uid, "# Zack run\n\nSome report text.", { cutoff: settings.runCutoff, now })).toEqual({ ok: false, message: "Waiting for the member’s card." });
+    expect(await giveExtraFreeList(query, ADMIN, uid)).toEqual({ ok: false, message: "Waiting for the member’s card." });
+    expect(await query("select 1 from runs")).toEqual([]);
+    expect((await u()).free_lists_used).toBe(1);
+    expect(await log()).toEqual([]);
+    // A sponsored member needs no card.
+    await query("update users set sponsor_id = '00000000-0000-4000-8000-000000000001' where id = $1", [uid]);
+    expect(await addRunForUser(query, ADMIN, uid, "# Zack run\n\nSome report text.", { cutoff: settings.runCutoff, now })).toMatchObject({ ok: true });
+    expect(await giveExtraFreeList(query, ADMIN, uid)).toMatchObject({ ok: true });
   });
 
   it("sends a template nudge once a week, and saves the note", async () => {

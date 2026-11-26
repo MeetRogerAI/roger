@@ -10,6 +10,7 @@ const f = (o: Partial<ListFacts>): ListFacts => ({
   ordered: false,
   charged: false,
   accessEnded: false,
+  hasCard: true,
   ...o,
 });
 
@@ -42,5 +43,19 @@ describe("whoGetsAList at the 1:00 AM cutoff", () => {
     expect(whoGetsAList(f({ plan: "per_run", ordered: true, charged: false }), "pick").gets).toBe(true);
     expect(whoGetsAList(f({ plan: "per_run", ordered: true, charged: false }), "send").gets).toBe(false);
     expect(whoGetsAList(f({ plan: "per_run", ordered: true, runArrived: false }), "pick").gets).toBe(false);
+  });
+});
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  it("is picked for exactly as a trial with a card; only the reason says the list is held", () => {
+    for (const phase of ["pick", "send"] as const) {
+      for (const o of [{ runArrived: true }, { runArrived: false }, { sharing: "off" as const, runArrived: false }]) {
+        const withCard = whoGetsAList(f({ status: "trial", ...o }), phase);
+        const noCard = whoGetsAList(f({ status: "trial", hasCard: false, ...o }), phase);
+        expect(noCard.gets).toBe(withCard.gets);
+        if (noCard.gets) expect(noCard.why).toBe(`${withCard.why}; no card yet, so the list is held until a card is saved`);
+        else expect(noCard.why).toBe(withCard.why);
+      }
+    }
   });
 });

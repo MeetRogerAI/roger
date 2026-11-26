@@ -1,6 +1,7 @@
 import { torontoDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { ANCHOR, ISO } from "@/lib/billing/adjustment";
+import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 import { periodAt } from "@/lib/billing/period";
 import { amount, money, moneyCents, priceId, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { AdjustmentGateway, InvoiceRow, OrderGateway, PlanGateway } from "@/lib/billing/subscriptions";
@@ -45,6 +46,7 @@ type U = {
   at_once: boolean;
   switched: boolean;
   renewal_invoice: string | null;
+  has_card: boolean;
 };
 
 export type BillingDeps = { settings: V3Settings; now: Date; plans?: PlanGateway | null; adjust?: AdjustmentGateway | null; orders?: OrderGateway | null };
@@ -54,7 +56,7 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
     `select status, plan, hold_reason, currency, free_lists_used, quote, stripe_customer, stripe_subscription,
             ${ISO("cancel_requested_at")} as cancel_requested_at, ${ISO("access_ends_at")} as access_ends_at, plan_change_to, ${ISO(ANCHOR("users"))} as anchor,
             (access_ends_at is not null and access_ends_at <= cancel_requested_at + interval '1 minute') as at_once,
-            switched_from_per_run_at is not null as switched, renewal_invoice
+            switched_from_per_run_at is not null as switched, renewal_invoice, ${HAS_CARD_SQL("users")} as has_card
      from users where id = $1`,
     [userId],
   );
@@ -113,7 +115,8 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
     nextCharge,
     invoices,
     invoicesFailed,
-    canUpdateCard: live && Boolean(u.stripe_customer),
+    // A Stripe customer is not a card (Payment creates the customer first): with no card saved, "Update card" would save one without the unlock.
+    canUpdateCard: live && Boolean(u.stripe_customer) && u.has_card,
     offer: live ? await switchOffer(q, s, d.now, userId) : null,
     cancel,
     undo,

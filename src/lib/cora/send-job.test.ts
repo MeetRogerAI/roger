@@ -33,8 +33,8 @@ let plays: string[];
 async function member(email: string, o: Record<string, unknown> = {}) {
   const v = { status: "trial", plan: "monthly", sharing: "share", free_lists_used: 0, stripe_customer: `cus_${email}`, email_prefs: {}, ...o };
   const [u] = await query<{ id: string }>(
-    "insert into users (email, status, plan, sharing, free_lists_used, stripe_customer, email_prefs, currency) values ($1, $2, $3, $4, $5, $6, $7, 'USD') returning id",
-    [email, v.status, v.plan, v.sharing, v.free_lists_used, v.stripe_customer, JSON.stringify(v.email_prefs)],
+    "insert into users (email, status, plan, sharing, free_lists_used, stripe_customer, email_prefs, currency, trial_started_at) values ($1, $2, $3, $4, $5, $6, $7, 'USD', $8) returning id",
+    [email, v.status, v.plan, v.sharing, v.free_lists_used, v.stripe_customer, JSON.stringify(v.email_prefs), "trial_started_at" in o ? o.trial_started_at : "2026-11-16T15:00:00Z"],
   );
   return u.id;
 }

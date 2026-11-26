@@ -1,4 +1,5 @@
 import { adjustmentOnAccountClosed, type AdjustDeps } from "@/lib/billing/adjustment";
+import { HAS_CARD_OR_SPONSORED_SQL, WAITING_FOR_CARD } from "@/lib/billing/has-card";
 import { isLive, type BillingGateway } from "@/lib/billing/subscriptions";
 import { isRealDate, wallParts } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
@@ -49,17 +50,21 @@ export async function giveExtraFreeList(q: Query, by: string, userId: string): P
   const rows = await q<{ free_lists_used: number }>(
     `update users u set free_lists_used = u.free_lists_used - 1, quote = null
      where u.id = $1 and u.status = 'trial' and u.stripe_subscription is null and u.free_lists_used > 0 and u.switched_from_per_run_at is null
-       and not ${OPEN_CLAIM} and not ${OPEN_ORDER}
+       and ${HAS_CARD_OR_SPONSORED_SQL("u")} and not ${OPEN_CLAIM} and not ${OPEN_ORDER}
      returning u.free_lists_used`,
     [userId],
   );
   if (!rows.length) {
-    const [u] = await q<{ status: string; free_lists_used: number; open: boolean; ordered: boolean; switched: boolean }>(
-      `select status, free_lists_used, ${OPEN_CLAIM} as open, ${OPEN_ORDER} as ordered, switched_from_per_run_at is not null as switched from users u where id = $1`,
+    const [u] = await q<{ status: string; free_lists_used: number; open: boolean; ordered: boolean; switched: boolean; card: boolean }>(
+      `select status, free_lists_used, ${OPEN_CLAIM} as open, ${OPEN_ORDER} as ordered, switched_from_per_run_at is not null as switched,
+              ${HAS_CARD_OR_SPONSORED_SQL("u")} as card
+       from users u where id = $1`,
       [userId],
     );
     if (!u) return no("No such user.");
     if (u.switched) return no("They switched to monthly from paying one list at a time: they are not on the trial, so there is no free list to give.");
+    // Sign-up ends without a card: nothing is counted until the card is saved, so there is nothing to give yet.
+    if (u.status === "trial" && !u.card) return no(WAITING_FOR_CARD);
     if (u.open) return no("A charge for this user is in progress. Try again in a few minutes.");
     if (u.ordered) return no("They have a list ordered, which would be charged. Give the extra list after that Monday, or once they cancel the order.");
     if (u.status !== "trial") return no("Only a member still on the trial can get an extra free list.");
@@ -91,12 +96,13 @@ export async function sendNudge(q: Query, d: MailDeps, by: string, userId: strin
 export async function addRunForUser(q: Query, by: string, userId: string, body: string, o: { cutoff: string; now: Date }): Promise<Done & { stored?: Stored }> {
   const checked = checkReport(body, "run");
   if (!checked.ok) return no(checked.error);
-  const [u] = await q<{ id: string; email: string; sharing: "share" | "match_only" | "off"; agent: string; status: string }>(
-    `select id, email, sharing, agent, status from users where id = $1`,
+  const [u] = await q<{ id: string; email: string; sharing: "share" | "match_only" | "off"; agent: string; status: string; card: boolean }>(
+    `select id, email, sharing, agent, status, ${HAS_CARD_OR_SPONSORED_SQL("u")} as card from users u where id = $1`,
     [userId],
   );
   if (!u) return no("No such user.");
   if (u.status === "closed" || u.status === "signup") return no("This account can’t receive runs.");
+  if (u.status === "trial" && !u.card) return no(WAITING_FOR_CARD);
   const stored = await storeReport(q, u, checked, { route: "admin", test: false, cutoff: o.cutoff, now: o.now });
   await logAdminAction(q, { by, userId, action: "add_run", detail: { runId: stored.id, week: stored.week_of, replaced: stored.replaced, kind: stored.kind } });
   return { ok: true, message: `Stored for the list on ${stored.week_of}${stored.replaced ? ", replacing the earlier one" : ""}. Intake reads it now.`, stored };

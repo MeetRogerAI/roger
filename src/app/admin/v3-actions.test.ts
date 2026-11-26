@@ -37,7 +37,7 @@ beforeEach(async () => {
   ({ query: current } = await testDb());
   resetNextFakes();
   admin = null;
-  [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used) values ('ana@example.com', 'Ana', 'trial', 2) returning id");
+  [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used, trial_started_at) values ('ana@example.com', 'Ana', 'trial', 2, now()) returning id");
   [{ id: playId }] = await current<{ id: string }>(
     "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('One', 'Sales', 'd', 'p', 'i', '2026-12-07', '2026-12-07') returning id",
   );

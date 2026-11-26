@@ -2,6 +2,7 @@ import { isAtOrPast, torontoDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { statusLine, type StatusFacts } from "@/lib/app/status";
 import { weekIdeas } from "@/lib/app/week";
+import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 import { amount, money, type Currency } from "@/lib/billing/prices";
 import { sendFirstPaidNext } from "@/lib/billing/quote";
 import { contributionStatus, processContributions } from "@/lib/billing/contribution";
@@ -44,6 +45,8 @@ type U = {
   switching_at: string | null;
   ending_at: string | null;
   switched: boolean;
+  has_card: boolean;
+  first_teaser_at: string | null;
   outcome: string;
   run_arrived: boolean;
   order_status: string | null;
@@ -58,7 +61,7 @@ async function usersFor(q: Query, week: string, onlyIds: string[] | null = null)
             u.quote, u.first_charge_at::text, u.access_ends_at::text, u.hold_reason, u.renewal_failed_at::text,
             case when u.plan_change_to = 'per_run' and u.cancel_requested_at is not null then u.access_ends_at::text end as switching_at,
             case when u.status = 'active' and u.cancel_requested_at is not null and u.plan_change_to is distinct from 'per_run' then u.access_ends_at::text end as ending_at,
-            u.switched_from_per_run_at is not null as switched, cw.outcome,
+            u.switched_from_per_run_at is not null as switched, ${HAS_CARD_SQL("u")} as has_card, u.first_teaser_at::text, cw.outcome,
             exists (select 1 from runs r where r.user_id = u.id and r.week_of = $1 and not r.is_test and r.status in ('received', 'accepted', 'flagged')) as run_arrived,
             o.status as order_status, o.amount_cents as order_cents, o.receipt_url,
             exists (select 1 from picks k where k.user_id = u.id and k.week_of = $1 and not k.dry_run and k.delivered_at is not null) as has_delivered
@@ -70,7 +73,7 @@ async function usersFor(q: Query, week: string, onlyIds: string[] | null = null)
   );
 }
 
-export const facts = (u: Pick<U, "status" | "plan" | "sponsored" | "sharing" | "currency" | "free_lists_used" | "quote" | "first_charge_at" | "order_cents" | "access_ends_at"> & Partial<Pick<U, "hold_reason" | "renewal_failed_at" | "switching_at" | "ending_at" | "switched">>, s: V3Settings, now: Date): StatusFacts => ({
+export const facts = (u: Pick<U, "status" | "plan" | "sponsored" | "sharing" | "currency" | "free_lists_used" | "quote" | "first_charge_at" | "order_cents" | "access_ends_at" | "has_card"> & Partial<Pick<U, "hold_reason" | "renewal_failed_at" | "switching_at" | "ending_at" | "switched" | "first_teaser_at">>, s: V3Settings, now: Date): StatusFacts => ({
   status: u.status,
   plan: u.plan,
   sponsored: u.sponsored,
@@ -87,6 +90,8 @@ export const facts = (u: Pick<U, "status" | "plan" | "sponsored" | "sharing" | "
   switchingAt: u.switching_at ?? null,
   endingAt: u.ending_at ?? null,
   switchedFromPerRun: u.switched ?? false,
+  hasCard: u.has_card,
+  firstTeaserAt: u.first_teaser_at ?? null,
   now,
 });
 

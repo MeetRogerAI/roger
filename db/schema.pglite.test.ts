@@ -85,6 +85,21 @@ describe("schema.sql on Postgres", () => {
     ).rejects.toThrow();
   });
 
+  it("has the payment-at-first-list columns, and keeps one promo reservation per code and member (plan 2026-11-26-001, Unit 1)", async () => {
+    const cols = await columns();
+    for (const c of ["users.first_teaser_at", "users.setup_session", "users.promo_code", "users.promo_coupon", "users.promo_label", "cora_user_weeks.superseded_at"]) {
+      expect(cols).toContain(c);
+    }
+    const [{ id }] = (await db.query<{ id: string }>("insert into users (email) values ('promo@example.com') returning id")).rows;
+    const reserve = () =>
+      db.query("insert into promo_reservations (promotion_code, user_id, card_fingerprint, reserved_at) values ('promo_1', $1, 'fp_1', now()) on conflict do nothing returning id", [id]);
+    expect((await reserve()).rows).toHaveLength(1);
+    expect((await reserve()).rows).toHaveLength(0);
+    await expect(db.query("insert into promo_reservations (promotion_code, user_id) values ('promo_2', $1)", [id])).rejects.toThrow();
+    await db.query("delete from users where id = $1", [id]);
+    expect((await db.query("select 1 from promo_reservations")).rows).toHaveLength(0);
+  });
+
   it("increments a rate counter in one statement", async () => {
     const hit = () =>
       db.query<{ count: number }>(

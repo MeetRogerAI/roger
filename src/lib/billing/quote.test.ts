@@ -4,7 +4,7 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import { chargeFirst } from "./first-charge";
-import { noticeQuoteChange, quoteFrozen, sendFirstChargeReminders, sendFirstPaidNext } from "./quote";
+import { noticeQuoteChange, quotable, quoteFrozen, sendFirstChargeReminders, sendFirstPaidNext } from "./quote";
 import type { BillingGateway } from "./subscriptions";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -59,7 +59,7 @@ beforeEach(async () => {
   vi.stubEnv("STRIPE_PRICE_MONTHLY_HIGHER_USD", "price_monthly_higher_usd");
   vi.stubEnv("ADMIN_EMAILS", "");
   [{ id: uid }] = await query<{ id: string }>(
-    "insert into users (email, status, plan, currency, sharing, stripe_customer, free_lists_used) values ('ana@example.com', 'trial', 'monthly', 'USD', 'share', 'cus_1', 2) returning id",
+    "insert into users (email, status, plan, currency, sharing, stripe_customer, free_lists_used, trial_started_at) values ('ana@example.com', 'trial', 'monthly', 'USD', 'share', 'cus_1', 2, '2026-11-16T15:00:00Z') returning id",
   );
 });
 
@@ -151,5 +151,28 @@ describe("who is quoted", () => {
     await query("update users set plan = 'monthly', status = 'active'");
     expect(await sendFirstChargeReminders(query, deps(SATURDAY))).toBe(0);
     expect(sent).toEqual([]);
+  });
+});
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  it("is never quoted, even with a Stripe customer: no email, no stored amount, no preview", async () => {
+    // Payment creates the Stripe customer before the card is saved; trial_started_at is "card saved".
+    await query("update users set trial_started_at = null");
+    let previews = 0;
+    const counting = { ...deps(MONDAY_BEFORE), gw: { ...gw, preview: async (o: Parameters<BillingGateway["preview"]>[0]) => (previews++, gw.preview(o)) } };
+    expect(await sendFirstPaidNext(query, counting, uid)).toBe(false);
+    await switchSharing("off", "2026-12-08T12:00:00Z");
+    expect(await noticeQuoteChange(query, { ...counting, now: new Date("2026-12-08T12:00:00Z") }, uid)).toBe(false);
+    expect(await sendFirstChargeReminders(query, { ...counting, now: SATURDAY })).toBe(0);
+    expect(previews).toBe(0);
+    expect(sent).toEqual([]);
+    expect((await told()).total).toBeNull();
+  });
+
+  it("quotable: a Stripe customer alone is not a card", () => {
+    const base = { plan: "monthly", status: "trial", stripe_customer: "cus_1" };
+    expect(quotable({ ...base, trial_started_at: null })).toBe(false);
+    expect(quotable({ ...base, trial_started_at: "2026-11-16T15:00:00Z" })).toBe(true);
+    expect(quotable({ ...base, stripe_customer: null, trial_started_at: "2026-11-16T15:00:00Z" })).toBe(false);
   });
 });

@@ -39,8 +39,23 @@ export type StatusFacts = {
   endingAt?: string | null;
   /** A paying one-at-a-time member who switched to monthly and awaits the first charge (status trial, but not a trial). */
   switchedFromPerRun?: boolean;
+  /** A card is saved (billing/has-card.ts `hasCard`). A trial without one has had no list delivered yet. */
+  hasCard: boolean;
+  /** No card: when the first held list's teaser was sent (a held list is waiting for the card). */
+  firstTeaserAt?: string | null;
   now: Date;
 };
+
+/** Where a trial with no card saves it (Step 4, Payment). */
+export const PAYMENT_PATH = "/start/payment";
+
+/** A trial waiting for its card (not sponsored, not a switched one-at-a-time member). */
+const waitingForCard = (f: StatusFacts) => f.status === "trial" && !f.hasCard && !f.sponsored && !f.switchedFromPerRun;
+
+/** The link that goes with the status line, when it asks for something: a held list's Payment page. */
+export function statusLink(f: StatusFacts): { href: string; label: string } | null {
+  return waitingForCard(f) && f.firstTeaserAt ? { href: PAYMENT_PATH, label: "Add your card" } : null;
+}
 
 /** The next monthly anniversary of the first charge, on or after today (Toronto dates). */
 export function nextMonthly(firstChargeAt: string, now: Date): string {
@@ -85,6 +100,11 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
     return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a list every Monday. After that you order lists one at a time.`;
   }
   if (f.sponsored) return "Your lists are covered by your sponsor.";
+  // No card yet (sign-up ends without one): the first list is held until the card is saved.
+  if (waitingForCard(f)) {
+    if (f.firstTeaserAt) return "Your first ideas are ready — add a card to see them.";
+    return f.sharing === "off" ? "Your first list arrives on Monday." : "Your first list arrives after Zack’s first report.";
+  }
   if (f.status === "trial") {
     if (f.freeListsUsed === 0) return `Your first ${f.freeRuns} lists are free.`;
     const n = Math.min(f.freeListsUsed, f.freeRuns);

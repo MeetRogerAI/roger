@@ -18,6 +18,12 @@ export type ListFacts = {
   accessEnded: boolean;
   /** Held: why. An unpaid renewal is still picked for; the list waits for the payment. */
   holdReason?: string | null;
+  /**
+   * A card is saved, or the member is sponsored (billing/has-card.ts). Only
+   * the reason text reads it: a trial without a card is picked for as usual,
+   * and its list is held until the card is saved.
+   */
+  hasCard: boolean;
 };
 
 export type ListDecision = { gets: boolean; why: string };
@@ -30,8 +36,9 @@ export function whoGetsAList(f: ListFacts, phase: "pick" | "send"): ListDecision
   if (f.status === "active" && f.plan === "monthly" && !f.sponsored && f.accessEnded) return { gets: false, why: "monthly ending before this week" };
   if (f.sponsored) return { gets: true, why: "sponsored: every Monday" };
   if (f.status === "trial") {
-    if (f.sharing === "off") return { gets: true, why: "trial, Zack off: matched from the profile" };
-    return f.runArrived ? { gets: true, why: "trial, run arrived" } : { gets: false, why: "trial, no run this week (a free list is not used)" };
+    const held = f.hasCard ? "" : "; no card yet, so the list is held until a card is saved";
+    if (f.sharing === "off") return { gets: true, why: `trial, Zack off: matched from the profile${held}` };
+    return f.runArrived ? { gets: true, why: `trial, run arrived${held}` } : { gets: false, why: "trial, no run this week (a free list is not used)" };
   }
   // Active, or cancelled within the paid month.
   if (f.plan === "monthly") return { gets: true, why: "monthly: every Monday" };

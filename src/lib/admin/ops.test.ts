@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import { linkContributor } from "./users";
-import { attentionFor, eligibleCounts, excuseDefaultWeek, filterOps, loadOps, opsWeek } from "./ops";
+import { attentionFor, eligibleCounts, excuseDefaultWeek, filterOps, loadOps, opsWeek, STATUS_KEYS, statusKey } from "./ops";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -167,5 +167,29 @@ describe("eligible plays (R16, R25)", () => {
     const [{ id: other }] = await query<{ id: string }>("insert into seed_contributors (label) values ('Kim') returning id");
     await linkContributor(query, "admin@example.com", contributor, a);
     expect(await linkContributor(query, "admin@example.com", other, a)).toMatchObject({ ok: false });
+  });
+});
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  it("has its own status kind and filter, and no money words beyond 'No card yet'", async () => {
+    const noCard = await user("nocard@example.com", { stripe_customer: "cus_n" });
+    const carded = await user("card@example.com", { trial_started_at: "2026-11-30T15:00:00Z" });
+    const sponsored = await user("sponsored@example.com", { sponsor_id: "00000000-0000-4000-8000-000000000001" });
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const by = (id: string) => rows.find((r) => r.id === id)!;
+    expect(by(noCard)).toMatchObject({ hasCard: false, money: "No card yet" });
+    expect(statusKey(by(noCard))).toBe("trial_no_card");
+    expect(statusKey(by(carded))).toBe("trial");
+    expect(statusKey(by(sponsored))).toBe("sponsored");
+    expect(filterOps(rows, { status: "trial_no_card" }).map((r) => r.id)).toEqual([noCard]);
+    expect(STATUS_KEYS).toContain("trial_no_card");
+  });
+
+  it("statusKey: active, held and cancelled accounts are never 'no card'", () => {
+    const r = { plan: "monthly" as const, sponsored: false, cancelRequested: false, hasCard: false };
+    expect(statusKey({ ...r, status: "active" })).toBe("monthly");
+    expect(statusKey({ ...r, status: "held" })).toBe("held");
+    expect(statusKey({ ...r, status: "cancelled" })).toBe("cancelled");
+    expect(statusKey({ ...r, status: "trial", switched: true })).toBe("monthly");
   });
 });
