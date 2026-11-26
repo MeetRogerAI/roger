@@ -26,12 +26,12 @@ const { DRAFT_COOKIE, encodeDraft } = await import("@/lib/signup/draft");
 const idle = { status: "idle" as const };
 function quiz(over: Record<string, string> = {}) {
   const fd = new FormData();
-  const base = { work: "real_estate", role: "Broker", uses: "most_weeks", agent: "grok-bot", count: "1-2", software: "if_shown", cur: "CAD", ...over };
+  const base = { work: "real_estate", role: "Broker", uses: "most_weeks", agent: "grok-bot", count: "1-2", level: "3", software: "if_shown", cur: "CAD", ...over };
   for (const [k, v] of Object.entries(base)) fd.append(k, v);
   return fd;
 }
 const draft = encodeDraft({
-  answers: { work: "real_estate", role: "Broker", uses: "most_weeks", agents: ["grok-bot"], agentOther: "", count: "1-2", help: [], software: "if_shown" },
+  answers: { work: "real_estate", role: "Broker", uses: "most_weeks", agents: ["grok-bot"], agentOther: "", primary: "", level: 3, count: "1-2", help: [], software: "if_shown" },
   path: "new",
   continuedAnyway: false,
   source: null,

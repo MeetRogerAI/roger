@@ -1,26 +1,49 @@
 "use client";
 
-import { useActionState, useId, useState, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useId, useState, type ReactNode } from "react";
 import { submitQuiz, type StartFormState } from "@/app/start/actions";
 import type { StartParams } from "@/lib/signup/params";
+import { agentLevels } from "@/data/agent-levels";
 
 const idle: StartFormState = { status: "idle" };
 
 type Option = { value: string; label: string };
 
 /**
- * The six-question sign-up quiz (spec B.4), on one screen. Every question is
+ * The seven-question sign-up quiz (spec B.4), on one screen. Every question is
  * a real fieldset with a visible legend; errors show inline under the
  * question and are announced.
  */
 export function QuizForm({ params, agents, categories }: { params: StartParams; agents: Option[]; categories: readonly string[] }) {
   const [state, action, pending] = useActionState(submitQuiz, idle);
-  const [otherAgent, setOtherAgent] = useState(false);
+  // Question 3: ticked agents in the order they were ticked, and the one picked as primary.
+  const [ticked, setTicked] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const primary = chosen && ticked.includes(chosen) ? chosen : (ticked.find((v) => v !== "not_sure") ?? "");
+  const toggle = (v: string, on: boolean) => setTicked((t) => (on ? [...t.filter((x) => x !== v), v] : t.filter((x) => x !== v)));
+  const agentOptions = [...agents, { value: "other", label: "Another one" }, { value: "not_sure", label: "Not sure yet" }];
   const e = state.errors ?? {};
+  // Bring the first unanswered question into view.
+  useEffect(() => {
+    if (state.status !== "error") return;
+    const first = document.querySelector<HTMLElement>("fieldset[aria-invalid]");
+    first?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [state]);
   const id = useId();
 
   return (
-    <form action={action} className="mt-10 space-y-10" noValidate>
+    <form
+      action={action}
+      // Submitted by hand so React doesn't clear the form when an answer is missing:
+      // everything typed and ticked stays, and the missing answers are marked.
+      onSubmit={(ev) => {
+        ev.preventDefault();
+        const fd = new FormData(ev.currentTarget);
+        startTransition(() => action(fd));
+      }}
+      className="mt-10 space-y-10"
+      noValidate
+    >
       {(["path", "cur", "ref", "zack", "utm"] as const).map((k) => (
         <input key={k} type="hidden" name={k} value={params[k] ?? ""} />
       ))}
@@ -51,22 +74,45 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         />
       </Question>
 
-      <Question n={3} legend="Which AI agents do you use, or plan to?" hint="Choose any." error={e.agent ?? e.agentOther}>
+      <Question
+        n={3}
+        legend="Which AI agents do you use, or plan to?"
+        hint="Choose any. The star marks your primary agent, the one Roger sets you up with first."
+        error={e.agent ?? e.agentOther}
+      >
+        <input type="hidden" name="primary" value={primary} />
         <div className="grid gap-2 sm:grid-cols-2">
-          {[...agents, { value: "other", label: "Another one" }, { value: "not_sure", label: "Not sure yet" }].map((o) => (
-            <label key={o.value} className={choice}>
-              <input
-                type="checkbox"
-                name="agent"
-                value={o.value}
-                onChange={o.value === "other" ? (ev) => setOtherAgent(ev.currentTarget.checked) : undefined}
-                className="size-4 accent-accent"
-              />
-              {o.label}
-            </label>
-          ))}
+          {agentOptions.map((o) => {
+            const isTicked = ticked.includes(o.value);
+            const canLead = isTicked && o.value !== "not_sure";
+            return (
+              <div key={o.value} className={`${choice} justify-between`}>
+                <label className="flex min-h-10 flex-1 cursor-pointer items-center gap-3">
+                  <input type="checkbox" name="agent" value={o.value} onChange={(ev) => toggle(o.value, ev.currentTarget.checked)} className="size-4 accent-accent" />
+                  {o.label}
+                </label>
+                {canLead &&
+                  (o.value === primary ? (
+                    <span className="flex items-center gap-1 text-small font-[560] text-accent">
+                      <Star filled />
+                      Primary
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setChosen(o.value)}
+                      className="flex min-h-10 items-center gap-1 rounded-full px-2 text-small text-ink-2 hover:text-ink"
+                      aria-label={`Make ${o.label} your primary agent`}
+                    >
+                      <Star />
+                      Make primary
+                    </button>
+                  ))}
+              </div>
+            );
+          })}
         </div>
-        {otherAgent && (
+        {ticked.includes("other") && (
           <>
             <label htmlFor={`${id}-other`} className="mt-4 block text-small font-[560]">
               Which one?
@@ -88,7 +134,24 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         />
       </Question>
 
-      <Question n={5} legend="What do you most want help with?" hint="Choose any.">
+      <Question n={5} legend="Which level sounds most like you today?" hint="Pick the one that matches how you work most weeks." error={e.level}>
+        <div className="grid gap-2">
+          {agentLevels.map((l) => (
+            <label key={l.level} className={`${choice} items-start py-3`}>
+              <input type="radio" name="level" value={l.level} className="mt-1 size-4 shrink-0 accent-accent" />
+              <span>
+                <span className="block font-[560] text-ink">
+                  <span className="tabular">Level {l.level}</span> · {l.name}
+                </span>
+                <span className="block text-ink-2">{l.does}</span>
+                <span className="mt-1 block text-ink-2">Your role: {l.role}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </Question>
+
+      <Question n={6} legend="What do you most want help with?" hint="Choose any.">
         <div className="grid gap-2 sm:grid-cols-2">
           {categories.map((c) => (
             <label key={c} className={choice}>
@@ -99,7 +162,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         </div>
       </Question>
 
-      <Question n={6} legend="How do you feel about trying new software for work?" error={e.software}>
+      <Question n={7} legend="How do you feel about trying new software for work?" error={e.software}>
         <Radios
           name="software"
           options={[
@@ -129,7 +192,11 @@ const choice =
 function Question({ n, legend, hint, error, children }: { n: number; legend: string; hint?: string; error?: string; children: ReactNode }) {
   const errId = `q${n}-err`;
   return (
-    <fieldset aria-describedby={error ? errId : undefined} aria-invalid={error ? true : undefined}>
+    <fieldset
+      aria-describedby={error ? errId : undefined}
+      aria-invalid={error ? true : undefined}
+      className={error ? "rounded-[8px] outline outline-2 outline-offset-[10px] outline-error" : undefined}
+    >
       <legend className="text-title">
         <span className="tabular mr-2 text-ink-2">{n}.</span>
         {legend}
@@ -161,5 +228,13 @@ function Radios({ name, options, defaultValue }: { name: string; options: Option
         </label>
       ))}
     </div>
+  );
+}
+
+function Star({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" className="size-4" aria-hidden="true" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+      <path d="M10 2.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L10 14.4l-4.6 2.4.9-5.1-3.8-3.7 5.2-.8z" />
+    </svg>
   );
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { accountPath, decodeDraft, encodeDraft, type SignupDraft } from "./draft";
 
 const draft: SignupDraft = {
-  answers: { work: "real_estate", role: "Broker", uses: "not_yet", agents: ["not_sure"], agentOther: "", count: "none", help: [], software: "avoid" },
+  answers: { work: "real_estate", role: "Broker", uses: "not_yet", agents: ["not_sure"], agentOther: "", primary: "", level: 0, count: "none", help: [], software: "avoid" },
   path: "not_ready",
   continuedAnyway: true,
   source: "re",

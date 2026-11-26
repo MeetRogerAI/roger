@@ -10,6 +10,7 @@ function form(over: Record<string, string | string[]> = {}) {
     uses: "most_weeks",
     agent: "grok-bot",
     count: "1-2",
+    level: "3",
     help: ["Listings", "Client follow-up"],
     software: "if_shown",
     ...over,
@@ -52,7 +53,7 @@ describe("parseQuiz", () => {
     const fd = new FormData();
     const r = parseQuiz(fd, slugs);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["agent", "count", "role", "software", "uses", "work"]);
+    if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["agent", "count", "level", "role", "software", "uses", "work"]);
   });
 
   it("asks which agent when 'Another one' has no name", () => {
@@ -85,15 +86,43 @@ describe("parseQuiz", () => {
   });
 });
 
+describe("primary agent and level", () => {
+  it("keeps the agent marked primary when it is ticked", () => {
+    const r = parseQuiz(form({ agent: ["claude", "hark"], primary: "hark" }), slugs);
+    expect(r.ok && r.answers.primary).toBe("hark");
+    expect(r.ok && primaryAgent(r.answers)).toBe("hark");
+  });
+
+  it("ignores a primary that isn't ticked or is 'Not sure yet'", () => {
+    const r = parseQuiz(form({ agent: ["claude"], primary: "hark" }), slugs);
+    expect(r.ok && r.answers.primary).toBe("");
+    expect(r.ok && primaryAgent(r.answers)).toBe("claude");
+    const n = parseQuiz(form({ agent: "not_sure", primary: "not_sure" }), slugs);
+    expect(n.ok && n.answers.primary).toBe("");
+  });
+
+  it("uses the typed name when 'Another one' is primary", () => {
+    const r = parseQuiz(form({ agent: ["claude", "other"], agentOther: "Lindy", primary: "other" }), slugs);
+    expect(r.ok && primaryAgent(r.answers)).toBe("Lindy");
+  });
+
+  it("takes levels 0 to 8 only", () => {
+    const zero = parseQuiz(form({ level: "0" }), slugs);
+    expect(zero.ok && zero.answers.level).toBe(0);
+    expect(parseQuiz(form({ level: "8" }), slugs).ok).toBe(true);
+    for (const bad of ["9", "-1", "2.5", "x"]) expect(parseQuiz(form({ level: bad }), slugs).ok, bad).toBe(false);
+  });
+});
+
 describe("primaryAgent", () => {
   it("sets the account up for the first chosen agent that has a Zack file", () => {
-    expect(primaryAgent({ agents: ["other", "hark"], agentOther: "Lindy" })).toBe("hark");
-    expect(primaryAgent({ agents: ["claude", "hark"], agentOther: "" })).toBe("claude");
+    expect(primaryAgent({ agents: ["other", "hark"], agentOther: "Lindy", primary: "" })).toBe("hark");
+    expect(primaryAgent({ agents: ["claude", "hark"], agentOther: "", primary: "" })).toBe("claude");
   });
 
   it("falls back to the typed name, then 'not_sure'", () => {
-    expect(primaryAgent({ agents: ["other"], agentOther: "Lindy" })).toBe("Lindy");
-    expect(primaryAgent({ agents: ["instinct"], agentOther: "" })).toBe("instinct");
-    expect(primaryAgent({ agents: ["not_sure"], agentOther: "" })).toBe("not_sure");
+    expect(primaryAgent({ agents: ["other"], agentOther: "Lindy", primary: "" })).toBe("Lindy");
+    expect(primaryAgent({ agents: ["instinct"], agentOther: "", primary: "" })).toBe("instinct");
+    expect(primaryAgent({ agents: ["not_sure"], agentOther: "", primary: "" })).toBe("not_sure");
   });
 });
