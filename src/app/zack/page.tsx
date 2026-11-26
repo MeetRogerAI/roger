@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
-import { SiteNotBuilt } from "@/components/site/not-built";
+import { V1ZackPicker } from "@/components/site/v1/zack";
+import { zackMeta } from "@/lib/site/chrome";
 import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import HamptonPage, { metadata as hampton } from "../hampton/page";
 
 const site = getServedSite();
 
 // Under Circles, exactly the same page as /hampton, at its own link.
-// Under a site version this address is the free Zack run, which is not built yet.
+// Under a site version this address is the free Zack run (spec A.11): the agent picker, open to search.
 export const metadata: Metadata = isBuiltVersion(site)
-  ? { title: "Run Zack", robots: { index: false, follow: false }, alternates: { canonical: "/zack" } }
+  ? {
+      title: { absolute: zackMeta(site).title },
+      description: zackMeta(site).description,
+      alternates: { canonical: "/zack" },
+      openGraph: { url: "/zack", title: zackMeta(site).headline, description: zackMeta(site).description },
+    }
   : {
       ...hampton,
       alternates: { canonical: "/zack" },
@@ -16,6 +22,7 @@ export const metadata: Metadata = isBuiltVersion(site)
     };
 
 export default async function ZackPage() {
-  if (isBuiltVersion(site)) return <SiteNotBuilt version={site} page="Run Zack" />;
+  // v2 and v3 show v1's page until each has its own (U13, U17).
+  if (isBuiltVersion(site)) return <V1ZackPicker version={site} />;
   return HamptonPage();
 }

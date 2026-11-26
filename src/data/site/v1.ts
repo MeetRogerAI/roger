@@ -474,15 +474,104 @@ export const v1Agents = {
  * apart from `v1` for the same reason. The warning above the paste box is
  * `v1.zackWarning`, because shared behaviour needs it.
  */
+const zackTitle = "Run Zack on yourself first";
+const zackIntro = "Zack runs in your own agent account and writes up your best plays from the past seven days. Nothing is sent to Roger unless you paste it here.";
+
+/**
+ * In this object "[agent]" stands for the agent's name and "[max]" for the
+ * report's size limit. The page and the actions fill them in. They are not
+ * written {agent}, because names in braces are amounts from the settings.
+ */
 export const v1Zack = {
-  title: "Run Zack on yourself first",
+  /** The browser title, the search description and the shared link's one line. */
+  meta: { title: `Roger: ${zackTitle}`, headline: zackTitle, description: zackIntro },
+  title: zackTitle,
+  intro: zackIntro,
   steps: ["Pick your agent", "Your email", "Run Zack once", "Paste the report back"],
+  /** Read out before a step's number, for screen readers: "Step 3: Run Zack once". */
+  step: "Step",
   copyPrompt: "Copy",
+  copied: "Copied",
+  /** /zack: one entry per agent. */
+  picker: {
+    file: "Zack file for",
+    version: "Version",
+    choose: "Run Zack on [agent]",
+    noFile: "No Zack file yet. You start from the Hark file and ask [agent] to adapt it.",
+    chooseNoFile: "Adapt Zack for [agent]",
+  },
   notListed: {
     title: "Agent not listed?",
     body: "Start from the Hark file and ask your own agent to adapt it.",
+    link: "Start from the Hark file",
+    /** The name used in headings when the visitor's agent is not one we list. */
+    name: "your agent",
   },
-  afterPaste: { title: "Your top plays" },
+  /** /zack/[agent]: above the steps. */
+  agentPage: {
+    title: "Run Zack on [agent]",
+    back: "Pick another agent",
+    loading: "Loading your run…",
+  },
+  email: {
+    title: "Your email",
+    body: "Use the email you would sign up with. Your report can only be attached to an account with the same email.",
+    label: "Email address",
+    submit: "Show me the instructions",
+    pending: "Starting…",
+    invalid: "Enter a valid email address.",
+    limited: "Too many tries with this email. Try again in an hour.",
+    limitedHere: "Too many tries from here. Try again in an hour.",
+    /**
+     * Shown when the address holds a run link that opens nothing. One line for every cause, so it tells nobody
+     * whether the link was mistyped, replaced or used. It ends on a link to /signin: lead, then the link's words.
+     */
+    expired: "That run link is no longer active. Start again with the same email and you get a new one.",
+    expiredSignInLead: "Already use Roger?",
+    expiredSignIn: "Sign in",
+    started: "Your run is ready.",
+    continue: "Continue to the instructions",
+  },
+  noDatabase: "Saving is not switched on here yet, so a report cannot be pasted back. You can still read the instructions and run Zack.",
+  ourSide: "Something went wrong on our side. Try again in a minute.",
+  run: {
+    title: "Run Zack once",
+    fileLead: "Give [agent] the Zack file. Download it, or copy its text.",
+    fileName: "Zack The Collector for",
+    version: "Version",
+    download: "Download the file",
+    copyFile: "Copy the file",
+    adaptLead: "There is no Zack file for [agent] yet. Start from the Hark file and ask your own agent to adapt it with this prompt.",
+    adaptLabel: "Your agent",
+    adaptPlaceholder: "e.g. ChatGPT",
+    adaptBlank: "[INSERT AGENT]",
+    adaptPrompt:
+      "I want you to take the Zack The Collector file, and update it so that it works for [agent]. I then want you to create a .md file for my agent I can download and then do a test run and produce a markdown file",
+    adaptCopy: "Copy prompt",
+    adaptAfter: "That test run is your report. Skip the next prompt and paste the report below.",
+    promptLead: "Attach the file (or paste its text), then send this:",
+    prompt: "Run Zack the Collector now from the attached file and create a .md output file.",
+    comeBack: "When Zack finishes, come back and paste your report below. This page’s address holds your place, so you can bookmark it or leave the tab open.",
+  },
+  paste: {
+    title: "Paste the report back",
+    label: "Your Zack report",
+    submit: "Save my report",
+    pending: "Saving…",
+    empty: "Paste your report first.",
+    tooLong: "That is over [max] characters. Paste the run file only, without the matching profile.",
+    limited: "Too many tries. Try again in an hour.",
+    notSaved: "We could not save this report, because this run link is no longer active. Start again with your email, then paste the report there.",
+    startAgain: "Start again",
+  },
+  afterPaste: {
+    title: "Your top plays",
+    saved: "Your report is saved.",
+    noPlays: "We could not read the plays in your report. It is saved all the same.",
+    next: "Start with the same email and this report becomes your first run.",
+    already: "We have your report for this run. Pasting another replaces it.",
+    again: "Paste a different report",
+  },
 };
 
 export type V1Copy = typeof v1;

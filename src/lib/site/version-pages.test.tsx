@@ -53,12 +53,14 @@ describe("a site version before its pages are built", () => {
     expect(homeMetadata.alternates).toEqual({ canonical: "/" });
   });
 
-  it("serves a placeholder at /zack, not the Hampton page", async () => {
+  it("serves the free Zack run at /zack, open to search, not the Hampton page (U8)", async () => {
     const markup = await pageMarkup(<Zack />);
-    expect(markup).toContain("not built yet");
+    expect(markup).not.toContain("not built yet");
+    expect(markup).toContain("Run Zack on yourself first");
+    expect(markup).toContain('data-site="v1"');
     expect(markup).not.toContain("Zack The Collector Page");
     expect(zackMetadata.alternates).toEqual({ canonical: "/zack" });
-    expect(zackMetadata.robots).toEqual({ index: false, follow: false });
+    expect(zackMetadata.robots).toBeUndefined();
   });
 
   it("shows no Circles legal text at /privacy or /terms", async () => {

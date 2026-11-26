@@ -210,7 +210,8 @@ None block the build. Each has a default the plan uses until Peter says otherwis
 - KTD12. **The Zack free run stores as little as the spec allows.**
   - The server mints a token of the shape sign-up already accepts and writes `free_runs` in one statement.
   - A stored report is reachable only by its token. Paste-back finds its row by token alone, and no response ever returns an existing token.
-  - A repeat email-step submit for the same email and agent, on an unclaimed row, mints a new token and clears any stored report, so someone who knows an email can force a redo but can never read or attach another person's report. A claimed row gets the same neutral answer and no change.
+  - A repeat email-step submit for the same email and agent mints a new token and empties the row, claimed or not, so someone who knows an email can force a redo but can never read or attach another person's report. A claimed row is reset like any other: its report was copied into the account at the claim, so the row is only a marker, and treating it differently let an outsider tell which emails belong to customers.
+  - Accepted risks: a restart erases a pasted report that has not been claimed yet; a run token in a page address lets its holder replace an unclaimed report, never read it; and because the email is not verified, someone can start a run for another person's address and send them the sign-up link.
   - Unclaimed rows are deleted, and the report on claimed rows is cleared, once they pass the existing retention period, through the existing housekeeping job.
   - The token rides in the page address between steps.
   - "Top plays summarised" is a deterministic read of the report's play headings, with a plain message when none are found; no model is called.
@@ -593,8 +594,8 @@ Waits on: nothing.
 - A repeat email-step submit for an unclaimed email and agent keeps one row, issues a different token, and leaves the report empty; the old token no longer finds a row.
 - A paste-back with a valid token stores the report on that row; a paste-back with an unknown token stores nothing.
 - No action response for a repeat email contains the token that was issued before.
-- A submit for a claimed row changes nothing and returns the same answer as success.
-- The purge deletes an unclaimed row older than the retention period, clears the report on a claimed row of the same age, and leaves newer rows alone.
+- A submit for a claimed row resets it like any other: the same answer, the same empty run and the same next page as for a new email, and the run already attached to the account is untouched.
+- The purge deletes an unclaimed row older than the retention period, clears the report on a claimed row of the same age, deletes a claimed row whose account no longer exists, and leaves newer rows alone.
 - Two concurrent submits for the same email and agent leave exactly one row.
 - A report of 20,001 characters is refused with a message and the pasted text is returned to the form.
 - An empty report is refused with a message.

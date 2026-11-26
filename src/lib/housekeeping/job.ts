@@ -21,6 +21,7 @@ import { stripe } from "@/lib/billing/stripe";
 import { stripeGateway } from "@/lib/billing/gateway";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { purgeFreeRuns } from "@/lib/site/free-run";
 import { applyRetention, cleanUpExpired } from "./retention";
 import { closeTrialsWithNoList, sendTrialNudges, sendUploadReminders } from "./trial";
 import { finishCancellations } from "@/lib/billing/cancel";
@@ -41,13 +42,31 @@ import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from 
  */
 export const PASS_SECONDS = 240;
 export type PassContext = { /** Epoch ms. */ deadline: number; /** The real clock (tests that simulate time pass their own); defaults to now. */ realNow?: Date };
-export type HourlyTask = { name: string; run: (q: Query, d: ChargeDeps, ctx: PassContext) => Promise<unknown> };
+/**
+ * A task marked `always` needs neither the paid cycle nor Stripe, and runs in
+ * its place in the list even when the cycle is not live or Stripe is not set
+ * up. It is given only the settings and the time. Every other task runs only
+ * when both are there.
+ */
+export type AlwaysDeps = Pick<ChargeDeps, "settings" | "now">;
+export type HourlyTask =
+  | { name: string; always?: false; run: (q: Query, d: ChargeDeps, ctx: PassContext) => Promise<unknown> }
+  | { name: string; always: true; run: (q: Query, d: AlwaysDeps, ctx: PassContext) => Promise<unknown> };
+/** What a pass is given: the full set, or the same with no gateway when Stripe is not set up. */
+export type HourlyDeps = ChargeDeps | (Omit<ChargeDeps, "gw"> & { gw: null });
+
+export const CYCLE_NOT_LIVE = "The cycle is not live.";
+export const STRIPE_NOT_SET_UP = "Stripe is not configured.";
 
 export const HOURLY_TASKS: HourlyTask[] = [
   // Expired links, sessions, Google sign-in states and rate counters (the database's clock, never "as of").
   { name: "expired_cleanup", run: (q) => cleanUpExpired(q) },
   // Runs and unshared plays, the set number of days after access ends. Never ahead of the real clock.
   { name: "retention", run: (q, d) => applyRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())), retentionDays: d.settings.retentionDays }) },
+  // Free Zack runs from /zack, on the same period: unclaimed ones deleted, the report cleared on claimed ones, and claimed
+  // ones whose account is gone deleted. Never ahead of the real clock. The site can be live before the paid cycle is, so
+  // this one runs always.
+  { name: "free_run_purge", always: true, run: (q, d) => purgeFreeRuns(q, { now: new Date(Math.min(d.now.getTime(), Date.now())), retentionDays: d.settings.retentionDays }) },
   // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
   { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.
@@ -139,17 +158,25 @@ export async function reconcileStripe(q: Query, d: ChargeDeps, c: PassContext, g
   return out;
 }
 
-export async function runHourly(q: Query, d: ChargeDeps, tasks: HourlyTask[] = HOURLY_TASKS, o: { deadline?: number } = {}): Promise<Record<string, unknown>> {
+/**
+ * One pass over the tasks, in the list's order. With the cycle not live, or
+ * with no gateway, the answer is `skipped` with the reason, and only the
+ * tasks marked `always` have run: each is in the answer under its name.
+ */
+export async function runHourly(q: Query, d: HourlyDeps, tasks: HourlyTask[] = HOURLY_TASKS, o: { deadline?: number } = {}): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
-  if (!d.settings.cycleLive) return { skipped: "The cycle is not live." };
+  // The cycle is checked first, as it was when Stripe was the route's own check.
+  const full: ChargeDeps | null = d.gw && d.settings.cycleLive ? d : null;
+  if (!full) out.skipped = d.settings.cycleLive ? STRIPE_NOT_SET_UP : CYCLE_NOT_LIVE;
   const ctx: PassContext = { deadline: o.deadline ?? Date.now() + PASS_SECONDS * 1000 };
   for (const t of tasks) {
+    if (!t.always && !full) continue;
     if (Date.now() >= ctx.deadline) {
       out[t.name] = "out of time: next pass";
       continue;
     }
     try {
-      out[t.name] = await t.run(q, d, ctx);
+      out[t.name] = t.always ? await t.run(q, d, ctx) : full ? await t.run(q, full, ctx) : undefined;
     } catch (e) {
       console.error(`[hourly] ${t.name}`, e instanceof Error ? e.message : e);
       out[t.name] = { error: e instanceof Error ? e.message : String(e) };

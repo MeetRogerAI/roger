@@ -9,7 +9,7 @@
  * settings reader into the browser bundle.
  */
 import type { SharedCopy } from "@/data/site/copy-types";
-import { v1, v1Agents } from "@/data/site/v1";
+import { v1, v1Agents, v1Zack } from "@/data/site/v1";
 import { fillCopy, getAmounts, type Amounts } from "./amounts";
 import type { BuiltVersion } from "./version";
 
@@ -48,6 +48,11 @@ export function siteMeta(version: BuiltVersion): SharedCopy["meta"] {
 /** The same three for /agents, from that page's own copy. v2 and v3 use v1's until each has its own. */
 export function agentsMeta(version: BuiltVersion): SharedCopy["meta"] {
   return { v1: v1Agents, v2: v1Agents, v3: v1Agents }[version].meta;
+}
+
+/** The same three for /zack and /zack/[agent], from the free run's own copy. v2 and v3 use v1's until each has its own. */
+export function zackMeta(version: BuiltVersion): SharedCopy["meta"] {
+  return { v1: v1Zack, v2: v1Zack, v3: v1Zack }[version].meta;
 }
 
 /** The four reading pages, by their name in a version's copy. */
