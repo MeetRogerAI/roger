@@ -41,33 +41,48 @@ describe("the hourly pass", () => {
     await query("insert into free_runs (token, email, agent, created_at) values ('old-token-0000000', 'old@example.com', 'claude', $1)", [old]);
   }
   const purged = { deleted: 1, cleared: 0, orphaned: 0 };
+  const nothingExpired = { tokens: 0, sessions: 0, states: 0, counters: 0 };
 
-  it("purges free Zack runs while the cycle is not live, and runs nothing else", async () => {
+  it("purges free Zack runs while the cycle is not live, and runs nothing else but the expired clean-up", async () => {
     await oldFreeRun();
     const d = { gw: {} as BillingGateway, settings: mergeV3([{ key: "v3.cycleLive", value: false }]), now: new Date(), query, transport };
-    expect(await runHourly(query, d)).toEqual({ skipped: "The cycle is not live.", free_run_purge: purged });
+    expect(await runHourly(query, d)).toEqual({ skipped: "The cycle is not live.", expired_cleanup: nothingExpired, free_run_purge: purged });
     expect(await query("select 1 from free_runs")).toEqual([]);
   });
 
-  it("purges free Zack runs when Stripe is not set up, and runs nothing else", async () => {
+  it("purges free Zack runs when Stripe is not set up, and runs nothing else but the expired clean-up", async () => {
     await oldFreeRun();
     const d = { gw: null, settings, now: new Date(), query, transport };
-    expect(await runHourly(query, d)).toEqual({ skipped: "Stripe is not configured.", free_run_purge: purged });
+    expect(await runHourly(query, d)).toEqual({ skipped: "Stripe is not configured.", expired_cleanup: nothingExpired, free_run_purge: purged });
     expect(await query("select 1 from free_runs")).toEqual([]);
     // With neither, the cycle is the reason given, and the purge still runs.
     await oldFreeRun();
-    expect(await runHourly(query, { ...d, settings: mergeV3([]) })).toEqual({ skipped: "The cycle is not live.", free_run_purge: purged });
+    expect(await runHourly(query, { ...d, settings: mergeV3([]) })).toEqual({ skipped: "The cycle is not live.", expired_cleanup: nothingExpired, free_run_purge: purged });
   });
 
-  it("marks only the free-run purge to run always, and keeps it third in the list", () => {
-    expect(HOURLY_TASKS.filter((t) => t.always).map((t) => t.name)).toEqual(["free_run_purge"]);
+  it("removes the free Zack run's expired per-IP counters while the cycle is not live and Stripe is not set up", async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    const hourAhead = new Date(Date.now() + 3_600_000).toISOString();
+    await query(
+      "insert into rate_events (key, window_start, count, expires_at) values ('zack:run:ip:203.0.113.7', 1, 3, $1), ('zack:report:ip:203.0.113.7', 1, 1, $1), ('zack:run:ip:203.0.113.8', 2, 1, $2)",
+      [hourAgo, hourAhead],
+    );
+    const d = { gw: null, settings: mergeV3([{ key: "v3.cycleLive", value: false }]), now: new Date(), query, transport };
+    const out = await runHourly(query, d);
+    expect(out.expired_cleanup).toEqual({ ...nothingExpired, counters: 2 });
+    // A counter still inside its hour is kept, so the limit it enforces still holds.
+    expect(await query("select key from rate_events")).toEqual([{ key: "zack:run:ip:203.0.113.8" }]);
+  });
+
+  it("marks only the expired clean-up and the free-run purge to run always, and keeps their places in the list", () => {
+    expect(HOURLY_TASKS.filter((t) => t.always).map((t) => t.name)).toEqual(["expired_cleanup", "free_run_purge"]);
     expect(HOURLY_TASKS.slice(0, 4).map((t) => t.name)).toEqual(["expired_cleanup", "retention", "free_run_purge", "charge_takeover"]);
   });
 
   it("a failing free-run purge does not stop the tasks after it", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     // The real list, in its order, with the real purge. Every other task's work is replaced by a marker, so no task reaches Stripe.
-    const tasks: HourlyTask[] = HOURLY_TASKS.map((t) => (t.always ? t : { name: t.name, run: async () => "ran" }));
+    const tasks: HourlyTask[] = HOURLY_TASKS.map((t) => (t.name === "free_run_purge" ? t : { name: t.name, always: t.always, run: async () => "ran" } as HourlyTask));
     const failing: Query = <T>(text: string, params?: unknown[]) => (/free_runs/.test(text) ? Promise.reject(new Error("db blip")) : query<T>(text, params));
     const d = { gw: {} as BillingGateway, settings, now: new Date(), query, transport };
     const out = await runHourly(failing, d, tasks);
@@ -77,8 +92,8 @@ describe("the hourly pass", () => {
     expect(after.length).toBeGreaterThan(10);
     for (const name of after) expect(out[name], name).toBe("ran");
     expect(Object.keys(out)).toEqual(names);
-    // The same when it is the only task that runs.
-    expect(await runHourly(failing, { ...d, gw: null }, tasks)).toEqual({ skipped: "Stripe is not configured.", free_run_purge: { error: "db blip" } });
+    // The same when only the tasks that always run do.
+    expect(await runHourly(failing, { ...d, gw: null }, tasks)).toEqual({ skipped: "Stripe is not configured.", expired_cleanup: "ran", free_run_purge: { error: "db blip" } });
     logged.mockRestore();
   });
 

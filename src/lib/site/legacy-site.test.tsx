@@ -59,6 +59,27 @@ describe("the legacy site's footer", () => {
   });
 });
 
+describe("/privacy and /terms on the legacy site", () => {
+  it("render the setup-era documents with the metadata they had before a site version had its own (U9)", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/site/version", async (orig) => ({ ...(await orig<typeof import("@/lib/site/version")>()), getServedSite: () => "legacy" }));
+    try {
+      const { default: Privacy, metadata: privacyMetadata } = await import("@/app/privacy/page");
+      const { default: Terms, metadata: termsMetadata } = await import("@/app/terms/page");
+      const { LegalPage } = await import("@/components/legal-page");
+      const { privacy, terms } = await import("@/data/legal");
+      expect(await pageMarkup(<Privacy />)).toBe(await pageMarkup(<LegalPage doc={privacy} />));
+      expect(await pageMarkup(<Terms />)).toBe(await pageMarkup(<LegalPage doc={terms} />));
+      expect(await pageMarkup(<Terms />)).toContain("These terms cover the setups we sell on this site.");
+      expect(privacyMetadata).toEqual({ title: "Privacy", description: "What Roger collects, why, and what stays in your browser.", alternates: { canonical: "/privacy" } });
+      expect(termsMetadata).toEqual({ title: "Terms", description: "The plain-language terms for Roger setups.", alternates: { canonical: "/terms" } });
+    } finally {
+      vi.doUnmock("@/lib/site/version");
+      vi.resetModules();
+    }
+  });
+});
+
 describe("/apply on the legacy site", () => {
   it("is not found, as it was before the resolver", () => {
     const flags = siteConfig.flags as { circlesMode: boolean };

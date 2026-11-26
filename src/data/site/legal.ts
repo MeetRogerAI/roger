@@ -1,0 +1,224 @@
+/**
+ * Privacy and terms for a built site version (plan U9, spec A.13). Both are
+ * drafts until Peter has them read: the pages render them with the "Draft,
+ * under review." note.
+ *
+ * Each sentence states something the spec, the plan or the code says, and
+ * nothing else. What was left out because no source states it is listed in
+ * docs/site/v1-copy-changes.md.
+ *
+ * Amounts are never typed here. A line names them in braces, as the page copy
+ * in ./v1.ts does, and `siteLegal` fills them from the settings. The period
+ * runs are kept for is {retentionDays}: the same setting the housekeeping job
+ * uses for a user's runs and for free Zack runs.
+ *
+ * Vocabulary (spec 0.4): "agent" never appears without "AI" in front. A test
+ * holds both documents to it.
+ */
+import { siteConfig } from "@/data/config";
+import type { LegalDoc } from "@/data/legal";
+import { fillCopy, type Amounts } from "@/lib/site/amounts";
+
+const email = siteConfig.contactEmail;
+
+/**
+ * TODO(Peter): the model provider's position on training is not confirmed.
+ * Spec A.13 says to state it once Peter confirms it. Until then this sentence
+ * says only that it is being confirmed. Replace it with the confirmed position
+ * before a version goes live. It must not state or imply a position before then.
+ */
+export const trainingPosition = "We are confirming the model provider’s position on training its models, and will state it here.";
+
+/**
+ * The three passages kept from the privacy text the site already had (spec
+ * A.13: "The existing passages on the library, watches, and analytics, kept as
+ * they are"). The library and watch passages are from `circlesPrivacyPreview`
+ * in src/data/circles-legal.ts, and the analytics passage is from `privacy` in
+ * src/data/legal.ts. The watch passage is word for word but for its opening.
+ * Its first sentence, "The library's optional watch sign-up is separate from
+ * Circles.", is left out because a site version has no Circles, and the "It"
+ * that began the next sentence is replaced by the subject of the dropped one,
+ * "The library's optional watch sign-up", so the passage still says what
+ * collects the email. A test compares all three with their sources.
+ */
+const keptPassages: LegalDoc["sections"] = [
+  {
+    id: "library",
+    heading: "The public library",
+    body: ["The library summarises public posts in Roger's own words and links to the original. It shows the author's public handle. Email us if you want a post of yours removed."],
+  },
+  {
+    id: "watches",
+    heading: "Existing library sign-ups",
+    body: [
+      "The library's optional watch sign-up collects the email and search you provide so Roger can send matching use cases. Each watch email includes a way to stop. The site runs on Vercel, its database is hosted by Neon, and email is sent through Resend. These services may store information outside Canada.",
+    ],
+  },
+  { id: "analytics", heading: "Analytics", body: ["This site doesn’t run analytics right now. If we turn it on, this page will say so first."] },
+];
+
+const privacyIntro = "Roger is run from Toronto. We’re responsible for the personal information Roger collects. Here is what we collect, what happens to it and who holds it, in plain language.";
+
+export const sitePrivacy: LegalDoc = {
+  title: "Privacy",
+  updated: "November 2026",
+  intro: privacyIntro,
+  sections: [
+    {
+      id: "sign-up",
+      heading: "What sign-up collects",
+      body: [
+        "When you sign up we collect your name, your email address, your answers to the sign-up quiz, the AI agent you use, your country and your time zone.",
+        "Your quiz answers become the profile Cora uses to match ideas to you.",
+      ],
+    },
+    {
+      id: "card",
+      heading: "Your card",
+      body: ["Your card is collected by Stripe. Roger never sees the card number."],
+    },
+    {
+      id: "zack",
+      heading: "What Zack does",
+      body: [
+        "Zack is an AI agent that runs in your own AI agent account. It reads the past seven days of activity across that account, including work finished in that time. It also reads the list of what the account has set up, such as its skills, scheduled tasks and connected services, and the notes file your AI agent keeps about the Roger ideas it has installed, from which it reports on ideas from the past eight weeks.",
+        "Zack is instructed to remove private details before it writes its report, and Roger checks again when the report arrives. Zack sends two files to Roger each week, because you agreed to that when you signed up: the report, and a private matching profile.",
+        "The matching profile describes, in general words, the kind of work you do, what your AI agent account has set up, the public services connected to it by name, where your week still took effort, and what became of earlier Roger ideas. Roger uses it to match ideas to you. It is not shared with other users. It is sent on the share and matching only settings. Its contents are erased when you delete the run it came with, and with your runs after your access ends.",
+        "You can read the instructions your Zack runs, change what it collects and turn sharing off, all in your dashboard.",
+        "Sharing has three settings: share with the pool, use for your own matching only, or Zack off. On matching only, Zack still sends both files; they are used to choose your ideas and none of your plays are shared. With Zack off, Zack is told to send nothing, except in a test run you start yourself, which still sends and is never shared. On monthly, matching only and Zack off both bring the higher monthly rate, which the Terms describe.",
+      ],
+    },
+    {
+      id: "runs",
+      heading: "What happens to a run",
+      body: [
+        "When a run reaches Roger it is stored as it arrived. It is then checked again for private details before any of its plays are shared.",
+        "It is processed by Cora, an AI system, through a model provider. Cora scores plays and picks the ideas each user receives.",
+        "Roger’s team can read a run, and reviews any play the check flags before it is shared.",
+        trainingPosition,
+      ],
+    },
+    {
+      id: "other-users",
+      heading: "What other users see",
+      body: ["Other Roger users see anonymous plays only. Roger never shows who a play came from."],
+    },
+    {
+      id: "retention",
+      heading: "How long we keep your runs",
+      body: [
+        "We keep your runs while you have access to Roger, and for {retentionDays} days after your access ends. Cancelling does not delete your account.",
+        "After that period the text of each run and its matching profile are erased, and plays that were never shared are deleted. An empty record of each run stays until your account is deleted: its week, how it arrived, the AI agent it came from and when it arrived.",
+        "You can delete any run from your dashboard.",
+        "Plays already shared stay in the pool. Other users see nothing that identifies you. Roger keeps your own copy of each shared play until your account is deleted, and a private record of which account a shared play came from, so that Cora does not send it back to you.",
+      ],
+    },
+    {
+      id: "free-run",
+      heading: "The free Zack run",
+      body: [
+        "The free Zack run at /zack is separate from sign-up. It stores the email you give, the AI agent you choose and the report you paste. To limit misuse, it also keeps a count of requests from your IP address. Each count covers one hour and is removed by an hourly clean-up after that hour ends.",
+        "Your report may be read by Roger’s team and by Cora, Roger’s ranking AI system.",
+        "It is attached to an account only if you go on to sign up from that run with the same email. It then becomes your first run and is treated like any other run: with sharing on, which is how every account starts, its plays are shared with other users in anonymous form.",
+        "If you do not sign up, the free run is deleted {retentionDays} days after you started it. If you do sign up, the copy of the report kept with the free run is cleared after the same {retentionDays} days. The email and the AI agent stay on that record until your account is deleted.",
+        "The run is reached by the link in your browser’s address bar. The run link works for anyone who has it, so do not share it. Anyone with the link can replace the report, and anyone who enters your email at /zack with the same AI agent can start the run again, which replaces the earlier run and its report. Neither can read a report you pasted.",
+      ],
+    },
+    ...keptPassages,
+    {
+      id: "services",
+      heading: "The services that hold your data",
+      body: [
+        "These services hold or process what this page describes: Vercel, which runs the site and passes Roger’s requests to the model provider; Neon, which hosts the database; Resend, which sends email; Stripe, which collects your card; Google, if you sign in with Google; and the model provider Cora runs through.",
+        "Some of them store data outside Canada.",
+      ],
+    },
+    {
+      id: "your-data",
+      heading: "Asking what we hold, correcting it or deleting it",
+      body: [`Email ${email} to ask what we hold about you, to have it corrected or to have it deleted. We will answer within 30 days.`],
+    },
+  ],
+};
+
+const termsIntro =
+  "These terms cover Roger: the free trial, the price and the ideas we send you each Monday. We’ve kept them short and plain. “We”, “us” and “our” means Roger, run from Toronto, Ontario. “You” means the person who signs up.";
+
+export const siteTerms: LegalDoc = {
+  title: "Terms",
+  updated: "November 2026",
+  intro: termsIntro,
+  sections: [
+    {
+      id: "trial",
+      heading: "The free trial",
+      body: [
+        "Your first {freeLists} Monday lists are free. Only a list that is delivered to you counts as one of them.",
+        "We ask for a card when you sign up, and it is kept on file. It is not charged then.",
+        "On monthly, your card is charged with your {firstPaidList} list. On one list at a time, it is charged only when you order a list. Cancel before then and you pay nothing.",
+        "If no first list is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
+      ],
+    },
+    {
+      id: "price",
+      heading: "The price",
+      body: [
+        "Monthly costs {monthlyUsd} a month ({monthlyCad} in Canada). It is charged once a month and brings a list every Monday. A week has no list when Roger has no new ideas for you or the week fails on our side, and lists are held while a payment is unpaid.",
+        "One list at a time costs {listUsd} a list ({listCad} in Canada). You order a list for any Monday you want one, and you are charged only for the lists you order.",
+      ],
+    },
+    {
+      id: "contributing",
+      heading: "Contributing, and the higher monthly rate",
+      body: [
+        "Roger works because everyone’s Zack contributes. Everyone starts as a contributor.",
+        "On monthly, if Zack misses a week, the first miss each billing month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). A miss caused by Roger never counts. We email you both times.",
+        "If you set sharing to matching only or to Zack off in your dashboard, the monthly price is {higherUsd} a month ({higherCad} in Canada).",
+        "Those are the only two cases where the higher rate applies. It is not a plan you can choose.",
+        "Your subscription itself stays at the standard price. For a month at the higher rate, the difference is added to your next invoice as its own line.",
+        "One-at-a-time lists need that week’s Zack report. With Zack off, a list cannot be ordered.",
+      ],
+    },
+    {
+      id: "refunds",
+      heading: "Refunds and cancelling",
+      body: ["There are no refunds.", "You can cancel any time, in one click. Your access continues to the end of the month you have paid for."],
+    },
+    {
+      id: "tax",
+      heading: "Tax",
+      body: ["Prices are shown before tax. HST or other tax is added where it applies."],
+    },
+    {
+      id: "plays",
+      heading: "Your plays",
+      body: [
+        "Your plays are shared so that other users can use them. They are shared in anonymous form, without anything that identifies you.",
+        "You keep the right to your own work. You grant Roger the right to share the anonymised play.",
+      ],
+    },
+    {
+      id: "ideas",
+      heading: "The ideas",
+      body: ["The ideas Roger sends you are other people’s working methods. They are offered as they are, with no promise of a result."],
+    },
+    { id: "questions", heading: "Questions", body: [`Email us at ${email}.`] },
+  ],
+};
+
+export type SiteLegalName = "privacy" | "terms";
+
+/**
+ * Each page's browser title, search description and shared-link line: its own
+ * heading and its own first paragraph. Neither names an amount, so static
+ * metadata can read them.
+ */
+export const siteLegalMeta: Record<SiteLegalName, { title: string; headline: string; description: string }> = {
+  privacy: { title: "Roger: Privacy", headline: "Privacy", description: privacyIntro },
+  terms: { title: "Roger: Terms", headline: "Terms", description: termsIntro },
+};
+
+/** Both documents with every amount filled in, ready for a page. */
+export function siteLegal(amounts: Amounts): Record<SiteLegalName, LegalDoc> {
+  return { privacy: fillCopy(sitePrivacy, amounts), terms: fillCopy(siteTerms, amounts) };
+}

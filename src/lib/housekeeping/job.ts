@@ -59,8 +59,10 @@ export const CYCLE_NOT_LIVE = "The cycle is not live.";
 export const STRIPE_NOT_SET_UP = "Stripe is not configured.";
 
 export const HOURLY_TASKS: HourlyTask[] = [
-  // Expired links, sessions, Google sign-in states and rate counters (the database's clock, never "as of").
-  { name: "expired_cleanup", run: (q) => cleanUpExpired(q) },
+  // Expired links, sessions, Google sign-in states and rate counters (the database's clock, never "as of"). It only
+  // deletes rows already past their expiry, and the free Zack run's per-IP counters hold a visitor's IP address, so
+  // this one runs always: the site can be live before the paid cycle is.
+  { name: "expired_cleanup", always: true, run: (q) => cleanUpExpired(q) },
   // Runs and unshared plays, the set number of days after access ends. Never ahead of the real clock.
   { name: "retention", run: (q, d) => applyRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())), retentionDays: d.settings.retentionDays }) },
   // Free Zack runs from /zack, on the same period: unclaimed ones deleted, the report cleared on claimed ones, and claimed

@@ -277,6 +277,124 @@ The Wednesday paragraph does not mention the Wednesday numbers email, because th
 
 The Trigger note says only "What starts it." The spec names the part without saying what a trigger can be, so the note does not list kinds of trigger.
 
+**`/library`, the band above the footer** (spec A.12)
+
+The sentence is the spec's, word for word: "This is what people post in public. Roger sends you what works in private." Under it is the primary button, "Get two free Monday lists", and under that the trial line, as in the closing band of the homepage. No new wording. The library's cards carry no link to `/setup`.
+
+**`/privacy` and `/terms`, the drafts** (spec A.13 lists what each must say; none of the text is written)
+
+Both documents are new wording, written from the spec's two lists, the design spec's decisions (0.2) and the code. Both are dated November 2026 and both show the note "Draft, under review." at the top. Peter has not read either. They are in `src/data/site/legal.ts`. Under Circles and the legacy site, `/privacy` and `/terms` are unchanged.
+
+Every amount is filled from the settings: the six prices, the number of free lists, the 21 days and the 90 days runs are kept for. The 90 days is the `v3.retentionDays` setting, which is also what the hourly job uses to remove a user's runs and to remove free Zack runs, so the page and the job read one number (for up to a few minutes after the setting changes they can still differ: see 6.4). Each US price has the Canadian one beside it, as in "US$200 a month (CA$280 in Canada)".
+
+Privacy, by section:
+
+1. What sign-up collects
+2. Your card
+3. What Zack does
+4. What happens to a run
+5. What other users see
+6. How long we keep your runs
+7. The free Zack run
+8. The public library
+9. Existing library sign-ups
+10. Analytics
+11. The services that hold your data
+12. Asking what we hold, correcting it or deleting it
+
+Terms, by section:
+
+1. The free trial
+2. The price
+3. Contributing, and the higher monthly rate
+4. Refunds and cancelling
+5. Tax
+6. Your plays
+7. The ideas
+8. Questions
+
+Statements that go beyond the spec's two lists, each from another source:
+
+| Statement | Source |
+|---|---|
+| "Your quiz answers become the profile Cora uses to match ideas to you." | Design spec 0.2, "Sign-up quiz". |
+| "Sharing has three settings: share with the pool, use for your own matching only, or Zack off. On matching only, Zack still sends both files; they are used to choose your ideas and none of your plays are shared. With Zack off, Zack is told to send nothing, except in a test run you start yourself, which still sends and is never shared." | Design spec B, the sharing control and acceptance item 8, and `src/lib/zack/instructions.ts`. It is there because "turn sharing off" alone would let a reader think nothing is sent on "matching only". |
+| "Cora scores plays and picks the ideas each user receives." | The site's own copy. |
+| The free Zack run: what is stored, who may read it, when it is attached and what happens then, when it is deleted, who can replace a report, and that the link should not be shared. | Plan KTD12, `src/lib/site/free-run.ts`, `src/app/zack/actions.ts` and `src/lib/zack/receive.ts`. "Roger’s team and by Cora" is from the spec's warning line (A.11), with "ranking agent" written "ranking AI system". See the corrections below. |
+| "Only a list that is delivered to you counts as one of them." and "It is not charged then." | Design spec 0.2, "What counts as a free run", and the `/how-it-works` copy. |
+| "Everyone starts as a contributor.", "A miss caused by Roger never counts.", "It is not a plan you can choose." | Design spec 0.2, "The higher rate" and "Contributor rule". |
+| "Your subscription itself stays at the standard price. For a month at the higher rate, the difference is added to your next invoice as its own line." | Design spec B, "How the higher rate is billed". |
+| "One-at-a-time lists need that week’s Zack report. With Zack off, a list cannot be ordered." | The first sentence is the `/pricing` copy, word for word. The second is design spec B.9 ("It needs sharing switched on") and `src/lib/billing/orders.ts`, which refuses the order. |
+| "in one click", and "Your access continues to the end of the month you have paid for." | Design spec 0.2, "Refunds", and the cancel rule in B. |
+| "Prices are shown before tax. HST or other tax is added where it applies." | Design spec 0.2, "Sales tax". |
+
+**The three passages kept from the earlier privacy text.** The spec says the passages on the library, watches and analytics stay as they are. "The public library" and "Existing library sign-ups" are copied from the Circles privacy preview, and "Analytics" from the setup-era privacy text. Two are word for word. One sentence is left out of the third: the watch passage began "The library's optional watch sign-up is separate from Circles.", and a site version has no Circles. The rest of that passage is unchanged, and so is its heading. A test compares all three with their sources. Without its first sentence the passage opened on "It collects the email and search you provide", with nothing to say what "it" was. In code review on November 26, 2026 the "It" was replaced by the subject of the dropped sentence, so the passage now opens "The library's optional watch sign-up collects the email and search you provide so Roger can send matching use cases." No other word of the passage is changed, and the test pins exactly that difference.
+
+**Corrections made in code review, November 26, 2026.** An accuracy audit compared every sentence of both drafts with the spec and with what the code does. Where a sentence, or the spec sentence it was copied from, said something the code or the Zack instructions do not do, it now says what happens. Peter has not read these. Each has a test in `src/data/site/legal.test.ts` that fails if the correction is removed.
+
+Privacy:
+
+| # | Spec or draft wording | Corrected wording | The fact behind it |
+|---|---|---|---|
+| 1 | "It reads only that account’s activity from the past seven days." (spec A.13) | "It reads the past seven days of activity across that account, including work finished in that time. It also reads the list of what the account has set up, such as its skills, scheduled tasks and connected services, and the notes file your AI agent keeps about the Roger ideas it has installed, from which it reports on ideas from the past eight weeks." | The connected instructions in `content/zack/claude.md`, `duet.md`, `grok-bot.md` and `hark.md`: security rule 3 and "What Zack reads" (the week's activity with finished work, the setup list, "Roger Upgrade Notes"), and "Past ideas" in the profile ("from the past 8 weeks"). The four files name the setup list's parts differently (projects on Claude, bots on Grok Bot, specialties on Hark), so the sentence gives the parts they share. See 6.4. |
+| 2 | "Zack removes private details before it writes its report." (spec A.13) | "Zack is instructed to remove private details before it writes its report, and Roger checks again when the report arrives." | Zack is instructions the user's own AI agent follows. `src/lib/intake/process.ts` checks every play again and flags what it is unsure of. |
+| 3 | "It sends that report to Roger each week, because you agreed to that when you signed up." | "Zack sends two files to Roger each week, because you agreed to that when you signed up: the report, and a private matching profile." Then: "The matching profile describes, in general words, the kind of work you do, what your AI agent account has set up, the public services connected to it by name, where your week still took effort, and what became of earlier Roger ideas. Roger uses it to match ideas to you. It is not shared with other users. It is sent on the share and matching only settings. Its contents are erased when you delete the run it came with, and with your runs after your access ends." | Two send addresses in `src/lib/zack/instructions.ts`; the `zack_profiles` table in `db/schema.sql`; what it holds in `content/zack/claude.md`, "The private matching profile"; read for picking in `src/lib/cora/context.ts`; sent on matching only by `src/lib/zack/rules.ts`; erased by `deleteRun` in `src/lib/zack/settings.ts` and by `src/lib/housekeeping/retention.ts`. |
+| 4 | "When a run reaches Roger, it is checked again for private details and then stored." | "When a run reaches Roger it is stored as it arrived. It is then checked again for private details before any of its plays are shared." | `storeReport` in `src/lib/zack/receive.ts` writes the text first; intake runs afterwards and never rewrites the stored text. |
+| 5 | (nothing) | "Roger’s team can read a run, and reviews any play the check flags before it is shared." | `src/lib/admin/runs.ts` returns a run's text; `src/lib/admin/flags.ts` is the review queue. |
+| 6 | "Plays already shared stay in the pool, without anything that identifies you." | "Plays already shared stay in the pool. Other users see nothing that identifies you. Roger keeps your own copy of each shared play until your account is deleted, and a private record of which account a shared play came from, so that Cora does not send it back to you." | The user's `plays` row stays while it has a pool play, and goes with the account (`db/schema.sql`, `on delete cascade`). `pool_play_contributors` holds the account's id (`src/lib/cora/merge.ts`, read in `src/lib/cora/context.ts`). The sentence gives no end date for that record because the code has none: see 6.4. |
+| 7 | "On matching only, your run is used to choose your ideas and none of your plays are shared. With Zack off, Zack is told to send nothing. The Terms say what turning sharing off does to the monthly price." | The sharing sentences in the table above, then: "On monthly, matching only and Zack off both bring the higher monthly rate, which the Terms describe." | `recordWeek` in `src/lib/billing/contribution.ts` and `src/lib/zack/sharing-effect.ts`: any setting but "share" is the higher band. A test run sends with sharing off (`buildInstructions` in `src/lib/zack/instructions.ts`) and is never shareable (`src/lib/intake/process.ts`). |
+| 8 | "We keep your runs while you subscribe, and for 90 days after." | "We keep your runs while you have access to Roger, and for 90 days after your access ends. Cancelling does not delete your account." Then: "After that period the text of each run and its matching profile are erased, and plays that were never shared are deleted. An empty record of each run stays until your account is deleted: its week, how it arrived, the AI agent it came from and when it arrived." | `src/lib/housekeeping/retention.ts` counts from `access_ends_at`, which also covers trial and one-at-a-time users, and leaves the run row as an empty stub. Only `deleteAccount` in `src/lib/admin/users.ts` deletes an account, and only a closed one. |
+| 9a | "It stores three things: the email you give, the AI agent you choose and the report you paste." | "It stores the email you give, the AI agent you choose and the report you paste. To limit misuse, it also keeps a count of requests from your IP address. Each count covers one hour and is removed by an hourly clean-up after that hour ends." | `src/app/zack/actions.ts` counts starts and pastes under a key that holds the IP address (`src/lib/rate-limit.ts`, one-hour windows). `cleanUpExpired` in `src/lib/housekeeping/retention.ts` deletes expired counters, and now runs before the paid cycle is live (below). |
+| 9b | "Your report is read by Roger’s team and by Cora, Roger’s ranking AI system. It is never published." (spec A.11) | "Your report may be read by Roger’s team and by Cora, Roger’s ranking AI system." | No code reads a report nobody signed up from. "Never published" is dropped because the next sentence says its plays can be shared. |
+| 9c | "It is then copied into your account as your first run, and kept like any other run." | "It then becomes your first run and is treated like any other run: with sharing on, which is how every account starts, its plays are shared with other users in anonymous form." | `claimFreeRun` in `src/lib/zack/receive.ts` stores it with the account's sharing setting, which defaults to "share" (`db/schema.sql`). |
+| 9d | "The email and the AI agent stay on that record while your account exists." | "… until your account is deleted." | `purgeFreeRuns` in `src/lib/site/free-run.ts` deletes the row once its account is gone. Cancelling does not delete an account. |
+| 9e | "If you start the free run again with the same email and the same AI agent, the earlier run and its report are replaced." | "The run is reached by the link in your browser’s address bar. The run link works for anyone who has it, so do not share it. Anyone with the link can replace the report, and anyone who enters your email at /zack with the same AI agent can start the run again, which replaces the earlier run and its report. Neither can read a report you pasted." | `startRun`, `saveReport` and `readRun` in `src/lib/site/free-run.ts`: the email is not verified, a paste needs only the token, and no function returns a stored report. |
+| 10 | "They never see who a play came from." (spec A.13) | "Roger never shows who a play came from." | Roger attaches no name. Whether a playbook's own words give someone away depends on Zack and the checks. |
+| 11 | "Vercel, which runs the site; … Google, for sign-in with Google and for Meet" (spec A.13) | "Vercel, which runs the site and passes Roger’s requests to the model provider; … Google, if you sign in with Google" | Sign-in with Google is in `src/lib/auth/google.ts`. No Meet feature is in the code: the spec lists Meet for the weekly group session, which belongs to a later version, and the entry goes back in with it. Model calls use the AI SDK with a provider-and-model name and no provider key (`src/lib/intake/model.ts`, `src/lib/cora/merge.ts`, `src/lib/cora/fit.ts`), which sends them through the Vercel AI Gateway (`src/lib/ai/errors.ts`, design spec B.7). Whoever owns the gateway account should confirm the wording. |
+| 12 | The watch passage's opening "It" | "The library's optional watch sign-up" | Above. |
+
+Terms:
+
+| # | Draft wording | Corrected wording | The fact behind it |
+|---|---|---|---|
+| 13 | "If you switch sharing off in your dashboard, the monthly price is US$400 a month (CA$560 in Canada)." | "If you set sharing to matching only or to Zack off in your dashboard, the monthly price is US$400 a month (CA$560 in Canada)." | As row 7. A user on matching only, whose Zack still runs, would not have read "sharing off" as theirs. The marketing pages still say "switch sharing off" (section 2.3). |
+| 14 | "It is charged once a month and brings a list every Monday." | The same, then: "A week has no list when Roger has no new ideas for you or the week fails on our side, and lists are held while a payment is unpaid." | Design spec B.7 ("No eligible plays", "When it fails") and B.9 (a failed charge, a renewal unpaid after seven days); `src/lib/cora/job.ts`, `src/lib/cora/send-job.ts` and `src/lib/billing/renewals.ts`. |
+| 16 | "One-at-a-time lists need that week’s Zack report." | The same, then: "With Zack off, a list cannot be ordered." | `placeOrder` in `src/lib/billing/orders.ts`. |
+
+Read and left as they are:
+
+- **"the difference is added to your next invoice as its own line"** (item 15). Design spec B.9 has two exceptions: a user not sharing at their first charge has the difference on that first invoice, and a second miss found less than three days before a renewal goes on the invoice after it. The sentence is right for every other month, and the user is emailed the date each time, so it is not changed. Peter may want the exceptions said.
+- **"(CA$280 in Canada)"** (item 17). Peter approved this pattern (section 2.3). It is not exact: the currency is the user's own choice at the card step of sign-up, offered by country and changeable there, and fixed once the card is saved (design spec B.4). A user in Canada who chose US dollars pays the US price. "CA$280 if you pay in Canadian dollars" would be exact.
+
+**Left out, because no source states it.** Nothing below is in either document. A lawyer reading the drafts will expect most of it.
+
+Privacy:
+
+- The model provider's name, and its position on training (section 6.3).
+- What Roger uses each piece of data for, beyond what the sections above say, and any statement that data is not sold.
+- Cookies and browser storage: the sign-in session cookie, and the currency choice, the audience and the campaign tags kept in the browser tab. The Circles preview has a currency passage; it was not one of the three the spec says to keep.
+- What a referral code or a campaign tag carries into sign-up.
+- The rate-limit records sign-in, sign-up and the card step keep, some of which hold an IP address. The free Zack run's are now stated.
+- When the record of which account a shared play came from is removed (6.4).
+- That Roger's team can read a matching profile. No admin page shows one today, so the draft does not say it.
+- What deleting an account removes. The design spec describes it (B.14), but the spec's list for this page does not ask for it.
+- Sign-up leads: what is kept about someone who starts sign-up and does not finish.
+- Which service stores data in which country.
+- Who the "30 days" promise is measured for. The draft says "We will answer within 30 days." The spec says only "with a 30-day promise", so whether the promise is to answer or to finish the correction or deletion is Peter's to settle.
+- A named privacy contact, the law the page is written under, a regulator, or a right to complain.
+- Children, and any minimum age.
+- How changes to the page are announced.
+
+Terms:
+
+- The governing law, a limit on liability, and how the terms change. The setup-era terms had all three; they described a different product and nothing in the v3 sources restates them.
+- Who may sign up, and what a user may not do with a playbook.
+- What happens to a list already ordered when a one-at-a-time user cancels.
+- The failed-payment retries, the hold on lists while a renewal is unpaid, and plan switches.
+- Which currency a user is charged in, and how it is chosen.
+- The referral credit, sponsor codes and the group session, which belong to a later version.
+- The number of misses forgiven is written as "the first miss each billing month", as the site's copy has it. It is a setting (`v3.forgivenMissesPerMonth`, 1 today) that no amount name covers, so this sentence would be wrong if the setting changed.
+
 ## 4. Choices made where the spec is silent
 
 - **Which six questions each page shows.** Homepage: "I don’t use AI agents yet. Can I start?", "What do I have to do each week?", "What does Zack read?", "Who sees my plays?", "What does it cost?", "When is my card charged?". `/agents`: "Which AI agents does Roger work with?", "What leaves my account?", "Can I see and change what Zack does?", "I compete with other people on Roger. What if I don’t want to share?", "Will an idea work on my AI agent if it came from a different one?", "When is my card charged?". `/faq` shows all eighteen.
@@ -327,6 +445,14 @@ Nothing was changed in the Zack files, and the sentence on the site is still the
 - **The free Zack run accepts 40,000 characters, not the spec's 20,000.** The spec sets 20,000 (A.11). Of the thirteen real reports in `artifacts/Zack Runs`, ten are longer than that: they run from about 8,500 to 33,200 characters, so the specified limit would have stopped most visitors at the paste step. The limit is 40,000, which clears the longest real report and stays inside the 80,000 that sign-up's own claim accepts. It is one number (`FREE_RUN_REPORT_CHARS` in `src/lib/site/free-run.ts`) if Peter wants another.
 - **The public Zack files call the reader "the member" and describe a collector and a circle** (6.1). `/zack` now sends visitors to those files, so the same correction covers this page.
 
+### 6.3 Privacy and terms are unreviewed drafts
+
+- **Both documents are drafts nobody has reviewed.** `/privacy` and `/terms` under a site version are written from the spec and the code (section 3) and show "Draft, under review." Peter has them read before a version goes live (plan R13, design spec "Needed from Peter", item 10). The note comes off by passing `reviewed` to `LegalPage` in `src/components/site/shared/site-legal.tsx`. The list of what was left out is in section 3.
+- **The model provider's position on training is not known.** The privacy page says only: "We are confirming the model provider’s position on training its models, and will state it here." That sentence must be replaced with the confirmed position. It is the constant `trainingPosition` in `src/data/site/legal.ts`, marked `TODO(Peter)`. Two tests pin the sentence word for word, and the word "train" to that one place on the page, so any new wording has to change the tests with it. The provider is not named on the page either.
+- **The privacy page and the Zack files must end up saying the same thing.** The privacy draft now says what the connected instructions read (6.4), and that runs are kept for 90 days after access ends. The public Zack files say other things about who receives a report and how long it is kept (12 months). Whatever settles 6.1 must leave the privacy page and the files in agreement.
+- **The watch passage has a new opening** (section 3), which Peter has not read.
+- **Both documents leave out things a privacy notice and terms normally contain.** They were written from the spec's two lists and the code, not from a legal checklist. The list of what is missing is in section 3, "Left out, because no source states it": for example what each piece of data is used for, cookies, the governing law and a limit on liability. Whoever reviews the drafts should start from that list.
+
 **The free Zack run: risks accepted in the plan (KTD12)**
 
 These follow from two choices: the run asks for an email and does not verify it, and a run is reached by the token in its page address and by nothing else. Peter should know them before a version goes live.
@@ -343,4 +469,27 @@ These follow from two choices: the run asks for an email and does not verify it,
 
 **The free Zack run: the per-IP limits count valid requests**
 
+These counters hold the visitor's IP address for an hour. The hourly task that deletes expired counters, links and sessions (`expired_cleanup` in `src/lib/housekeeping/job.ts`) ran only while the paid cycle was live, so before go-live the addresses would have been kept with no end. It now runs always, as the free-run purge does: it only deletes rows already past their expiry.
+
 The lesson on per-IP lockouts (`docs/solutions/security-issues/per-ip-lockout-blocks-everyone-behind-an-agent-platform-2026-11-22.md`) says to limit by IP only for failures, because many people can share one address: an agent platform, an office, a VPN. The two per-IP limits here (starts, and pastes) count every valid request and refuse the 101st in an hour from one address, so they depart from the letter of that lesson. They were kept because these two requests have no failure to count: a start succeeds for any well-formed email, and each one writes a row and can empty someone's run, so the limit is what stops a script doing that for a list of addresses. They are set at 100 an hour, twenty times the per-email limit of 5, and a test starts runs for twenty emails from one address. The per-IP limit is checked before the per-email one, so a start it refuses does not use up one of that email's tries. A badly formed email, an unknown agent, and an empty or over-long report are refused before anything is counted.
+
+### 6.4 What the accuracy audit of the privacy and terms drafts left open
+
+The corrections themselves are in section 3. These are what they leave for Peter or for the app.
+
+**(a) The marketing pages say less than the Zack instructions read.** The spec's sentence "Only your own activity inside your AI agent account, from the past seven days. He does not read your email, calendar or files." is the answer to "What does Zack read?" (homepage and `/faq`) and fills "What he reads" and "What he never reads" on `/how-it-works`. The connected instructions in `content/zack` read more: the list of what the account has set up (skills, scheduled tasks, connected services), the notes file "Roger Upgrade Notes", and from that file ideas from the past eight weeks. The week's activity they read includes finished work, "files, documents, decks, sheets". The privacy draft now says what the instructions say. The FAQ and `/how-it-works` still carry the spec wording, so the site contradicts itself until one changes: either the instructions are narrowed, or Peter approves a wider sentence for the marketing pages. This is on top of 6.1, which is about the public files in `public/zack`.
+
+**(b) "Zack removes private details" on the marketing pages is the same kind of absolute.** The privacy draft now says Zack "is instructed to remove" them and that Roger checks again. The marketing copy still states it as a fact: "with client details removed" (`/how-it-works`, Sunday), "private details replaced by placeholders" ("What leaves my account?" and "What he removes"). Zack is a set of instructions the user's own AI agent follows, and the app assumes it can miss, which is why intake checks again and holds unclear plays for a person. The spec also bans "legal assurances the product cannot back". Peter decides whether the marketing lines are softened the same way.
+
+**(c) App-side items the privacy and terms text now depends on.** None of these was changed by this work.
+
+- **The job that erases a departed user's runs runs only while the paid cycle is live.** The `retention` task in `src/lib/housekeeping/job.ts` is skipped while `v3.cycleLive` is off or Stripe is not set up. The privacy draft states the 90 days without that condition. It holds once the cycle is live, which is also when there are first users whose access can end.
+- **Nothing clears the cached settings when a v3 setting changes.** The page reads its amounts through a cache (`getAmounts` in `src/lib/site/amounts.ts`, five minutes) and the jobs read the settings directly, so for a few minutes after a change the page and the jobs can disagree about the retention period or a price.
+- **Shortening the retention setting applies to people who already left.** The job compares each user's access end with the setting as it is now, so a shorter period erases, at the next pass, the runs of users who left under the longer one.
+- **"The first miss each billing month is forgiven" is typed, and the number is a setting.** `v3.forgivenMissesPerMonth` is 1 today and can be set from 0 to 4 (`src/lib/v3-settings.ts`, read in `src/lib/billing/contribution.ts`). No amount name covers it, so the terms and the site copy turn false if it changes.
+- **A `v3.freeRuns` of 0 garbles the copy.** The amount names would read "Your first no Monday lists are free" and "charged with your first list".
+- **The record of which account a shared play came from is never removed.** `pool_play_contributors` holds the account's id as text, with no link to the `users` table, and no code deletes its rows: not the retention job, not deleting a run, and not deleting the account. The admin log keeps a deleted account's id beside its email (`deleteAccount` in `src/lib/admin/users.ts`), so the record can still be tied to a person after the account is gone. The privacy draft therefore says Roger keeps this record and gives it no end date. Design spec B.14 says a deleted account leaves nothing that points to a person. Either the rows are removed with the account, or the privacy text must say they are kept.
+- **A run's row is never fully removed while the account exists.** After retention or a delete, the row stays with its week, route, AI agent and times. The privacy draft now says so.
+- **The run history shows the newest 60 runs.** "You can delete any run from your dashboard" is true of those; an older run has no button (`listRuns` in `src/lib/zack/settings.ts`).
+
+**(d) Both documents are unreviewed drafts, and incomplete.** See 6.3. They omit things a privacy notice and terms normally contain; the list is in section 3, "Left out, because no source states it".

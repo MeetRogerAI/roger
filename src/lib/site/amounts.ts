@@ -1,6 +1,7 @@
 /**
  * Every amount the public site shows (plan KTD8, R8): prices, the higher rate,
- * the number of free lists and the days before an unused trial closes. They
+ * the number of free lists, the days before an unused trial closes and the
+ * days runs are kept (the privacy text states those). They
  * come from the v3 settings, never from a copy file. Copy names an amount in
  * braces, such as "{monthlyUsd} a month", and fillAmounts puts the value in.
  */
@@ -29,9 +30,11 @@ export type Amounts = {
   freeLists: number;
   /** Days a trial with no first list stays open. */
   trialCloseDays: number;
+  /** Days runs are kept after access ends, and a free Zack run after it starts. Stated in the privacy text only. */
+  retentionDays: number;
 };
 
-type AmountSettings = Pick<V3Settings, "priceUsd" | "priceCad" | "priceRunUsd" | "priceRunCad" | "priceHigherUsd" | "priceHigherCad" | "freeRuns" | "trialCloseDays">;
+type AmountSettings = Pick<V3Settings, "priceUsd" | "priceCad" | "priceRunUsd" | "priceRunCad" | "priceHigherUsd" | "priceHigherCad" | "freeRuns" | "trialCloseDays" | "retentionDays">;
 
 export function amountsFrom(s: AmountSettings): Amounts {
   return {
@@ -40,6 +43,7 @@ export function amountsFrom(s: AmountSettings): Amounts {
     higher: { USD: s.priceHigherUsd, CAD: s.priceHigherCad },
     freeLists: s.freeRuns,
     trialCloseDays: s.trialCloseDays,
+    retentionDays: s.retentionDays,
   };
 }
 
@@ -105,6 +109,8 @@ export function amountNames(a: Amounts) {
     lastFreeList: ordinals[a.freeLists - 1] ?? `${a.freeLists}th`,
     /** "21", as in "within 21 days". */
     trialCloseDays: String(a.trialCloseDays),
+    /** "90", as in "for 90 days after". */
+    retentionDays: String(a.retentionDays),
   };
 }
 

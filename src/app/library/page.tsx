@@ -6,6 +6,10 @@ import { StickyCta } from "@/components/client-boot";
 import { WatchSentence } from "@/components/home/watch-sentence";
 import { LibraryBrowser, LibraryStatic } from "@/components/library-browser";
 import { getUseCases } from "@/lib/library-source";
+import { ClosingBand } from "@/components/site/v1/blocks/closing-band";
+import { closingBandCopy, v1Copy } from "@/data/site/v1";
+import { getAmounts } from "@/lib/site/amounts";
+import type { BuiltVersion } from "@/lib/site/version";
 
 export const metadata: Metadata = {
   title: { absolute: "Real AI agent use cases · Roger" },
@@ -36,6 +40,21 @@ function SetUpBand() {
           Or a $500 custom setup
         </Link>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The one band a site version adds, above the footer (spec A.12): the library
+ * sentence, the primary start button and the trial line. The button has no
+ * audience, so it carries the one remembered from the homepage or /agents.
+ * v2 and v3 use v1's until each has its own.
+ */
+async function TrialBand({ version }: { version: BuiltVersion }) {
+  const { copy } = v1Copy(await getAmounts());
+  return (
+    <div data-site={version} data-library-band>
+      <ClosingBand id="library-band" copy={closingBandCopy(copy, copy.library.band)} />
     </div>
   );
 }
@@ -87,6 +106,8 @@ export default async function LibraryPage() {
         <p className="mt-6 max-w-[36rem] text-small text-ink-2">The morning someone’s agent does it, you get one email with the link. Every email has a link to stop.</p>
         </div>
       </section>
+
+      {isBuiltVersion(site) && <TrialBand version={site} />}
 
       {site === "legacy" && <StickyCta actions={[{ kind: "setupCall", label: "Book a free setup call" }]} />}
     </>

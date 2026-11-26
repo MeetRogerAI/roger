@@ -5,6 +5,8 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { pageMarkup } from "@/test-helpers/page-markup";
 import { nextHeaders, Redirected, resetNextFakes } from "@/test-helpers/next-fakes";
+import { v3Defaults } from "@/data/config";
+import { siteLegalMeta, trainingPosition } from "@/data/site/legal";
 
 vi.hoisted(() => {
   process.env.SITE_VERSION = "v1";
@@ -63,20 +65,52 @@ describe("a site version before its pages are built", () => {
     expect(zackMetadata.robots).toBeUndefined();
   });
 
-  it("shows no Circles legal text at /privacy or /terms", async () => {
+  it("serves the version's own privacy and terms drafts, with the draft note and no Circles text (U9)", async () => {
     for (const page of [<Privacy key="p" />, <Terms key="t" />]) {
       const markup = await pageMarkup(page);
-      expect(markup).toContain("not built yet");
+      expect(markup).not.toContain("not built yet");
       expect(markup).not.toContain("Circle");
+      expect(markup).toContain('data-site="v1"');
+      expect(markup).toContain('<p role="note"');
+      expect(markup).toContain("Draft, under review.");
+      expect(markup).toContain("Last updated <!-- -->November 2026");
+      expect(markup).not.toMatch(/\{\w+\}/);
     }
   });
 
-  it("keeps the /privacy and /terms placeholders out of search", () => {
-    expect(privacyMetadata.robots).toEqual({ index: false, follow: false });
-    expect(termsMetadata.robots).toEqual({ index: false, follow: false });
+  it("privacy names Vercel, Neon, Resend, Stripe and Google, and states the free run's period from the setting (U9)", async () => {
+    const markup = await pageMarkup(<Privacy />);
+    for (const name of ["Vercel", "Neon", "Resend", "Stripe", "Google"]) expect(markup, name).toContain(name);
+    expect(markup).toContain('<section id="free-run"');
+    expect(markup).toContain(`the free run is deleted ${v3Defaults.retentionDays} days after you started it`);
+    // The whole sentence, as the page prints it: it states no position.
+    expect(trainingPosition).toBe("We are confirming the model provider’s position on training its models, and will state it here.");
+    expect(markup).toContain(`>${trainingPosition}</p>`);
+    expect(markup.match(/\btrain\w*/gi)).toEqual(["training"]);
+  });
+
+  it("terms state the no-refund line and no amount that differs from the defaults (U9)", async () => {
+    const markup = await pageMarkup(<Terms />);
+    expect(markup).toContain("There are no refunds.");
+    const allowed = [v3Defaults.priceUsd, v3Defaults.priceRunUsd, v3Defaults.priceHigherUsd].map((n) => `US$${n}`).concat([v3Defaults.priceCad, v3Defaults.priceRunCad, v3Defaults.priceHigherCad].map((n) => `CA$${n}`));
+    const shown = markup.match(/(?:US|CA)\$[\d,]+/g) ?? [];
+    expect(shown.length).toBeGreaterThanOrEqual(8);
+    for (const amount of shown) expect(allowed, amount).toContain(amount);
+    // No "$" without its country.
+    expect(markup).not.toMatch(/(?<!US|CA)\$/);
+  });
+
+  it("opens /privacy and /terms to search, with each page's own title and description (U9)", () => {
+    expect(privacyMetadata.robots).toBeUndefined();
+    expect(termsMetadata.robots).toBeUndefined();
     expect(privacyMetadata.alternates).toEqual({ canonical: "/privacy" });
     expect(termsMetadata.alternates).toEqual({ canonical: "/terms" });
+    expect(privacyMetadata.title).toEqual({ absolute: "Roger: Privacy" });
+    expect(termsMetadata.title).toEqual({ absolute: "Roger: Terms" });
+    expect(privacyMetadata.description).toBe(siteLegalMeta.privacy.description);
+    expect(termsMetadata.description).toBe(siteLegalMeta.terms.description);
     expect(JSON.stringify([privacyMetadata, termsMetadata])).not.toContain("Circle");
+    expect(JSON.stringify([privacyMetadata, termsMetadata])).not.toContain("setups");
   });
 
   it("sends /apply to /start (covers AE10)", () => {
@@ -199,5 +233,27 @@ describe("a site version before its pages are built", () => {
     expect(markup.match(/<article/g)!.length).toBeGreaterThan(10);
     expect(markup).not.toContain("We can set this up");
     expect(markup).not.toContain("Apply for a founding Circle");
+    // No card links to /setup (spec A.12).
+    expect(hrefs(markup).filter((h) => h.startsWith("/setup"))).toEqual([]);
+    expect(markup).not.toContain("data-to-offer");
+  });
+
+  it("ends the library on one band: the sentence, the start button with no audience, and the trial line (U9)", async () => {
+    path = "/library";
+    const markup = await pageMarkup(<Library />);
+    const sentence = "This is what people post in public. Roger sends you what works in private.";
+    expect(markup.split(sentence)).toHaveLength(2);
+    expect(markup.match(/data-library-band/g)).toHaveLength(1);
+    const band = markup.slice(markup.indexOf("<div data-site=\"v1\" data-library-band"));
+    // The band is the last thing on the page, after the watch section.
+    expect(markup.indexOf("data-library-band")).toBeGreaterThan(markup.indexOf('id="watch"'));
+    expect(band).not.toContain("<article");
+    expect(band).toContain(sentence);
+    // One link, the primary button, to /start with nothing added on the server.
+    expect(hrefs(band)).toEqual(["/start"]);
+    expect(band).toContain('<a class="btn btn-l" href="/start">Get two free Monday lists</a>');
+    expect(band).toContain("Your first two Monday lists are free. We ask for a card when you start.");
+    // It is the page's only start link.
+    expect(hrefs(markup).filter((h) => h.startsWith("/start"))).toEqual(["/start"]);
   });
 });

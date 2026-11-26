@@ -1,23 +1,29 @@
-import { SiteNotBuilt } from "@/components/site/not-built";
-import { bySite, getServedSite, isBuiltVersion } from "@/lib/site/version";
+import { SiteLegalPage } from "@/components/site/shared/site-legal";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import { circlesTerms } from "@/data/circles-legal";
+import { siteLegalMeta } from "@/data/site/legal";
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
 import { terms } from "@/data/legal";
 
 const site = getServedSite();
 
-export const metadata: Metadata = {
-  title: "Terms",
-  description: bySite<string | undefined>(site, { circles: "Draft terms and the 45-day guarantee for Roger Circles.", built: undefined, legacy: "The plain-language terms for Roger setups." }),
-  alternates: { canonical: "/terms" },
-  // The placeholder stays out of search until the version's own terms are written.
-  ...(isBuiltVersion(site) ? { robots: { index: false, follow: false } } : {}),
-};
+// A site version has its own draft and its own words for search. Circles and the legacy site keep theirs.
+export const metadata: Metadata = isBuiltVersion(site)
+  ? {
+      title: { absolute: siteLegalMeta.terms.title },
+      description: siteLegalMeta.terms.description,
+      alternates: { canonical: "/terms" },
+      openGraph: { url: "/terms", title: siteLegalMeta.terms.headline, description: siteLegalMeta.terms.description },
+    }
+  : {
+      title: "Terms",
+      description: site === "circles" ? "Draft terms and the 45-day guarantee for Roger Circles." : "The plain-language terms for Roger setups.",
+      alternates: { canonical: "/terms" },
+    };
 
 export default function Page() {
   if (site === "circles") return <LegalPage doc={circlesTerms} reviewed={false} />;
-  // The Circles terms do not describe a site version, so nothing is shown until its own are written.
-  if (isBuiltVersion(site)) return <SiteNotBuilt version={site} page="Terms" />;
+  if (isBuiltVersion(site)) return <SiteLegalPage version={site} name="terms" />;
   return <LegalPage doc={terms} />;
 }
