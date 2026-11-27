@@ -8,10 +8,12 @@
   Published at https://claude.ai/artifact/PvCLU9uLcV2abfxwNqd7tE (republish this file there after editing).
 
   Three tabs:
-  - "PR #57" and "Everything else" are checklists. Each item is an <li class="item" data-id="...">.
+  - "PR #N" (the open PR) and "Everything else" are checklists. Each item is an <li class="item" data-id="...">.
     Ticks are NOT stored in this file. They live in the artifact's shared data, collection "checks",
     one document per item id ({done: true, by, at}). Read them with the ArtifactData tool (list "checks").
-    Items with data-gate="1" must all be ticked before PR #57 may be merged.
+    Items with data-gate="1" must all be ticked before the open PR may be merged; data-merge marks the merge item.
+    After every merge, REMOVE the items that are done and merged (and delete their "checks" docs), so the
+    list only shrinks (Peter, 2026-11-26). Done rows in the Reference tab are removed too.
     Never rename an item's data-id (its tick would be lost); add new items with new ids.
   - "Reference" keeps the detail rows. Rules for those rows:
   1. Read this file before starting work on any version (A1, A2, B1, B2, B3, B4).
@@ -30,7 +32,7 @@
      set data-status="confirmed" and the status cell to "Confirmed". When Peter changes one,
      set data-status="changed", write the new value in the Notes cell, and update the
      matching section of the spec and the setting or rule in code in the same change.
-  6. Never delete a row. Never renumber. Add new rows at the end of their table with the
+  6. Remove a row once it is done (Peter, 2026-11-26). Never renumber. Add new rows at the end of their table with the
      next number.
   7. The counts in the Reference tab are computed from data-status when the page is opened.
 -->
@@ -148,53 +150,36 @@
 <div class="wrap">
   <p class="eyebrow">Roger v3 · launch list</p>
   <h1>Roger v3 launch list</h1>
-  <p class="lead">Three tabs. <b>PR #57</b> is what to do before merging the payment change, and what it leaves for you before sign-up opens. <b>Everything else</b> is the rest of go-live, plus later versions. <b>Reference</b> keeps the full detail rows (S1 to S22, D1 to D12).</p>
-  <p class="meta">Updated November 26, 2026 for PR #57 (payment at the first Cora list) and spec 1.5 (Roger AI Levels and the build order) · Tick a box when it's done; ticks are saved on this page for everyone · Owner: Peter Kuperman</p>
 
   <div class="tabs" role="tablist" aria-label="Launch list sections">
-    <button class="tab" role="tab" id="tab-pr57" aria-controls="pr57" data-tab="pr57">PR #57<span class="count" data-count="pr57"></span></button>
+    <button class="tab" role="tab" id="tab-pr" aria-controls="pr" data-tab="pr">PR #58<span class="count" data-count="pr"></span></button>
     <button class="tab" role="tab" id="tab-golive" aria-controls="golive" data-tab="golive">Everything else<span class="count" data-count="golive"></span></button>
     <button class="tab" role="tab" id="tab-reference" aria-controls="reference" data-tab="reference">Reference</button>
   </div>
 
-  <section class="panel" id="pr57" role="tabpanel" aria-labelledby="tab-pr57">
-    <p class="panel-intro">PR #57 moves the card from sign-up to the moment the first Cora list is ready, and makes monthly the only plan. Merging it deploys meetroger.ai, but sign-up stays switched off in production, so members see nothing until you open it. <a class="tlink" href="https://github.com/MeetRogerAI/roger/pull/57">Open PR #57</a></p>
-    <div class="gate" id="merge-gate"><span class="dot"></span><div><b id="merge-gate-title">Not ready to merge yet</b><span id="merge-gate-text">Tick everything under "Before you merge" except the merge itself.</span></div></div>
+  <section class="panel" id="pr" role="tabpanel" aria-labelledby="tab-pr" data-pr="58">
+    <div class="gate" id="merge-gate"><span class="dot"></span><div><b id="merge-gate-title">Not ready to merge yet</b><span id="merge-gate-text"></span></div></div>
 
     <div class="group">
       <h2>Before you merge</h2>
-      <p class="sub">In this order. The new code needs the new database columns, so the database step comes before the merge.</p>
       <ul class="list" data-group="merge">
-        <li class="item" data-id="m-setup-preview" data-gate="1"><div class="what">Add the new columns to the preview database</div><div class="detail"><p>Done by Claude Code on November 26 (<code>db/setup.mjs</code> run twice on preview).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
-        <li class="item" data-id="m-setup-prod" data-gate="1"><div class="what">Add the new columns to the production database</div><div class="detail"><p>Run <code>node --env-file=&lt;production env file&gt; db/setup.mjs</code> twice; the second run should change nothing. Claude Code can do it if you put production's <code>DATABASE_URL</code> in a local env file and ask. There is no scenario-test database yet (Reference, S17), so nothing to run there.</p></div><div class="tags"><span class="tag who-you">You, or ask Claude Code</span></div></li>
-        <li class="item" data-id="m-verify-prod" data-gate="1"><div class="what">Check the columns are on production</div><div class="detail"><p>This query should return 16 rows. It is also in the PR description.</p><pre class="sql">select table_name, column_name from information_schema.columns
-where (table_name='users' and column_name in ('first_teaser_at','setup_session','promo_code','promo_coupon','promo_label','promo_refused_at','unlock_attempted_at','promo_ended_label','promo_duration','promo_duration_months','signup_finished_at','card_fingerprint'))
-   or (table_name='cora_user_weeks' and column_name='superseded_at')
-   or (table_name='charge_attempts' and column_name='coupon')
-   or (table_name='promo_reservations' and column_name in ('slot','card_fingerprint'));</pre></div><div class="tags"><span class="tag who-you">You, or ask Claude Code</span></div></li>
-        <li class="item" data-id="m-pk-preview" data-gate="1"><div class="what">Stripe publishable key on Vercel Preview</div><div class="detail"><p>Done by Claude Code on November 26 (the sandbox <code>pk_test_</code> key).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
-        <li class="item" data-id="m-pk-prod" data-gate="1"><div class="what">Add the live Stripe publishable key to Vercel Production</div><div class="detail"><p>In Stripe (live mode, not the sandbox): Developers, then API keys, then copy the <code>pk_live_</code> key. In Vercel: Settings, then Environment Variables, add <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> for Production only.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="m-browser" data-gate="1"><div class="what">Browser check of the Payment page on preview</div><div class="detail"><p>Done by Claude Code on November 26: tax line, a 3D Secure card, a declined card and a bad promo code all worked, after two fixes. Results are on the PR.</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
-        <li class="item" data-id="m-phone"><div class="what">Look at the Payment page on your phone</div><div class="detail"><p>The one thing the browser check could not cover. Sign in on preview as a test member (ask Claude Code for a fresh one) and check the summary bar, the card fields and the button at phone width.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
-        <li class="item" data-id="m-merge"><div class="what">Merge PR #57 into main</div><div class="detail"><p>Tell Claude Code "merge PR #57" once everything above is ticked. Vercel then deploys meetroger.ai. Sign-up stays off in production.</p></div><div class="tags"><span class="tag who-you">You say go</span><span class="tag who-claude">Claude Code merges</span></div></li>
+        <li class="item" data-id="pr58-preview" data-gate="1"><div class="what">Try the sign-up changes on preview</div><div class="detail"><p>Switching USD and CAD on Payment no longer reloads the card fields or says "Too many tries". Every sign-up step has a step bar; Step 2 has "Back to the questions" (your answers stay filled in); Payment has "Back to your first list" instead of "Not now". "Due today: $0". The preview link is on <a class="tlink" href="https://github.com/MeetRogerAI/roger/pull/58">PR #58</a>.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="pr58-merge" data-merge="1"><div class="what">Merge PR #58 into main</div><div class="detail"><p>Tell Claude Code "merge PR #58". Vercel then deploys meetroger.ai; sign-up stays off in production.</p></div><div class="tags"><span class="tag who-you">You say go</span><span class="tag who-claude">Claude Code merges</span></div></li>
       </ul>
     </div>
 
     <div class="group">
       <h2>Before sign-up opens</h2>
-      <p class="sub">These come from PR #57 but don't block the merge, because sign-up stays off. They do block opening sign-up.</p>
-      <ul class="list" data-group="after57">
-        <li class="item" data-id="s-wording"><div class="what">Sign off the new wording</div><div class="detail"><p>Step 3 "Product and Pricing", the welcome email, the "first list ready" email, the day 2 and day 7 reminders, the no-card closing email, the Payment page and the discount-length lines ("CA$56 off your first month, then CA$316.40 a month").</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="s-due-today"><div class="what">Choose "Due today: CA$0" or "Due today: $0"</div><div class="detail"><p>The page names the currency because every Roger price does. Your original request said "$0".</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="s-terms"><div class="what">Add a monthly "no refunds, cancel any time" section to the terms</div><div class="detail"><p>The Payment page's "Terms and refunds" link goes to <code>/terms</code>, which still holds the old setups terms with a 14-day money-back guarantee. Claude Code can draft the section for you to approve.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="s-test-members"><div class="what">Keep or delete the two preview test members</div><div class="detail"><p><code>hello+paycheck@meetroger.ai</code> and <code>hello+paycheck2@meetroger.ai</code>, on preview only. Their emails go to the hello@ inbox.</p></div><div class="tags"><span class="tag who-you">You decide</span></div></li>
-        <li class="item" data-id="s-csp"><div class="what">Decide when to enforce the Payment page's security policy</div><div class="detail"><p>It ships report-only. The preview check showed no violations. Enforcing it needs a short follow-up change.</p></div><div class="tags"><span class="tag who-you">You decide</span><span class="tag optional">Optional</span></div></li>
+      <ul class="list" data-group="after">
+        <li class="item" data-id="s-wording"><div class="what">Sign off the sign-up and payment wording</div><div class="detail"><p><a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md">Read all the wording in one document</a>, shown as members see it:</p><p><a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#1-step-3-product-and-pricing">Step 3, Product and Pricing</a> · <a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#2-welcome-email">Welcome email</a> · <a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#3-your-first-list-in-the-app">Your first list (in the app)</a> · <a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#4-first-list-ready-email">First list ready email</a> · <a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#5-reminder-emails-day-2-and-day-7">Day 2 and day 7 reminders</a> · <a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#6-payment-page">Payment page</a> · <a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#7-discount-lines">Discount lines</a> · <a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/wording-signoff.md#8-closing-emails">Closing emails</a></p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="s-terms"><div class="what">Approve the monthly terms: no refunds, cancel any time</div><div class="detail"><p><a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/fix/due-today-and-terms/artifacts/terms-monthly-draft.md">Read the draft section</a>. Once you approve it, Claude Code puts it on the Terms page in place of the 14-day money-back guarantee and points the Payment page's "Terms and refunds" link to it.</p></div><div class="tags"><span class="tag who-you">You approve</span><span class="tag who-claude">Claude Code adds it</span></div></li>
+        <li class="item" data-id="s-due-today"><div class="what">"Due today: $0"</div><div class="detail"><p>Your choice, built in PR #58.</p></div><div class="tags"><span class="tag who-claude">In PR #58</span></div></li>
+        <li class="item" data-id="s-csp"><div class="what">Decide when to enforce the Payment page's security policy</div><div class="detail"><p>The policy lists the only places the Payment page may load code from (Roger and Stripe), so a script slipped into the page could not send card details anywhere else. Today it only reports what it would have blocked; the preview check reported nothing. Enforcing it is a one-line change. Suggested: turn it on before sign-up opens.</p></div><div class="tags"><span class="tag who-you">You decide</span></div></li>
       </ul>
     </div>
   </section>
 
   <section class="panel" id="golive" role="tabpanel" aria-labelledby="tab-golive" hidden>
-    <p class="panel-intro">Everything not in PR #57. The first six groups must be done before you turn sign-up on; the last group is later versions from spec 1.5. Row numbers (S1, D10) point to the Reference tab.</p>
 
     <div class="group">
       <h2>Content</h2>
@@ -204,7 +189,7 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
         <li class="item" data-id="g-categories"><div class="what">Confirm the category list</div><div class="detail"><p>Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands (D10, closes S3).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-setup-file"><div class="what">Supply and publish the starter setup file</div><div class="detail"><p>Send <code>Real estate Grok Bot Setup.md</code>, read version 1, publish it, and give the Grok Bot download link (S9).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-emails"><div class="what">Read the other automatic emails</div><div class="detail"><p>The ~30 emails and sign-up screens from the first build, including "tax included" vs "plus tax" and the higher-rate invoice line (S18).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="g-privacy"><div class="what">Have privacy and terms read, then remove the "draft" label</div><div class="detail"><p>Include the AI provider's position on training (S10) and the privacy points the build raised (S22).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-privacy"><div class="what">Have privacy and terms read, then remove the "draft" label</div><div class="detail"><p>Include the AI provider's position on training (S10) and the privacy points the build raised (S22). Then link them from sign-up.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
       </ul>
     </div>
 
@@ -216,6 +201,7 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
         <li class="item" data-id="g-live-webhook"><div class="what">Create the live webhook</div><div class="detail"><p>To <code>https://meetroger.ai/api/stripe/webhook</code> on API version <code>2026-11-18.endive</code> with the seven events in S16.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-live-settings"><div class="what">Set the live dashboard settings</div><div class="detail"><p>Failed renewals end unpaid (not cancelled); Stripe's own customer emails off; Radar on; Link off (S16).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-hst-invoice"><div class="what">See HST as its own line on a Canadian test invoice</div><div class="detail"><p>Needs a test charge on preview (a member's third list).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="g-hst-registration"><div class="what">Turn on the HST registration in Stripe Tax (live)</div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-accountant"><div class="what">Get the accountant's word on charging US customers</div><div class="detail"><p>And on the product tax category (S4).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-old-webhooks"><div class="what">Delete leftover webhooks from old projects</div><div class="detail"><p>An active "the120" endpoint is still in the sandbox.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
         <li class="item" data-id="g-old-key"><div class="what">Find where the old preview key came from</div><div class="detail"><p>Preview held a live key (<code>sk_live_51H8a…</code>) that isn't Roger's live key. Roll it in that account if it was pasted somewhere it shouldn't be.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
@@ -235,6 +221,7 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
       <h2>Checks on preview</h2>
       <ul class="list">
         <li class="item" data-id="g-ai-gateway"><div class="what">The AI Gateway reads a run on preview</div><div class="detail"><p>Plus the Monday cron jobs show in Vercel and a Cora dry run completes (S15).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="g-live-checks"><div class="what">Walk the checks that need a live environment on preview</div><div class="detail"><p>From the B1 first-pass record, plus one run of the scenario tests against the sandbox.</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
         <li class="item" data-id="g-scenario-db"><div class="what">Create a scenario-test database branch</div><div class="detail"><p>A third Neon branch with the non-production marker, URL in <code>SCENARIO_DATABASE_URL</code> (S17). The tests run in-process meanwhile.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
       </ul>
     </div>
@@ -242,7 +229,6 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
     <div class="group">
       <h2>Decisions</h2>
       <ul class="list">
-        <li class="item" data-id="g-nextjs"><div class="what">Take the Next.js security release</div><div class="detail"><p>Done: main is on Next.js 16.4.6, merged November 26 (S19).</p></div><div class="tags"><span class="tag who-claude">Done</span></div></li>
         <li class="item" data-id="g-cora-decisions"><div class="what">Rule on Cora's six literal readings and the three unbuilt Cora 2.0 changes</div><div class="detail"><p>Listed in S20.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-defaults"><div class="what">Confirm or change the eleven defaults</div><div class="detail"><p>D1 to D12 on the Reference tab, section 2.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
       </ul>
@@ -261,7 +247,6 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
 
     <div class="group">
       <h2>Later, not needed for launch</h2>
-      <p class="sub">From spec 1.5 (Roger AI Levels and the build order). Each version is built in full.</p>
       <ul class="list">
         <li class="item" data-id="l-levels-docs"><div class="what">Approve the Levels documents</div><div class="detail"><p>Roger AI Agent Levels and Check Charts v1.1, and the Levels Build Spec v1.2.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag later">Later</span></div></li>
         <li class="item" data-id="l-zack21"><div class="what">Zack 2.1 content, once B1 is live</div><div class="detail"><p>Collects level evidence in a private <code>roger-level</code> block.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
@@ -273,19 +258,14 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
   </section>
 
   <section class="panel" id="reference" role="tabpanel" aria-labelledby="tab-reference" hidden>
-    <p class="panel-intro">The full detail rows, as kept since November 21. The two tabs before this one are the checklist; this tab is for looking things up.</p>
     <div class="wrap-ref">
 
 
   <h2>What Peter still has to supply, and the defaults waiting for his yes</h2>
-  <p class="lead">The build spec leaves 14 things only Peter can provide and 12 choices made on his behalf; the B1 build added eight more owner-only go-live items (S15 to S22). Nothing here is finished until its row says so.</p>
-  <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Updated November 23, 2026 for spec version 1.2 and the B1 build (section 3) · Updated November 25, 2026 for spec version 1.3 (one list now US$200 or CA$280, the same as a month) · Updated November 26, 2026: go-live status by area (section 0), progress on S13, S15, S16 and S17, and the sign-up changes (section 3) · Updated again November 26, 2026 for spec version 1.4 (no card at sign-up: the card is asked for on a new Payment page when the first list is ready; monthly is the only plan): the Stripe area, S13, S16, S18, S19 done, the schema step and the Payment browser check before go-live · Source: <code>artifacts/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
 
   <div class="tiles" aria-label="Progress">
     <div class="tile"><b id="n-open">20</b><span>items still to supply</span></div>
-    <div class="tile"><b id="n-done">2</b><span>items supplied</span></div>
     <div class="tile"><b id="n-unconf">11</b><span>defaults not yet confirmed</span></div>
-    <div class="tile"><b id="n-conf">1</b><span>defaults confirmed or changed</span></div>
   </div>
 
   <div class="how">
@@ -298,128 +278,9 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
     </ol>
   </div>
 
-  <section aria-labelledby="h-areas">
-    <h2 id="h-areas">0. Where go-live stands, by area</h2>
-    <p class="sub">Updated November 26, 2026. The seven owner-only areas Peter and Claude Code are working through one at a time. Each card lists what is finished and what is left, and names the rows below that hold the detail.</p>
-    <div class="areas">
-
-      <article class="area">
-        <header><h3>1. Vercel</h3><span class="st done">Done</span></header>
-        <h4>Finished</h4>
-        <ul>
-          <li>Merges to <code>main</code> deploy meetroger.ai again (Vercel GitHub app installed on the MeetRogerAI org).</li>
-          <li>A long-lived <code>preview</code> branch serves <b>preview.meetroger.ai</b> (also <code>roger-git-preview-helix3.vercel.app</code>), kept in step with <code>main</code> after each merge.</li>
-          <li>Preview settings: its own database, Stripe test key, the six test price ids, webhook secret, Resend key, <code>ADMIN_EMAILS</code>, admin and cron secrets.</li>
-          <li>Vercel's login wall is off, so preview signs people in exactly like production. Previews are never indexed by search engines (robots rule and <code>X-Robots-Tag</code>, PR #51).</li>
-        </ul>
-        <h4>Left</h4>
-        <ul><li>Nothing in Vercel itself. Two checks move to go-live: the Monday cron jobs show in Vercel, and the AI Gateway reads a run (S15).</li></ul>
-      </article>
-
-      <article class="area">
-        <header><h3>2. Stripe</h3><span class="st partial">Under way</span></header>
-        <h4>Finished (test mode)</h4>
-        <ul>
-          <li>Products and six prices: monthly US$200 / CA$280, higher rate US$400 / CA$560, one list US$200 / CA$280, all before tax. (Since spec 1.4 only monthly is offered; the one-list prices are preview-only, kept for leftover per-run test accounts. Live mode does not need them.)</li>
-          <li>Tax settings: prices exclude tax; tax is added on top.</li>
-          <li>Webhook to preview on API version <code>2026-11-18.endive</code>, checked end to end (an event arrived and was recorded). On Nov 26 the missing <code>checkout.session.completed</code> event was added; without it the card step could not finish.</li>
-          <li>Stripe CLI logged in on Peter's machine (upgrade before Feb 8, 2027). Decision: this Stripe account is Roger's.</li>
-          <li>Nov 26: the preview <code>STRIPE_SECRET_KEY</code> was corrected to this account's sandbox (test) key. It had been a live key from another Stripe account.</li>
-          <li>Nov 26, the Payment page spike (plan 2026-11-26-001, Unit 4) passed in the sandbox: Stripe's embedded setup-mode Checkout (<code>ui_mode: 'elements'</code>, cards only) saves the card and writes the billing address, tax previews work, promotion codes and coupons behave as recorded. No new webhook event is needed (no <code>setup_intent.succeeded</code>); <code>checkout.session.completed</code> stays the one that finishes a card save.</li>
-        </ul>
-        <h4>Left</h4>
-        <ul>
-          <li><code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> in Vercel for each environment: the sandbox <code>pk_test_…</code> on Preview (and local), the live <code>pk_live_…</code> on Production. Without it the Payment page shows "The card form didn't load".</li>
-          <li><b>Now:</b> a browser check of the Payment page on preview: sign up (no card is asked), get a held first list, then on Payment use 4242 4242 4242 4242 and a 3DS card (4000 0027 6000 3184, both "Complete" and "Fail"), a decline (4000 0000 0000 0002), a US ZIP (10001), the currency toggle, a promo code, and the phone layout at 375px; then check the Canadian test invoice at the first charge shows HST as its own line. The eight checks are listed in the plan's Unit 6 notes.</li>
-          <li>Link off in the Stripe dashboard's payment methods (test and live), as a second guard: the page already turns Link and wallets off.</li>
-          <li>The Payment page's content security policy ships report-only (it allows Stripe's hosts, including <code>m.stripe.network</code>). Watch the browser console on preview, then decide: enforce it with <code>'unsafe-inline'</code> plus the Stripe hosts, or move the two Payment routes to a nonce set per request. There is no endpoint collecting reports yet.</li>
-          <li>Live mode: the product and four live prices, monthly standard (US$200 / CA$280) and monthly higher (US$400 / CA$560), before tax (Claude Code can script this); the live webhook to <code>https://meetroger.ai/api/stripe/webhook</code>; and the live key, the four monthly price ids and the webhook secret in Vercel Production. No one-list price is needed in live mode: only leftover per-run preview accounts read <code>STRIPE_PRICE_RUN_*</code>, and a missing one-list id breaks nothing at startup (the dormant order charge just alerts and stops).</li>
-          <li>Live dashboard settings Peter sets by hand: failed renewals end <b>unpaid</b> (not cancelled) when retries run out; Stripe's own customer emails off (failed payments, renewals, expiring cards, receipts); Radar on.</li>
-          <li>Tax: the HST registration active in Stripe Tax; the accountant's word on US customers and on the product tax category.</li>
-          <li>Optional: delete leftover webhooks from old projects (an active "the120" endpoint).</li>
-        </ul>
-        <p class="rows">Rows: S4, S13, S16</p>
-      </article>
-
-      <article class="area">
-        <header><h3>3. Neon (database)</h3><span class="st done">Done</span></header>
-        <h4>Finished</h4>
-        <ul>
-          <li>Upgraded to the Launch plan, which ended the "exceeded the quota" outage and settles the plan question in S17.</li>
-          <li>A schema-only <code>preview</code> branch, connected to preview. Sign-up is switched on there only (<code>v3.signupOpen</code>); production stays closed.</li>
-        </ul>
-        <h4>Left</h4>
-        <ul><li>Optional: a third branch for the scenario tests (S17). They run on an in-process database meanwhile.</li></ul>
-      </article>
-
-      <article class="area">
-        <header><h3>4. Accounts</h3><span class="st partial">Under way</span></header>
-        <h4>Finished</h4>
-        <ul>
-          <li>Resend: new account, meetroger.ai verified at Namecheap, keys in Vercel. Senders "Roger support &lt;support@meetroger.ai&gt;" and library@meetroger.ai. Google Workspace mail untouched.</li>
-          <li>Admins (Peter's decision, Nov 25): <code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code>.</li>
-          <li>Email-link sign-in tested on preview: Roger's own email arrives from the support address.</li>
-        </ul>
-        <h4>Left</h4>
-        <ul>
-          <li>Delete the Resend key that appeared in a screenshot, if not done yet.</li>
-          <li>Admins need a Roger account first: Peter signs up on preview to test <code>/admin</code>; at go-live both admin addresses sign up on production.</li>
-          <li>Optional: "Sign in with Google" (a Google OAuth client with <code>https://meetroger.ai/auth/google/callback</code>, keys in Vercel). Hidden until then.</li>
-        </ul>
-        <p class="rows">Rows: S5, S13, S21</p>
-      </article>
-
-      <article class="area">
-        <header><h3>5. Content</h3><span class="st open">To do</span></header>
-        <h4>Left</h4>
-        <ul>
-          <li>Approve Zack 2.0 (Claude, Duet, Grok Bot, Hark) and Cora 2.0: drafts are in the repo.</li>
-          <li>Confirm the category list (D10, closes S3).</li>
-          <li>The starter setup file: supply <code>Real estate Grok Bot Setup.md</code>, read version 1, publish it, and give the Grok Bot download link.</li>
-          <li>Wording sign-offs: the ~30 automatic emails and the sign-up screens ("tax included" or "plus tax", the no-ideas note, the higher-rate invoice line), plus the spec 1.4 text: Step 3, the welcome, the held-list emails, the no-card closing email and the Payment page (S18).</li>
-          <li>Privacy and terms: a read, the AI provider's position on training, then remove the "draft" label.</li>
-          <li>For the public v3 site: the letter without Circles, headshot and signature, testimonial attributions and a quote from Grace, the group session day, time and link, the demo video and the "one real week" figures.</li>
-          <li>New: the Levels documents (Zack 2.1, Cora 2.1, dashboard) are in the repo; nothing is built from them yet. The quiz records each person's level, but Cora does not use it yet. Planned (November 26): Zack 2.1 ships as content after B1 is live, once intake is confirmed to ignore an unknown block; the Season rename and quiz Levels 0 to 9 go into B2; the levels engine is version B4, after B3 (see the Levels Build Spec v1.2, section 3).</li>
-        </ul>
-        <p class="rows">Rows: S1, S2, S3, S6 to S12, S18</p>
-      </article>
-
-      <article class="area">
-        <header><h3>6. Decisions</h3><span class="st open">To do</span></header>
-        <h4>Left</h4>
-        <ul>
-          <li><s>Take the pending Next.js security release before real cards, or wait (S19).</s> Done Nov 26: <code>main</code> is on Next.js 16.4.6.</li>
-          <li>Remove the shared admin password once both admins have signed in by email on production (S21).</li>
-          <li>Privacy points (S22): admin reads of runs are not logged; a deleted member's email stays in the admin log; retention gaps for idle one-at-a-time and held members; pooled plays after a run is deleted; withdrawal; how long leads, notifications and Stripe events are kept.</li>
-          <li>Cora's six literal readings and three unbuilt Cora 2.0 changes (S20).</li>
-          <li>Eleven defaults waiting for a yes (section 2).</li>
-        </ul>
-        <p class="rows">Rows: S19 to S22, D1 to D12</p>
-      </article>
-
-      <article class="area">
-        <header><h3>7. Go-live</h3><span class="st open">To do</span></header>
-        <h4>Left, in order</h4>
-        <ol>
-          <li>Content approved (Zack 2.0, Cora 2.0, categories).</li>
-          <li><code>db/setup.mjs</code> run on the preview, production and scenario-test databases, for the spec 1.4 schema (listed in section 3).</li>
-          <li>On preview: the test sign-up (no card), a held first list, the Payment page browser check with 4242 and a 3DS card (Stripe area), the first charge, then the seven checks that need a live environment (webhook, Monday crons, the model reading a run, a Cora dry run).</li>
-          <li><s>Next.js decision</s> (done: 16.4.6); <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> on Production.</li>
-          <li>Live Stripe in place; a Canadian test invoice shows HST on its own line.</li>
-          <li>The 13 pilot runs read by the model, imported on production, pilots linked, a Cora dry run read by an admin.</li>
-          <li>Privacy and terms linked from sign-up.</li>
-          <li>The public v3 site: meetroger.ai is still the Circles preview. The v3 pages, the "Start free" header and the switch that hides Circles (spec Part A, <code>v3Mode</code>) are not built yet. This is the largest build left.</li>
-          <li>Check no subscription is on the higher price by mistake; turn on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</li>
-          <li>After launch: both admins sign in by email, then the shared password is removed.</li>
-        </ol>
-      </article>
-
-    </div>
-  </section>
 
   <section aria-labelledby="h-supply">
     <h2 id="h-supply">1. Items Peter needs to supply</h2>
-    <p class="sub">Items S1 to S12 are the spec's own list. S13 was added when this list was made, because billing, the admin and email cannot run without it. S14 was added on November 22, 2026, because Cora has nothing to pick from on the first Monday without the pilot runs. S15 to S22 were added on November 23, 2026: owner-only items the B1 build found it needs before go-live.</p>
     <div class="scroll">
       <table id="supply">
         <caption>Items Peter needs to supply</caption>
@@ -456,16 +317,6 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
             <td>Build with default D10.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
             <td class="notes"></td>
-          </tr>
-          <tr data-id="S4" data-status="done" data-blocks="B1" data-done-on="2026-11-22">
-            <td class="id">S4</td>
-            <th scope="row">Tax registration in Stripe, and the accountant's word on charging US customers</th>
-            <td>Stripe dashboard, Stripe Tax registrations</td>
-            <td>Stripe shows an active registration, and a test invoice for a Canadian customer shows HST as its own line.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Build and test in Stripe test mode. No live charge before this is done.</td>
-            <td class="statuscell"><span class="st done">Done</span></td>
-            <td class="notes">2026-11-22, Peter: tax registration is already done in Stripe; cards can be charged right away. Lives in the Stripe dashboard. The HST line on a test invoice is still to be seen during the build (spec check 26). The accountant's word on US customers was not mentioned.</td>
           </tr>
           <tr data-id="S5" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S5</td>
@@ -616,16 +467,6 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
                 <li><b>Other member-facing lines changed for spec 1.4:</b> the second-miss email's last sentence, now "If you cancel on the billing page before that invoice, the difference isn't collected." (the switch to one list at a time is gone); <code>/app/billing</code> with no card, "No card yet. Your first list is ready, and your first two lists are free." and, before any list is held, "We'll ask for your card when your first list is ready."; the card-save return page, "Confirming your card…" ("This usually takes a few seconds. This page checks again on its own."), "This is taking longer than usual." ("Stripe hasn't confirmed your card yet. Refresh this page in a minute, or go back to Payment if you didn't finish adding your card.") and the problem line "We hit a problem saving your card. We'll finish it shortly — or write to us at …"; the line leftover per-run accounts see, "Monthly is now the only plan. Write to us if you have questions about yours."; and the cancel confirmation for a trial with no card, "You have not been charged." (without "and we removed your saved card").</li>
               </ul></td>
           </tr>
-          <tr data-id="S19" data-status="done" data-blocks="B1" data-done-on="2026-11-26">
-            <td class="id">S19</td>
-            <th scope="row">The Next.js security upgrade decision</th>
-            <td><code>package.json</code> (Next.js 16.4.1 then; 16.4.6 now)</td>
-            <td>Peter has decided whether to take the pending Next.js security release before real cards, and the upgrade is merged with the build, lint and tests passing, or the decision to wait is recorded here.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Stay on 16.4.1.</td>
-            <td class="statuscell"><span class="st done">Done</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build.<br>2026-11-26: taken. <code>main</code> is on Next.js 16.4.6 (branch <code>chore/next-16.4.6</code>, merged 2026-11-26), which clears the seven moderate advisories npm audit reported for 16.0.0 to 16.4.4 and the intermittent <code>SecurityFatalError</code> in <code>next build</code> on 16.4.1; <code>eslint-config-next</code> moved with it. The payment branch was built, linted and tested on 16.4.6 after merging <code>main</code>.</td>
-          </tr>
           <tr data-id="S20" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S20</td>
             <th scope="row">Open Cora decisions</th>
@@ -683,7 +524,6 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
 
   <section aria-labelledby="h-defaults">
     <h2 id="h-defaults">2. Defaults waiting for Peter's yes</h2>
-    <p class="sub">Each was chosen to fill a gap in the interview. The build uses the default as written until Peter confirms or changes it.</p>
     <div class="scroll">
       <table id="defaults">
         <caption>Defaults to confirm</caption>
@@ -771,16 +611,6 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
             <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
             <td class="notes"></td>
           </tr>
-          <tr data-id="D9" data-status="changed" data-blocks="A1">
-            <td class="id">D9</td>
-            <th scope="row">The à la carte link shows a price: US$100 or CA$140 a list (retired; one list is now US$200 or CA$280)</th>
-            <td>Whether the demand test measures interest at a real price or interest in the idea alone.</td>
-            <td>Settings <code>v3.priceRunUsd</code>, <code>v3.priceRunCad</code>; the price block</td>
-            <td>A.7</td>
-            <td><span class="ver">A1</span></td>
-            <td class="statuscell"><span class="st changed">Changed</span></td>
-            <td class="notes">2026-11-21, Peter: single lists are sold at US$100 or CA$140, so there is no demand link. Spec 1.1, sections A.7 and B.9.<br>2026-11-25, Peter: one list now costs US$200 or CA$280, the same as a month, and monthly brings a list every Monday, so it is much cheaper per list. Spec 1.3. This row stays retired.</td>
-          </tr>
           <tr data-id="D10" data-status="unconfirmed" data-blocks="B1">
             <td class="id">D10</td>
             <th scope="row">Categories: Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands</th>
@@ -816,42 +646,6 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
     </div>
   </section>
 
-  <section aria-labelledby="h-built">
-    <h2 id="h-built">3. B1: what is built, and the go-live gate</h2>
-    <p class="sub">Updated November 23, 2026. Units 1 to 18 of <code>docs/plans/2026-11-22-001-feat-roger-v3-app-b1-plan.md</code> are merged to <code>main</code>; Unit 19's scenario tests, first-pass record (<code>docs/v3-app-b1-first-pass.md</code>) and the spec write-back (version 1.2) are on <code>feat/v3-e2e</code>. On production both <code>v3.cycleLive</code> and <code>v3.signupOpen</code> are off.</p>
-    <div class="scroll">
-      <table id="built">
-        <caption>B1 build status</caption>
-        <thead>
-          <tr><th scope="col">Part</th><th scope="col">Built</th><th scope="col">Waits on</th></tr>
-        </thead>
-        <tbody>
-          <tr><th scope="row">Accounts and sign-in</th><td>Built: email links with a confirm button, sessions, the admin check by <code>ADMIN_EMAILS</code>, Google sign-in (hidden).</td><td>S5, S13, S21</td></tr>
-          <tr><th scope="row">Sign-up and the card step</th><td>Built: <code>/start</code> quiz, account, plan and consent, Stripe card step, done, welcome email, pilot links, the "not open yet" note. <b>Since spec 1.4:</b> three steps ending at Product and Pricing with no card; the card is saved on the embedded Payment page (<code>/start/payment</code>) when the first list is ready.</td><td>S10, S13, S16, S18</td></tr>
-          <tr><th scope="row">Zack</th><td>Built: key, instructions and runs endpoints, <code>/app/zack</code> controls, upload, run history and delete. Zack 2.0 files drafted.</td><td>S1, S3</td></tr>
-          <tr><th scope="row">Intake</th><td>Built: block parsing, the model fallback, validation, the three privacy passes and the fourth (harm) pass, flags.</td><td>S15 (the model)</td></tr>
-          <tr><th scope="row">Cora</th><td>Built: pool, merge, scoring in code, eligibility, picks, short lists, the job with lease, phases, noon deadline and dry run, seed import. Cora 2.0 drafted.</td><td>S2, S14, S20</td></tr>
-          <tr><th scope="row">Monday money</th><td>Built: first charge with retries and closes, orders, stored quotes, the contributor rule's difference line, the billing page, switching, cancelling, renewals, the webhook and the daily reconcile.</td><td>S13, S16, S4 (US tax)</td></tr>
-          <tr><th scope="row">Send, dashboard, startup page, admin, upkeep</th><td>Built: send job and emails, <code>/app</code>, history and week pages, <code>/getstarted</code> and its editor, settings with two-step email change, the admin pages and log, the hourly pass, nudges, the 21-day close, retention.</td><td>S9, S18, S22</td></tr>
-          <tr><th scope="row">Proof</th><td>Built: over 900 unit and integration tests; scenario tests for the trial to the first charge (CAD and USD), failed charges, the 21-day close, missed weeks, orders, thin weeks, switching and cancelling, one unattended cycle and the seed import. Of the 41 acceptance checks, 34 pass in tests and 7 need the live environment. The three gaps the first pass found were fixed by the seams review (PR #42); one more (an "as of" clock mismatch in the no-first-charge close) was found and fixed on the same branch. All scenario tests pass.</td><td>S15, S16, S17</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="sub" style="margin-top:20px"><b>Sign-up changes, November 25 and 26 (PRs #51 to #55, all merged; 967 tests pass).</b> Question 3 takes several agents, with a star for the primary agent and "Make primary". A new question 5 asks for the AI agent level, 0 to 8 (<code>src/data/agent-levels.ts</code>); help with is 6 and new software is 7. The quiz shows one question per screen with a progress bar, Next and Back, and keeps every answer when one is missing. Typing a role picks "Something else". Step 2 asks for first and last name and does not ask again for an email this browser already typed into Roger. Sign-up, sign-in and the app show no Circles header button. Spec 1.3 records all of this.</p>
-    <p class="sub" style="margin-top:20px"><b>Payment at the first list, November 26 (branch <code>feat/payment-at-first-curation</code>, plan <code>docs/plans/2026-11-26-001-feat-payment-at-first-curation-plan.md</code>; spec 1.4).</b> Sign-up ends at Step 3 (Product and Pricing, with the Zack consent) as a trial with no card. A no-card member's Monday list is held: a titles-only teaser by email and on <code>/app</code>, linking to Payment, an embedded Stripe card form with a Price Box (USD/CAD, live tax, a promo code, "Due today: CA$0"). Saving the card delivers the held list as free list 1 of 2; the first charge still comes with the third list, now with the locked-in promo. A newer held list replaces the older one; reminders on days 2 and 7; the no-card close at 14 days after the first teaser (21 after consent with no teaser), with a 7-day reopen for a card confirmed around it. Monthly is the only plan. The admin has a "First list held, no card" state and a sign-up funnel. The scenario tests cover the new order end to end (<code>tests/scenarios/</code>, including <code>held-and-closed.test.ts</code>).</p>
-    <p class="sub"><b>Schema for this change</b> (appended to <code>db/schema.sql</code>, idempotent; run <code>db/setup.mjs</code> on the <b>preview</b>, <b>production</b> and <b>scenario-test</b> databases <b>before</b> each environment gets the new code; the new code fails without these columns): on <code>users</code>, <code>first_teaser_at</code>, <code>setup_session</code>, <code>promo_code</code>, <code>promo_coupon</code>, <code>promo_label</code>, <code>promo_refused_at</code>, <code>unlock_attempted_at</code>, <code>promo_ended_label</code>, <code>promo_duration</code>, <code>promo_duration_months</code>, <code>signup_finished_at</code>, <code>card_fingerprint</code> (with the index <code>users_card_fingerprint</code>); <code>cora_user_weeks.superseded_at</code>; the new table <code>promo_reservations</code> (with <code>slot</code>, the unique index <code>promo_reservations_slot</code> and the index <code>promo_reservations_fingerprint</code>); <code>charge_attempts.coupon</code>.</p>
-    <p class="sub" style="margin-top:20px"><b>The go-live gate, in order.</b></p>
-    <ol class="sub">
-      <li>S1, S2, S3 approved; S13, S15, S16 in place on Preview; the scenario tests run once against the sandbox (S17) and the checks marked "needs the live environment" in the first-pass record are walked on preview.</li>
-      <li>S19 decided (done 2026-11-26: Next.js 16.4.6). Run <code>db/setup.mjs</code> on production (an owner step), and on preview and the scenario-test database, for the spec 1.4 columns listed above, before the payment branch deploys.</li>
-      <li>The Payment page checked in a browser on preview with 4242 4242 4242 4242 and a 3DS test card (Stripe area); <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> set on Preview and Production; Link off in the Stripe dashboard; the report-only CSP reviewed.</li>
-      <li>Live keys and prices (S13) and the live webhook (S16) on Production; a Canadian test invoice shows HST as its own row.</li>
-      <li>The 13 seed runs imported on production (S14), pilots' records linked, a Cora dry run read by an admin.</li>
-      <li>Privacy and terms linked from <code>/start</code> (S10); the Circles banner hidden on app pages and the header change agreed with the marketing builder. Since 2026-11-26 sign-up, sign-in and the app show no Circles header; the public v3 site (spec Part A, <code>v3Mode</code>) is still to be built.</li>
-      <li>An admin turns on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</li>
-      <li>After both admins have signed in by email on production: S21.</li>
-    </ol>
-  </section>
 
   <footer>
     <p>Statuses are stored in this file. To change one, edit the row's <code>data-status</code> and its status label; the counts at the top update when the page is opened.</p>
@@ -927,7 +721,7 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
   }
 
   function counts() {
-    ['pr57', 'golive'].forEach(function (tab) {
+    ['pr', 'golive'].forEach(function (tab) {
       var lis = document.querySelectorAll('#' + tab + ' .item[data-id]');
       var n = 0;
       lis.forEach(function (li) { var s = state[li.getAttribute('data-id')]; if (s && s.done) n++; });
@@ -940,13 +734,15 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
     var need = document.querySelectorAll('.item[data-gate="1"]');
     var left = 0;
     need.forEach(function (li) { var s = state[li.getAttribute('data-id')]; if (!(s && s.done)) left++; });
-    var merged = state['m-merge'] && state['m-merge'].done;
+    var pr = document.getElementById('pr').getAttribute('data-pr');
+    var mi = document.querySelector('#pr .item[data-merge]');
+    var merged = mi && state[mi.getAttribute('data-id')] && state[mi.getAttribute('data-id')].done;
     var g = document.getElementById('merge-gate');
     var t = document.getElementById('merge-gate-title');
     var x = document.getElementById('merge-gate-text');
     g.classList.toggle('ready', left === 0);
-    if (merged) { t.textContent = 'PR #57 is merged'; x.textContent = 'Next: the "Before sign-up opens" list below.'; }
-    else if (left === 0) { t.textContent = 'Ready to merge'; x.textContent = 'Everything before the merge is ticked. Tell Claude Code "merge PR #57".'; }
+    if (merged) { t.textContent = 'PR #' + pr + ' is merged'; x.textContent = 'Next: the "Before sign-up opens" list below.'; }
+    else if (left === 0) { t.textContent = 'Ready to merge'; x.textContent = 'Everything before the merge is ticked. Tell Claude Code "merge PR #' + pr + '".'; }
     else { t.textContent = 'Not ready to merge yet'; x.textContent = left + ' step' + (left === 1 ? '' : 's') + ' left under "Before you merge".'; }
   }
 
@@ -969,7 +765,7 @@ where (table_name='users' and column_name in ('first_teaser_at','setup_session',
   // Tabs, routed on the hash so a link can open one.
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
   function show(name) {
-    if (['pr57', 'golive', 'reference'].indexOf(name) < 0) name = 'pr57';
+    if (['pr', 'golive', 'reference'].indexOf(name) < 0) name = 'pr';
     tabs.forEach(function (b) {
       var on = b.getAttribute('data-tab') === name;
       b.setAttribute('aria-selected', on ? 'true' : 'false');
