@@ -3,12 +3,14 @@ import { connection } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
 import { amountNames, getAmounts } from "@/lib/site/amounts";
-import { draftChanges, linksInto, sectionChanges, wordingOf } from "@/lib/site/content/check";
-import { PAGES_ADDRESS, REVIEW_ADDRESS, fieldAnchor, fieldLabel, pageBySlug, sectionAnchor, sectionNotes, sectionsAnchor, wordsFor } from "@/lib/site/content/labels";
-import { baseline, layoutOn, sameLayout, sectionLayout, textAt } from "@/lib/site/content/model";
+import { shortened } from "@/lib/site/content/caption";
+import { asRead, draftChanges, draftCount, linksInto, listChanges, pageStatus, sectionChanges, wordingOf } from "@/lib/site/content/check";
+import { PAGES_ADDRESS, REVIEW_ADDRESS, fieldAnchor, fieldLabel, listAnchor, listWords, pageBySlug, placesIn, sectionAnchor, sectionNotes, sectionsAnchor, toggleHint, wordsFor } from "@/lib/site/content/labels";
+import { applyOverlay, baseline, layoutOn, listItems, readField, sameLayout, sectionLayout, textAt } from "@/lib/site/content/model";
+import { fieldsOfItem, siteRegistry, type Field, type List } from "@/lib/site/content/registry";
 import { readStored } from "@/lib/site/content/store";
 import { amountPlaceholderNames, asPlaceholder } from "@/lib/site/content/text";
-import { PageEditor, type EditorField, type EditorSection, type NameHint } from "../field-editor";
+import { PageEditor, type EditorBlock, type EditorField, type EditorList, type EditorSection, type NameHint } from "../field-editor";
 import { LaunchListLine } from "../launch-list";
 import { Unreadable, count } from "../parts";
 import { SectionControls, type SectionRow } from "../section-controls";
@@ -31,6 +33,13 @@ import { SectionControls, type SectionRow } from "../section-controls";
  * a section that is switched off keeps its words on screen, marked as not on
  * the page. A page's title, and everything under Shared, is not in the panel:
  * it cannot be moved or switched off, and has no control to say so.
+ *
+ * THE PAGE'S LISTS (plan U7, R8). Where a section's words are a list (the
+ * questions of a group, the hero's steps), its items are shown in the order
+ * the DRAFT has them, the ones added here among them, each numbered by its
+ * place there, with the list's controls around them (list-editor.tsx). An
+ * item the draft has removed is not among the boxes: it is listed under the
+ * list, with Put back.
  */
 const BACK = "All pages";
 
@@ -63,11 +72,18 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
   const amounts = await getAmounts();
   const today: Record<string, string> = amountNames(amounts);
   const waiting = draftChanges(stored);
+  // Every field whose wording is a draft: a text that would change, and each text of an item that is new to the site.
   const waitingHere = new Set(waiting.filter((change) => change.field.page === page.id).map((change) => change.field.id));
   const moving = sectionChanges(stored);
   const movingHere = moving.filter((change) => change.page.id === page.id);
-  const waitingAll = waiting.length + moving.length;
-  const waitingOnPage = waitingHere.size + movingHere.length;
+  const listing = listChanges(stored).filter((change) => change.page.id === page.id);
+  const waitingAll = draftCount(stored);
+  const waitingOnPage = pageStatus(stored).get(page.id)?.drafts ?? 0;
+  // The page's words as the draft would print them: which items each list has, and in which order.
+  const draftModel = applyOverlay(baseline, stored.draft);
+  const places = placesIn(draftModel);
+  const listsOf = (sectionId: string) => [...siteRegistry.lists.values()].filter((list) => list.page === page.id && list.section === sectionId);
+  const hasLists = [...siteRegistry.lists.values()].some((list) => list.page === page.id);
 
   // The page's sections as the draft has them: the ones an admin may move in the draft's order, each fixed one where it is.
   const layout = layoutOn(stored.draft, page.id);
@@ -85,7 +101,7 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
       label: section.label,
       off: layout.off.includes(section.id),
       waiting: movingHere.some((change) => change.section.id === section.id),
-      jump: section.fields.length > 0 ? sectionAnchor(page.id, section.id) : null,
+      jump: section.fields.length > 0 || listsOf(section.id).length > 0 ? sectionAnchor(page.id, section.id) : null,
       notes: [...sectionNotes(page.id, section.id), ...linksInto(stored, page.id, section.id).map((link) => `The ${link} lands here.`)],
     }));
 
@@ -97,28 +113,78 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
   };
   const hint = (name: string): NameHint => ({ name: asPlaceholder(name), shows: wordsFor(name) ?? "an amount from Settings", now: Object.hasOwn(today, name) ? today[name] : null });
 
+  const rowsFor = (field: { kind: string; max: number }) => (field.kind === "block" || field.max > 400 ? 6 : field.max > ONE_LINE_MAX ? 3 : 1);
+  const boxFor = (field: Field): EditorField => {
+    const original = textAt(baseline, field.id);
+    return {
+      id: field.id,
+      anchor: fieldAnchor(field.id),
+      name: field.name,
+      kind: field.kind === "toggle" ? "toggle" : "text",
+      hint: field.kind === "toggle" ? toggleHint(field) : null,
+      rows: rowsFor(field),
+      max: field.max,
+      value: readField(draftModel, field) ?? wordingOf(stored.draft, field.id),
+      // A field of an item added here has no original, its tick box included: a new question is not "changed from
+      // the original" because it is ticked, and unticking it is how it goes back.
+      original: original ?? null,
+      waiting: waitingHere.has(field.id),
+      names: setOf(field.placeholders),
+    };
+  };
+  /** A list as the draft has it: its items in the draft's order, each numbered by its place, and the original items the draft has removed. */
+  const listFor = (list: List): EditorList => {
+    const items = places(list.id);
+    const original = listItems(baseline, list.id);
+    const words = listWords(list);
+    const changes = listing.filter((change) => change.list.id === list.id);
+    const mark = (item: string) => {
+      const kinds = changes.filter((change) => change.item === item).map((change) => change.kind);
+      if (kinds.includes("added")) return "New: a draft, not published yet";
+      if (kinds.includes("back")) return "Put back: a draft, not published yet";
+      return kinds.includes("moved") ? "Moved: a draft, not published yet" : null;
+    };
+    /** A removed item by the wording the draft keeps for it, as a visitor would read it. */
+    const wording = (item: string) => shortened(asRead(wordingOf(stored.draft, fieldsOfItem(list, item)[0]?.id ?? ""), amounts));
+    return {
+      id: list.id,
+      anchor: listAnchor(list.id),
+      title: words.title,
+      one: words.one,
+      many: words.many,
+      limits: words.limits,
+      canAdd: items.length < list.max,
+      canRemove: items.length > list.min,
+      fixed: list.min === list.max,
+      items: items.map((item, i) => ({ key: item, title: `${list.item} ${i + 1}`, fields: fieldsOfItem(list, item).map(boxFor), added: !original.includes(item), waiting: mark(item) })),
+      removed: original.filter((item) => !items.includes(item)).map((item) => ({ id: item, wording: wording(item), live: changes.some((change) => change.item === item && change.kind === "removed") })),
+      fresh: list.fields.map((field) => ({ name: field.name, label: field.label, kind: field.kind === "toggle" ? ("toggle" as const) : ("text" as const), rows: rowsFor(field), max: field.max, hint: field.kind === "toggle" ? toggleHint({ item: { array: list.id }, path: [field.name] }) : null })),
+      changed: Object.hasOwn(stored.draft.lists, list.id),
+      waiting: changes.length,
+    };
+  };
+
   const sections: EditorSection[] = ordered
-    .filter((section) => section.fields.length > 0)
+    .filter((section) => section.fields.length > 0 || listsOf(section.id).length > 0)
     .map((section) => {
-      const groups: EditorSection["groups"] = [];
+      const blocks: EditorBlock[] = [];
+      const drawn = new Set<string>();
       for (const field of section.fields) {
+        // A field of a list's item: the whole list is drawn once, where its first field is, as the draft has it.
+        const list = field.item ? siteRegistry.lists.get(field.item.array) : undefined;
+        if (list) {
+          if (!drawn.has(list.id)) blocks.push({ kind: "list", list: listFor(list) });
+          drawn.add(list.id);
+          continue;
+        }
         const label = fieldLabel(field);
-        const entry: EditorField = {
-          id: field.id,
-          anchor: fieldAnchor(field.id),
-          name: label.name,
-          rows: field.kind === "block" || field.max > 400 ? 6 : field.max > ONE_LINE_MAX ? 3 : 1,
-          max: field.max,
-          value: wordingOf(stored.draft, field.id),
-          original: textAt(baseline, field.id) ?? "",
-          waiting: waitingHere.has(field.id),
-          names: setOf(field.placeholders),
-        };
-        const open = groups.at(-1);
-        if (open && open.title === label.group) open.fields.push(entry);
-        else groups.push({ title: label.group, fields: [entry] });
+        const open = blocks.at(-1);
+        if (open?.kind === "fields" && open.group.title === label.group) open.group.fields.push(boxFor(field));
+        else blocks.push({ kind: "fields", group: { key: field.id, title: label.group, fields: [boxFor(field)] } });
       }
-      return { id: section.id, label: section.label, groups, off: layout.off.includes(section.id), anchor: sectionAnchor(page.id, section.id) };
+      // A list with no built-in item left in the code has no field to stand for it, and may still hold added ones.
+      for (const list of listsOf(section.id)) if (!drawn.has(list.id)) blocks.push({ kind: "list", list: listFor(list) });
+      return { id: section.id, label: section.label, blocks, off: layout.off.includes(section.id), anchor: sectionAnchor(page.id, section.id) };
     });
   const names = sets.map((set) => set.map(hint));
   const amountHints = amountPlaceholderNames.map(hint);
@@ -136,7 +202,8 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
         </p>
         <h1 className="text-h3">{page.label}</h1>
         <p className="text-small text-ink-2">
-          Change the words, then press Save draft at the foot of the screen. A draft is not on the site: visitors see it only after you publish.
+          Change the words, then press Save draft at the foot of the screen.{hasLists ? " Where the words are a list, you can also move, remove and add its items." : ""} A draft is not on
+          the site: visitors see it only after you publish.
           {live && (
             <>
               {" "}

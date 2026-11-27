@@ -23,12 +23,12 @@
  * the release file, where a dropped entry would be a silent loss.
  */
 import { z } from "zod";
-import { ADDED_PREFIX, ID_MAX, ID_PATTERN, isId, siteRegistry, usableValue, type Registry } from "./registry";
+import { ADDED_PREFIX, ID_MAX, ID_PATTERN, LIST_CAP, fieldsOfItem, isAddedId, isId, resolveField, siteRegistry, usableValue, type Registry } from "./registry";
 
 export const OVERLAY_FORMAT = 1;
 
-/** The most items one list, or one page's section order, may hold. A bound for storage, not for layout. */
-export const LIST_MAX = 30;
+/** The most ids one list entry, or one page's section order, may hold. A bound for storage: what a list may SHOW is its own, smaller number (the registry's `max`). */
+export const LIST_MAX = LIST_CAP;
 /** The longest text any one entry may hold, whatever its field. A field's own limit is smaller (registry). */
 export const TEXT_MAX = 20_000;
 /** The most text entries an overlay may hold. */
@@ -76,9 +76,16 @@ function idsOf(value: unknown, keep: (id: string) => boolean = () => true): stri
  * Dropped: anything that is not an overlay of this format; a text entry for a field the registry does not have,
  * or whose value the field cannot print (not text, empty, a name in braces the field may not hold, an address a
  * link may not point at); a section entry for an unknown page, and in it any id that is not a section of that page
- * an admin may move; a list entry for an unknown list, and in it anything that is not an id. An item id in a list
- * entry is NOT checked against the built-in items here: the layer below may have added it, so that is decided
- * where the overlay is applied.
+ * an admin may move; a list entry for an unknown list, and in it anything that is not an id.
+ *
+ * A text entry may be for a field of an item ADDED in the admin, `<list>.x-….<key>` (resolveField): it is kept
+ * when the list has such a field and the value is one the field can print. Whether that item exists is NOT
+ * decided here, and neither is whether an id in a list entry is an item of the list: the layer below may have
+ * added it, so both are decided where the overlay is applied (./model.ts).
+ *
+ * In a list entry: `added` holds only ids that start with "x-"; an id that is in both `added` and `removed` is in
+ * neither (the entry adds nothing it also removes); and a list that can only be reordered (its `min` is its `max`)
+ * keeps its `order` alone.
  */
 export function parseOverlay(value: unknown, registry: Registry = siteRegistry): Overlay {
   const out = newOverlay();
@@ -88,7 +95,7 @@ export function parseOverlay(value: unknown, registry: Registry = siteRegistry):
     let kept = 0;
     for (const [id, text] of Object.entries(value.text)) {
       if (kept >= TEXT_ENTRIES_MAX) break;
-      const field = registry.fields.get(id);
+      const field = resolveField(id, registry);
       if (!field || !usableValue(field, text) || text.length > TEXT_MAX) continue;
       out.text[id] = text;
       kept++;
@@ -106,10 +113,12 @@ export function parseOverlay(value: unknown, registry: Registry = siteRegistry):
   }
 
   if (isRecord(value.lists)) {
-    for (const id of registry.lists.keys()) {
+    for (const [id, list] of registry.lists) {
       const edit = Object.hasOwn(value.lists, id) ? value.lists[id] : undefined;
       if (!isRecord(edit)) continue;
-      const entry = { order: idsOf(edit.order), removed: idsOf(edit.removed), added: idsOf(edit.added, (item) => item.startsWith(ADDED_PREFIX)) };
+      const reorderOnly = list.min === list.max;
+      const [added, removed] = reorderOnly ? [[], []] : [idsOf(edit.added, isAddedId), idsOf(edit.removed)];
+      const entry = { order: idsOf(edit.order), removed: removed.filter((item) => !added.includes(item)), added: added.filter((item) => !removed.includes(item)) };
       if (entry.order.length + entry.removed.length + entry.added.length > 0) out.lists[id] = entry;
     }
   }
@@ -136,7 +145,13 @@ export type StrictResult = { ok: true; overlay: Overlay } | { ok: false; problem
  * A value as an overlay, or everything that is wrong with it (plan KTD13). It passes only when the shape is exact
  * and every part is known to the registry: each text entry is for a field that exists, is within that field's
  * limit and is something the field can print; each section entry is for a covered page and names only sections of
- * it that an admin may move; each list entry is for a list that exists, and each added item's id starts with "x-".
+ * it that an admin may move; each list entry is for a list that exists and says only what that list can be.
+ *
+ * A LIST ENTRY is held to the list's built-in items, because the file this reads is an overlay on the code copy:
+ * `removed` names built-in items only; `added` names ids that start with "x-", none of them also removed; `order`
+ * names items the list then has (built-in and not removed, or added); the list ends up with no fewer and no more
+ * items than it may hold; a list that can only be reordered adds and removes nothing; every added item has each of
+ * its texts; and a text entry for an added item's field is for an item its list's entry adds.
  */
 export function parseOverlayStrict(value: unknown, registry: Registry = siteRegistry): StrictResult {
   const shape = overlaySchema.safeParse(value);
@@ -151,8 +166,10 @@ export function parseOverlayStrict(value: unknown, registry: Registry = siteRegi
   }
 
   for (const [fieldId, text] of Object.entries(overlay.text)) {
-    const field = registry.fields.get(fieldId);
+    const field = resolveField(fieldId, registry);
+    const entry = field?.item && Object.hasOwn(overlay.lists, field.item.array) ? overlay.lists[field.item.array] : undefined;
     if (!field) problems.push(`text.${fieldId}: no such field`);
+    else if (!registry.fields.has(fieldId) && !entry?.added.includes(field.item!.id)) problems.push(`text.${fieldId}: no item "${field.item!.id}" is added to the list "${field.item!.array}"`);
     else if (text.length > field.max) problems.push(`text.${fieldId}: ${text.length} characters, and the most is ${field.max}`);
     else if (!usableValue(field, text)) problems.push(`text.${fieldId}: not something this field can print (empty, a name in braces it may not hold, or an address a link may not point at)`);
   }
@@ -167,8 +184,31 @@ export function parseOverlayStrict(value: unknown, registry: Registry = siteRegi
     }
   }
   for (const [listId, edit] of Object.entries(overlay.lists)) {
-    if (!registry.lists.has(listId)) problems.push(`lists.${listId}: no such list`);
-    for (const item of edit.added) if (!item.startsWith(ADDED_PREFIX)) problems.push(`lists.${listId}: the added item "${item}" must have an id that starts with "${ADDED_PREFIX}"`);
+    const list = registry.lists.get(listId);
+    if (!list) {
+      problems.push(`lists.${listId}: no such list`);
+      continue;
+    }
+    const at = `lists.${listId}`;
+    for (const item of edit.added) {
+      if (!isAddedId(item)) problems.push(`${at}: the added item "${item}" must have an id that starts with "${ADDED_PREFIX}"`);
+      else if (edit.removed.includes(item)) problems.push(`${at}: "${item}" is both added and removed`);
+      else {
+        // Every text an item must have, or the page would have nothing to print for it.
+        for (const field of fieldsOfItem(list, item, registry)) {
+          if (field.kind !== "toggle" && !Object.hasOwn(overlay.text, field.id)) problems.push(`${at}: the added item "${item}" has no text for "${field.id}"`);
+        }
+      }
+    }
+    for (const item of edit.removed) if (!list.items.includes(item) && !edit.added.includes(item)) problems.push(`${at}: "${item}" is removed and is not an item of this list`);
+    for (const item of edit.order) {
+      if (edit.removed.includes(item)) problems.push(`${at}: "${item}" is both removed and given a place in the order`);
+      else if (!list.items.includes(item) && !edit.added.includes(item)) problems.push(`${at}: "${item}" is given a place in the order and is not an item of this list`);
+    }
+    const count = list.items.filter((item) => !edit.removed.includes(item)).length + edit.added.filter((item) => !edit.removed.includes(item)).length;
+    if (list.min === list.max && edit.added.length + edit.removed.length > 0) problems.push(`${at}: this list always has ${list.max} items, so none can be added or removed`);
+    else if (count > list.max) problems.push(`${at}: ${count} items, and the most this list can show is ${list.max}`);
+    else if (count < list.min) problems.push(`${at}: ${count} items, and the fewest this list can show is ${list.min}`);
   }
   return problems.length > 0 ? { ok: false, problems } : { ok: true, overlay };
 }

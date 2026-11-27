@@ -116,14 +116,17 @@ export function V1HowItWorksView({
     // 1. The week
     week: (
       <ReadingSection id="week" title={how.week.title}>
-        <dl className="border-b border-rule">
-          {how.week.days.map((d) => (
-            <div key={d.id} className="grid gap-x-8 gap-y-2 border-t border-rule py-6 sm:grid-cols-[7rem_minmax(0,1fr)]">
-              <dt className="text-title">{d.day}</dt>
-              <dd className="text-body">{d.body}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* An admin may remove every day (Pages): then there is no list, and no line under it. */}
+        {how.week.days.length > 0 && (
+          <dl className="border-b border-rule">
+            {how.week.days.map((d) => (
+              <div key={d.id} className="grid gap-x-8 gap-y-2 border-t border-rule py-6 sm:grid-cols-[7rem_minmax(0,1fr)]">
+                <dt className="text-title">{d.day}</dt>
+                <dd className="text-body">{d.body}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </ReadingSection>
     ),
     // 2. Zack, in detail: the control block's link lands here
@@ -215,17 +218,19 @@ export function V1HowItWorksView({
     // 5. Your first weeks: the trial, step by step
     firstWeeks: (
       <ReadingSection id="first-weeks" title={how.firstWeeks.title}>
-        <ol className="border-b border-rule">
-          {how.firstWeeks.steps.map((step, i) => (
-            <li key={step.id} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 border-t border-rule py-5">
-              {/* Decoration: the list is ordered, so a screen reader already counts the steps. */}
-              <span aria-hidden="true" data-claims="numeral" className="tabular text-title text-ink-2">
-                {i + 1}
-              </span>
-              <span className="text-body">{step.text}</span>
-            </li>
-          ))}
-        </ol>
+        {how.firstWeeks.steps.length > 0 && (
+          <ol className="border-b border-rule">
+            {how.firstWeeks.steps.map((step, i) => (
+              <li key={step.id} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 border-t border-rule py-5">
+                {/* Decoration: the list is ordered, so a screen reader already counts the steps. */}
+                <span aria-hidden="true" data-claims="numeral" className="tabular text-title text-ink-2">
+                  {i + 1}
+                </span>
+                <span className="text-body">{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        )}
       </ReadingSection>
     ),
     // 6. If you have no AI agent yet

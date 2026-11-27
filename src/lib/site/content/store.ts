@@ -15,6 +15,13 @@
  * what the site would show. To publish is to make `published` the draft; to
  * reset a field is to take its entry out of the draft.
  *
+ * THE DRAFT HOLDS ONE THING THE SITE WOULD NOT SHOW: the wording of an item
+ * the draft has removed from a list, so that "Put back" brings the item back
+ * as it was edited. A publish leaves that wording out of what it makes live
+ * (shownOverlay), so what is published never holds the text of an item that
+ * is not on a page, and keeps it in the draft, so that it is still there to
+ * put back after an Undo.
+ *
  * HOW A WRITE IS ONE STATEMENT. The database has no transactions over HTTP.
  * A write reads the row as text, works out the new value in code (where the
  * registry and the baseline are), and stores it with one statement that
@@ -47,8 +54,8 @@
 import { logAdminAction } from "@/lib/admin/log";
 import type { Query } from "@/lib/db-query";
 import { OVERLAY_FORMAT, newOverlay, type Overlay } from "./format";
-import { baseline, codeModel, diffSectionEdit, layoutOn, normaliseOverlay, sectionLayout, textAt, type Layout } from "./model";
-import { siteRegistry, usableValue } from "./registry";
+import { applyOverlay, baseline, codeModel, diffListEdit, diffSectionEdit, layoutOn, listItems, normaliseOverlay, sectionLayout, shownOverlay, textAt, type Layout } from "./model";
+import { fieldsOfItem, isAddedId, resolveField, siteRegistry, usableValue } from "./registry";
 
 export const CONTENT_KEY = "site.content";
 /** The row the Edit Questions screen wrote before "site.content" existed. Read to seed that row, never written. */
@@ -196,24 +203,155 @@ export type SaveResult =
  * equal to the built-in wording is no edit, and takes the entry out (plan KTD6).
  */
 export async function saveDraft(q: Query, changes: readonly DraftChange[], base: unknown = baseline): Promise<SaveResult> {
+  /** The fields of items added in the admin: each must be an item its list has when the write lands. */
+  const ofAdded: { field: string; list: string; item: string }[] = [];
   for (const { field: id, text } of changes) {
-    const field = siteRegistry.fields.get(id);
+    const field = resolveField(id);
     if (!field) return { ok: false, reason: "unknown-field", field: id };
+    if (!siteRegistry.fields.has(id)) ofAdded.push({ field: id, list: field.item!.array, item: field.item!.id });
     if (text === null) continue;
     if (!usableValue(field, text)) return { ok: false, reason: "unusable", field: id };
     if (text.length > field.max) return { ok: false, reason: "too-long", field: id };
   }
+  let missing: string | undefined;
   const done = await transition(q, base, (now) => {
+    // An added item's text is stored only while the item is in its list: in the draft's, or removed there and so
+    // waiting to be put back. For an item that is in neither, the text would be read by nothing.
+    if (ofAdded.length > 0) {
+      const model = applyOverlay(base, now.draft);
+      const removedIn = (list: string) => (Object.hasOwn(now.draft.lists, list) ? now.draft.lists[list].removed : []);
+      missing = ofAdded.find((entry) => !listItems(model, entry.list).includes(entry.item) && !removedIn(entry.list).includes(entry.item))?.field;
+      if (missing) return null;
+    }
     const text = { ...now.draft.text };
     for (const change of changes) {
       if (change.text === null || change.text === textAt(base, change.field)) delete text[change.field];
       else text[change.field] = change.text;
     }
-    const draft = { ...now.draft, text };
+    const draft = normaliseOverlay(base, { ...now.draft, text });
     return sameOverlay(draft, now.draft) ? null : { ...now, draft };
   });
   if (done === "busy") return { ok: false, reason: "busy" };
+  if (missing) return { ok: false, reason: "unknown-field", field: missing };
   return { ok: true, changed: done.written, content: done.after };
+}
+
+/**
+ * One press on a list's controls (plan R8): move an item one place up or down, remove it, put a removed one back,
+ * add a new one with its texts, or put the list back as the baseline has it.
+ *
+ * `add`: `id` is the new item's id, made by the caller, starting with "x-". `fields` is each of the item's
+ * fields by its key ("q", "a"), tidied: every text, and a switch where it is on.
+ */
+export type ListChange = { list: string } & ({ op: "up" | "down" | "remove" | "back"; item: string } | { op: "add"; id: string; fields: ReadonlyMap<string, string> } | { op: "reset" });
+
+export type ListResult =
+  | { ok: true; changed: boolean; content: StoredContent; items: string[] }
+  /**
+   * "unknown-list", "unknown-item": not a list, or not an item the press can be for. "full" and "too-few": the
+   * list holds as many, or as few, as its page can draw. "missing-field", "unusable", "too-long": a new item's
+   * text, with `field` the key. Nothing was stored.
+   */
+  | { ok: false; reason: "unknown-list" | "unknown-item" | "full" | "too-few" | "missing-field" | "unusable" | "too-long" | "busy"; field?: string };
+
+/**
+ * Stores one change to a list in the draft. No visitor sees it until it is published.
+ *
+ * Like a press on a page's sections, the change is made to the list AS THE DRAFT HAS IT WHEN THE WRITE LANDS. What
+ * is stored is the list's one entry, written the one way diffListEdit writes it, and no entry at all for a list
+ * that is as the baseline has it.
+ *
+ * - remove: an item the baseline has is named in the entry's `removed`, and its edited wording stays in the draft
+ *   so that "back" restores it. An item added in this draft is taken out of the entry, and its texts with it.
+ * - back: only for an item the baseline has and the draft has removed. It returns directly after the item it
+ *   follows in the baseline.
+ * - add: refused when a text is missing, cannot be printed or is over its limit, and when the list is full.
+ * - reset: the entry goes, and with it the texts of the items the draft had added. Edited wording of the
+ *   baseline's own items stays: each field has its own reset.
+ *
+ * A list never ends up with more items than its page can draw, or fewer (the registry's `max` and `min`): the
+ * press that would do it is refused. Moving the first item up, or the last down, changes nothing.
+ */
+export async function saveList(q: Query, change: ListChange, base: unknown = baseline): Promise<ListResult> {
+  const list = siteRegistry.lists.get(change.list);
+  if (!list) return { ok: false, reason: "unknown-list" };
+  const below = listItems(base, list.id);
+
+  const texts = new Map<string, string>();
+  if (change.op === "add") {
+    if (!isAddedId(change.id)) return { ok: false, reason: "unknown-item" };
+    for (const field of fieldsOfItem(list, change.id)) {
+      const key = field.path.at(-1)!;
+      const text = change.fields.get(key);
+      if (text === undefined) {
+        if (field.kind === "toggle") continue;
+        return { ok: false, reason: "missing-field", field: key };
+      }
+      const empty = field.kind !== "toggle" && text.trim() === "";
+      if (!usableValue(field, text)) return { ok: false, reason: empty ? "missing-field" : "unusable", field: key };
+      if (text.length > field.max) return { ok: false, reason: "too-long", field: key };
+      texts.set(field.id, text);
+    }
+  }
+
+  let refused: "unknown-item" | "full" | "too-few" | undefined;
+  let items = below;
+  const done = await transition(q, base, (now) => {
+    refused = undefined;
+    const before = listItems(applyOverlay(base, now.draft), list.id);
+    const text = { ...now.draft.text };
+    const dropTexts = (item: string) => {
+      for (const field of fieldsOfItem(list, item)) delete text[field.id];
+    };
+    let after = before;
+    if (change.op === "reset") {
+      after = below;
+      for (const item of before) if (!below.includes(item)) dropTexts(item);
+    } else if (change.op === "add") {
+      if (before.includes(change.id) || below.includes(change.id)) refused = "unknown-item";
+      else if (before.length >= list.max) refused = "full";
+      else {
+        after = [...before, change.id];
+        for (const [id, value] of texts) text[id] = value;
+      }
+    } else if (change.op === "back") {
+      if (!below.includes(change.item) || before.includes(change.item)) refused = "unknown-item";
+      else if (before.length >= list.max) refused = "full";
+      else {
+        // Back where it was: directly after the nearest item before it in the baseline that the list still has,
+        // wherever that item is now, or first when there is none (the rule mergeOrder places an unnamed item by).
+        const earlier = below.slice(0, below.indexOf(change.item)).reverse().find((item) => before.includes(item));
+        after = [...before];
+        after.splice(earlier === undefined ? 0 : before.indexOf(earlier) + 1, 0, change.item);
+      }
+    } else {
+      const at = before.indexOf(change.item);
+      if (at === -1) refused = "unknown-item";
+      else if (change.op === "remove") {
+        if (before.length <= list.min) refused = "too-few";
+        else {
+          after = before.filter((item) => item !== change.item);
+          if (!below.includes(change.item)) dropTexts(change.item);
+        }
+      } else {
+        const to = change.op === "up" ? at - 1 : at + 1;
+        if (to >= 0 && to < before.length) {
+          after = [...before];
+          [after[at], after[to]] = [after[to], after[at]];
+        }
+      }
+    }
+    if (refused) return null;
+    items = after;
+    const entry = diffListEdit(below, after);
+    const lists = Object.fromEntries(Object.entries(now.draft.lists).filter(([id]) => id !== list.id));
+    if (entry) lists[list.id] = entry;
+    const draft = normaliseOverlay(base, { ...now.draft, text, lists });
+    return sameOverlay(draft, now.draft) ? null : { ...now, draft };
+  });
+  if (done === "busy") return { ok: false, reason: "busy" };
+  if (refused) return { ok: false, reason: refused };
+  return { ok: true, changed: done.written, content: done.after, items };
 }
 
 /**
@@ -282,6 +420,11 @@ export type PublishResult =
  * one, nothing changes and the answer says so: a save from another tab is never published unread.
  *
  * A draft equal to what is published publishes nothing, and leaves `previous` alone: `changed` is false.
+ *
+ * What goes live is what the draft SHOWS (shownOverlay): the wording the draft keeps for items it has removed from a
+ * list is not published. It stays in the draft, so that after an Undo of this publish "Put back" still brings such
+ * an item back as it was edited. "Nothing is waiting" is therefore `shownOverlay(draft)` equal to `published`, never
+ * the two overlays equal.
  * `note` is added to the admin log row, which names what changed and not the text.
  *
  * `over` is what was on the site when the admin read the list of changes. When it is given and something else is
@@ -294,11 +437,14 @@ export async function publish(q: Query, by: string, checked: Overlay, o: { base?
   const over = o.over ? normaliseOverlay(base, o.over) : null;
   let moved = false;
   const done = await transition(q, base, (now) => {
-    const live = sameOverlay(now.draft, now.published);
+    const shown = shownOverlay(base, now.draft);
+    const live = sameOverlay(shown, now.published);
     // A draft that is live already is nothing to publish, whoever published it: that is not "changed", it is done.
     moved = !sameOverlay(now.draft, want) || (over !== null && !live && !sameOverlay(now.published, over));
     if (moved || live) return null;
-    return { draft: now.draft, published: now.draft, previous: now.published };
+    // The draft keeps the wording of the items it removes: an Undo of this publish puts such an item back on the
+    // site with that wording, and "Put back" in the editor must bring the same wording, not the original.
+    return { draft: now.draft, published: shown, previous: now.published };
   });
   if (done === "busy") return { ok: false, reason: "busy" };
   if (moved) return { ok: false, reason: "draft-changed" };

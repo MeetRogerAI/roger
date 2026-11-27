@@ -290,8 +290,10 @@ describe("what the registry says about a field", () => {
     for (const entry of page("home").sections[3].fields) expect(entry.claims, entry.id).toEqual({ path: "/", zones: ["compounding"] });
     expect(field("bricks.caption.week").placeholders).toEqual(captionNames);
     expect(field("bricks.caption.bricks").placeholders).toEqual(captionNames);
-    const others = fields.filter((f) => !f.id.startsWith("bricks.caption."));
+    // A switch holds no words, so no name in braces either.
+    const others = fields.filter((f) => !f.id.startsWith("bricks.caption.") && f.kind !== "toggle");
     for (const entry of others) expect(entry.placeholders, entry.id).toEqual(amountPlaceholderNames);
+    for (const entry of fields.filter((f) => f.kind === "toggle")) expect(entry.placeholders, entry.id).toEqual([]);
   });
 
   it("leaves out what Pages does not edit: titles and descriptions, names only a screen reader hears, addresses, /zack's warning", () => {
@@ -310,8 +312,10 @@ describe("what the registry says about a field", () => {
       expect(text.length, entry.id).toBeLessThanOrEqual(entry.max);
       expect(usableValue(entry, text), entry.id).toBe(true);
     }
-    // Every field of the site is one line of text today. Fields that keep their lines, and addresses, come with the examples and the links.
-    expect(new Set(fields.map((f) => f.kind))).toEqual(new Set(["line"]));
+    // Every field of the site is one line of text today, or a question's "Show on the homepage" switch (plan U7).
+    // Fields that keep their lines, and addresses, come with the examples and the links.
+    expect(new Set(fields.map((f) => f.kind))).toEqual(new Set(["line", "toggle"]));
+    expect(fields.filter((f) => f.kind === "toggle").map((f) => f.id)).toEqual(codeModel.questions.flatMap((group) => group.items.map((item) => `questions.${group.id}.items.${item.id}.home`)));
   });
 
   it("has every built-in wording already tidy, so a field saved without a change equals its baseline and is no edit (KTD6)", () => {

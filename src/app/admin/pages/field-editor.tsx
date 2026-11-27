@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { fullName, itemTitle } from "@/lib/site/content/caption";
 import { savePageAction, type SaveState } from "./actions";
+import { ListBlock, type ListProps } from "./list-editor";
 
 /**
  * One page's words, as one form with one Save (plan U5).
@@ -30,6 +31,14 @@ import { savePageAction, type SaveState } from "./actions";
  * wording as it stands in the box, "Question 3 — “What do I have to do each
  * week?”", so the owner never has to count.
  *
+ * A LIST (plan U7) is drawn by list-editor.tsx around its items' fields: the
+ * items can be moved, removed, put back and added there, each press saved at
+ * once as a draft, while their words stay in this form and its one Save. What
+ * is typed is held here by FIELD, so it stays with its item through every
+ * such press: a moved item keeps its typing, and a removed one has it again
+ * when it is put back. A new item's fields are held here too, so leaving
+ * with one half typed asks first.
+ *
  * A REFUSED SAVE moves the focus to the first field that needs fixing, whose
  * box is described by the reason.
  *
@@ -42,27 +51,41 @@ export type EditorField = {
   anchor: string;
   /** "Headline". */
   name: string;
+  /** A box of text, or a switch of an item ("Show on the homepage"), which holds "yes" or "no". */
+  kind: "text" | "toggle";
+  /** For a switch: what it does, in a sentence. */
+  hint: string | null;
   /** A paragraph's box, or one line's. */
   rows: number;
   max: number;
   /** The draft wording: what a save last stored, or the original. */
   value: string;
-  original: string;
+  /** Null for a text of an item that was added here: it has no original wording, so nothing to compare with or reset to. */
+  original: string | null;
   /** True when the draft wording is not on the site yet. */
   waiting: boolean;
   /** Which of `names` this field may hold. */
   names: number;
 };
-/** `title` is an item's place, "Question 3", or null for fields outside any item. The item's first field holds the wording that names it. */
-export type EditorGroup = { title: string | null; fields: EditorField[] };
+/** `title` is an item's place, "Question 3", or null for fields outside any item. The item's first field holds the wording that names it. `key` is the item's id, so its boxes stay its own wherever it moves. */
+export type EditorGroup = { key: string; title: string | null; fields: EditorField[] };
+/** A list an admin may reorder, add to and remove from: what list-editor.tsx draws, with each item's fields for this form to draw inside it. */
+export type EditorList = Omit<ListProps, "page" | "items" | "reviewAddress" | "adding" | "onAdding"> & { items: (EditorGroup & { added: boolean; waiting: string | null })[] };
+/** A section's words in the order the owner reads them: runs of fields, and lists. */
+export type EditorBlock = { kind: "fields"; group: EditorGroup } | { kind: "list"; list: EditorList };
 /** `off`: the draft has the section switched off. Its words stay here to be changed, marked as not on the page. */
-export type EditorSection = { id: string; label: string; groups: EditorGroup[]; off: boolean; /** The id its block has in the markup: the page’s own, since two editing screens can be in the document together. */ anchor: string };
+export type EditorSection = { id: string; label: string; blocks: EditorBlock[]; off: boolean; /** The id its block has in the markup: the page’s own, since two editing screens can be in the document together. */ anchor: string };
+
+/** Every run of fields of a section, a list's items among them, in the order they are on screen. */
+const groupsOf = (section: EditorSection): EditorGroup[] => section.blocks.flatMap((block) => (block.kind === "list" ? block.list.items : [block.group]));
 /** A name a text may hold in braces: as typed, what it shows, and what it shows today (null when that depends on where it is printed). */
 export type NameHint = { name: string; shows: string; now: string | null };
 
 const idle: SaveState = { status: "idle" };
 const LOST = "The save did not get through, so nothing was saved. Nothing you typed is lost: check your connection and press Save draft again. If it keeps happening, sign in again in another tab, then come back here.";
 const LEAVE = "You have typing on this page that is not saved yet. Leave without saving it?";
+const ON = "yes";
+const OFF = "no";
 const PUT_BACK = "The typing you had not saved on this page is back in its boxes, marked “Not saved yet”. Press Save draft to keep it.";
 /** Far over every field's limit and far under what one save may carry: a text longer than this is refused here, unsent. */
 const SEND_MAX = 20_000;
@@ -87,20 +110,24 @@ export function PageEditor({ page, sections, names, reviewAddress }: { page: str
   const [stored, setStored] = useState<Record<string, { text: string; over: string }>>({});
   /** The wording a reset took away, so it can be put back. */
   const [taken, setTaken] = useState<{ id: string; text: string } | null>(null);
+  /** What is typed for a new item of a list and not added yet, by list. Null (or nothing) while that list's form is closed. */
+  const [adding, setAdding] = useState<Record<string, Record<string, string> | null>>({});
   const [state, setState] = useState<SaveState>(idle);
   const [pending, start] = useTransition();
   /** Counts the saves this screen refused by itself. Each gives the refusal a new `at`, as the server's do, which is what moves the focus. */
   const refusals = useRef(0);
 
-  const fields = sections.flatMap((section) => section.groups.flatMap((group) => group.fields));
+  const fields = sections.flatMap((section) => groupsOf(section).flatMap((group) => group.fields));
   /** The wording the server holds for a field, as far as this screen knows. */
   const held = (field: EditorField) => (Object.hasOwn(stored, field.id) && stored[field.id].over === field.value ? stored[field.id].text : field.value);
   const shown = (field: EditorField) => (Object.hasOwn(typed, field.id) ? typed[field.id] : held(field));
   const unsaved = fields.filter((field) => shown(field) !== held(field));
-  const dirty = unsaved.length > 0;
+  /** A new item with something typed in it, which is in no list yet. */
+  const halfAdded = Object.values(adding).some((item) => item !== null && Object.values(item).some((text) => text.trim() !== ""));
+  const dirty = unsaved.length > 0 || halfAdded;
   /** Each field's whole name, with its item's wording as it stands in the item's first box. */
   const full = new Map<string, string>();
-  for (const section of sections) for (const group of section.groups) for (const field of group.fields) full.set(field.id, fullName(group.title, shown(group.fields[0]), field.name));
+  for (const section of sections) for (const group of groupsOf(section)) for (const field of group.fields) full.set(field.id, fullName(group.title, shown(group.fields[0]), field.name));
 
   // Typing that was not saved when this screen was last left in this tab (the Back button, a reload, a sign-in that
   // ran out) is put back, once, after the first render. Only into a field that still holds the wording it was typed
@@ -239,8 +266,10 @@ export function PageEditor({ page, sections, names, reviewAddress }: { page: str
 
   const reset = (field: EditorField) => {
     const before = shown(field);
+    if (field.original === null) return;
+    const original = field.original;
     // Nothing is stored for it: the box only goes back.
-    if (held(field) === field.original) {
+    if (held(field) === original) {
       setTyped((now) => Object.fromEntries(Object.entries(now).filter(([id]) => id !== field.id)));
       setTaken({ id: field.id, text: before });
       setState({ status: "ok", reset: field.id, message: "Back to the original wording." });
@@ -250,7 +279,7 @@ export function PageEditor({ page, sections, names, reviewAddress }: { page: str
     fd.set("page", page);
     fd.set("reset", field.id);
     send(fd, () => {
-      setStored((now) => ({ ...now, [field.id]: { text: field.original, over: field.value } }));
+      setStored((now) => ({ ...now, [field.id]: { text: original, over: field.value } }));
       setTyped((now) => Object.fromEntries(Object.entries(now).filter(([id]) => id !== field.id)));
       setTaken({ id: field.id, text: before });
     });
@@ -309,9 +338,24 @@ export function PageEditor({ page, sections, names, reviewAddress }: { page: str
             </p>
           )}
           <div className="mt-4 space-y-4">
-            {section.groups.map((group, g) =>
-              group.title ? (
-                <fieldset key={group.title} className="min-w-0 rounded-[8px] border border-rule bg-surface p-4 sm:p-5">
+            {section.blocks.map((block) => {
+              if (block.kind === "list") {
+                const { items, ...list } = block.list;
+                return (
+                  <ListBlock
+                    key={list.id}
+                    {...list}
+                    page={page}
+                    reviewAddress={reviewAddress}
+                    items={items.map((item) => ({ id: item.key, place: item.title ?? "", wording: shown(item.fields[0]), added: item.added, waiting: item.waiting, body: item.fields.map(fieldBox) }))}
+                    adding={adding[list.id] ?? null}
+                    onAdding={(next) => setAdding((now) => ({ ...now, [list.id]: next }))}
+                  />
+                );
+              }
+              const { group } = block;
+              return group.title ? (
+                <fieldset key={group.key} className="min-w-0 rounded-[8px] border border-rule bg-surface p-4 sm:p-5">
                   {/* The item's place and its wording as it stands in its first box: nobody has to count to know which one this is. */}
                   <legend data-item className={`max-w-full px-1 text-small font-[620] ${wrap}`}>
                     {itemTitle(group.title, shown(group.fields[0]))}
@@ -321,11 +365,11 @@ export function PageEditor({ page, sections, names, reviewAddress }: { page: str
                   </div>
                 </fieldset>
               ) : (
-                <div key={`plain-${g}`} className="space-y-6 rounded-[8px] border border-rule bg-surface p-4 sm:p-5">
+                <div key={group.key} className="space-y-6 rounded-[8px] border border-rule bg-surface p-4 sm:p-5">
                   {group.fields.map(fieldBox)}
                 </div>
-              ),
-            )}
+              );
+            })}
           </div>
         </section>
       ))}
@@ -337,7 +381,11 @@ export function PageEditor({ page, sections, names, reviewAddress }: { page: str
             {pending ? "Saving…" : "Save draft"}
           </button>
           <p data-unsaved className="text-small text-ink-2">
-            {dirty ? `${unsaved.length === 1 ? "1 field has" : `${unsaved.length} fields have`} typing that is not saved yet.` : "Nothing waiting to be saved."}
+            {unsaved.length > 0
+              ? `${unsaved.length === 1 ? "1 field has" : `${unsaved.length} fields have`} typing that is not saved yet.`
+              : halfAdded
+                ? "A new item is typed in and not added to its list yet: press its Add button."
+                : "Nothing waiting to be saved."}
           </p>
         </div>
         {/* Always in the page, so a screen reader hears a message when it arrives. */}
@@ -401,8 +449,71 @@ function FieldBox({
 }) {
   const input = `input-${field.id}`;
   const over = value.length - field.max;
-  const differs = value !== field.original;
+  const differs = field.original !== null && value !== field.original;
   const unsaved = value !== held;
+  const marks = (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+      {unsaved ? (
+        <span data-mark="unsaved" className={`${chip} border-ink text-ink`}>
+          Not saved yet
+        </span>
+      ) : (
+        field.waiting && (
+          <span data-mark="draft" className={`${chip} border-accent text-accent`}>
+            Draft, not published yet
+          </span>
+        )
+      )}
+      {differs && (
+        <>
+          <span data-mark="edited" className={`${chip} border-rule-strong text-ink-2`}>
+            Changed from the original
+          </span>
+          <button type="button" data-reset disabled={pending} onClick={onReset} className={quiet}>
+            {field.kind === "toggle" ? "Reset to the original" : "Reset to the original wording"}
+            <span className="sr-only">: {full}</span>
+          </button>
+        </>
+      )}
+      {taken !== null && !differs && (
+        <button type="button" data-put-back onClick={() => onPutBack(taken)} className={quiet}>
+          {field.kind === "toggle" ? "Put my choice back" : "Put my wording back"}
+          <span className="sr-only">: {full}</span>
+        </button>
+      )}
+    </div>
+  );
+
+  // A switch of an item: a checkbox with its label, saved with Save draft like the texts around it.
+  if (field.kind === "toggle") {
+    return (
+      <div id={field.anchor} data-field data-toggle data-edited={differs ? "" : undefined} className="min-w-0 scroll-mt-4">
+        <label className="flex min-h-10 items-center gap-3 text-small">
+          <input
+            type="checkbox"
+            id={input}
+            checked={value === ON}
+            onChange={(e) => onType(e.target.checked ? ON : OFF)}
+            aria-label={full}
+            aria-describedby={[field.hint ? `${input}-hint` : "", error ? `${input}-error` : ""].filter(Boolean).join(" ") || undefined}
+            className={`size-5 shrink-0 accent-ink ${clear}`}
+          />
+          <span aria-hidden="true">{field.name}</span>
+        </label>
+        {field.hint && (
+          <p id={`${input}-hint`} className="text-meta text-ink-2">
+            {field.hint}
+          </p>
+        )}
+        {error && (
+          <p id={`${input}-error`} data-error className="mt-1.5 text-small text-error">
+            {error}
+          </p>
+        )}
+        {marks}
+      </div>
+    );
+  }
   const used = namesIn(value);
   // The text as a visitor reads it today: each name that stands for an amount replaced by that amount.
   const reads = value.replace(/\{(\w+)\}/g, (typedName) => hints.find((entry) => entry.name === typedName)?.now ?? typedName);
@@ -463,34 +574,7 @@ function FieldBox({
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-        {unsaved ? (
-          <span data-mark="unsaved" className={`${chip} border-ink text-ink`}>
-            Not saved yet
-          </span>
-        ) : (
-          field.waiting && (
-            <span data-mark="draft" className={`${chip} border-accent text-accent`}>
-              Draft, not published yet
-            </span>
-          )
-        )}
-        {differs && (
-          <>
-            <span data-mark="edited" className={`${chip} border-rule-strong text-ink-2`}>
-              Changed from the original
-            </span>
-            <button type="button" data-reset disabled={pending} onClick={onReset} className={quiet}>
-              Reset to the original wording<span className="sr-only">: {full}</span>
-            </button>
-          </>
-        )}
-        {taken !== null && !differs && (
-          <button type="button" data-put-back onClick={() => onPutBack(taken)} className={quiet}>
-            Put my wording back<span className="sr-only">: {full}</span>
-          </button>
-        )}
-      </div>
+      {marks}
 
       {differs && (
         <details className="mt-2 text-small text-ink-2">
