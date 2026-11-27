@@ -108,7 +108,7 @@ describe("welcome_unsent (plan 2026-11-26-001, Unit 2)", () => {
     expect(await pass()).toEqual({ welcome_unsent: 1 });
     expect(await pass()).toEqual({ welcome_unsent: 0 });
     expect(sent.map((m) => [m.to[0], m.subject])).toEqual([["ana@example.com", "Welcome to Roger"]]);
-    expect(sent[0].text).toContain("When your first list is ready we’ll ask for your card.");
+    expect(sent[0].text).toContain("Your first two Cora lists are free.");
   });
 
   it("welcomes a trial that saved its card before the retry ran", async () => {

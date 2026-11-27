@@ -5,12 +5,12 @@ import { paymentCsp, PAYMENT_CSP_HEADER } from "./payment-csp";
 /** Plan 2026-11-26-001, Unit 6: the Payment page's CSP, on its routes only. */
 
 describe("Payment CSP", () => {
-  it("is sent on /start/payment and /start/payment/done only (report-only for now)", async () => {
+  it("is sent on /start/payment and /start/payment/done only (enforced)", async () => {
     const rules = await nextConfig.headers!();
     const withCsp = rules.filter((r) => r.headers.some((h) => /content-security-policy/i.test(h.key)));
     expect(withCsp.map((r) => r.source)).toEqual(["/start/payment", "/start/payment/done"]);
     for (const r of withCsp) expect(r.headers).toEqual([{ key: PAYMENT_CSP_HEADER, value: paymentCsp() }]);
-    expect(PAYMENT_CSP_HEADER).toBe("Content-Security-Policy-Report-Only");
+    expect(PAYMENT_CSP_HEADER).toBe("Content-Security-Policy");
   });
 
   it("allows Stripe's origins and nothing else outside Roger", () => {

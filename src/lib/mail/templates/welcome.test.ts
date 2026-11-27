@@ -9,10 +9,11 @@ describe("welcomeEmail (sent when sign-up ends at Step 3; plan 2026-11-26-001 Un
   const ca = welcomeEmail({ name: "Ana Silva", currency: "CAD", path: "running", settings });
   const us = welcomeEmail({ name: "Sam Lee", currency: "USD", path: "new", settings });
 
-  it("says the card is asked for when the first list is ready", () => {
+  it("says the first two lists are free, without saying when the card is asked for", () => {
     expect(ca.subject).toBe("Welcome to Roger");
     expect(ca.text).toContain("Welcome, Ana.");
-    expect(ca.text).toContain("Your first two Cora lists are free. When your first list is ready we’ll ask for your card.");
+    expect(ca.text).toContain("Your first two Cora lists are free.");
+    for (const m of [ca, us]) expect(m.text).not.toContain("ask for your card");
   });
 
   it("states the monthly price with the tax phrase for the currency", () => {

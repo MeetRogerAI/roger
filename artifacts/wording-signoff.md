@@ -27,7 +27,7 @@ File: `src/lib/mail/templates/welcome.ts` (sent when Step 3 is finished; a Canad
 ```text
 Welcome, Ana.
 
-Your first two Cora lists are free. When your first list is ready we’ll ask for your card.
+Your first two Cora lists are free.
 
 After that, Roger is CA$280 a month, plus HST. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.
 

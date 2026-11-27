@@ -8,9 +8,9 @@
  */
 export const PCI_LINE = "Payments are processed by Stripe, a PCI DSS Level 1 certified provider. Roger never sees your card number.";
 
-/** Roger has no separate refund page for the monthly plan yet; the terms hold the rule (no refunds; cancel any time), so one link names both. */
+/** The monthly plan's refund rule (no refunds; cancel any time) is a section of the terms, so one link names both and opens that section. */
 const POLICIES = [
-  { href: "/terms", label: "Terms and refunds" },
+  { href: "/terms#roger-monthly", label: "Terms and refunds" },
   { href: "/privacy", label: "Privacy" },
 ];
 

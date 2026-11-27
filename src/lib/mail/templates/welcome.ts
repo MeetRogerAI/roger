@@ -4,8 +4,8 @@ import { appUrl, renderEmail, type Rendered } from "../layout";
 
 /**
  * Email 2 (spec B.13): welcome, sent when sign-up ends at Step 3 (plan
- * 2026-11-26-001, Unit 2). No card has been asked for yet: it is asked for
- * when the first list is ready. Monthly is the only plan; the higher-rate
+ * 2026-11-26-001, Unit 2). No card has been asked for yet, and the email
+ * does not say when it will be (Peter's wording sign-off, 2026-11-26). Monthly is the only plan; the higher-rate
  * rule lives in the terms and FAQ, not here (origin R6).
  */
 export function welcomeEmail(o: { name: string; currency: Currency; path: string; settings: V3Settings }): Rendered {
@@ -21,7 +21,7 @@ export function welcomeEmail(o: { name: string; currency: Currency; path: string
     subject: "Welcome to Roger",
     preview: "Your first two Cora lists are free.",
     heading: `Welcome, ${o.name.split(" ")[0] || "there"}.`,
-    paragraphs: ["Your first two Cora lists are free. When your first list is ready we’ll ask for your card.", ...terms, next.line],
+    paragraphs: ["Your first two Cora lists are free.", ...terms, next.line],
     button: { label: next.label, url: appUrl("/app") },
   });
 }
