@@ -62,7 +62,7 @@ export function Sketch5({ copy }: SketchProps) {
             {copy.buttons.signIn}
           </Link>
           <StartLink audience="re" className="sk5-btn sk5-btn-s">
-            {copy.buttons.startShort}
+            {copy.buttons.start}
           </StartLink>
         </div>
       </header>

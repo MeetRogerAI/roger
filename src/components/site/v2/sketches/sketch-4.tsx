@@ -82,7 +82,7 @@ export function Sketch4({ copy }: SketchProps) {
             {copy.buttons.signIn}
           </Link>
           <StartLink audience="re" className="sk4-btn sk4-btn-s">
-            {copy.buttons.startShort}
+            {copy.buttons.start}
           </StartLink>
         </div>
       </Sketch4Nav>

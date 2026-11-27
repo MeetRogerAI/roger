@@ -59,7 +59,7 @@ export function Sketch3({ copy, amounts }: SketchProps) {
             {copy.buttons.signIn}
           </Link>
           <StartLink audience="re" className="sk3-pill sk3-pill-dark">
-            {copy.buttons.startShort}
+            {copy.buttons.start}
           </StartLink>
         </div>
       </header>
