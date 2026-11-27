@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
-import { siteConfig } from "@/data/config";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import Link from "next/link";
 import { Suspense } from "react";
 import { StickyCta } from "@/components/client-boot";
 import { WatchSentence } from "@/components/home/watch-sentence";
 import { LibraryBrowser, LibraryStatic } from "@/components/library-browser";
 import { getUseCases } from "@/lib/library-source";
+import { ClosingBand } from "@/components/site/v1/blocks/closing-band";
+import { closingBandCopy, v1Copy } from "@/data/site/v1";
+import { getAmounts } from "@/lib/site/amounts";
+import type { BuiltVersion } from "@/lib/site/version";
 
 export const metadata: Metadata = {
   title: { absolute: "Real AI agent use cases · Roger" },
@@ -15,8 +19,11 @@ export const metadata: Metadata = {
   openGraph: { url: "/library" },
 };
 
+const site = getServedSite();
+
+/** The band part-way down the list. A site version has none until its own is built. */
 function SetUpBand() {
-  if (siteConfig.flags.circlesMode) return (
+  if (site === "circles") return (
     <div className="on-night grid gap-6 rounded-[8px] bg-night p-8 text-night-ink sm:p-10 md:grid-cols-[1.2fr_1fr] md:items-center">
       <div><h2 className="text-h3">This is what people post.</h2><p className="mt-3 text-lead text-night-ink-2">A Circle gets what they don&apos;t.</p></div>
       <Link href="/apply" className="btn btn-m justify-self-start">Apply for a founding Circle</Link>
@@ -36,6 +43,28 @@ function SetUpBand() {
     </div>
   );
 }
+
+/**
+ * The one band a site version adds, above the footer (spec A.12): the library
+ * sentence, the primary start button and the trial line. The button has no
+ * audience, so it carries the one remembered from the homepage or /agents.
+ */
+async function TrialBand({ version }: { version: BuiltVersion }) {
+  const { copy } = v1Copy(await getAmounts());
+  return (
+    <div data-site={version} data-library-band>
+      <ClosingBand id="library-band" copy={closingBandCopy(copy, copy.library.band)} />
+    </div>
+  );
+}
+
+/**
+ * The word for the software. A site version says "AI agent" in full, because
+ * its readers in real estate are also called agents (spec 0.4, A.16 check 10).
+ * Circles and the legacy site keep "agent".
+ */
+const agent = isBuiltVersion(site) ? "AI agent" : "agent";
+const anyAgent = isBuiltVersion(site) ? "Any AI agent" : undefined;
 
 export default async function LibraryPage() {
   const items = await getUseCases();
@@ -57,10 +86,12 @@ export default async function LibraryPage() {
         </h1>
         <div className="after-lines">
           <p className="text-lead">
-            {items.length.toLocaleString("en-CA")} real things people’s agents did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.
+            {items.length.toLocaleString("en-CA")}
+            {` real things people’s ${agent}s did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.`}
           </p>
           <p className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
-            {siteConfig.flags.circlesMode ? <Link href="/apply" className="btn btn-m">Apply for a founding Circle</Link> : <Link href="/packs/solopreneur" className="btn btn-m">Get the free starter pack</Link>}
+            {site === "circles" && <Link href="/apply" className="btn btn-m">Apply for a founding Circle</Link>}
+            {site === "legacy" && <Link href="/packs/solopreneur" className="btn btn-m">Get the free starter pack</Link>}
             <Link href="#watch" className="tlink chev">
               Watch for what you need
             </Link>
@@ -68,8 +99,8 @@ export default async function LibraryPage() {
         </div>
       </section>
 
-      <Suspense fallback={<LibraryStatic items={items} />}>
-        <LibraryBrowser items={items} band={<SetUpBand />} />
+      <Suspense fallback={<LibraryStatic items={items} showOffer={site === "legacy"} anyAgent={anyAgent} />}>
+        <LibraryBrowser items={items} showOffer={site === "legacy"} anyAgent={anyAgent} band={isBuiltVersion(site) ? null : <SetUpBand />} />
       </Suspense>
 
       <section id="watch" aria-labelledby="watch-title" className="wrap scroll-mt-32 pb-8 pt-16 md:pt-24">
@@ -78,13 +109,15 @@ export default async function LibraryPage() {
           Not in the library yet?
         </h2>
         <div className="mt-6">
-          <WatchSentence />
+          <WatchSentence agent={agent} />
         </div>
-        <p className="mt-6 max-w-[36rem] text-small text-ink-2">The morning someone’s agent does it, you get one email with the link. Every email has a link to stop.</p>
+        <p className="mt-6 max-w-[36rem] text-small text-ink-2">{`The morning someone’s ${agent} does it, you get one email with the link. Every email has a link to stop.`}</p>
         </div>
       </section>
 
-      {!siteConfig.flags.circlesMode && <StickyCta actions={[{ kind: "setupCall", label: "Book a free setup call" }]} />}
+      {isBuiltVersion(site) && <TrialBand version={site} />}
+
+      {site === "legacy" && <StickyCta actions={[{ kind: "setupCall", label: "Book a free setup call" }]} />}
     </>
   );
 }

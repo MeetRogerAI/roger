@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { siteConfig } from "@/data/config";
+import { notFound, redirect } from "next/navigation";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 
 export const metadata: Metadata = {
   title: "Apply for a founding Circle",
@@ -10,10 +10,17 @@ export const metadata: Metadata = {
   alternates: { canonical: "/apply" },
 };
 
+// Under a site version this page only redirects, so there is no instant shell to validate.
+export const instant = false;
+
 // Deliberately no form, report box, fake submit or email side effect in this pass.
 // The launch version needs the complete two-step persistence and token flow.
 export default function ApplyPage() {
-  if (!siteConfig.flags.circlesMode) notFound();
+  const site = getServedSite();
+  // Under a site version the way in is sign-up. Redirected here, not in next.config.ts,
+  // so serving Circles again brings this page back (plan KTD4).
+  if (isBuiltVersion(site)) redirect("/start");
+  if (site !== "circles") notFound();
   return (
     <section className="mx-auto max-w-[760px] px-4 py-20 sm:px-6 lg:py-28">
       <p className="text-meta font-semibold uppercase tracking-wider text-accent">

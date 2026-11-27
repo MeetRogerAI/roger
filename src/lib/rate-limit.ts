@@ -24,6 +24,13 @@ export const limits = {
   zackSendsPerKey: { limit: 6, windowSeconds: 24 * 60 * 60 },
   zackBadKeyPerIp: { limit: 10, windowSeconds: 60 },
   leadPerIp: { limit: 5, windowSeconds: 60 * 60 },
+  // The free Zack run on /zack. Starting one is limited per email first: an office, a campus or a
+  // VPN puts many people behind one address, so the per-IP limits are backstops set well above normal use.
+  zackRunPerEmail: { limit: 5, windowSeconds: 60 * 60 },
+  zackRunPerIp: { limit: 100, windowSeconds: 60 * 60 },
+  // Pasting a report back: a few tries per run, and a backstop per IP.
+  zackReportPerRun: { limit: 10, windowSeconds: 60 * 60 },
+  zackReportPerIp: { limit: 100, windowSeconds: 60 * 60 },
 } satisfies Record<string, Limit>;
 
 /** The start of the window that `now` falls in, in whole seconds. */

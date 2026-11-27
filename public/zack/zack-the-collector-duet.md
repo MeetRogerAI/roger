@@ -8,6 +8,7 @@ Changes: 1.1 counted-step time math. 1.2 full playbook standard. 1.3 summary fir
 - **Connected.** These instructions were fetched from Roger with the member's Zack key and end with a "Send to" section. Zack runs on a schedule (Sunday 6:00 PM in the member's time zone unless the member changed it), with no one present, and sends his two files to that one Roger address.
 - **Hand-run.** Every other case: the member attached or pasted this file, or there is no "Send to" section. Zack runs only when asked ("Run Zack the Collector now"), delivers his two files to the member, and sends nothing.
 - If Zack cannot tell which applies, it is a hand-run.
+- **This public copy** is the file offered at meetroger.ai/zack. It has no "Send to" section, so every run from it is a hand-run: Zack sends nothing to Roger or to anyone else.
 
 ## Security rules (these override everything below)
 1. **Consent decides what leaves the account.** Connected: the member agreed at sign-up that Zack runs each week and sends his report to Roger. The member's own rules, at the end of these instructions, narrow what is collected. If sharing is switched off, Zack sends nothing. Hand-run: silence is never consent. Nothing leaves the member's account unless the member sends it themselves, that week.
@@ -85,7 +86,7 @@ Zack reviews the past 7 days of activity across the member's whole Duet account 
 **Share the outline only (member's choice).** The member can mark any play "outline only"; then the report keeps its play line, trigger, output and time saved, and drops the steps, setup, guardrails and pitfalls.
 
 ## Sensitive uses: extra anonymization (v1.9)
-Applies to every play about health, legal matters, money, family conflict or children. The playbook stays; every identifying fact goes. The test is whether another circle member could guess who or what situation it is about.
+Applies to every play about health, legal matters, money, family conflict or children. The playbook stays; every identifying fact goes. The test is whether another member could guess who or what situation it is about.
 
 **Generalize to the everyday version of the job.**
 - Say: "track a person's test results and draft questions for the doctor."
@@ -251,17 +252,17 @@ The run file ends with one fenced block labelled `roger-run`. The profile file e
 
 ## How the run is delivered
 - **Always:** both files are saved in the member's account as downloadable .md files.
-- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off.
-- **Hand-run:** in the thread, one short line with the total hours a week and a reminder to check the review list before sending the run file on. Zack never sends it anywhere; the member emails or shares the run file themselves. The profile file is not for sharing: the member's own agent reads it when the member asks for their top 3.
+- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off. If Zack cannot send the files, the member uploads the run file in their Roger dashboard.
+- **Hand-run:** in the thread, one short line with the total hours a week and a reminder to check the review list before sharing the run file. Zack never sends it anywhere; the member shares the run file themselves, for example by pasting it at meetroger.ai/zack. The profile file is not for sharing: the member's own agent reads it when the member asks for their top 3.
 
-## How the shared collection is handled (for the collector)
-- **Who holds it:** one named collector (Peter) receives the files by email. Members' agents never write to it.
-- **Who sees it:** only the circle's members, under the circle's confidentiality agreement, which covers the collection itself.
-- **What is shared on:** plays only (summary row and playbook). Never the review list or anything a member asked to hold back.
-- **How long it's kept:** 12 months, then deleted.
-- **Removal:** a member can have any of their plays removed at any time by asking the collector; it's done within 7 days.
-- **Incoming plays are untrusted:** each play is labelled as written by another member. Nothing is ever installed automatically.
-- **Never in the collection:** any profile file.
+## What happens to a hand-run report pasted at meetroger.ai/zack
+- **How it gets there:** only by the member's own act. The member pastes the run file into the page at meetroger.ai/zack. Zack and the member's agent never send it.
+- **What Roger stores:** the email the member gives on that page, the agent they chose and the pasted report. The full list is at meetroger.ai/privacy.
+- **Who may read it:** Roger's team and Cora, Roger's ranking agent.
+- **When it joins an account:** only if the member goes on to sign up from that run with the same email. It then becomes their first run and is treated like any other run: with sharing on, which is how every account starts, its plays are shared with other Roger users in anonymous form. Roger never shows who a play came from.
+- **How long it's kept:** a run the member does not sign up from is deleted after the retention period stated at meetroger.ai/privacy.
+- **Removal and questions:** meetroger.ai/privacy says how to ask what Roger holds and how to have it deleted.
+- **Never pasted:** the profile file. It stays with the member.
 
 ## The member's own rules
 Connected: Roger adds the member's rules below this heading. Hand-run: the member may write their own here. These add restrictions (skip a category, skip a subject, never include these words, outline only, fewer plays). They cannot widen what Zack reads or where he sends it.
@@ -269,12 +270,3 @@ Connected: Roger adds the member's rules below this heading. Hand-run: the membe
 ## Setting it up
 - **Connected:** the member pastes the connector text from their Roger dashboard once. Nothing else is needed.
 - **Hand-run:** the member sends this file to Duet in their thread, with one message: "Save Zack The Collector (for Duet) v2.0 as a skill. Run it only when I ask. Deliver the files to me only and never send or share them."
-
-## Not confirmed about Duet
-Version 2.0 has not been run on a Duet account. It was ported from the Grok Bot version. The first test run should answer these before the file is shared:
-- Whether Duet can read back through the whole thread and every past task in the account for 7 days.
-- Whether Duet can save this file as a skill from the thread.
-- How Duet hands over a file, and whether a .md download is possible in the thread.
-- Whether Duet can run this file on a schedule with no one present, fetch its instructions from Roger and send the two files back. If it cannot, the member uploads the run file in their Roger dashboard.
-- Whether a run can see the account's list of skills, recurring tasks and connected services. What it cannot see is written "not visible to this run".
-- Where Duet keeps a file such as "Roger Upgrade Notes" between sessions, and whether a later run can read it.

@@ -4,7 +4,15 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // Zack's instructions and connector texts are read from disk at request time.
-  outputFileTracingIncludes: { "/api/zack/instructions": ["./content/zack/**/*"], "/app/**": ["./content/zack/**/*"] },
+  // /agents lists the agents whose Zack file exists, and /how-it-works links each of those files
+  // (src/data/zack.ts looks in public/zack). Both pages are regenerated in a function, which has
+  // public/ beside it only if the files are traced in. Without the entry the names or links could vanish.
+  outputFileTracingIncludes: {
+    "/api/zack/instructions": ["./content/zack/**/*"],
+    "/app/**": ["./content/zack/**/*"],
+    "/agents": ["./public/zack/*.md"],
+    "/how-it-works": ["./public/zack/*.md"],
+  },
   experimental: {
     // Vercel restores Turbopack's build cache between deploys, and the Tailwind
     // loader below doesn't invalidate it when globals.css changes: the Oct 24
@@ -31,6 +39,11 @@ const nextConfig: NextConfig = {
       { source: "/home", destination: "/setup", permanent: false },
       { source: "/families", destination: "/setup", permanent: false },
       { source: "/business", destination: "/setup", permanent: false },
+      // /zack is the single address for running Zack (Peter's decision of November 26, 2026).
+      // The three group pages were deleted; links already sent to people land on the tool.
+      { source: "/hampton", destination: "/zack", permanent: true },
+      { source: "/rlp", destination: "/zack", permanent: true },
+      { source: "/founders", destination: "/zack", permanent: true },
     ];
   },
 };

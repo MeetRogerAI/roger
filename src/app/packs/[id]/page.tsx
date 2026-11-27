@@ -1,4 +1,4 @@
-import { siteConfig } from "@/data/config";
+import { hiddenLegacyRobots } from "@/lib/site/version";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -23,7 +23,7 @@ export async function generateMetadata({
   const p = packs.find((x) => x.id === id);
   return p
     ? {
-        ...(siteConfig.flags.circlesMode ? { robots: { index: false, follow: false } } : {}),
+        ...hiddenLegacyRobots(),
         title: `${p.persona} starter pack: ${p.title}`,
         description: p.blurb,
         alternates: { canonical: `/packs/${p.id}` },

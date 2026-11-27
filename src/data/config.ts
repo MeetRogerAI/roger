@@ -1,3 +1,6 @@
+/** The Circles preview, or a site version built from the marketing spec. */
+export type SiteVersion = "circles" | "v1" | "v2" | "v3";
+
 /**
  * Everything Peter edits by hand lives here. Anything in this file ships to the
  * browser, so never put a secret or the work-balance Payment Link in it.
@@ -6,7 +9,14 @@
  */
 export const siteConfig = {
   productName: "Roger",
-  /** Feature-branch preview. Disable to restore the library-led site. */
+  /**
+   * Which public site is served: v1. Merging to main makes it live, and
+   * previews show the same. `live` is production; `preview` is Vercel
+   * previews, local development and tests; anywhere else gets `live`.
+   * Read through src/lib/site/version.ts, never from here.
+   */
+  site: { live: "v1" as SiteVersion, preview: "v1" as SiteVersion },
+  /** Applies while the site above is "circles". Disable to restore the library-led site. */
   flags: { circlesMode: true },
   circles: {
     priceUsd: 200,
@@ -28,7 +38,16 @@ export const siteConfig = {
     bio: [
       "A background in coding education: years teaching people to build with new tools.",
     ] as string[],
-    photo: "" as string, // e.g. "/peter.jpg" (square, at least 480px). Hidden while empty.
+    /**
+     * Peter's photograph: a path under public/, e.g. "/media/peter.jpg" (at least 480px wide; it is cropped to 4:5).
+     * Shown once set, on the site's "Who runs this" and the company pages. Hidden while empty.
+     */
+    photo: "" as string,
+    /**
+     * Peter's signature: a path under public/, e.g. "/media/peter-signature.png" (dark ink on a clear background).
+     * Shown under his letter on the site's /about once set. While empty, his name is typed there instead.
+     */
+    signature: "" as string,
     city: "Toronto",
     links: [] as { label: string; href: string }[], // e.g. { label: "X", href: "https://x.com/…" }
   },

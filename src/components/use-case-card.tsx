@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { siteConfig } from "@/data/config";
 import { categoryLabel, type UseCase } from "@/data/library";
 
 export function ExternalIcon({ className = "size-3.5" }: { className?: string }) {
@@ -22,8 +21,10 @@ function offerHref(u: UseCase) {
 /**
  * A use case from the weekly radar, in our words. Always credits the author,
  * links the original post, and says what it would take to get the same thing.
+ * `showOffer` adds the setup offer link, which belongs to the legacy site only;
+ * the caller decides, because this file also renders in the browser.
  */
-export function UseCaseCard({ u, figure, size = "grid", headingLevel = 3 }: { u: UseCase; figure?: { value: string; label: string }; size?: "grid" | "rail"; headingLevel?: 2 | 3 }) {
+export function UseCaseCard({ u, showOffer = false, figure, size = "grid", headingLevel = 3 }: { u: UseCase; showOffer?: boolean; figure?: { value: string; label: string }; size?: "grid" | "rail"; headingLevel?: 2 | 3 }) {
   const H = headingLevel === 2 ? "h2" : "h3";
   const miss = u.outcome === "honest-miss";
   return (
@@ -61,7 +62,7 @@ export function UseCaseCard({ u, figure, size = "grid", headingLevel = 3 }: { u:
             <ExternalIcon />
             <span className="sr-only">Read the original post on X (opens in a new tab)</span>
           </a>
-          {!siteConfig.flags.circlesMode && (<Link href={offerHref(u)} className="tlink-quiet chev" data-to-offer={u.id}>
+          {showOffer && (<Link href={offerHref(u)} className="tlink-quiet chev" data-to-offer={u.id}>
             We can set this up
           </Link>)}
         </div>
@@ -73,13 +74,16 @@ export function UseCaseCard({ u, figure, size = "grid", headingLevel = 3 }: { u:
 /**
  * A use case as a banded row: the agent, what it did in our words, and the
  * author's post. Rows are told apart by tone, never by lines.
+ *
+ * `anyAgent` is the label of a use case that names no tool. A site version
+ * passes "Any AI agent" (spec 0.4); like `showOffer`, the caller decides.
  */
-export function UseCaseRow({ u, shade }: { u: UseCase; shade: boolean }) {
+export function UseCaseRow({ u, shade, showOffer = false, anyAgent = "Any agent" }: { u: UseCase; shade: boolean; showOffer?: boolean; anyAgent?: string }) {
   const miss = u.outcome === "honest-miss";
   return (
     <article className={`grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-2 rounded-[8px] px-5 py-5 sm:px-6 md:grid-cols-[8rem_minmax(0,1fr)_12rem] md:items-start ${shade ? "bg-[#ececef]" : "bg-ground-2"}`}>
       <p className="text-small font-[560] text-ink-2">
-        {u.tool || "Any agent"}
+        {u.tool || anyAgent}
         <span className="block text-[0.8125rem] font-normal">{miss ? "Didn’t go as planned" : categoryLabel(u.category)}</span>
       </p>
       <div className="min-w-0">
@@ -92,7 +96,7 @@ export function UseCaseRow({ u, shade }: { u: UseCase; shade: boolean }) {
           <ExternalIcon />
           <span className="sr-only">Read the original post (opens in a new tab)</span>
         </a>
-        {!siteConfig.flags.circlesMode && (<Link href={offerHref(u)} className="tlink chev inline-block py-1" data-to-offer={u.id}>
+        {showOffer && (<Link href={offerHref(u)} className="tlink chev inline-block py-1" data-to-offer={u.id}>
           We can set this up
         </Link>)}
       </div>

@@ -1,6 +1,6 @@
 # Roger Install: the instructions behind "Implement these 3 in my system"
 
-Version 1.0 · November 22, 2026 · Roger (meetroger.ai) · Draft for Peter's approval
+Version 1.0 · November 22, 2026 · Roger (meetroger.ai)
 Replaces the one-paragraph playbook preface (`v3.playbookPreface`).
 
 ## How a member uses it

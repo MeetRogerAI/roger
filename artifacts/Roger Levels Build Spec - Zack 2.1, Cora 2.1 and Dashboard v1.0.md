@@ -1,6 +1,6 @@
 # Roger Levels Build Spec: Zack 2.1, Cora 2.1 and Dashboard v1.0
 
-Version 1.0 · November 25, 2026 · Roger (meetroger.ai) · Draft for Peter's approval
+Version 1.0 · November 25, 2026 · Roger (meetroger.ai)
 Implements: `Roger AI Agent Levels and Check Charts v1.0.md` (the ten levels, rules and check charts). Read that file first; rule and item numbers here (for example rule 2.3, item 7.03) refer to it.
 For: the Roger build agents, Claude Code, and whoever edits the Zack and Cora files.
 

@@ -1,9 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import { confirmWatch } from "@/lib/watches";
 
 export const metadata: Metadata = { title: "Watch confirmed", robots: { index: false } };
+
+/**
+ * Reached from the library's watch email. A site version says "AI agent" in
+ * full, as /library does (spec 0.4, A.16 check 10), and its library is at
+ * /library: "/" is the homepage there. Circles and the legacy site keep
+ * "agent" and the link they had.
+ */
+const site = getServedSite();
+const version = isBuiltVersion(site) ? site : undefined;
+const agent = version ? "AI agent" : "agent";
+const library = version ? "/library" : "/";
 
 async function Result({ searchParams }: { searchParams: Promise<{ t?: string }> }) {
   const { t } = await searchParams;
@@ -12,7 +24,8 @@ async function Result({ searchParams }: { searchParams: Promise<{ t?: string }> 
     <>
       <h1 className="text-h2">You’re watching for it.</h1>
       <p className="mt-4 max-w-[34rem] text-lead">
-        We’ll email you the day someone’s agent does <strong className="font-[600] text-ink">“{query}”</strong>. The library checks new posts every morning.
+        {`We’ll email you the day someone’s ${agent} does `}
+        <strong className="font-[600] text-ink">“{query}”</strong>. The library checks new posts every morning.
       </p>
     </>
   ) : (
@@ -25,12 +38,12 @@ async function Result({ searchParams }: { searchParams: Promise<{ t?: string }> 
 
 export default function Page({ searchParams }: PageProps<"/watch/confirm">) {
   return (
-    <section className="wrap py-24 md:py-32">
+    <section data-site={version} className="wrap py-24 md:py-32">
       <Suspense fallback={<p className="text-lead">Confirming…</p>}>
         <Result searchParams={searchParams as Promise<{ t?: string }>} />
       </Suspense>
       <p className="mt-10">
-        <Link className="tlink chev" href="/">
+        <Link className="tlink chev" href={library}>
           Back to the library
         </Link>
       </p>
