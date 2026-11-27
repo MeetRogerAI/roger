@@ -340,12 +340,13 @@ describe("the price block", () => {
     expect(Object.keys(copy.price).sort()).toEqual(["perMonth", "switchLabel", "tax"]);
   });
 
-  it("has Peter's line directly under its heading, before the currency switch", async () => {
+  it("has nothing between its heading and the currency switch (the line under the heading was removed on November 27, 2026)", async () => {
     expect(copy.priceBlock.sub).toBe("Get two Cora Curations for free and pay only after you have tried the product for two full weeks.");
     // Both counts are the number of free Cora Curations, from the settings: one arrives each Monday.
     expect(v1.priceBlock.sub).toBe("Get {freeLists} Cora Curations for free and pay only after you have tried the product for {freeLists} full weeks.");
     const markup = await render("USD");
-    expect(markup).toMatch(new RegExp(`</h2><p data-price-sub="true"[^>]*>${copy.priceBlock.sub}</p>`));
+    expect(markup).not.toContain("data-price-sub");
+    expect(text(markup)).not.toContain(copy.priceBlock.sub);
     expect(markup.indexOf("data-price-sub")).toBeLessThan(markup.indexOf('role="group"'));
   });
 

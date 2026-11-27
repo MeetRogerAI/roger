@@ -327,7 +327,8 @@ describe("the v1 homepage's sections", () => {
     // Monthly only, under Peter's line.
     expect(usd.match(/data-plan="/g)).toHaveLength(1);
     expect(text(usd)).not.toMatch(/one list|one at a time|\/ list\b/i);
-    expect(text(usd).startsWith(`${copy.priceBlock.title} Get two Cora Curations for free and pay only after you have tried the product for two full weeks.`)).toBe(true);
+    expect(text(usd).startsWith(`${copy.priceBlock.title} USD`)).toBe(true);
+    expect(text(usd)).not.toContain("two full weeks");
 
     // The block is the child of CountryDefault: the part streamed in for a visitor in Canada opens on CAD, with the same audience.
     expect(streamed(await full())).toMatch(/aria-pressed="true"[^>]*>USD</);

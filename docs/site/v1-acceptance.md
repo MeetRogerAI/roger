@@ -23,7 +23,7 @@ Peter read the homepage on the preview and asked for changes. Every string, befo
 - The site speaks to anyone who uses AI agents, not to people in real estate.
 - The marketing pages show monthly only. The second plan card, its FAQ entry and the two-column comparison on `/pricing` are removed.
 - What arrives each Monday is a "Cora Curation". Every start button, the header's included, reads "Get two free Cora Curations".
-- The line under the price, and under the closing band's line, is "Get two Cora Curations for free and pay only after you have tried the product for two full weeks."
+- The price section has no line under its heading (removed November 27, 2026). The closing band of the reading pages still carries "Get two Cora Curations for free and pay only after you have tried the product for two full weeks."
 - The hero's picture is the four parts of "How it works", one headline at a time, under the labels Use, Collect, Curate, Deploy.
 - The sample idea is an accordion, folded when the page loads: The Idea (Summary, What To Copy) and The Playbook (one row, "8 steps", which opens to a row for each step).
 - "It compounds" is a loop of seven states (weeks 1, 2, 3, 4, 10, 17 and 26) in place of the scroll story of four.
