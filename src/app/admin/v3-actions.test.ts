@@ -54,6 +54,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["undoExcuse", () => actions.undoExcuseAction(idle, form({ week: "2026-12-14" }))],
     ["pilotLink", () => actions.pilotLinkAction(idle, form({ email: "p@example.com", name: "P" }))],
     ["linkContributor", () => actions.linkContributorAction(idle, form({ contributorId: "x" }))],
+    ["clearDisplayName", () => actions.clearDisplayNameAction(idle, form({ userId: "x" }))],
     ["closeAccount", () => actions.closeAccountAction(idle, form({ userId: "x", confirm: "yes" }))],
     ["deleteAccount", () => actions.deleteAccountAction(idle, form({ userId: "x" }))],
     ["changeEmail", () => actions.changeEmailAction(idle, form({ userId: "x", email: "z@example.com" }))],
@@ -88,6 +89,19 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
 });
 
 describe("for an admin", () => {
+  it("clears a display name, which takes the member off the leaderboard, and logs it (B2 Unit 7)", async () => {
+    await current("update users set display_name = 'Ana B.', leaderboard_opt_in_at = now() where id = $1", [uid]);
+    expect(await actions.clearDisplayNameAction({ status: "idle" }, form({ userId: uid })).catch((e) => e.message)).toBe("Not signed in");
+    expect(await current("select display_name from users where id = $1", [uid])).toEqual([{ display_name: "Ana B." }]);
+    admin = "admin@example.com";
+    expect(await actions.clearDisplayNameAction({ status: "idle" }, form({ userId: uid }))).toMatchObject({ status: "ok" });
+    expect(await current("select display_name, leaderboard_opt_in_at from users where id = $1", [uid])).toEqual([{ display_name: "", leaderboard_opt_in_at: null }]);
+    expect(await actions.clearDisplayNameAction({ status: "idle" }, form({ userId: "" }))).toMatchObject({ status: "error", message: "No such user." });
+    expect(await current("select admin_email, action, detail from admin_actions")).toEqual([
+      { admin_email: "admin@example.com", action: "clear_display_name", detail: { name: "Ana B.", wasOnLeaderboard: true } },
+    ]);
+  });
+
   it("acts and logs who did it", async () => {
     admin = "admin@example.com";
     expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: uid }))).toMatchObject({ status: "ok" });

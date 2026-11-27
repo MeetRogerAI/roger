@@ -13,6 +13,16 @@ async function ReferralsLink() {
   );
 }
 
+/** Shown only while the leaderboard is switched on (B2 Unit 7). */
+async function LeaderboardLink() {
+  if (!featureOn(await getV3SettingsForDisplay(), "leaderboardOn")) return null;
+  return (
+    <Link href="/app/leaderboard" className="tlink">
+      Leaderboard
+    </Link>
+  );
+}
+
 /** The signed-in navigation. Sign out is a POST from this page (see /auth/signout). */
 export function AppNav() {
   return (
@@ -29,6 +39,9 @@ export function AppNav() {
         </Link>
         <Suspense fallback={null}>
           <ReferralsLink />
+        </Suspense>
+        <Suspense fallback={null}>
+          <LeaderboardLink />
         </Suspense>
         <Link href="/app/settings" className="tlink">
           Settings

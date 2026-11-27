@@ -997,3 +997,19 @@ alter table users add column if not exists credit_lapse_tried_at timestamptz;
 -- pick counts for a contributor only if contributed_week is null (from before
 -- B2) or earlier than the pick's week_of. contributed_at stays as an audit stamp.
 alter table pool_play_contributors add column if not exists contributed_week date;
+-- 2026-11-27, B2 Unit 7 review. users.leaderboard_name_key: the skeleton of the
+-- board name (src/lib/growth/leaderboard-name.ts skeleton: Latin letters with
+-- accents, case and look-alikes such as 0/o, i/l and rn/m folded), written
+-- whenever the board name is set. Its unique index among opted-in members
+-- replaces the lower(display_name) one (created first, then the old one
+-- dropped), so there is one source of truth for a taken name. An opted-in row
+-- with no key (from before this) is not on the board as far as the app is
+-- concerned, and gets a key when the member joins again. Nothing is cleared.
+alter table users add column if not exists leaderboard_name_key text;
+create unique index if not exists users_leaderboard_name_key on users (leaderboard_name_key) where leaderboard_opt_in_at is not null;
+drop index if exists users_leaderboard_name;
+-- A closed or cancelled account leaves the board, whichever code path closes
+-- it, so its name is free for someone else. One line each, so setup.mjs keeps them whole.
+create or replace function users_leave_board_on_close() returns trigger language plpgsql as $$ begin if new.status in ('closed', 'cancelled') then new.leaderboard_opt_in_at := null; end if; return new; end $$;
+create or replace trigger users_leave_board_on_close before insert or update of status on users for each row execute function users_leave_board_on_close();
+update users set leaderboard_opt_in_at = null where leaderboard_opt_in_at is not null and status in ('closed', 'cancelled');

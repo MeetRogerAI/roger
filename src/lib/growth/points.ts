@@ -267,24 +267,22 @@ export async function standings(q: Query): Promise<Standing[]> {
 }
 
 /**
- * Many members' standings in one read (the stats email, Unit 8). A member
- * with no points (or an unknown id) gets zeros and ranks after all who have some.
+ * The one standing reader (Unit 7 review): a member's standing from the full
+ * list. A member with no points (or an unknown id) gets zeros and ranks after
+ * everyone who has some (rank = number of members with points + 1).
  */
+export function myStanding(all: Standing[], userId: string): Standing {
+  return all.find((s) => s.userId === userId) ?? { userId, adopted: 0, confirmed: 0, total: 0, rank: all.length + 1 };
+}
+
+/** Many members' standings in one read (the stats email, Unit 8). */
 export async function standingsFor(q: Query, userIds: string[]): Promise<Map<string, Standing>> {
   const all = await standings(q);
   const byId = new Map(all.map((s) => [s.userId, s]));
-  const last = all.length + 1;
-  return new Map(userIds.map((id) => [id, byId.get(id) ?? { userId: id, adopted: 0, confirmed: 0, total: 0, rank: last }]));
+  return new Map(userIds.map((id) => [id, byId.get(id) ?? myStanding(all, id)]));
 }
 
-/** One member's points and rank; a member with no points has zeros and ranks after all who have some. */
+/** One member's points and rank (the leaderboard page and API); the same rule as myStanding. */
 export async function standingOf(q: Query, userId: string): Promise<Standing> {
-  const [r] = await q<StandingRow>(
-    `with ${TOTALS}, me as (select adopted, confirmed, total from totals where user_id = $1::uuid)
-     select $1::text as user_id, coalesce((select adopted from me), 0) as adopted, coalesce((select confirmed from me), 0) as confirmed,
-            coalesce((select total from me), 0) as total,
-            1 + (select count(*) from totals where total > coalesce((select total from me), 0)) as rank`,
-    [userId],
-  );
-  return toStanding(r);
+  return myStanding(await standings(q), userId);
 }

@@ -537,7 +537,7 @@ sequenceDiagram
 
 **Verification:** Point totals match a hand calculation on a seeded week.
 
-- [ ] **Unit 7: Leaderboard (opt-in)**
+- [x] **Unit 7: Leaderboard (opt-in)**
 
 **Goal:** `/app/leaderboard` with an explicit opt-in.
 

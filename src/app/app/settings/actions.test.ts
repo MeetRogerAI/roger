@@ -69,6 +69,23 @@ describe("settings actions", () => {
     expect(refreshed).toBe(1);
   });
 
+  it("applies the leaderboard's name rules to a member on the board, and answers a taken name with a message (B2 Unit 7)", async () => {
+    const save = (displayName: string) => saveProfileAction({ status: "idle" }, form({ name: "Ana", displayName, timezone: "America/Toronto" }));
+    await current("update users set display_name = 'Bo B.', leaderboard_name_key = 'bob', leaderboard_opt_in_at = now() where id = $1", [other]);
+    await current("update users set display_name = 'Ana A.', leaderboard_name_key = 'anaa', leaderboard_opt_in_at = now() where id = $1", [signedIn]);
+    expect(await save("bo b.")).toMatchObject({ status: "error", errors: { displayName: "That name is taken. Try another." } });
+    expect(await save("B0 B")).toMatchObject({ status: "error", errors: { displayName: "That name is taken. Try another." } });
+    expect(await save("Rоger")).toMatchObject({ status: "error", errors: { displayName: expect.stringContaining("Latin letters") } });
+    expect(await save("Roger")).toMatchObject({ status: "error", errors: { displayName: "That name is reserved. Try another." } });
+    expect(await save("")).toMatchObject({ status: "error", errors: { displayName: expect.stringContaining("Leave the board") } });
+    expect(await current("select display_name from users where id = $1", [signedIn])).toEqual([{ display_name: "Ana A." }]);
+    expect(await save("Ana Ｂ.")).toMatchObject({ status: "saved", values: { displayName: "Ana B." } });
+    expect(await current("select display_name, leaderboard_name_key as key from users where id = $1", [signedIn])).toEqual([{ display_name: "Ana B.", key: "anab" }]);
+    // Off the board, settings keep their own looser rules and a name another member uses is fine.
+    await current("update users set leaderboard_opt_in_at = null where id = $1", [signedIn]);
+    expect(await save("Bo B.")).toMatchObject({ status: "saved" });
+  });
+
   it("refuses someone not signed in", async () => {
     signedIn = null;
     await expect(saveProfileAction({ status: "idle" }, form({ name: "X", timezone: "America/Toronto" }))).rejects.toThrow("Not signed in");

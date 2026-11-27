@@ -2,7 +2,7 @@
 
 *Generated on November 26, 2026 from the code on PR #58 (the real templates and screens, with sample names and ideas). Each section names the file the words live in. Mark changes in a comment on the launch list or tell Claude Code; nothing here is live until sign-up opens.*
 
-Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails) · [9. Referral credit wording (Unit 5)](#9-referral-credit-wording-unit-5--pending-peters-sign-off)
+Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails) · [9. Referral credit wording (Unit 5)](#9-referral-credit-wording-unit-5--pending-peters-sign-off) · [10. Leaderboard wording (Unit 7)](#10-leaderboard-wording-unit-7--pending-peters-sign-off)
 
 ## 1. Step 3, Product and Pricing
 
@@ -301,4 +301,90 @@ Your first charge is now CA$316.40 with tax, not the amount we told you before. 
 
 ```text
 Credit applied −CA$280.00 · Card charged CA$36.40. The credit shown is your referral credit balance as this email is sent.
+```
+
+## 10. Leaderboard wording (Unit 7) — pending Peter's sign-off
+
+*Added on November 27, 2026 from the B2 branch (plan `docs/plans/2026-11-27-001-feat-roger-v3-b2-growth-plan.md`, Unit 7). Sample names: Ken R., Mia. Nothing here shows until `leaderboardOn` is switched on, except the "paused" line and Leave.*
+
+**Navigation** (`src/components/app/app-nav.tsx`):
+
+```text
+Leaderboard
+```
+
+**The page** (`src/app/app/leaderboard/page.tsx`):
+
+```text
+Leaderboard
+The leaderboard is coming soon. We’ll let you know when it opens.
+The leaderboard is paused. Your name isn’t shown to anyone while it is, and you can still leave.
+Your standing
+Points · Rank · On the board
+3 · 3rd · Yes, as Ken R.
+0 · Not ranked yet: no points so far · No, only you can see this
+2 users adopted your ideas · 1 set-up confirmed
+1 user adopted your idea · 1 set-up confirmed
+Join the board
+Your name on the board
+You’re not on the board. Choose a name to show other members your rank and points. You can leave any time.
+The board
+A point when Cora picks one of your plays for another member, and one more when they confirm it’s set up. Ranks count every member, including those not on the board.
+Rank · Member · Points
+1st · Mia · 4 — 3 users adopted their ideas · 1 set-up confirmed
+3rd · Ken R. (you) · 3
+– (read aloud: "No points yet") · a member with no points
+No one has joined the board yet.
+You’re not in the top 100. Your rank is above.
+```
+
+**The join and leave controls** (`src/components/app/leaderboard-forms.tsx`):
+
+```text
+The name to show on the board   /   Your name on the board
+2 to 30 characters: Latin letters (accents are fine), numbers, spaces and . ’ - &. Other members see this name, your rank and your points.
+Join the board   /   Change name   /   Saving…
+Leave the board   /   Leaving…
+You’ve left the board.
+```
+
+**Messages** (`src/app/app/leaderboard/actions.ts`, `src/lib/growth/leaderboard-join.ts`, `src/lib/growth/leaderboard.ts`, `src/lib/growth/leaderboard-name.ts`):
+
+```text
+You’re on the board as Ken R.
+That name is taken. Try another.
+That name is reserved. Try another.
+Use 2 to 30 characters.
+Use Latin letters (accents are fine), numbers, spaces and . ' - & only.
+Include at least two letters or numbers.
+The leaderboard isn’t open yet.
+Too many changes today. Try again tomorrow.
+Your account can’t join the leaderboard.
+You’re not on the leaderboard.
+```
+
+**Settings, for a member on the board** (`src/app/app/settings/actions.ts`), on the display name field, plus the board messages above:
+
+```text
+You’re on the leaderboard under this name. Leave the board first to clear it.
+```
+
+**Agent API** (`src/app/api/leaderboard/route.ts`), JSON `error` values besides the messages above:
+
+```text
+Not signed in.
+Finish signing up first.
+We couldn’t check your sign-in just now. Try again in a minute.
+Cross-site request refused.
+Send JSON: {"name": "..."}.
+```
+
+**Admin user page** (`src/app/admin/users/[id]/page.tsx`, `src/lib/admin/users.ts`), admin-only:
+
+```text
+Leaderboard
+On the board as “Ken R.” since 2026-11-27 12:00.   /   Not on the board. Display name “Ken R.”   /   No display name.
+Clear display name   /   Clearing…
+Display name cleared and removed from the leaderboard.
+Display name cleared.
 ```

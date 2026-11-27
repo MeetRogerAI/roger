@@ -41,6 +41,23 @@ export async function saveNote(q: Query, by: string, userId: string, note: strin
   return ok("Note saved.");
 }
 
+/**
+ * "Clear display name" (B2 Unit 7, origin R12: an admin can remove a name):
+ * clears the display name and takes the member off the leaderboard. Logged
+ * with the name that was removed.
+ */
+export async function clearDisplayName(q: Query, by: string, userId: string): Promise<Done> {
+  const [r] = await q<{ name: string; was_on: boolean }>(
+    `update users u set display_name = '', leaderboard_name_key = null, leaderboard_opt_in_at = null
+     from (select id, display_name, leaderboard_opt_in_at from users where id = $1) o
+     where u.id = o.id returning o.display_name as name, o.leaderboard_opt_in_at is not null as was_on`,
+    [userId],
+  );
+  if (!r) return no("No such user.");
+  await logAdminAction(q, { by, userId, action: "clear_display_name", detail: { name: r.name, wasOnLeaderboard: r.was_on } });
+  return ok(r.was_on ? "Display name cleared and removed from the leaderboard." : "Display name cleared.");
+}
+
 /** A charge in flight for the user: anything that changes what they owe waits for it. */
 const OPEN_CLAIM = `exists (select 1 from charge_attempts c where c.user_id = u.id and c.outcome in ('claimed', 'unknown'))`;
 

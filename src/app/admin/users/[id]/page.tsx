@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
 import { ATTENTION_LABELS, excuseDefaultWeek, statusKey, stripeCustomerUrl } from "@/lib/admin/ops";
 import { userDetail } from "@/lib/admin/user-detail";
+import { leaderboardEntryOf } from "@/lib/growth/leaderboard";
 import { moneyCents } from "@/lib/billing/prices";
 import { stripeMode } from "@/lib/billing/stripe";
 import { query } from "@/lib/db-query";
@@ -34,6 +35,7 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
   const now = new Date();
   const d = await userDetail(query, id, settings, now);
   if (!d) return <p className="text-small text-ink-2">No such user.</p>;
+  const board = await leaderboardEntryOf(query, id);
   const r = d.row;
   const quiz = d.profile as Record<string, unknown>;
 
@@ -180,6 +182,15 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
             ))}
           </ul>
         )}
+      </Section>
+
+      <Section title="Leaderboard" id="leaderboard">
+        <p className="mb-3 text-small text-ink-2 [overflow-wrap:anywhere]">
+          {board?.optedInAt ? `On the board as “${board.displayName}” since ${when(board.optedInAt)}.` : "Not on the board."}
+          {board?.displayName && !board.optedInAt ? ` Display name “${board.displayName}”.` : ""}
+          {!board?.displayName ? " No display name." : ""}
+        </p>
+        {(board?.displayName || board?.optedInAt) && <ActionButton action="clearDisplayName" values={{ userId: r.id }} label="Clear display name" pendingLabel="Clearing…" />}
       </Section>
 
       <Section title="Emails sent">

@@ -117,7 +117,7 @@ describe("schema.sql on Postgres", () => {
       for (const t of ["referrals", "credits", "points", "session_guests", "session_attendance", "sponsors", "sponsor_invoices"]) expect(tables).toContain(t);
       const cols = await columns();
       for (const c of [
-        "users.leaderboard_opt_in_at", "users.credit_balance_cents", "users.credit_balance_at", "users.pending_referrer_id", "pool_play_contributors.contributed_at",
+        "users.leaderboard_opt_in_at", "users.leaderboard_name_key", "users.credit_balance_cents", "users.credit_balance_at", "users.pending_referrer_id", "pool_play_contributors.contributed_at",
         "credits.uncollected_cents", "credits.offset_cents", "credits.reason", "credits.source_payment_intent", "referrals.referred_user_id",
         "session_guests.inviter_id", "points.total", "sponsors.alerted_80_at",
       ]) expect(cols).toContain(c);
@@ -252,13 +252,19 @@ describe("schema.sql on Postgres", () => {
       await expect(db.query("delete from sponsors where id = $1", [s])).resolves.toBeTruthy();
     });
 
-    it("keeps leaderboard names unique, ignoring case, among opted-in members only", async () => {
-      const named = (email: string, name: string, optIn: boolean) =>
-        db.query(`insert into users (email, display_name, leaderboard_opt_in_at) values ($1, $2, ${optIn ? "now()" : "null"})`, [email, name]);
-      await named("lb1@example.com", "Ace", true);
+    it("keeps leaderboard name keys unique among opted-in members only, and frees a name when the account closes", async () => {
+      const named = (email: string, key: string, optIn: boolean, status = "active") =>
+        db.query<{ id: string }>(`insert into users (email, status, leaderboard_name_key, leaderboard_opt_in_at) values ($1, $2, $3, ${optIn ? "now()" : "null"}) returning id`, [email, status, key]);
+      const a = (await named("lb1@example.com", "ace", true)).rows[0].id;
       await expect(named("lb2@example.com", "ace", true)).rejects.toThrow();
-      await expect(named("lb3@example.com", "ACE", false)).resolves.toBeTruthy();
-      await expect(named("lb4@example.com", "Ace", false)).resolves.toBeTruthy();
+      await expect(named("lb3@example.com", "ace", false)).resolves.toBeTruthy();
+      await db.query("update users set status = 'closed' where id = $1", [a]);
+      expect((await db.query<{ at: string | null }>("select leaderboard_opt_in_at as at from users where id = $1", [a])).rows[0].at).toBeNull();
+      await expect(named("lb4@example.com", "ace", true)).resolves.toBeTruthy();
+      await expect(named("lb5@example.com", "bee", true, "cancelled")).resolves.toBeTruthy();
+      expect((await db.query<{ at: string | null }>("select leaderboard_opt_in_at as at from users where email = 'lb5@example.com'")).rows[0].at).toBeNull();
+      const idx = (await db.query<{ n: string }>("select indexname as n from pg_indexes where tablename = 'users' and indexname like 'users_leaderboard%'")).rows.map((r) => r.n);
+      expect(idx).toEqual(["users_leaderboard_name_key"]);
     });
   });
 

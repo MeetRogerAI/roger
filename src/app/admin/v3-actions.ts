@@ -12,7 +12,7 @@ import { chargeAndSendNow } from "@/lib/admin/cora";
 import { approvePlay, EDITABLE_FIELDS, editPlay, rejectPlay } from "@/lib/admin/flags";
 import { audited, logAdminAction } from "@/lib/admin/log";
 import { opsWeek } from "@/lib/admin/ops";
-import { addRunForUser, changeUserEmail, closeAccount, deleteAccount, giveExtraFreeList, isMonday, linkContributor, saveNote, sendNudge, type Done } from "@/lib/admin/users";
+import { addRunForUser, changeUserEmail, clearDisplayName, closeAccount, deleteAccount, giveExtraFreeList, isMonday, linkContributor, saveNote, sendNudge, type Done } from "@/lib/admin/users";
 import { excuseWeek, undoExcuseForEveryone } from "@/lib/billing/contribution";
 import { runChargeJob } from "@/lib/billing/charge-job";
 import { asOfAllowed, AsOfRefused, currentMonday, jobNow, moneyAsOfAllowed } from "@/lib/clock";
@@ -158,6 +158,16 @@ export async function linkContributorAction(_p: V3State, fd: FormData): Promise<
   const userId = raw ? idOf(fd, "userId") : null;
   if (raw && !userId) return bad("No such user.");
   const r = await linkContributor(query, by, contributorId, userId);
+  refresh();
+  return state(r);
+}
+
+/** B2 Unit 7: clear a member's display name, which also takes them off the leaderboard. */
+export async function clearDisplayNameAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const userId = idOf(fd, "userId");
+  if (!userId) return bad("No such user.");
+  const r = await clearDisplayName(query, by, userId);
   refresh();
   return state(r);
 }
