@@ -1,8 +1,9 @@
 import Image from "next/image";
 import { siteConfig } from "@/data/config";
-import { letter, letterShown } from "@/data/site/letter";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
+import type { Overlay } from "@/lib/site/content/format";
 import { v1Copy } from "@/lib/site/content/model";
+import { getSiteContent } from "@/lib/site/content/read";
 import type { BuiltVersion } from "@/lib/site/version";
 import { StartBand } from "./blocks/reading";
 import { SectionHead } from "./blocks/section-head";
@@ -14,7 +15,8 @@ import { SectionHead } from "./blocks/section-head";
  * The letter is printed as it may be today (plan R13): its greeting, the
  * paragraphs that are still true, its sign-off and his name. The paragraphs
  * about Circles and applications stay out until Peter sends a new letter
- * (src/data/site/letter.ts).
+ * (src/data/site/letter.ts). The words come through the content model, so
+ * wording published in the admin is shown in place of the built-in wording.
  *
  * The photograph and the signature are each optional, and each is
  * configuration, not a look at the disk: a page regenerated inside a serverless
@@ -23,26 +25,30 @@ import { SectionHead } from "./blocks/section-head";
  * With no signature file his name is typed.
  */
 
-/** Reads the amounts the button names, cached, so the page keeps its static shell. */
+/** Reads the amounts the button names and the published content, both cached, so the page keeps its static shell. */
 export async function V1About({ version }: { version: BuiltVersion }) {
-  return <V1AboutView version={version} amounts={await getAmounts()} photo={siteConfig.founder.photo} signature={siteConfig.founder.signature} />;
+  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
+  return <V1AboutView version={version} amounts={amounts} content={content} photo={siteConfig.founder.photo} signature={siteConfig.founder.signature} />;
 }
 
 export function V1AboutView({
   version,
   amounts,
+  content,
   photo,
   signature,
 }: {
   /** The version being served. v2 and v3 show this page until they have their own. */
   version: BuiltVersion;
   amounts: Amounts;
+  /** Everything stored that the page should show, as one overlay on the code copy (getSiteContent). Left out, the page prints the code copy alone. */
+  content?: Overlay;
   /** The path of Peter's photograph under public/. Empty leaves it out. */
   photo: string;
   /** The path of his signature under public/. Empty types his name instead. */
   signature: string;
 }) {
-  const { copy } = v1Copy(amounts);
+  const { copy, letter } = v1Copy(amounts, content);
   const about = copy.about;
 
   return (
@@ -61,8 +67,8 @@ export function V1AboutView({
               {/* data-claims: Peter's letter, word for word, for the claims check (src/lib/site/claims.ts). */}
               <div data-claims="letter" className="mt-8 space-y-5 text-body">
                 <p>{letter.greeting}</p>
-                {letterShown.map((p) => (
-                  <p key={p.id}>{p.shown}</p>
+                {letter.paragraphs.map((p) => (
+                  <p key={p.id}>{p.text}</p>
                 ))}
                 <p>{letter.signOff}</p>
               </div>

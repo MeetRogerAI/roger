@@ -44,6 +44,7 @@ const madeUpScores: SamplePlay["scores"] = { hours: 7, reach: 8, ease: 6, proof:
 export default async function SiteBlocksPreview() {
   if (!isKnownNonProduction()) notFound();
   const [amounts, preface] = await Promise.all([getAmounts(), getPlaybookPreface()]);
+  // The code copy, on purpose: this page shows a builder the blocks as the code holds them, not what a site has published.
   const { copy } = v1Copy(amounts);
   const scoredIdea = publicIdeaView({ ...firstExample.play, scores: madeUpScores }, preface);
   const priceCopy = priceBlockCopy(copy);

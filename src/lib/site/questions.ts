@@ -1,113 +1,42 @@
 /**
- * The questions and answers an admin has edited (/admin/questions; Peter's
- * third homepage review, November 27, 2026).
+ * What the Edit Questions screen (/admin/questions) still owns until Pages
+ * replaces it (plan U5): the limits of a question and an answer, where a
+ * question is shown, the fields a question is stored under, and what a save
+ * refuses.
  *
- * The built-in wording is in src/data/site/v1.ts, each question under an id
- * that never changes. An edit is stored apart from it, so "reset" is simply
- * removing the edit, and a question nobody has edited follows the copy file.
+ * NOTHING IS STORED OR READ HERE ANY MORE (plan U4). A question's wording is
+ * site content like every other word: it lives in the "site.content" row
+ * (src/lib/site/content/store.ts), under the two field ids questionFields
+ * gives, and the public pages read it through getSiteContent
+ * (src/lib/site/content/read.ts). The edits this screen saved before that row
+ * existed, in the row "site.questions", are carried over by the store.
  *
- * Storage: ONE row of the `settings` table, key "site.questions", whose value
- * is a JSON object from question id to { q?, a? }. No table and no column was
- * added for this. Each save and each reset is a single statement that merges
- * into, or removes a key from, that object, so two admins saving different
- * questions at once do not undo each other (the database has no transactions
- * over HTTP).
- *
- * What may be saved: plain text only (a page prints it as text, never as
- * markup), within the length limits below, naming only amounts that exist
- * ({monthlyUsd} and the others in src/lib/site/amounts.ts), and passing the
- * site's claims and vocabulary rules (src/lib/site/claims.ts) once its amounts
- * are filled in. A refused save says which rule and which words.
- *
- * Reading: getQuestionOverrides is cached and tagged, as the testimonials are.
- * The admin's save and reset call updateTag with QUESTIONS_TAG, so the next
- * view of the homepage or /faq is rendered with the edit. With no database,
- * or on any error, there are no edits and every page shows the built-in text.
+ * What may be saved from this screen is what it always took: plain text only
+ * (a page prints it as text, never as markup), within the length limits
+ * below, naming only amounts that exist ({monthlyUsd} and the others in
+ * src/lib/site/amounts.ts), and passing the site's claims and vocabulary
+ * rules (src/lib/site/claims.ts) once its amounts are filled in. A refused
+ * save says which rule and which words.
  */
-import { cacheLife, cacheTag } from "next/cache";
 import { compoundingNumbers } from "@/data/site/compounding";
-import { builtInQuestions, v1 } from "@/data/site/v1";
-import { logAdminAction } from "@/lib/admin/log";
-import { hasDb } from "@/lib/db";
-import { query, type Query } from "@/lib/db-query";
 import { fillAmounts, type Amounts } from "./amounts";
 import { checkClaims, textPage, type Violation } from "./claims";
-import { newOverlay, type Overlay } from "./content/format";
-import { amountPlaceholderNames, amountPlaceholders, plainLine, unknownPlaceholder } from "./content/text";
+import { codeModel } from "./content/model";
+import { amountPlaceholderNames, amountPlaceholders, unknownPlaceholder } from "./content/text";
 
-/** Questions and answers edited in the admin, by question id, as the "site.questions" row holds them. A part left out keeps the built-in wording. */
-export type QuestionOverrides = Record<string, { q?: string; a?: string }>;
-
-export const QUESTIONS_KEY = "site.questions";
-export const QUESTIONS_TAG = "site-questions";
-
-/** The longest question and the longest answer an admin may save. */
+/** The longest question and the longest answer an admin may save. They are the limits of the two fields in the registry. */
 export const QUESTION_MAX = 200;
 export const ANSWER_MAX = 1500;
 
 /** Where a question is shown, in the admin's words. /faq shows every question. */
 export const pagesShowing = (on: readonly string[]): string[] => [...(on.includes("home") ? ["Homepage"] : []), "/faq"];
 
-/** A stored value as overrides: only known ids, only strings. Anything else in the row is dropped, so a bad row cannot break a page. */
-export function parseOverrides(value: unknown): QuestionOverrides {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const known = new Set(builtInQuestions().map((item) => item.id));
-  const out: QuestionOverrides = {};
-  for (const [id, edit] of Object.entries(value as Record<string, unknown>)) {
-    if (!known.has(id) || !edit || typeof edit !== "object") continue;
-    const { q, a } = edit as { q?: unknown; a?: unknown };
-    const kept: { q?: string; a?: string } = {};
-    if (typeof q === "string" && q.trim() !== "") kept.q = q;
-    if (typeof a === "string" && a.trim() !== "") kept.a = a;
-    if (kept.q !== undefined || kept.a !== undefined) out[id] = kept;
+/** The two content fields a question is stored under, by the question's id, or null for an id that is no question's. */
+export function questionFields(id: string): { q: string; a: string } | null {
+  for (const group of codeModel.questions) {
+    if (group.items.some((item) => item.id === id)) return { q: `questions.${group.id}.items.${id}.q`, a: `questions.${group.id}.items.${id}.a` };
   }
-  return out;
-}
-
-/** The edits as stored now. Not cached: the admin page and the tests read this. */
-export async function readQuestionOverrides(q: Query): Promise<QuestionOverrides> {
-  const rows = await q<{ value: unknown }>(`select value from settings where key = $1`, [QUESTIONS_KEY]);
-  return parseOverrides(rows[0]?.value);
-}
-
-/** The cached read. It throws when the database cannot be read, so a failed read is never stored as "no edits". */
-async function cachedQuestionOverrides(): Promise<QuestionOverrides> {
-  "use cache";
-  cacheLife({ stale: 300, revalidate: 3600, expire: 86400 });
-  cacheTag(QUESTIONS_TAG);
-  if (!hasDb()) return {};
-  return readQuestionOverrides(query);
-}
-
-/**
- * The edits for a public page: cached, and empty with no database or on any error, so the page shows the built-in
- * text. The catch is outside the cached function: caught inside it, one dropped connection would be cached as "no
- * edits" and the built-in wording would be back on the site for the cache's whole hour.
- */
-export async function getQuestionOverrides(): Promise<QuestionOverrides> {
-  try {
-    return await cachedQuestionOverrides();
-  } catch {
-    return {};
-  }
-}
-
-/**
- * The same edits as an overlay on the code copy, which is what a page's view takes (src/lib/site/content): each
- * part under its question's field id. An id that is no question's is left out.
- */
-export function questionOverlay(overrides: QuestionOverrides): Overlay {
-  const out = newOverlay();
-  for (const group of v1.questions) {
-    for (const item of group.items) {
-      const edit = Object.hasOwn(overrides, item.id) ? overrides[item.id] : undefined;
-      for (const part of ["q", "a"] as const) {
-        const text = edit?.[part];
-        if (typeof text === "string") out.text[`questions.${group.id}.items.${item.id}.${part}`] = text;
-      }
-    }
-  }
-  return out;
+  return null;
 }
 
 const ruleNames: Record<Violation["rule"], string> = {
@@ -138,49 +67,4 @@ export function refusal(what: "question" | "answer", text: string, amounts: Amou
   if (found.length === 0) return null;
   const first = found[0];
   return `${The} breaks the site’s rules: ${ruleNames[first.rule]} (“${first.found}” in “${first.context.trim()}”).`;
-}
-
-export type Saved = { ok: true; message: string } | { ok: false; message: string };
-
-/**
- * Saves an admin's wording for one question. A part that is the same as the
- * built-in wording is not stored, and when both are the same the edit is
- * removed, so the question follows the copy file again.
- */
-export async function saveQuestion(q: Query, by: string, input: { id: string; q: string; a: string }, amounts: Amounts): Promise<Saved> {
-  const builtIn = builtInQuestions().find((item) => item.id === input.id);
-  if (!builtIn) return { ok: false, message: "No such question." };
-  const question = plainLine(input.q);
-  const answer = plainLine(input.a);
-  const bad = refusal("question", question, amounts) ?? refusal("answer", answer, amounts);
-  if (bad) return { ok: false, message: bad };
-
-  const edit: { q?: string; a?: string } = {};
-  if (question !== builtIn.q) edit.q = question;
-  if (answer !== builtIn.a) edit.a = answer;
-  if (edit.q === undefined && edit.a === undefined) {
-    await removeEdit(q, input.id);
-    await logAdminAction(q, { by, action: "site_question_reset", detail: { id: input.id, reason: "saved with the built-in wording" } });
-    return { ok: true, message: "That is the built-in wording, so nothing is stored for this question." };
-  }
-  // One statement: merge this question into the object, whatever else is in it.
-  await q(
-    `insert into settings (key, value, updated_at) values ($1, jsonb_build_object($2::text, $3::jsonb), now())
-     on conflict (key) do update set value = (case when jsonb_typeof(settings.value) = 'object' then settings.value else '{}'::jsonb end) || excluded.value, updated_at = now()`,
-    [QUESTIONS_KEY, input.id, JSON.stringify(edit)],
-  );
-  await logAdminAction(q, { by, action: "site_question_saved", detail: { id: input.id, ...edit } });
-  return { ok: true, message: "Saved. The site shows it from the next page view." };
-}
-
-async function removeEdit(q: Query, id: string): Promise<void> {
-  await q(`update settings set value = value - $2::text, updated_at = now() where key = $1 and jsonb_typeof(value) = 'object'`, [QUESTIONS_KEY, id]);
-}
-
-/** Removes an admin's wording for one question, so the built-in wording shows again. */
-export async function resetQuestion(q: Query, by: string, id: string): Promise<Saved> {
-  if (!builtInQuestions().some((item) => item.id === id)) return { ok: false, message: "No such question." };
-  await removeEdit(q, id);
-  await logAdminAction(q, { by, action: "site_question_reset", detail: { id } });
-  return { ok: true, message: "Reset. The site shows the built-in wording from the next page view." };
 }
