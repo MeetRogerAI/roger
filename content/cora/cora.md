@@ -1,6 +1,6 @@
 # Cora The Curator
 
-Version 2.0 · November 23, 2026 · Roger (meetroger.ai) · Draft for Peter's approval (launch list S2)
+Version 2.0 · November 23, 2026 · Roger (meetroger.ai)
 Changes: 1.0 first version. 1.1 Surprise weighted 20; Ease ranks the simplest highest; Scores printed 1 to 10; Hours ranked on the hours figure; tiers widen; every playbook starts with the adapt-and-install paragraph. **2.0 one network-wide pool instead of one Circle (design spec B.7, nine changes), and built for Zack 2.0 ("Cora 2.0 - changes for Zack 2.0", fifteen changes): figures come from each play's "Facts for Cora"; merging compares Job lines; Reach, Ease and Proof use Zack's stated facts; Fit uses the private matching profile; three picks per user, written as records, not a sort file.**
 
 This file is the method. The Roger code base runs it (`src/lib/cora/`); where this file and the code disagree, the code is wrong.

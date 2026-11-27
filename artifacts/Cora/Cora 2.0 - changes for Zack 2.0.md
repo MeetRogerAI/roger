@@ -1,6 +1,6 @@
 # Cora 2.0: changes needed to use Zack 2.0
 
-November 22, 2026 · Roger (meetroger.ai) · Draft for Peter's approval
+November 22, 2026 · Roger (meetroger.ai)
 These are in addition to the nine changes in the design spec, section B.7. The scoring weights and formula are unchanged.
 
 ## 1. Changes to Cora
