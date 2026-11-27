@@ -83,8 +83,8 @@ export function Sketch2({ copy }: SketchProps) {
             </h2>
             {problem.statements.map((statement, i) => (
               // The first two statements each bring a week of bricks onto the rail.
-              <p key={statement} className="sk2-statement" data-sk2-week={i < 2 ? i + 2 : undefined}>
-                {statement}
+              <p key={statement.id} className="sk2-statement" data-sk2-week={i < 2 ? i + 2 : undefined}>
+                {statement.text}
               </p>
             ))}
           </section>

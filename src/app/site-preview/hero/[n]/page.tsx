@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { heroSketch, heroSketches } from "@/components/site/v2/sketches";
-import { v1Copy } from "@/data/site/v1";
+import { v1Copy } from "@/lib/site/content/model";
 import { getAmounts } from "@/lib/site/amounts";
 import { isKnownNonProduction } from "@/lib/site/version";
 
