@@ -5,6 +5,7 @@ import type { CompoundingStep } from "@/data/site/compounding";
 import type { BrickWords } from "@/data/site/copy-types";
 import { compoundingCaption } from "@/lib/site/compounding";
 import { BrickStack } from "./brick-stack";
+import { useLoopPlay } from "./use-loop-play";
 
 /**
  * The moving half of "It compounds" (plan R10, KTD11; Peter's homepage review,
@@ -17,8 +18,8 @@ import { BrickStack } from "./brick-stack";
  *
  * Once script is running and motion is allowed, the loop waits on the last
  * state, goes back to the first and steps through them all again, for ever.
- * It stops while the pointer is over it, while anything in it has focus, and
- * when "Pause" is pressed. The line of the current state is marked. Nothing
+ * It stops while a mouse is over it, while the keyboard's focus is in it,
+ * while the tab is hidden and when "Pause" is pressed (use-loop-play.ts). The line of the current state is marked. Nothing
  * announces a change to a screen reader: the lines under the stack already say
  * every state.
  *
@@ -56,10 +57,7 @@ export type CompoundingLoopCopy = { name: string; pause: string; play: string };
 export function CompoundingLoop({ steps, words, copy, className = "" }: { steps: readonly CompoundingStep[]; words: BrickWords; copy: CompoundingLoopCopy; className?: string }) {
   const last = steps.length - 1;
   const [current, setCurrent] = useState(last);
-  const [paused, setPaused] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const playing = !paused && !hovered && !focused;
+  const { playing, paused, toggle, holdProps } = useLoopPlay();
 
   useEffect(() => {
     if (!playing || steps.length < 2) return;
@@ -82,12 +80,7 @@ export function CompoundingLoop({ steps, words, copy, className = "" }: { steps:
       data-playing={playing ? "yes" : "no"}
       className={`compounding-loop flex flex-col items-center ${className}`}
       style={{ "--from": from, "--per": `${perBrickMs}ms` } as CSSProperties}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
-      }}
+      {...holdProps}
     >
       {/* The state in large type. The lines under the stack say the same, so this one is hidden from a screen reader. */}
       <p aria-hidden="true" data-loop-caption className="text-center">
@@ -113,7 +106,7 @@ export function CompoundingLoop({ steps, words, copy, className = "" }: { steps:
       <button
         type="button"
         data-loop-pause
-        onClick={() => setPaused((p) => !p)}
+        onClick={toggle}
         className="mt-8 hidden min-h-11 cursor-pointer items-center rounded-full border border-rule-strong px-5 text-meta font-semibold text-ink-2 transition-colors duration-[180ms] hover:text-ink"
       >
         {paused ? copy.play : copy.pause}

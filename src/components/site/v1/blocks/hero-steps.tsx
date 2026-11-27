@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { useLoopPlay } from "./use-loop-play";
 
 /**
  * The picture beside the homepage headline (Peter's homepage review,
@@ -14,9 +15,11 @@ import { useEffect, useState, type CSSProperties } from "react";
  * Only once script is running and motion is allowed (html.js, in globals.css,
  * "The hero's four parts") does it become a loop: the labels become a row of
  * buttons above the frame, the frame shows the current part's headline alone,
- * and the part changes every few seconds. It stops while the pointer is over
- * it, while anything in it has focus, and when "Pause" is pressed. A label
- * jumps to its part. Nothing announces a change to a screen reader.
+ * and the part changes every few seconds. It stops while a mouse is over it,
+ * while the keyboard's focus is in it, while the tab is hidden and when
+ * "Pause" is pressed (use-loop-play.ts). A label jumps to its part, which
+ * then stays up for its full time. Nothing announces a change to a screen
+ * reader.
  *
  * The four bricks under the headline are decoration: one for each part, lit
  * up to the current one. In the still picture all four are lit.
@@ -30,11 +33,6 @@ export function nextStep(current: number, count: number): number {
   return count > 0 ? (current + 1) % count : 0;
 }
 
-/** Whether the loop is moving: not paused by its button, the pointer or focus. */
-export function isPlaying(state: { paused: boolean; hovered: boolean; focused: boolean }): boolean {
-  return !state.paused && !state.hovered && !state.focused;
-}
-
 export type HeroStepsCopy = { name: string; labels: string[]; pause: string; play: string };
 
 // The four parts in the four level colours of the night chapters (globals.css), in the order of the bricks' own palette.
@@ -43,18 +41,16 @@ const brick = ["bg-f-reach-night", "bg-f-ease-night", "bg-f-proof-night", "bg-f-
 export function HeroSteps({ copy, headlines, className = "" }: { copy: HeroStepsCopy; /** The headline of each part, from the "How it works" copy. */ headlines: string[]; className?: string }) {
   const count = Math.min(copy.labels.length, headlines.length);
   const [current, setCurrent] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const playing = isPlaying({ paused, hovered, focused });
+  const { playing, paused, toggle, holdProps } = useLoopPlay();
 
   useEffect(() => {
     if (!playing || count < 2) return;
     // With reduced motion the still picture is showing, so there is nothing to advance.
     if (!window.matchMedia("(prefers-reduced-motion: no-preference)").matches) return;
-    const timer = window.setInterval(() => setCurrent((c) => nextStep(c, count)), HERO_STEP_MS);
-    return () => window.clearInterval(timer);
-  }, [playing, count]);
+    // One wait for each part, started again when the part changes: a part a label jumped to gets its full time.
+    const timer = window.setTimeout(() => setCurrent((c) => nextStep(c, count)), HERO_STEP_MS);
+    return () => window.clearTimeout(timer);
+  }, [playing, current, count]);
 
   return (
     <div
@@ -62,12 +58,7 @@ export function HeroSteps({ copy, headlines, className = "" }: { copy: HeroSteps
       data-current={current}
       data-playing={playing ? "yes" : "no"}
       className={`hero-steps w-full lg:w-[27rem] ${className}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
-      }}
+      {...holdProps}
     >
       {/* The labels as buttons. Shown only as part of the loop: with no script they could do nothing. */}
       <div data-step-tabs role="group" aria-label={copy.name} className="mb-3 hidden grid-cols-4 gap-1 rounded-full border border-night-rule bg-night-2 p-1">
@@ -107,7 +98,7 @@ export function HeroSteps({ copy, headlines, className = "" }: { copy: HeroSteps
           <button
             type="button"
             data-step-pause
-            onClick={() => setPaused((p) => !p)}
+            onClick={toggle}
             className="hidden min-h-11 cursor-pointer items-center gap-2 rounded-full border border-night-rule px-4 text-meta font-semibold text-night-ink-2 transition-colors duration-[180ms] hover:text-night-ink"
           >
             {paused ? copy.play : copy.pause}

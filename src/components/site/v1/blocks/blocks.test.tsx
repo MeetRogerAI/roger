@@ -253,6 +253,38 @@ describe("the sample idea card, folded (Peter's homepage review, November 26, 20
     expect(text(plain)).toContain("Read the message. Write two replies.");
   });
 
+  it("never has a row that opens to nothing, and never says “1 steps”, whatever play the admin chose", () => {
+    const card = (playbookMd: string) => renderToStaticMarkup(<SampleCard idea={publicIdeaView({ ...samplePlay, playbookMd }, preface)} copy={copy.sample} />);
+    const emptyRows = (html: string) => [...html.matchAll(/<\/summary>(.*?)<\/details>/g)].filter((m) => text(m[1]) === "");
+
+    // One headed part: the text whole, under "The full playbook".
+    const one = card("## Steps\n1. Read the note.\n2. Write the reply.");
+    expect(one).not.toContain("data-steps=");
+    expect(text(one)).not.toMatch(/\b1 steps\b/);
+    expect(unfolded(one)).toContain(`The Playbook ${copy.sample.playbook.whole}`);
+    expect(text(one)).toContain("Read the note.");
+
+    // A heading with nothing under it: whole again, not a step row with no text.
+    const bare = card("## Play\nDrafts a reply.\n\n## Steps");
+    expect(bare).not.toContain('data-fold="step"');
+    expect(emptyRows(bare)).toEqual([]);
+
+    // Smaller headings inside a part do not add to the count.
+    const nested = card("## Setup\nAsk first.\n\n### If there is no file\nSay so.\n\n## Steps\n1. Read.");
+    expect(nested).toContain('data-steps="2"');
+    expect(text(nested)).toContain("If there is no file");
+
+    // No playbook text at all: no Playbook heading and no row.
+    for (const none of ["", "  \n "]) {
+      const without = card(none);
+      expect(without).not.toContain('data-fold="playbook"');
+      expect(without).not.toContain(`>${copy.sample.playbook.title}<`);
+      expect(without).toContain('data-fold="summary"');
+      expect(emptyRows(without)).toEqual([]);
+    }
+    expect(emptyRows(markup)).toEqual([]);
+  });
+
   it("marks each row's state with a plus that turns when the row is open, and a summary a keyboard can reach", () => {
     expect(markup.match(/group-open\/fold:rotate-45/g)).toHaveLength(3);
     expect(markup.match(/group-open\/step:rotate-45/g)).toHaveLength(8);
