@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import type { AdjustmentGateway } from "@/lib/billing/subscriptions";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakePlans } from "@/test-helpers/fake-plans";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { CARD_LATER, loadBilling, NO_CARD_YET } from "./billing";
 
 const ONE_AT_A_TIME = /one (list )?at a time|per list|order a list|switch plan/i;
@@ -104,7 +104,7 @@ describe("a trial with no card yet: what the billing page says (plan 2026-11-26-
   const WEEK = "2026-12-07";
   async function noCard(email: string, o: { sponsored?: boolean } = {}) {
     return member(
-      `insert into users (email, status, plan, currency, free_lists_used, sponsor_id) values ('${email}', 'trial', 'monthly', 'USD', 0, ${o.sponsored ? "gen_random_uuid()" : "null"}) returning id`,
+      `insert into users (email, status, plan, currency, free_lists_used, sponsor_id) values ('${email}', 'trial', 'monthly', 'USD', 0, ${o.sponsored ? `'${await testSponsor(query)}'` : "null"}) returning id`,
     );
   }
   async function held(userId: string) {

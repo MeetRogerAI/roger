@@ -7,7 +7,7 @@ import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakeAdjustments } from "@/test-helpers/fake-adjustments";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { memberStatusLine } from "./user-detail";
 import { addRunForUser, changeUserEmail, closeAccount, deleteAccount, giveExtraFreeList, isMonday, saveNote, sendNudge } from "./users";
 
@@ -296,7 +296,7 @@ describe("other row actions", () => {
     expect((await u()).free_lists_used).toBe(1);
     expect(await log()).toEqual([]);
     // A sponsored member needs no card.
-    await query("update users set sponsor_id = '00000000-0000-4000-8000-000000000001' where id = $1", [uid]);
+    await query("update users set sponsor_id = $1 where id = $2", [await testSponsor(query), uid]);
     expect(await giveExtraFreeList(query, ADMIN, uid)).toMatchObject({ ok: true });
   });
 

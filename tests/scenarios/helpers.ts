@@ -59,7 +59,7 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3, type V3Settings } from "@/lib/v3-settings";
 import { storeReport } from "@/lib/zack/receive";
 import { fakePaymentStripe } from "@/test-helpers/fake-card-gateway";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 
 // A scenario walks weeks of jobs; with every test file running at once it needs more than the unit-test limit.
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
@@ -741,7 +741,7 @@ export async function signUp(
   const [{ id }] = await w.query<{ id: string }>(
     `insert into users (email, name, status, plan, sharing, currency, signup_step, email_verified_at, sponsor_id)
      values ($1, 'Test', 'signup', 'monthly', $2, $3, 'plan', $4, $5) returning id`,
-    [o.email, o.sharing ?? "share", o.currency, w.now.toISOString(), o.sponsored ? crypto.randomUUID() : null],
+    [o.email, o.sharing ?? "share", o.currency, w.now.toISOString(), o.sponsored ? await testSponsor(w.query, crypto.randomUUID()) : null],
   );
   const c = w.charge();
   if (!(await finishSignup(w.query, id, c.now))) throw new Error("Step 3 did not end sign-up");

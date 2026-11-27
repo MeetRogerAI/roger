@@ -6,7 +6,7 @@ import { v3Defaults } from "@/data/config";
 let respond: () => Promise<unknown> = async () => [];
 vi.mock("./db", () => ({ hasDb: () => true, sql: () => respond() }));
 
-const { mergeV3, readV3Settings, SettingsUnavailable } = await import("./v3-settings");
+const { mergeV3, readV3Settings, saveV3Settings, SettingsUnavailable } = await import("./v3-settings");
 
 describe("mergeV3", () => {
   it("gives every spec 0.9 key a default that passes validation", () => {
@@ -34,6 +34,26 @@ describe("mergeV3", () => {
 
   it("refuses jobs out of order", () => {
     expect(() => mergeV3([{ key: "v3.chargeAt", value: "08:00" }])).toThrow();
+  });
+
+  it("has the B2 switches, off by default, and takes a saved true", () => {
+    const s = mergeV3([]);
+    for (const k of ["referralsOn", "leaderboardOn", "statsOn", "sponsorsOn"] as const) {
+      expect(s[k]).toBe(false);
+      expect(mergeV3([{ key: `v3.${k}`, value: true }])[k]).toBe(true);
+      expect(() => mergeV3([{ key: `v3.${k}`, value: "on" }])).toThrow();
+    }
+  });
+
+  it("loads a stored stats time outside 08:00 to 12:00 as the default instead of failing", () => {
+    expect(mergeV3([]).statsAt).toBe("09:00");
+    expect(mergeV3([{ key: "v3.statsAt", value: "13:00" }]).statsAt).toBe("09:00");
+    expect(mergeV3([{ key: "v3.statsAt", value: "07:59" }]).statsAt).toBe("09:00");
+    expect(mergeV3([{ key: "v3.statsAt", value: "08:00" }]).statsAt).toBe("08:00");
+    expect(mergeV3([{ key: "v3.statsAt", value: "12:00" }]).statsAt).toBe("12:00");
+    expect(mergeV3([{ key: "v3.statsAt", value: "12:01" }]).statsAt).toBe("09:00");
+    // A malformed value still fails closed.
+    expect(() => mergeV3([{ key: "v3.statsAt", value: "9am" }])).toThrow();
   });
 
   it("refuses a cutoff in the small hours", () => {
@@ -66,5 +86,29 @@ describe("readV3Settings", () => {
   it("throws when a saved value is invalid", async () => {
     respond = async () => [{ key: "v3.priceUsd", value: -5 }];
     await expect(readV3Settings()).rejects.toBeInstanceOf(SettingsUnavailable);
+  });
+
+  it("reads a stored stats time of 13:00 as 09:00 without throwing", async () => {
+    respond = async () => [{ key: "v3.statsAt", value: "13:00" }];
+    expect((await readV3Settings()).statsAt).toBe("09:00");
+  });
+});
+
+describe("saveV3Settings", () => {
+  let writes = 0;
+  beforeEach(() => {
+    writes = 0;
+    respond = async () => {
+      writes++;
+      return [];
+    };
+  });
+
+  it("saves a stats time only between 08:00 and 12:00", async () => {
+    for (const t of ["13:30", "07:59", "12:01"]) await expect(saveV3Settings({ statsAt: t })).rejects.toThrow();
+    expect(writes).toBe(0);
+    for (const t of ["08:00", "12:00"]) await expect(saveV3Settings({ statsAt: t })).resolves.toBeUndefined();
+    // Each accepted save reads the settings, then writes them.
+    expect(writes).toBe(4);
   });
 });

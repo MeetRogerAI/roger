@@ -24,7 +24,7 @@ import { trialNoListClosedEmail } from "@/lib/mail/templates/zack-not-yet";
 import { mergeV3 } from "@/lib/v3-settings";
 import { sharingEffect } from "@/lib/zack/sharing-effect";
 import { fakePlans } from "@/test-helpers/fake-plans";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { cancelPlan } from "./cancel";
 import { runChargeJob } from "./charge-job";
 import { recordWeek } from "./contribution";
@@ -103,7 +103,7 @@ async function member(o: { status: string; plan?: string; sub?: string | null; f
       o.first ?? null,
       o.hold ?? null,
       o.quote ? JSON.stringify(o.quote) : null,
-      o.sponsor ? "00000000-0000-4000-8000-000000000001" : null,
+      o.sponsor ? await testSponsor(query) : null,
     ],
   );
   plans.cards.set(customer, 1);

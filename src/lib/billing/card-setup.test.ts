@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
-import { testDb } from "@/test-helpers/pglite-db";
+import { TEST_SPONSOR, testDb, testSponsor } from "@/test-helpers/pglite-db";
 import type { Counter } from "@/lib/rate-limit";
 import { CHECKOUT_LIMITED, completeCardSetup, discardSetupSession, openEmbeddedSetup, startCardUpdate } from "./card-setup";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
@@ -357,9 +357,10 @@ describe("openEmbeddedSetup: the Payment page's card session (plan 2026-11-26-00
     ["an account still signing up", "update users set status = 'signup', signup_step = 'plan' where id = $1"],
     ["an active member", "update users set status = 'active', trial_started_at = now() where id = $1"],
     ["a closed account", "update users set status = 'closed' where id = $1"],
-    ["a sponsored trial (never asked for a card)", "update users set sponsor_id = id where id = $1"],
+    ["a sponsored trial (never asked for a card)", `update users set sponsor_id = '${TEST_SPONSOR}' where id = $1`],
   ])("refuses %s (not_allowed) and opens nothing", async (_n, sql) => {
     const gw = fakeGateway();
+    await testSponsor(query);
     await query(sql, [userId]);
     expect(await open(gw)).toEqual({ ok: false, reason: "not_allowed" });
     expect(gw.sessions.size).toBe(0);

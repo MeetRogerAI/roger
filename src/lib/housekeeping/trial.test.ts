@@ -3,7 +3,7 @@ import { wallToInstant } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { sendHeldTeaser, sendUnsentTeasers } from "@/lib/cora/send-job";
 import { completeCardSetup } from "@/lib/billing/card-setup";
 import type { BillingGateway } from "@/lib/billing/subscriptions";
@@ -43,6 +43,7 @@ async function passes(from: Date, to: Date) {
 }
 
 async function user(email: string, cols: Record<string, unknown> = {}): Promise<string> {
+  if (typeof cols.sponsor_id === "string") await testSponsor(query, cols.sponsor_id);
   const c = { status: "trial", plan: "monthly", currency: "USD", trial_started_at: new Date(START).toISOString(), stripe_customer: `cus_${email}`, ...cols };
   const keys = Object.keys(c);
   const [{ id }] = await query<{ id: string }>(
@@ -219,7 +220,7 @@ describe("the review's cases", () => {
     await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2026-12-14', 'picked')", [id]);
     const [t] = await trialClocks(query, settings, day(21));
     expect(t.closesAt).toEqual(day(28));
-    await query("update users set sponsor_id = gen_random_uuid()");
+    await query("update users set sponsor_id = $1", [await testSponsor(query)]);
     expect(await trialClocks(query, settings, day(21))).toEqual([]);
   });
 

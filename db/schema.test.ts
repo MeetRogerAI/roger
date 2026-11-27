@@ -39,6 +39,12 @@ describe("schema.sql", () => {
       "rate_events", "testimonials", "free_runs", "setup_files",
     ]) expect(tables).toContain(t);
   });
+
+  it("creates every B2 table, and never a second sessions table", () => {
+    const tables = statements.map((s) => /^create table if not exists (\w+)/i.exec(s)?.[1]).filter(Boolean);
+    for (const t of ["referrals", "credits", "points", "session_guests", "session_attendance", "sponsors", "sponsor_invoices"]) expect(tables).toContain(t);
+    expect(tables.filter((t) => t === "sessions")).toHaveLength(1);
+  });
 });
 
 describe("seeds", () => {

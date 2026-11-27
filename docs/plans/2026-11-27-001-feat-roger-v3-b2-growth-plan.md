@@ -254,7 +254,7 @@ sequenceDiagram
 
 **Verification:** The tests pass. The PR is open and can merge on its own.
 
-- [ ] **Unit 1: B2 schema and settings switches**
+- [x] **Unit 1: B2 schema and settings switches**
 
 **Goal:** Add every B2 table and column, and the per-feature switches.
 
@@ -377,6 +377,12 @@ sequenceDiagram
   - People referred by link are shown as "Someone you invited", and guests by the name the member typed.
   - Emails never appear on the page, and neither does any name the referred person entered themselves.
 - **Switch:** with `v3.referralsOn` off, the page and link render "coming soon", and `/r` still stores the cookie so links shared early aren't lost.
+- **One switch helper** (from the Unit 1 review): add a single helper that combines a feature switch with `v3.signupOpen` / `v3.cycleLive`. Every B2 surface uses it.
+- **Retention** (from the Unit 1 review):
+  - When a referral links to an account, `referred_email` is nulled.
+  - Unlinked `invited` rows lose their email after 90 days, via `src/lib/housekeeping/retention.ts`.
+  - When a referred account is deleted, the referral is voided.
+  - Each of these has a test.
 
 **Patterns to follow:**
 - `src/lib/signup/params.ts`, the cookie handling in `src/lib/signup/draft.ts`, and `requireUser` pages.
@@ -427,6 +433,13 @@ sequenceDiagram
 - **Clawback:** a refund, or a dispute closed as lost, on the credited payment intent inserts a proportional clawback row keyed by the refund or dispute id. It posts a positive transaction capped at the remaining balance, records any shortfall, and alerts the admins. `dispute.created` freezes an unposted grant, and a won dispute unfreezes it.
 - **Lapse:** closing an account marks pending rows `lapsed` and zeroes any unused posted balance with a `lapse` row.
 - **Sponsored:** a sponsored referrer's grant is recorded as `lapsed` with reason `sponsored`. A sponsored referred member never triggers a grant.
+- **From the Unit 1 review:**
+  - The ledger outlives account deletion: `credits` foreign keys are set to null on delete. `deleteAccount` (`src/lib/admin/users.ts`) refuses while any credit is `pending_customer`, `pending_switch` or `frozen`.
+  - A shortfall offset is recorded on the consuming grant (`offset_cents`), and what's outstanding is `sum(uncollected_cents) - sum(offset_cents)`.
+  - Every ledger timestamp is written from the job clock.
+  - A lapse row's `source_object_id` is the close event's key.
+  - Once a referral or user is deleted, their key column is null and the unique indexes no longer dedupe. Webhook handlers therefore look up an existing clawback or lapse by `source_object_id` alone before inserting.
+  - A referral is required on every kind except `lapse`. The database no longer enforces this after the change to set-null deletes, so the code does.
 
 **Execution note:** Write the ledger and webhook tests first, against fakes that reject a reused idempotency key sent with different parameters.
 
@@ -532,6 +545,7 @@ sequenceDiagram
 - The board shows opted-in members ranked by points, with counts only ("2 users adopted your idea").
 - A member who isn't opted in sees their own points and rank privately, plus a form to choose a name and join.
 - Leaving clears `leaderboard_opt_in_at`.
+- Name uniqueness is enforced by the `users_leaderboard_name` unique index (Unit 1). The action catches the unique violation and shows "That name is taken", not a 500 error.
 - The rank used in the stats email is computed across every member, so it means the same thing whether or not the member is opted in.
 
 **Patterns to follow:**
@@ -604,7 +618,7 @@ sequenceDiagram
   - This creates a `session_guests` row and a `referrals` row at stage `invited`, source `guest`, and emails the guest.
   - The token is 128-bit random and stored hashed.
   - No email goes to an address that has unsubscribed or bounced.
-  - Unconverted guest rows and their emails are purged 90 days after the session, by the retention job.
+  - Unconverted guest rows and their emails are purged 90 days after the session (`session_date`), by `src/lib/housekeeping/retention.ts`, with a test.
 - `/g/{token}` shows the session's day and time and the inviter's display name, or "A Roger member" (origin R13: display name only).
   - The Meet link appears once the guest RSVPs.
   - Visiting sets the signed `roger-ref` cookie for the inviter if none is set.

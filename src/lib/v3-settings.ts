@@ -27,6 +27,15 @@ const hm = z.string().refine((s) => {
 /** Monday job times must fall between 1:00 AM and 11:00 AM (the cron window, plan: The weekly jobs). */
 const jobTime = hm.refine((s) => parseHm(s) >= 60 && parseHm(s) <= 660, "Between 01:00 and 11:00");
 
+/**
+ * The Wednesday stats email goes out after this Toronto time. 08:00 to 12:00 fits inside the
+ * cron window (12:00 to 18:00 UTC) in both summer and winter time (B2 plan: The Wednesday stats job).
+ * Enforced when saving only: a stored time outside the window loads as the default, so it can
+ * never make every job that reads the settings fail closed.
+ */
+const inStatsWindow = (s: string) => parseHm(s) >= 480 && parseHm(s) <= 720;
+const statsTime = hm.refine(inStatsWindow, "Between 08:00 and 12:00");
+
 export const v3Schema = z
   .object({
     priceUsd: money,
@@ -49,6 +58,11 @@ export const v3Schema = z
     retentionDays: z.number().int().min(30).max(3650),
     signupOpen: z.boolean(),
     cycleLive: z.boolean(),
+    // B2 per-feature switches. Each also sits behind signupOpen / cycleLive (B2 origin R2).
+    referralsOn: z.boolean(),
+    leaderboardOn: z.boolean(),
+    statsOn: z.boolean(),
+    sponsorsOn: z.boolean(),
     sessionDay: z.string().max(40),
     sessionTime: z.string().max(40),
     sessionLink: z.union([z.literal(""), z.url()]),
@@ -72,7 +86,10 @@ export const V3_PREFIX = "v3.";
 /** When v3.cycleLive was first switched on (not a setting: mergeV3 ignores it). */
 export const CYCLE_LIVE_SINCE = "v3.cycleLiveSince";
 
-/** Overlay saved rows on the defaults and validate the result. Throws on an invalid value. */
+/**
+ * Overlay saved rows on the defaults and validate the result. Throws on an invalid value,
+ * except a well-formed statsAt outside 08:00 to 12:00, which falls back to the default.
+ */
 export function mergeV3(rows: { key: string; value: unknown }[]): V3Settings {
   const out: Record<string, unknown> = structuredClone(v3Defaults) as Record<string, unknown>;
   for (const r of rows) {
@@ -80,7 +97,8 @@ export function mergeV3(rows: { key: string; value: unknown }[]): V3Settings {
     const name = r.key.slice(V3_PREFIX.length);
     if (Object.hasOwn(v3Defaults, name)) out[name] = r.value;
   }
-  return v3Schema.parse(out);
+  const s = v3Schema.parse(out);
+  return inStatsWindow(s.statsAt) ? s : { ...s, statsAt: v3Defaults.statsAt };
 }
 
 export class SettingsUnavailable extends Error {}
@@ -103,6 +121,7 @@ export async function readV3Settings(): Promise<V3Settings> {
 
 /** Validate and save some v3 settings. Throws (and saves nothing) if the result would be invalid. */
 export async function saveV3Settings(patch: Partial<V3Settings>): Promise<void> {
+  if (patch.statsAt !== undefined) statsTime.parse(patch.statsAt);
   const current = await readV3Settings();
   const next = v3Schema.parse({ ...current, ...patch });
   const keys = (Object.keys(patch) as V3Key[]).filter((k) => patch[k] !== undefined);

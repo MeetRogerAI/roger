@@ -785,3 +785,179 @@ alter table users add column if not exists promo_duration_months integer;
 alter table users add column if not exists signup_finished_at timestamptz;
 alter table users add column if not exists card_fingerprint text;
 create index if not exists users_card_fingerprint on users (card_fingerprint) where card_fingerprint is not null;
+
+-- 2026-11-27, B2 (growth), Unit 1. Plan:
+-- docs/plans/2026-11-27-001-feat-roger-v3-b2-growth-plan.md. Every B2 table
+-- and column. Each feature is also behind its own v3 switch (referralsOn,
+-- leaderboardOn, statsOn, sponsorsOn), all off by default.
+--
+-- referrals: one row per person a member brought in, by link or as a session
+-- guest. referred_user_id is set once the person has an account (one
+-- referrer per account, first referrer wins). referred_email holds a guest's
+-- normalised address until they sign up: Unit 3 clears it once the account
+-- is linked, and the retention job (Unit 9) clears it 90 days after the
+-- session if they never do. Stages move invited, trial, paying, or void
+-- (self-referral by card, with void_reason). generation is 1 for a direct
+-- referral. A deleted referrer leaves referrer_id null, so the row and its
+-- credits stay for reconciliation.
+create table if not exists referrals (
+  id uuid primary key default gen_random_uuid(),
+  referrer_id uuid references users (id) on delete set null,
+  referred_user_id uuid references users (id) on delete set null,
+  referred_email text,
+  source text not null check (source in ('link', 'guest')),
+  generation int not null default 1 check (generation >= 1),
+  stage text not null default 'invited' check (stage in ('invited', 'trial', 'paying', 'void')),
+  void_reason text,
+  created_at timestamptz not null default now(),
+  trial_at timestamptz,
+  paying_at timestamptz,
+  voided_at timestamptz,
+  check (referred_user_id is null or referred_user_id <> referrer_id)
+);
+create unique index if not exists referrals_referred_user_id on referrals (referred_user_id) where referred_user_id is not null;
+create unique index if not exists referrals_referrer_email on referrals (referrer_id, lower(referred_email)) where referred_email is not null;
+create index if not exists referrals_referrer on referrals (referrer_id, created_at desc);
+
+-- credits: the ledger behind the Stripe customer balance. user_id is the
+-- member whose balance the row moves (the referrer). A grant is posted once
+-- per referral, a clawback once per Stripe refund or dispute, and a lapse
+-- once per account close event (each keyed by source_object_id), zeroing an
+-- unused balance. Amounts are cents and never negative: the kind gives the
+-- direction. uncollected_cents is the part of a clawback the balance could
+-- not cover, and offset_cents the part of a grant's gross used to cover
+-- earlier shortfalls. reason says why a row was made or changed.
+-- source_payment_intent links a grant to the charge a refund or dispute
+-- names. The row id is the Stripe idempotency key and
+-- metadata.credit_ledger_id, and stripe_txn the balance transaction once
+-- posted. The ledger outlives accounts: deleting a user or a referral sets
+-- user_id or referral_id null and keeps the Stripe ids. Because of that the
+-- database cannot require a referral on grants and clawbacks: Unit 4 code
+-- always sets it when inserting them.
+create table if not exists credits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users (id) on delete set null,
+  referral_id uuid references referrals (id) on delete set null,
+  kind text not null check (kind in ('grant', 'clawback', 'lapse')),
+  amount_cents int not null check (amount_cents >= 0),
+  uncollected_cents int not null default 0 check (uncollected_cents >= 0),
+  offset_cents int not null default 0 check (offset_cents >= 0),
+  currency text not null check (currency in ('USD', 'CAD')),
+  status text not null default 'pending_customer' check (status in ('pending_customer', 'pending_switch', 'frozen', 'posted', 'lapsed')),
+  reason text,
+  stripe_txn text,
+  source_payment_intent text,
+  source_object_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  posted_at timestamptz,
+  check (kind not in ('clawback', 'lapse') or source_object_id is not null)
+);
+create unique index if not exists credits_one_grant on credits (referral_id) where kind = 'grant';
+create unique index if not exists credits_one_clawback on credits (referral_id, source_object_id) where kind = 'clawback';
+create unique index if not exists credits_one_lapse on credits (user_id, source_object_id) where kind = 'lapse';
+create unique index if not exists credits_stripe_txn on credits (stripe_txn) where stripe_txn is not null;
+create index if not exists credits_user on credits (user_id, created_at desc);
+create index if not exists credits_unposted on credits (status) where status in ('pending_customer', 'pending_switch');
+create index if not exists credits_payment_intent on credits (source_payment_intent) where source_payment_intent is not null;
+
+-- points: a cache of each member's weekly points (computed from picks and
+-- pool_play_contributors), for rank and history. total = adopted +
+-- confirmed. A past week is authoritative once written.
+create table if not exists points (
+  user_id uuid not null references users (id) on delete cascade,
+  week_of date not null,
+  adopted int not null default 0,
+  confirmed int not null default 0,
+  total int not null default 0,
+  computed_at timestamptz not null default now(),
+  primary key (user_id, week_of)
+);
+create index if not exists points_week on points (week_of, total desc);
+
+-- session_guests: one guest a member invited to a group session (one per
+-- member per session). Only the hash of the /g token is stored. The
+-- retention job (Unit 9) purges name and email 90 days after session_date if
+-- the guest never signed up.
+create table if not exists session_guests (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text not null unique,
+  inviter_id uuid not null references users (id) on delete cascade,
+  referral_id uuid references referrals (id) on delete set null,
+  session_date date not null,
+  name text,
+  email text,
+  rsvp_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists session_guests_one_per_session on session_guests (inviter_id, session_date);
+create index if not exists session_guests_created on session_guests (created_at);
+create index if not exists session_guests_purge on session_guests (session_date) where email is not null;
+
+-- session_attendance: who an admin ticked as attending a group session, a
+-- member or a guest (exactly one). marked_by holds the admin's email. (The
+-- name "sessions" is taken by sign-in sessions.)
+create table if not exists session_attendance (
+  id bigserial primary key,
+  session_date date not null,
+  user_id uuid references users (id) on delete cascade,
+  guest_id uuid references session_guests (id) on delete cascade,
+  marked_by text not null,
+  created_at timestamptz not null default now(),
+  check ((user_id is null) <> (guest_id is null))
+);
+create unique index if not exists session_attendance_member on session_attendance (session_date, user_id) where user_id is not null;
+create unique index if not exists session_attendance_guest on session_attendance (session_date, guest_id) where guest_id is not null;
+
+-- sponsors: a company that pays for its members' seats by monthly invoice.
+-- Only the hash of the sign-up code is stored (it is shown once). Prices are
+-- cents per seat per month, standard and higher (the contributor rule, per
+-- seat). alerted_80_at is when admins were told 80% of the seats are taken.
+-- users.sponsor_id points here, and a sponsor cannot be deleted while a
+-- member does (revoke it instead).
+create table if not exists sponsors (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  currency text not null check (currency in ('USD', 'CAD')),
+  standard_cents int not null check (standard_cents > 0),
+  higher_cents int not null check (higher_cents > 0),
+  seats int not null check (seats >= 0),
+  code_hash text not null unique,
+  billing_email text not null,
+  billing_country text not null default '',
+  billing_postal text not null default '',
+  stripe_customer text unique,
+  alerted_80_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists users_sponsor on users (sponsor_id) where sponsor_id is not null;
+-- One line, so setup.mjs keeps it whole. No code wrote users.sponsor_id before B2.
+do $$ begin if not exists (select 1 from pg_constraint where conname = 'users_sponsor_id_fkey') then alter table users add constraint users_sponsor_id_fkey foreign key (sponsor_id) references sponsors (id) on delete restrict; end if; end $$;
+
+-- sponsor_invoices: one invoice per sponsor per calendar month (month is its
+-- first day). Prepare makes the Stripe draft once, Send finalizes it.
+create table if not exists sponsor_invoices (
+  id uuid primary key default gen_random_uuid(),
+  sponsor_id uuid not null references sponsors (id) on delete restrict,
+  month date not null,
+  stripe_invoice text,
+  prepared_by text,
+  prepared_at timestamptz,
+  sent_at timestamptz,
+  unique (sponsor_id, month)
+);
+
+-- users: when the member joined the leaderboard (set only from its prompt,
+-- their display_name is unique, ignoring case, among opted-in members), and
+-- a cache of their Stripe customer balance as credit in cents (positive is
+-- credit they can spend) with when it was read.
+alter table users add column if not exists leaderboard_opt_in_at timestamptz;
+alter table users add column if not exists credit_balance_cents int;
+alter table users add column if not exists credit_balance_at timestamptz;
+create unique index if not exists users_leaderboard_name on users (lower(display_name)) where leaderboard_opt_in_at is not null;
+
+-- pool_play_contributors: when the contributor was added (job clock). A pick
+-- counts toward a contributor's points only if they contributed before it
+-- was delivered. Rows from before B2 stay null, earlier than everything.
+alter table pool_play_contributors add column if not exists contributed_at timestamptz;
