@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { delivered, newWorld, order, seedPool, sendRun, signUp, toronto, userRow, vercelCron, weeksWithRuns, type CronCall, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (src/lib/billing/offered.ts). This cycle includes a member ordering one at a
+// time, so the order charge keeps being driven end to end: the option is on here.
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => true }));
 
 /**
  * One complete unattended cycle (plan Unit 19; spec B.1 rule 4, B.8, check
@@ -61,7 +64,7 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
     expect(first(log, "send", "done")).toBe("2026-12-28T12:00:00.000Z");
     for (const m of [trial, third, paying, single]) {
       expect(await delivered(w, m.id, WEEK)).toHaveLength(3);
-      const monday = w.mail(m.email).filter((x) => x.subject === "Your list, and your receipt" || x.subject.includes("December 28"));
+      const monday = w.mail(m.email).filter((x) => x.subject === "Your Cora Curation, and your receipt" || x.subject.includes("December 28"));
       expect(monday).toHaveLength(1);
     }
     expect(await w.query(`select status from cora_weeks where week_of = $1`, [WEEK])).toEqual([{ status: "sent" }]);
@@ -80,7 +83,7 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
     const again = await vercelCron(w, toronto(WEEK, "13:30"));
     expect(again.filter((c) => c.route === "cora").every((c) => c.status === "sent")).toBe(true);
     expect(w.stripe.callsTo("subscriptions.create")).toHaveLength(2);
-    for (const m of [trial, third, paying, single]) expect(w.mail(m.email).filter((x) => x.subject === "Your list, and your receipt" || x.subject.includes("December 28"))).toHaveLength(1);
+    for (const m of [trial, third, paying, single]) expect(w.mail(m.email).filter((x) => x.subject === "Your Cora Curation, and your receipt" || x.subject.includes("December 28"))).toHaveLength(1);
   });
 });
 

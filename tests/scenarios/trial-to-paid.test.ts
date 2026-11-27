@@ -41,11 +41,11 @@ describe("trial to the third-list charge", () => {
     }
     // Nothing was charged in the trial (spec check 19: "at no other time").
     expect(w.stripe.callsTo("subscriptions.create")).toEqual([]);
-    expect(w.mail(ca.email).find((m) => m.subject.startsWith("Your three ideas"))!.text).toContain("Free list 1 of 2.");
+    expect(w.mail(ca.email).find((m) => m.subject.startsWith("Your three ideas"))!.text).toContain("Free Cora Curation 1 of 2.");
 
     // After the second list: the first paid one, with the date and the amount with tax (spec check 21).
     const told = { ca: 31640, us: 20000 };
-    const paidNext = (email: string) => w.mail(email).find((m) => m.subject === "Your next list is your first paid one")!;
+    const paidNext = (email: string) => w.mail(email).find((m) => m.subject === "Your next Cora Curation is your first paid one")!;
     expect(paidNext(ca.email).text).toContain(dollars(told.ca, "CAD"));
     expect(paidNext(ca.email).text).toContain("December 21");
     expect(paidNext(us.email).text).toContain(dollars(told.us, "USD"));
@@ -166,8 +166,8 @@ describe("a trial with no first list (spec check 23)", () => {
     expect(s.filter((x) => x === "Your Roger trial closes soon")).toHaveLength(1);
     expect(s.filter((x) => x === "Your Roger trial has closed")).toHaveLength(1);
     // Spec B.8 item 6 (check 20): each Monday without a run says so, and no free list was used.
-    expect(s.filter((x) => x === "No list this week")).toHaveLength(3);
-    expect(w.mail(m.email).find((x) => x.subject === "No list this week")!.text).toContain("no free list was used");
+    expect(s.filter((x) => x === "No Cora Curation this week")).toHaveLength(3);
+    expect(w.mail(m.email).find((x) => x.subject === "No Cora Curation this week")!.text).toContain("no free one was used");
     expect(w.stripe.callsTo("subscriptions.create")).toEqual([]);
     expect(await w.query("select 1 from charge_attempts")).toEqual([]);
   });
