@@ -219,19 +219,48 @@ describe("privacy says each point in the spec's list", () => {
   });
 });
 
-describe("the model provider's position on training", () => {
-  it("is one sentence in the privacy text, saying only that it is being confirmed", () => {
+describe("the model provider's position on training (checked November 27, 2026)", () => {
+  it("names the provider and the route, and states both positions, in the runs section", () => {
     expect(privacy.sections.find((s) => s.id === "runs")!.body).toContain(trainingPosition);
-    // Pinned word for word: any change to it, a stated position included, has to change this line too.
-    expect(trainingPosition).toBe("We are confirming the model provider’s position on training its models, and will state it here.");
-    expect(trainingPosition.match(/[.?]/g)).toHaveLength(1);
+    // Pinned word for word: a change of provider, route or position has to change this line too.
+    expect(trainingPosition).toBe(
+      "Cora’s model provider is Anthropic, reached through Vercel’s AI Gateway. Anthropic’s commercial terms do not allow it to train its models on what Roger sends, and Vercel does not use it for training either.",
+    );
   });
 
-  it("asserts no position, there or anywhere else in the document", () => {
-    const asserts = /\b(does not|doesn’t|do not|don’t|never|not|no|won’t|will not|only)\b[^.]*\btrain|\btrain(s|ed|ing)?\b[^.]*\b(not|never|no)\b|\bis (not )?used (to|for) train/i;
-    expect(trainingPosition).not.toMatch(asserts);
-    // The word appears once in the whole document: in that sentence.
-    expect(privacyText.match(/\btrain\w*/gi)).toEqual(["training"]);
+  it("states it there and nowhere else in the document", () => {
+    expect(privacyText.match(/\btrain\w*/gi)).toEqual(["train", "training"]);
+  });
+});
+
+describe("privacy decisions of November 27, 2026 (launch list S22)", () => {
+  it("P1: the deletion and email-change record keeps the email address", () => {
+    expect(section(privacy, "your-data")).toContain("When an account is deleted, or its email address is changed, Roger’s admin log keeps a short record of it that includes the email address.");
+  });
+
+  it("P2: Roger's team can read a run (reads are not logged, and the page promises nothing more)", () => {
+    expect(section(privacy, "runs")).toContain("Roger’s team can read a run");
+    expect(privacyText).not.toMatch(/\blog(s|ged)? (each|every) (read|view)/i);
+  });
+
+  it("P3: one-at-a-time and held accounts are erased after a year with no run, order, charge or sign-in", () => {
+    expect(section(privacy, "retention")).toContain("If you buy lists one at a time, or your account is on hold, the same erasing happens once a year has passed with no run sent, no list ordered, no charge and no sign-in.");
+  });
+
+  it("P4: shared plays stay in the pool, anonymous", () => {
+    expect(section(privacy, "retention")).toContain("Plays already shared stay in the pool. Other users see nothing that identifies you.");
+  });
+
+  it("P5: shared plays are withdrawn on request", () => {
+    expect(section(privacy, "your-data")).toContain("You can also ask us to take your shared plays out of the pool, and we will remove them.");
+  });
+
+  it("P6: email records a year (welcome kept), payment events eighteen months, unanswered sign-up interest a year", () => {
+    const records = section(privacy, "records");
+    expect(records).toContain("for a year");
+    expect(records).toContain("welcome email went out stays until your account is deleted");
+    expect(records).toContain("payment events from Stripe are kept for eighteen months");
+    expect(records).toContain("we keep it for a year from the last time you left it");
   });
 });
 
