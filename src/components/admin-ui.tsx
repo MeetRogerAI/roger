@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { addUseCase, runIngestAction, saveSecretAction, saveSettingsAction, signInAction, updateUseCase, type AdminState } from "@/app/admin/actions";
 import { categories } from "@/data/library";
 
@@ -104,6 +104,163 @@ export function adminScreenAt(path: string): AdminScreen | null {
   return null;
 }
 
+/** Where this browser keeps the headings the owner has folded: a JSON list of heading names, such as ["People","Setup"]. */
+export const adminFoldedKey = "roger-admin-folded";
+
+/**
+ * The folded headings a stored value names, in the sidebar's order. Anything that is not a list of
+ * current heading names (nothing stored, broken JSON, another shape, a heading since renamed) folds nothing.
+ */
+export function parseFolded(stored: string | null | undefined): string[] {
+  if (!stored) return [];
+  let value: unknown;
+  try {
+    value = JSON.parse(stored);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(value)) return [];
+  return adminGroups.map((group) => group.heading).filter((heading) => value.includes(heading));
+}
+
+/** The folded headings after one of them is pressed: a folded one opens, an open one folds. */
+export function toggleFolded(folded: readonly string[], heading: string): string[] {
+  const next = folded.includes(heading) ? folded.filter((h) => h !== heading) : [...folded, heading];
+  return adminGroups.map((group) => group.heading).filter((h) => next.includes(h));
+}
+
+/**
+ * Whether a heading carries the "you are here" mark: only when it is folded and the current screen is inside it.
+ * A folded group is not opened by going to one of its screens (the owner folded it on purpose); the mark says where they are.
+ */
+export function headingMarked(group: AdminGroup, current: AdminScreen | null, folded: readonly string[]): boolean {
+  return current !== null && folded.includes(group.heading) && group.screens.includes(current);
+}
+
+const groupId = (group: AdminGroup) => `admin-group-${group.heading.toLowerCase()}`;
+
+// Storage can be switched off (private browsing, blocked site data); the choice then lasts until the page is reloaded.
+let unsavedFolded: string | null = null;
+const foldedEvent = "roger-admin-folded";
+
+/** What is stored now, as text. Exported with the two below for the tests. */
+export function storedFolded(): string {
+  if (unsavedFolded !== null) return unsavedFolded;
+  try {
+    return localStorage.getItem(adminFoldedKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function subscribeFolded(listener: () => void) {
+  const reread = () => {
+    unsavedFolded = null;
+    listener();
+  };
+  // Another tab changed it (a null key: it cleared everything). A change to some other key is not a reason to drop a choice that could not be saved.
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === null || e.key === adminFoldedKey) reread();
+  };
+  // A page brought back by Back or Forward heard no storage events while it was put away.
+  const onPageShow = (e: PageTransitionEvent) => {
+    if (e.persisted) reread();
+  };
+  window.addEventListener(foldedEvent, listener);
+  window.addEventListener("storage", onStorage);
+  window.addEventListener("pageshow", onPageShow);
+  return () => {
+    window.removeEventListener(foldedEvent, listener);
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener("pageshow", onPageShow);
+  };
+}
+
+export function saveFolded(folded: readonly string[]) {
+  unsavedFolded = JSON.stringify(folded);
+  try {
+    localStorage.setItem(adminFoldedKey, unsavedFolded);
+  } catch {
+    /* Optional persistence. */
+  }
+  window.dispatchEvent(new Event(foldedEvent));
+}
+
+/**
+ * Runs as the server's markup is read, before the page's scripts load: folds what this browser has stored as folded,
+ * so a reload does not show every group open and then close some. It only sets what React sets a moment later
+ * (`hidden` on a list, `aria-expanded` on its heading). Every other look of a folded group follows from those two in CSS.
+ *
+ * Until React takes over, the headings have no handler of React's. If the page's scripts are slow or never load, a group this
+ * script folded would be shut for good, so the script also opens a folded group when its heading is pressed, and takes it out
+ * of the stored list so React agrees when it arrives. It only ever opens: a list it left hidden that React believed open would
+ * never be put right. It stops once its own tag has left the page, which is when React has read the stored choice.
+ *
+ * Nothing stored reaches the page as markup or code: stored names are only compared with the headings. The text is fixed.
+ */
+const foldBeforeScripts = `(function(){try{var k=${JSON.stringify(adminFoldedKey)},s=document.currentScript,p=s.parentNode,get=function(){var f=JSON.parse(localStorage.getItem(k));return Array.isArray(f)?f:[]},set=function(b,o){var l=document.getElementById(b.getAttribute("aria-controls"));if(l){l.hidden=!o;b.setAttribute("aria-expanded",o?"true":"false")}},f=get(),b=p.querySelectorAll("button[data-admin-fold]");for(var i=0;i<b.length;i++)if(f.indexOf(b[i].getAttribute("data-admin-fold"))>=0)set(b[i],false);p.addEventListener("click",function(e){if(!s.isConnected)return;var h=e.target.closest("button[data-admin-fold]");if(!h||h.getAttribute("aria-expanded")!=="false")return;set(h,true);try{var n=h.getAttribute("data-admin-fold");localStorage.setItem(k,JSON.stringify(get().filter(function(x){return x!==n})))}catch(e){}})}catch(e){}})()`;
+
+/**
+ * The five headings and their screens. Each heading is a button that folds its list away.
+ * A folded list is `hidden`: its links leave the tab order and are not read out.
+ */
+export function AdminNavList({ current, folded, onToggle, onNavigate }: { current: AdminScreen | null; folded: readonly string[]; onToggle?: (heading: string) => void; onNavigate?: () => void }) {
+  return (
+    <nav aria-label="Admin" className="space-y-2">
+      {adminGroups.map((group) => {
+        const id = groupId(group);
+        const isFolded = folded.includes(group.heading);
+        const here = current !== null && group.screens.includes(current);
+        return (
+          <div key={group.heading}>
+            <h2 id={id}>
+              {/* suppressHydrationWarning here and on the list: the script above may already have folded this group when React first reads the markup. */}
+              <button
+                type="button"
+                data-admin-fold={group.heading}
+                aria-expanded={!isFolded}
+                aria-controls={`${id}-screens`}
+                suppressHydrationWarning
+                onClick={() => onToggle?.(group.heading)}
+                className={`group flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-control)] px-3 text-left text-meta font-[620] uppercase tracking-[0.08em] text-ink-2 hover:bg-ground-2 hover:text-ink lg:min-h-8 ${here ? "aria-[expanded=false]:text-ink" : ""}`}
+              >
+                {group.heading}
+                {/* Shown only while the group is folded: the screen that is open is inside it. The second set of classes is for a group the script folded before React knew. */}
+                {here && (
+                  <span data-admin-here className={`items-center ${headingMarked(group, current, folded) ? "inline-flex" : "hidden group-aria-[expanded=false]:inline-flex"}`}>
+                    <span aria-hidden="true" className="size-2 rounded-full bg-ink" />
+                    <span className="sr-only">, you are on {current.label}</span>
+                  </span>
+                )}
+                <svg viewBox="0 0 20 20" className="ml-auto size-4 shrink-0 transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M7.5 4.5L13 10l-5.5 5.5" />
+                </svg>
+              </button>
+            </h2>
+            <ul id={`${id}-screens`} aria-labelledby={id} hidden={isFolded} suppressHydrationWarning>
+              {group.screens.map((screen) => {
+                const on = screen === current;
+                return (
+                  <li key={screen.href}>
+                    <Link
+                      href={screen.href}
+                      aria-current={on ? "page" : undefined}
+                      onClick={onNavigate}
+                      className={`flex min-h-11 items-center rounded-[var(--radius-control)] px-3 text-small lg:min-h-8 ${on ? "bg-ink font-[620] text-ground" : "text-ink hover:bg-ground-2"}`}
+                    >
+                      {screen.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
 /**
  * The admin's navigation. From the lg breakpoint it is a column that stays in view beside the page.
  * Below it, it folds behind one "Menu" button that stays under the site header, as the site's own phone menu does.
@@ -112,6 +269,9 @@ export function adminScreenAt(path: string): AdminScreen | null {
 export function AdminSidebar({ children }: { children?: React.ReactNode }) {
   const path = usePathname() || "/admin";
   const current = adminScreenAt(path);
+  // Null on the server and while React first reads the server's markup: every group open, so with no script every link can be reached.
+  const stored = useSyncExternalStore<string | null>(subscribeFolded, storedFolded, () => null);
+  const folded = useMemo(() => parseFolded(stored), [stored]);
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === path;
@@ -127,9 +287,19 @@ export function AdminSidebar({ children }: { children?: React.ReactNode }) {
       }
     };
     document.addEventListener("keydown", onKey);
-    (panelRef.current?.querySelector<HTMLAnchorElement>('a[aria-current="page"]') ?? panelRef.current?.querySelector<HTMLAnchorElement>("a"))?.focus();
+    // Focus goes to the current screen's link. Inside a folded group that link cannot take it, so its heading does.
+    const link = panelRef.current?.querySelector<HTMLAnchorElement>('a[aria-current="page"]');
+    const heading = link?.closest("ul[hidden]")?.parentElement?.querySelector<HTMLButtonElement>("button[data-admin-fold]");
+    (heading ?? link ?? panelRef.current?.querySelector<HTMLButtonElement>("button[data-admin-fold]"))?.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // A group can be folded from elsewhere (another tab) while the focus is on one of its links. A hidden link cannot keep
+  // the focus, and the browser would drop it to the top of the page; the group's heading takes it instead.
+  useLayoutEffect(() => {
+    const list = document.activeElement?.closest("ul[hidden]");
+    if (list && panelRef.current?.contains(list)) list.parentElement?.querySelector<HTMLButtonElement>("button[data-admin-fold]")?.focus();
+  }, [folded]);
 
   return (
     // data-admin-nav: globals.css gives the page more scroll-padding below lg while this bar is pinned over it.
@@ -162,35 +332,10 @@ export function AdminSidebar({ children }: { children?: React.ReactNode }) {
       </button>
 
       <div id="admin-menu" ref={panelRef} className={`${open ? "block max-h-[calc(100dvh-140px)] overflow-y-auto px-1 pb-3 pt-4" : "hidden"} lg:block lg:max-h-none lg:overflow-visible lg:p-0`}>
-        <nav aria-label="Admin" className="space-y-5">
-          {adminGroups.map((group) => {
-            const id = `admin-group-${group.heading.toLowerCase()}`;
-            return (
-              <div key={group.heading}>
-                <h2 id={id} className="px-3 text-meta font-[620] uppercase tracking-[0.08em] text-ink-2">
-                  {group.heading}
-                </h2>
-                <ul aria-labelledby={id} className="mt-1">
-                  {group.screens.map((screen) => {
-                    const on = screen === current;
-                    return (
-                      <li key={screen.href}>
-                        <Link
-                          href={screen.href}
-                          aria-current={on ? "page" : undefined}
-                          onClick={() => setOpenOn(null)}
-                          className={`flex min-h-11 items-center rounded-[var(--radius-control)] px-3 text-small lg:min-h-8 ${on ? "bg-ink font-[620] text-ground" : "text-ink hover:bg-ground-2"}`}
-                        >
-                          {screen.label}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
-        </nav>
+        {/* A press changes what is stored now, not what this render read: a press handled before the stored choice was rendered would otherwise store that one heading and forget the rest. */}
+        <AdminNavList current={current} folded={folded} onToggle={(heading) => saveFolded(toggleFolded(parseFolded(storedFolded()), heading))} onNavigate={() => setOpenOn(null)} />
+        {/* Only in the server's markup. It is gone once React has read the stored choice itself, and is never rendered in the browser. */}
+        {stored === null && <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: foldBeforeScripts }} />}
         {children && <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-rule px-3 pt-4 lg:flex-col lg:items-start">{children}</div>}
       </div>
     </div>
