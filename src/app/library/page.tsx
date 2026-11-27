@@ -9,6 +9,7 @@ import { getUseCases } from "@/lib/library-source";
 import { ClosingBand } from "@/components/site/v1/blocks/closing-band";
 import { closingBandCopy } from "@/data/site/v1";
 import { v1Copy } from "@/lib/site/content/model";
+import { getSiteContent } from "@/lib/site/content/read";
 import { getAmounts } from "@/lib/site/amounts";
 import type { BuiltVersion } from "@/lib/site/version";
 
@@ -51,7 +52,8 @@ function SetUpBand() {
  * audience, so it carries the one remembered from the homepage or the free Zack run.
  */
 async function TrialBand({ version }: { version: BuiltVersion }) {
-  const { copy } = v1Copy(await getAmounts());
+  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
+  const { copy } = v1Copy(amounts, content);
   return (
     <div data-site={version} data-library-band>
       <ClosingBand id="library-band" copy={closingBandCopy(copy, copy.library.band)} />
@@ -85,8 +87,8 @@ const anyAgent = isBuiltVersion(site) ? "Any AI agent" : undefined;
 
 export default async function LibraryPage() {
   const items = await getUseCases();
-  // A site version's own words for this page are in its copy. Circles and the legacy site keep theirs here.
-  const words = isBuiltVersion(site) ? v1Copy(await getAmounts()).copy.library : null;
+  // A site version's own words for this page are in its copy, as published. Circles and the legacy site keep theirs here, and read no stored content.
+  const words = isBuiltVersion(site) ? v1Copy(...(await Promise.all([getAmounts(), getSiteContent()]))).copy.library : null;
 
   return (
     <>

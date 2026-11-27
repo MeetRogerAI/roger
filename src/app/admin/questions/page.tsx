@@ -2,8 +2,10 @@ import { connection } from "next/server";
 import { builtInQuestions } from "@/data/site/v1";
 import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
+import { baseline, textAt } from "@/lib/site/content/model";
+import { readStored } from "@/lib/site/content/store";
 import { amountPlaceholders } from "@/lib/site/content/text";
-import { ANSWER_MAX, QUESTION_MAX, pagesShowing, readQuestionOverrides } from "@/lib/site/questions";
+import { ANSWER_MAX, QUESTION_MAX, pagesShowing, questionFields } from "@/lib/site/questions";
 import { QuestionEditor, type EditableQuestion } from "./editor";
 
 /**
@@ -15,16 +17,23 @@ import { QuestionEditor, type EditableQuestion } from "./editor";
  * (an address in the ADMIN_EMAILS environment variable, or the shared
  * password while that login still exists). No address is written in the code.
  * The page checks again itself, and so does the action that saves.
+ *
+ * The wording is read from the site's stored content (plan U4), where this
+ * screen's saves now go, and "built-in" is the baseline: the code copy with
+ * the release file on it. Pages replaces this screen in U5.
  */
 export default async function QuestionsPage() {
   await connection();
   if (!(await isAdmin())) return null;
-  const overrides = await readQuestionOverrides(query);
+  // The draft is what a save builds on. This screen publishes with every save, so it is also what is live.
+  const { draft } = await readStored(query);
   const all = builtInQuestions();
   const groups = [...new Set(all.map((item) => item.group))];
   const editable = (item: (typeof all)[number]): EditableQuestion => {
-    const edit = overrides[item.id];
-    return { id: item.id, pages: pagesShowing(item.on), q: edit?.q ?? item.q, a: edit?.a ?? item.a, builtIn: { q: item.q, a: item.a }, edited: Boolean(edit) };
+    const fields = questionFields(item.id)!;
+    const builtIn = { q: textAt(baseline, fields.q) ?? item.q, a: textAt(baseline, fields.a) ?? item.a };
+    const edit = { q: Object.hasOwn(draft.text, fields.q) ? draft.text[fields.q] : undefined, a: Object.hasOwn(draft.text, fields.a) ? draft.text[fields.a] : undefined };
+    return { id: item.id, pages: pagesShowing(item.on), q: edit.q ?? builtIn.q, a: edit.a ?? builtIn.a, builtIn, edited: edit.q !== undefined || edit.a !== undefined };
   };
 
   return (

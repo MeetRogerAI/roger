@@ -5,7 +5,7 @@ import { priceBlockCopy, questionsOn } from "@/data/site/v1";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import type { Overlay } from "@/lib/site/content/format";
 import { v1Copy } from "@/lib/site/content/model";
-import { getQuestionOverrides, questionOverlay } from "@/lib/site/questions";
+import { getSiteContent } from "@/lib/site/content/read";
 import { exampleViews, getPlaybookPreface, type ExampleView } from "@/lib/site/sample";
 import { getTestimonials, type Testimonial } from "@/lib/site/testimonials";
 import type { BuiltVersion } from "@/lib/site/version";
@@ -45,8 +45,8 @@ import { Testimonials } from "./blocks/testimonials";
 
 /** Reads what the page shows, all of it cached, so the page keeps its static shell. */
 export async function V1Home({ version }: { version: BuiltVersion }) {
-  const [amounts, preface, testimonials, questions] = await Promise.all([getAmounts(), getPlaybookPreface(), getTestimonials("re"), getQuestionOverrides()]);
-  return <V1HomeView version={version} amounts={amounts} examples={exampleViews(examples, preface)} testimonials={testimonials} content={questionOverlay(questions)} />;
+  const [amounts, preface, testimonials, content] = await Promise.all([getAmounts(), getPlaybookPreface(), getTestimonials("re"), getSiteContent()]);
+  return <V1HomeView version={version} amounts={amounts} examples={exampleViews(examples, preface)} testimonials={testimonials} content={content} />;
 }
 
 export function V1HomeView({
@@ -63,7 +63,7 @@ export function V1HomeView({
   examples: ExampleView[];
   /** Cleared quotes for the audience "re". Empty leaves the section out. */
   testimonials: Testimonial[];
-  /** The stored edits to show, as one overlay on the code copy. Left out, the page prints the code copy alone. */
+  /** Everything stored that the page should show, as one overlay on the code copy (getSiteContent). Left out, the page prints the code copy alone. */
   content?: Overlay;
 }) {
   const { copy } = v1Copy(amounts, content);

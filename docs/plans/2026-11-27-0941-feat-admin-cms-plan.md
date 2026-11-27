@@ -458,6 +458,18 @@ docs/site/content-release.md
   - A row holding nonsense (a string, an array, unknown keys) gives the baseline on every page.
 - **Verification:** With a local database, a published text edit shows on the homepage, `/faq` and in the header on the next view; with the database switched off, every page renders its built-in wording.
 
+### Notes for U5 to U10 from the U4 build and review (November 27, 2026)
+
+- Store API (`src/lib/site/content/store.ts`): `saveDraft`, `publish(q, by, checkedDraft, {note})`, `undoPublish`, `readStored`, `readPublished`. Handle `"busy"` and `"draft-changed"`. `transition` writes exactly `{draft, published, previous}`: add a key there, not beside it. Keep reading the row as `value::text`.
+- Call `updateTag(CONTENT_TAG)` after every publish, undo or reset-all that gets as far as the write, whatever `changed` says, and also when the call throws.
+- `saveDraft` does not tidy text: pass `plainLine` or `plainBlock` output.
+- The old questions screen publishes the whole draft, so it must be replaced in the same unit that introduces draft-only saves (U5).
+- `composeOverlays` replaces a page's section entry or a list's entry wholesale; the merge by id (KTD4) is still to do in U6 and U7.
+- Do not bump `OVERLAY_FORMAT` without a guard: older code reads a newer-format row as empty and its next save overwrites it.
+- Any client that calls `fetch` from inside `"use cache"` needs `cache: "no-store"` (`docs/solutions/runtime-errors/next-build-answers-queries-from-the-previous-builds-fetch-cache-2026-11-27.md`).
+- Tests that render pages with a database switched on must mock `@/lib/db-query`.
+- For U11: Pages could flag when `site.questions` was updated after `site.content` (an edit saved by the previous release's code during a deploy); a failed log insert after a publish leaves the publish live and unlogged; `getSettings` reads the whole settings table and has a catch inside `use cache`.
+
 ### U5. Pages editor for text, with review, publish and undo
 
 - **Goal:** An admin edits any registered text under Website, Pages, sees what is edited and what is drafted, reviews the wording warnings, publishes and can undo.
