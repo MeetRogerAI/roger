@@ -189,10 +189,12 @@ describe("monthly only: no one-at-a-time wording, no card at sign-up (plan 2026-
 
   it("the dormant per-run modules and exports are imported only by their own per-run flows (review fixes Unit 9, F4)", () => {
     const live = sourceFiles(join(root, "src")).map(rel);
+    // Parse each file once: re-parsing every file per entry timed out under a loaded full run.
+    const imports = new Map(live.map((f) => [f, importsOf(f)]));
     for (const [path, { names, from }] of Object.entries(DORMANT_IMPORTERS)) {
       const target = path.replace(/\.(ts|tsx)$/, "");
       const importers = live.filter((f) =>
-        importsOf(f).some((i) => i.module === target && (!names || i.names === "all" || i.names.some((n) => names.includes(n)))),
+        imports.get(f)!.some((i) => i.module === target && (!names || i.names === "all" || i.names.some((n) => names.includes(n)))),
       );
       expect(importers.sort(), path).toEqual([...from].sort());
     }

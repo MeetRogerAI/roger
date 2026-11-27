@@ -27,7 +27,7 @@ beforeEach(async () => {
 
 describe("the hourly pass", () => {
   it("runs the cheap database tasks first", () => {
-    expect(HOURLY_TASKS.slice(0, 2).map((t) => t.name)).toEqual(["expired_cleanup", "retention"]);
+    expect(HOURLY_TASKS.slice(0, 4).map((t) => t.name)).toEqual(["expired_cleanup", "retention", "idle_retention", "old_records"]);
   });
 
   it("leaves tasks not started by the pass's deadline to the next pass, and hands the deadline to each task", async () => {
