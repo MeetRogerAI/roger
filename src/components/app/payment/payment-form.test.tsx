@@ -117,7 +117,7 @@ describe("PaymentForm", () => {
     expect(stripe.elementProps[0].options).toEqual({
       layout: "tabs",
       wallets: { applePay: "never", googlePay: "never", link: "never" },
-      fields: { billingDetails: { name: "never", email: "never", phone: "never", address: "never" } },
+      fields: { billingDetails: { name: "never", address: "never" } },
     });
     expect(button(html)).not.toContain("disabled");
     // The country defaults from the account currency.

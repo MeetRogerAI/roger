@@ -414,7 +414,10 @@ function CardElement({ onLoadError }: { onLoadError: () => void }) {
       options={{
         layout: "tabs",
         wallets: { applePay: "never", googlePay: "never", link: "never" },
-        fields: { billingDetails: { name: "never", email: "never", phone: "never", address: "never" } },
+        // Only name and address are Roger's own fields (sent with updateBillingAddress). Endive refuses a
+        // Payment Element with every billing field set to "never" unless the session also collects them,
+        // so email and phone stay on Stripe's default (the customer's email; no phone collection).
+        fields: { billingDetails: { name: "never", address: "never" } },
       }}
     />
   );
