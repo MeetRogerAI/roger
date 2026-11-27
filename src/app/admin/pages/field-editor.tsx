@@ -55,7 +55,8 @@ export type EditorField = {
 };
 /** `title` is an item's place, "Question 3", or null for fields outside any item. The item's first field holds the wording that names it. */
 export type EditorGroup = { title: string | null; fields: EditorField[] };
-export type EditorSection = { id: string; label: string; groups: EditorGroup[] };
+/** `off`: the draft has the section switched off. Its words stay here to be changed, marked as not on the page. */
+export type EditorSection = { id: string; label: string; groups: EditorGroup[]; off: boolean; /** The id its block has in the markup: the page’s own, since two editing screens can be in the document together. */ anchor: string };
 /** A name a text may hold in braces: as typed, what it shows, and what it shows today (null when that depends on where it is printed). */
 export type NameHint = { name: string; shows: string; now: string | null };
 
@@ -297,10 +298,16 @@ export function PageEditor({ page, sections, names, reviewAddress }: { page: str
       className="space-y-10"
     >
       {sections.map((section) => (
-        <section key={section.id} id={`section-${section.id}`} aria-labelledby={`section-${section.id}-h`} className="scroll-mt-4">
-          <h2 id={`section-${section.id}-h`} className="text-title">
+        <section key={section.id} id={section.anchor} data-section={section.id} data-section-off={section.off ? "" : undefined} aria-labelledby={`${section.anchor}-h`} className="scroll-mt-4">
+          <h2 id={`${section.anchor}-h`} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-title">
             {section.label}
+            {section.off && <span className={`${chip} border-rule-strong font-[500] text-ink-2`}>Switched off: not on the page</span>}
           </h2>
+          {section.off && (
+            <p data-off-note className="mt-2 text-small text-ink-2">
+              This section is switched off: once that is published, visitors do not see these words. You can still change them. They are kept for when you switch the section back on, under “Sections of this page” above.
+            </p>
+          )}
           <div className="mt-4 space-y-4">
             {section.groups.map((group, g) =>
               group.title ? (

@@ -8,12 +8,16 @@
  * The rule wording and its cases came with the rules from the Edit Questions
  * screen, which refused on them. Here they warn.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { v3Defaults } from "@/data/config";
+import { v1 } from "@/data/site/v1";
+import { PRICE_SECTION_HREF } from "../chrome";
 import { amountsFrom } from "../amounts";
 import { ruleIds } from "../claims";
 import { captionNames } from "../compounding";
-import { TYPED_MAX, draftChanges, pageStatus, reviewKey, ruleWords, saveRefusal, tidyFor, wordingOf, wordingWarnings, type Change } from "./check";
+import { TYPED_MAX, draftChanges, linkWarnings, pageStatus, reviewKey, sectionChanges, ruleWords, saveRefusal, tidyFor, wordingOf, wordingWarnings, type Change } from "./check";
 import { newOverlay, type Overlay } from "./format";
 import { editorAddress, fieldAnchor, fieldLabel, fieldLabels, fieldPlace, pageBySlug, pageCovers, pageSlug, placeholderWords, wordsFor } from "./labels";
 import { baseline, textAt } from "./model";
@@ -110,14 +114,116 @@ describe("what a publish would change", () => {
     const status = pageStatus({ draft: edits({ [HEADLINE]: "A new headline", [REFUND_A]: "No.", [COST_A]: "{monthlyUsd} a month." }), published: edits({ [COST_A]: "{monthlyUsd} a month.", [HERO_SUB]: "A published line." }) });
     expect(Object.fromEntries(status)).toEqual({
       // The headline is a new draft, and the line under it goes back to the original: two drafts, one text that differs.
-      home: { drafts: 2, edits: 1 },
-      howItWorks: { drafts: 0, edits: 0 },
-      library: { drafts: 0, edits: 0 },
+      home: { drafts: 2, edits: 1, rearranged: false },
+      howItWorks: { drafts: 0, edits: 0, rearranged: false },
+      library: { drafts: 0, edits: 0, rearranged: false },
       // One answer is drafted, one was published earlier: both differ from the original, one is waiting.
-      faq: { drafts: 1, edits: 2 },
-      about: { drafts: 0, edits: 0 },
-      shared: { drafts: 0, edits: 0 },
+      faq: { drafts: 1, edits: 2, rearranged: false },
+      about: { drafts: 0, edits: 0, rearranged: false },
+      shared: { drafts: 0, edits: 0, rearranged: false },
     });
+  });
+});
+
+describe("what a publish would change about a page's sections (plan U6, R7)", () => {
+  const sections = (entries: Overlay["sections"]): Overlay => ({ ...newOverlay(), sections: entries });
+  const HOME = ["hero", "problem", "examples", "compounds", "testimonials", "control", "price", "questions", "closing"];
+  const said = (draft: Overlay["sections"], published: Overlay["sections"] = {}) => sectionChanges({ draft: sections(draft), published: sections(published) }).map((change) => change.says);
+
+  it("is nothing while no page's sections are drafted", () => {
+    expect(said({})).toEqual([]);
+    expect(said({ home: { order: [], off: ["price"] } }, { home: { order: [], off: ["price"] } })).toEqual([]);
+  });
+
+  it("says a section switched off, and one switched back on, in a plain sentence that names the page", () => {
+    expect(said({ home: { order: [], off: ["compounds"] } })).toEqual(["Home: the “It compounds” section will be switched off."]);
+    expect(said({}, { home: { order: [], off: ["compounds"] } })).toEqual(["Home: the “It compounds” section will be switched back on."]);
+    expect(said({ faq: { order: [], off: ["price-and-billing"] }, howItWorks: { order: [], off: ["zack"] } })).toEqual([
+      "How it works: the “Zack, in detail” section will be switched off.",
+      "FAQ: the “Price and billing” section will be switched off.",
+    ]);
+  });
+
+  it("says a move for the one section that moved, by its new neighbour, and not for the ones it passed", () => {
+    const swapped = HOME.map((id) => (id === "price" ? "questions" : id === "questions" ? "price" : id));
+    expect(said({ home: { order: swapped, off: [] } })).toEqual(["Home: “Questions” moves up, above “Price”."]);
+    // Three places up: still one sentence.
+    const up = ["hero", "problem", "examples", "compounds", "questions", "testimonials", "control", "price", "closing"];
+    expect(said({ home: { order: up, off: [] } })).toEqual(["Home: “Questions” moves up, above “What people say”."]);
+    // To the end: placed by the section it now follows.
+    const last = [...HOME.filter((id) => id !== "problem"), "problem"];
+    expect(said({ home: { order: last, off: [] } })).toEqual(["Home: “The problem” moves down, below “Closing band”."]);
+    // And back: against what is published, not against the original.
+    expect(said({}, { home: { order: swapped, off: [] } })).toEqual(["Home: “Price” moves up, above “Questions”."]);
+  });
+
+  it("lists a switch and a move on one page as two changes, the switches first", () => {
+    const swapped = HOME.map((id) => (id === "price" ? "questions" : id === "questions" ? "price" : id));
+    const changes = sectionChanges({ draft: sections({ home: { order: swapped, off: ["compounds"] } }), published: newOverlay() });
+    expect(changes.map((change) => [change.page.id, change.section.id, change.kind])).toEqual([
+      ["home", "compounds", "off"],
+      ["home", "questions", "moved"],
+    ]);
+  });
+
+  it("is counted on the page, and the page is marked as rearranged until its sections are the original's again", () => {
+    const status = pageStatus({ draft: { ...edits({ [HEADLINE]: "A new headline" }), sections: { home: { order: [], off: ["compounds", "price"] } } }, published: newOverlay() });
+    expect(status.get("home")).toEqual({ drafts: 3, edits: 1, rearranged: true });
+    expect(status.get("faq")).toEqual({ drafts: 0, edits: 0, rearranged: false });
+    // Published: nothing waits, and the page still differs from the original.
+    const live = sections({ home: { order: [], off: ["price"] } });
+    expect(pageStatus({ draft: live, published: live }).get("home")).toEqual({ drafts: 0, edits: 0, rearranged: true });
+  });
+
+  it("is part of the fingerprint a publish carries: another order is another review", () => {
+    const a = { draft: sections({ home: { order: [], off: ["price"] } }), published: newOverlay() };
+    const b = { draft: sections({ home: { order: [], off: ["compounds"] } }), published: newOverlay() };
+    expect(reviewKey(a, [])).not.toBe(reviewKey(b, []));
+  });
+});
+
+describe("links that would point at a section that is switched off (plan R17, AE3)", () => {
+  const off = (entries: Record<string, string[]>, text: Record<string, string> = {}): { draft: Overlay } => ({
+    draft: { ...edits(text), sections: Object.fromEntries(Object.entries(entries).map(([page, ids]) => [page, { order: [], off: ids }])) },
+  });
+
+  it("is nothing while every section a link points at is on", () => {
+    expect(linkWarnings({ draft: newOverlay() })).toEqual([]);
+    expect(linkWarnings(off({ home: ["compounds", "questions"], howItWorks: ["cora"] }))).toEqual([]);
+  });
+
+  it("Covers AE3. names the “Pricing” link, in the header and in the footer, when Price is switched off on Home", () => {
+    const [warning, ...rest] = linkWarnings(off({ home: ["price"] }));
+    expect(rest).toEqual([]);
+    expect(warning.href).toBe(PRICE_SECTION_HREF);
+    expect(warning.says).toBe("The “Pricing” link in the header and in the footer of every page points at the “Price” section of Home, which is switched off. A visitor who presses it lands at the top of the homepage instead.");
+    // The link is named by the words the draft gives it.
+    expect(linkWarnings(off({ home: ["price"] }, { "nav.pricing": "What it costs" }))[0].says).toContain("The “What it costs” link in the header and in the footer");
+  });
+
+  it("names the control block's link when the Zack section is switched off on How it works, unless the control block is off too", () => {
+    const [warning, ...rest] = linkWarnings(off({ howItWorks: ["zack"] }));
+    expect(rest).toEqual([]);
+    expect(warning.href).toBe(v1.control.link.href);
+    expect(warning.says).toContain(`The “${v1.control.link.label}” link on the homepage, under “You decide what Zack shares” points at the “Zack, in detail” section of How it works`);
+    expect(warning.says).toContain("lands at the top of the How it works page instead");
+    expect(linkWarnings(off({ howItWorks: ["zack"], home: ["control"] }))).toEqual([]);
+  });
+
+  it("names the Use cases page's own link to its watch form when that section is switched off", () => {
+    const [warning, ...rest] = linkWarnings(off({ library: ["watch"] }));
+    expect(rest).toEqual([]);
+    expect(warning.href).toBe("/library#watch");
+    expect(warning.says).toContain(`The “${v1.library.watchLink}” link at the top of the Use cases page`);
+    expect(linkWarnings(off({ library: ["watch", "intro"] }))).toEqual([]);
+  });
+
+  it("points every link it knows at an anchor the registry has, which is the address the page's code links to", () => {
+    const anchor = (page: string, section: string) => siteRegistry.pages.find((entry) => entry.id === page)!.sections.find((entry) => entry.id === section)!.anchor;
+    expect(`/#${anchor("home", "price")}`).toBe(PRICE_SECTION_HREF);
+    expect(`/how-it-works#${anchor("howItWorks", "zack")}`).toBe(v1.control.link.href);
+    expect(anchor("howItWorks", "zack")).toBe(v1.howItWorks.zack.id);
+    expect(readFileSync(path.join(process.cwd(), "src/app/library/page.tsx"), "utf8")).toContain(`href="#${anchor("library", "watch")}"`);
   });
 });
 

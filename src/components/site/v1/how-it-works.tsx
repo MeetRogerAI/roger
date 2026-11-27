@@ -6,13 +6,13 @@ import { firstExample } from "@/data/site/examples";
 import { zackAgents } from "@/data/zack";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import type { Overlay } from "@/lib/site/content/format";
-import { v1Copy } from "@/lib/site/content/model";
+import { sectionsShown, v1Copy } from "@/lib/site/content/model";
 import { getSiteContent } from "@/lib/site/content/read";
 import { playbookParts } from "@/lib/site/playbook";
 import { getPlaybookPreface, publicIdeaView, type IdeaView } from "@/lib/site/sample";
 import type { BuiltVersion } from "@/lib/site/version";
 import { PageHead, ReadingSection, StartBand } from "./blocks/reading";
-import { Hairline } from "./blocks/sections";
+import { InOrder, pageParts } from "./blocks/sections";
 
 /**
  * /how-it-works on site version 1, long form in one narrow column, in the
@@ -25,6 +25,12 @@ import { Hairline } from "./blocks/sections";
  *   5. your first weeks             the trial, step by step
  *   6. if you have no AI agent yet  the link to /getstarted
  *   then the start button
+ *
+ * That is the built-in order. An admin may switch a section off or move it
+ * (Pages, plan U6): the page prints the sections that are on, in the stored
+ * order, with a hairline between two reading sections that are neighbours,
+ * as the built-in order has (InOrder in blocks/sections.tsx). The page's
+ * title is not a section, and always comes first.
  *
  * The page is under the vocabulary rule ("AI agent", never "agent" alone).
  * One block is not the site's words: the line added to the top of every
@@ -105,11 +111,10 @@ export function V1HowItWorksView({
   const installNote = how.anatomy.notes.at(-1)!;
   const paired = annotate(idea.playbookMd, playbookNotes);
 
-  return (
-    <div data-site={version}>
-      <PageHead title={how.title} />
-
-      {/* 1. The week */}
+  // Each section by its id in the registry (src/lib/site/content/registry.ts), numbered as the built-in order has them.
+  const nodes: Record<string, ReactNode> = {
+    // 1. The week
+    week: (
       <ReadingSection id="week" title={how.week.title}>
         <dl className="border-b border-rule">
           {how.week.days.map((d) => (
@@ -120,9 +125,9 @@ export function V1HowItWorksView({
           ))}
         </dl>
       </ReadingSection>
-
-      {/* 2. Zack, in detail: the control block's link lands here */}
-      <Hairline />
+    ),
+    // 2. Zack, in detail: the control block's link lands here
+    zack: (
       <ReadingSection id={how.zack.id} title={how.zack.title}>
         <dl className="space-y-8">
           {how.zack.points.map((point) => (
@@ -148,15 +153,15 @@ export function V1HowItWorksView({
           </div>
         )}
       </ReadingSection>
-
-      {/* 3. Cora, in detail */}
-      <Hairline />
+    ),
+    // 3. Cora, in detail
+    cora: (
       <ReadingSection id="cora" title={how.cora.title}>
         <p className="text-body">{how.cora.body}</p>
       </ReadingSection>
-
-      {/* 4. The anatomy of an idea: the preface first, then the sample idea with a note on each part */}
-      <Hairline />
+    ),
+    // 4. The anatomy of an idea: the preface first, then the sample idea with a note on each part
+    anatomy: (
       <ReadingSection id="anatomy" title={how.anatomy.title} width="wide">
         <figure data-preface className="mx-auto max-w-[40rem]">
           <figcaption className="text-meta font-semibold text-ink-2">{how.anatomy.prefaceLabel}</figcaption>
@@ -206,9 +211,9 @@ export function V1HowItWorksView({
           </ol>
         </article>
       </ReadingSection>
-
-      {/* 5. Your first weeks: the trial, step by step */}
-      <Hairline />
+    ),
+    // 5. Your first weeks: the trial, step by step
+    firstWeeks: (
       <ReadingSection id="first-weeks" title={how.firstWeeks.title}>
         <ol className="border-b border-rule">
           {how.firstWeeks.steps.map((step, i) => (
@@ -222,9 +227,9 @@ export function V1HowItWorksView({
           ))}
         </ol>
       </ReadingSection>
-
-      {/* 6. If you have no AI agent yet */}
-      <Hairline />
+    ),
+    // 6. If you have no AI agent yet
+    noAgent: (
       <ReadingSection id="no-agent" title={how.noAgent.title}>
         <p className="text-body">{how.noAgent.body}</p>
         <p className="mt-6">
@@ -233,8 +238,15 @@ export function V1HowItWorksView({
           </Link>
         </p>
       </ReadingSection>
+    ),
+    startBand: <StartBand start={copy.buttons.start} cardLine={copy.cardLine} />,
+  };
+  const parts = pageParts("howItWorks", sectionsShown("howItWorks", content), nodes);
 
-      <StartBand start={copy.buttons.start} cardLine={copy.cardLine} />
+  return (
+    <div data-site={version}>
+      <PageHead title={how.title} alone={parts[0]?.ground !== "ground"} />
+      <InOrder parts={parts} />
     </div>
   );
 }

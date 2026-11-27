@@ -41,7 +41,7 @@ let current: Query;
 vi.mock("@/lib/db", () => ({ hasDb: () => db.on, sql: Object.assign(async () => [], { query: async () => [] }) }));
 vi.mock("@/lib/db-query", () => ({ query: (t: string, p?: unknown[]) => current(t, p) }));
 
-const { CONTENT_KEY, publish, saveDraft } = await import("./store");
+const { CONTENT_KEY, publish, readStored, saveDraft, saveSections } = await import("./store");
 
 const ADMIN = "admin@example.com";
 const put = (stored: unknown) => current("insert into settings (key, value) values ($1, $2::jsonb) on conflict (key) do update set value = excluded.value", [CONTENT_KEY, JSON.stringify(stored)]);
@@ -213,6 +213,76 @@ describe("what is published", () => {
   });
 });
 
+/**
+ * The sections of each covered page, as published (plan U6, R7): every page prints the ones that are on, in the
+ * stored order, through the route and the root layout. A draft changes no page.
+ */
+describe("the sections that are published", () => {
+  const main = (list: RenderedPage[], at: string) => /<main\b[\s\S]*?<\/main>/.exec(page(list, at).markup)![0];
+  /** A page's own sections by the id of each one's heading, in order. */
+  const sectionsOf = (markup: string) => [...markup.matchAll(/<section\b[^>]*aria-labelledby="([\w-]+)-title"/g)].map((m) => m[1]);
+  const presses = [
+    { page: "home", op: "off", section: "compounds" },
+    { page: "home", op: "up", section: "questions" },
+    { page: "howItWorks", op: "off", section: "zack" },
+    { page: "faq", op: "off", section: "price-and-billing" },
+    { page: "about", op: "off", section: "startBand" },
+    // /library: the watch form above the list.
+    { page: "library", op: "up", section: "watch" },
+  ] as const;
+  const press = async () => {
+    for (const change of presses) expect(await saveSections(current, change), JSON.stringify(change)).toMatchObject({ ok: true, changed: true });
+  };
+
+  it("are on no page while they are a draft", async () => {
+    await press();
+    sameAsPlain(await render(), "with section changes saved as a draft");
+  });
+
+  it("are followed by each page once published, and by no other page", async () => {
+    await press();
+    expect(await publish(current, ADMIN, (await readStored(current)).draft)).toMatchObject({ ok: true, changed: true });
+    const pages = await render();
+    expect(sectionsOf(main(plain, "/"))).toEqual(["hero", "problem", "examples", "compounds", "control", "price", "questions", "closing"]);
+    expect(sectionsOf(main(pages, "/"))).toEqual(["hero", "problem", "examples", "control", "questions", "price", "closing"]);
+    expect(sectionsOf(main(pages, "/how-it-works"))).toEqual(["page", "week", "cora", "anatomy", "first-weeks", "no-agent"]);
+    expect(main(pages, "/how-it-works")).toContain("data-start-band");
+    expect(sectionsOf(main(pages, "/faq"))).toEqual(["page", "getting-started", "zack-and-privacy", "cora-and-the-ideas"]);
+    expect(main(plain, "/about")).toContain("data-start-band");
+    expect(main(pages, "/about")).not.toContain("data-start-band");
+    expect(main(pages, "/about")).toContain("data-letter");
+    // /library: the watch form now comes before the list, with its search. The band still ends the page.
+    const [before, after] = [main(plain, "/library"), main(pages, "/library")];
+    expect(sectionsOf(before)).toEqual(["library", "watch", "library-band"]);
+    expect(sectionsOf(after)).toEqual(["library", "watch", "library-band"]);
+    expect(before.indexOf('id="library-search"')).toBeGreaterThan(-1);
+    expect(before.indexOf('id="watch"')).toBeGreaterThan(before.indexOf('id="library-search"'));
+    expect(after.indexOf('id="watch"')).toBeLessThan(after.indexOf('id="library-search"'));
+    // The homepage's questions leave out the group that is off on /faq.
+    expect(text(main(plain, "/"))).toContain("What does it cost?");
+    expect(text(main(pages, "/"))).not.toContain("What does it cost?");
+    // The header and the footer are not sections: they are what they were, on every page. And the pages Pages does not cover are untouched.
+    for (const p of pages) {
+      for (const part of [/<header\b[\s\S]*?<\/header>/, /<footer\b[\s\S]*?<\/footer>/]) expect(part.exec(p.markup)![0] === part.exec(page(plain, p.path).markup)![0], p.path).toBe(true);
+      if (!["/", "/how-it-works", "/faq", "/about", "/library"].includes(p.path)) expect(p.markup === page(plain, p.path).markup, p.path).toBe(true);
+    }
+  });
+
+  it("go back to the built-in order on every page when the database stops answering (plan R18)", async () => {
+    await press();
+    await publish(current, ADMIN, (await readStored(current)).draft);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      current = async () => {
+        throw new Error("fetch failed");
+      };
+      sameAsPlain(await render(), "with the database down");
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
 describe("every caller of v1Copy", () => {
   /** Every source file under a directory that is not a test. */
   const sources = (dir: string): string[] =>
@@ -247,7 +317,7 @@ describe("every caller of v1Copy", () => {
       const passes = /^amounts, content\)/.test(call) || /getSiteContent\(\)/.test(call);
       expect(passes, `${file}: v1Copy(${call}`).toBe(!codeCopyOnPurpose.includes(file));
     }
-    expect(calls).toHaveLength(9);
+    expect(calls).toHaveLength(8);
   });
 
   it("is under a server component that reads the content, in every file that prints a covered page", () => {

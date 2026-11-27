@@ -47,6 +47,34 @@ const covers: Record<string, string> = {
 
 export const pageCovers = (pageId: string): string => (Object.hasOwn(covers, pageId) ? covers[pageId] : "");
 
+/**
+ * What the owner should know about a section before switching it off or moving it (plan U6), where its name does
+ * not say it: what it is when it has no words of its own, when it shows, and what else follows it.
+ */
+export function sectionNotes(pageId: string, sectionId: string, registry: Registry = siteRegistry): string[] {
+  if (sectionId === "startBand") return ["The start button with the line under it. Its words are under Shared."];
+  if (pageId === "home" && sectionId === "testimonials") return ["Shows on the page only while at least one testimonial is cleared (Website, Testimonials)."];
+  if (pageId === "home" && sectionId === "questions") return ["Shows the homepage’s questions from the FAQ page, in the FAQ page’s order. A group switched off on the FAQ page is left out here too."];
+  if (pageId === "library" && sectionId === "rows") return ["The list of use cases, with its search. The use cases themselves are on the Use cases screen."];
+  if (pageId === "library" && sectionId === "intro") return ["Holds the page’s main heading."];
+  if (pageId === "home" && sectionId === "hero") return ["Holds the page’s main heading."];
+  // /faq's own sections are the question groups.
+  if (pageId === "faq" && registry.pages.find((page) => page.id === "faq")?.sections.some((section) => section.id === sectionId && !section.fixed)) {
+    return ["Switched off, this group’s questions leave the FAQ page, and the homepage’s Questions section leaves them out too."];
+  }
+  return [];
+}
+
+/**
+ * The ids of an editing screen's own parts: the block that holds a section's words, and the heading of the panel
+ * that lists the page's sections. Each carries the page, because two editing screens can be in the document
+ * together: Next keeps the screen a click has left, hidden, and several pages have a section with the same id
+ * ("title"). An id that is there twice sends a link, a label or getElementById to whichever copy comes first
+ * (docs/solutions/ui-bugs/next16-hidden-page-runs-mount-effects-again-…).
+ */
+export const sectionAnchor = (pageId: string, sectionId: string): string => `section-${pageSlug(pageId)}-${sectionId}`;
+export const sectionsAnchor = (pageId: string): string => `sections-${pageSlug(pageId)}`;
+
 /** The id a field's box has in the editing screen's markup, so that a link can land on it. */
 export const fieldAnchor = (fieldId: string): string => `field-${fieldId}`;
 
