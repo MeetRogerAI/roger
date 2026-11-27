@@ -45,9 +45,6 @@ export function PriceBlock({
         <h2 id={titleId} className="text-h2">
           {copy.title}
         </h2>
-        <p data-price-sub className="mx-auto mt-4 max-w-[44rem] text-lead text-night-ink-2">
-          {copy.sub}
-        </p>
         <div className="mt-8">
           <CurrencyToggle initial={initialCurrency} label={copy.switchLabel} options={currencies} />
         </div>
