@@ -163,7 +163,7 @@ describe.each(numbers)("hero sketch %s", (n) => {
     const hero = markup.slice(markup.indexOf("<h1"));
     const start = new RegExp(`<a\\b[^>]*href="/start\\?path=re"[^>]*>${copy.buttons.start}</a>`).exec(hero);
     expect(start, "the start link").not.toBeNull();
-    const secondary = new RegExp(`<a\\b[^>]*href="#how"[^>]*>${copy.home.hero.secondary.label}</a>`).exec(hero);
+    const secondary = new RegExp(`<a\\b[^>]*href="#how"[^>]*>See how it works</a>`).exec(hero);
     expect(secondary, "the secondary link").not.toBeNull();
     expect(secondary!.index).toBeGreaterThan(start!.index);
     // The card line is the next text after the two actions.
@@ -172,7 +172,7 @@ describe.each(numbers)("hero sketch %s", (n) => {
     expect(markup.split(copy.cardLine)).toHaveLength(2);
     // The secondary link has somewhere to land.
     expect(markup.match(/\sid="how"/g)).toHaveLength(1);
-    expect(text(markup)).toContain(copy.home.how.title);
+    expect(text(markup)).toContain("How it works");
   });
 
   it("sends every start button to /start for the audience “re”", () => {
@@ -217,7 +217,7 @@ describe.each(numbers)("hero sketch %s", (n) => {
 
   it("draws its own header: the logo slot, the five links, sign in and a start button", () => {
     const header = /<header\b[\s\S]*?<\/header>/.exec(markup)?.[0] ?? "";
-    for (const href of ["/how-it-works", "/pricing", "/library", "/faq", "/about", "/signin", "/start?path=re"]) expect(header, href).toContain(`href="${href}"`);
+    for (const href of ["/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start?path=re"]) expect(header, href).toContain(`href="${href}"`);
     expect(markup.match(/<header\b/g)).toHaveLength(1);
     expect(markup).not.toContain("<footer");
   });

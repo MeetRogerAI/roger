@@ -5,7 +5,7 @@ import { StartLink } from "@/components/site/shared/start-link";
 import { bricksPerWeek, compoundingSteps } from "@/data/site/compounding";
 import { compoundingCaption } from "@/lib/site/compounding";
 import { Placeholder } from "../placeholder";
-import { LogoSlot, navItems, SkipLink, type SketchProps } from "../sketch-kit";
+import { LogoSlot, navItems, SkipLink, type SketchProps, sketchWords } from "../sketch-kit";
 import { Sketch4Nav } from "./sketch-4-nav";
 import "./sketch-4.css";
 
@@ -54,7 +54,7 @@ const spots = [
 
 export function Sketch4({ copy }: SketchProps) {
   const hero = copy.home.hero;
-  const how = copy.home.how;
+  const { how, secondary } = sketchWords(copy);
   const weeks = compoundingSteps.slice(0, 3);
   const latest = weeks[weeks.length - 1];
   const total = compoundingCaption(copy.bricks.caption, latest);
@@ -102,8 +102,8 @@ export function Sketch4({ copy }: SketchProps) {
             <StartLink audience="re" className="sk4-btn">
               {copy.buttons.start}
             </StartLink>
-            <Link href={hero.secondary.href} className="sk4-link">
-              {hero.secondary.label}
+            <Link href={secondary.href} className="sk4-link">
+              {secondary.label}
             </Link>
           </div>
           <p className="sk4-card">{copy.cardLine}</p>

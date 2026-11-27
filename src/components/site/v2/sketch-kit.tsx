@@ -18,7 +18,7 @@ export type SketchProps = { copy: V1Copy; amounts: Amounts };
 export function navItems(copy: V1Copy): { href: string; label: string }[] {
   return [
     { href: "/how-it-works", label: copy.nav.howItWorks },
-    { href: "/pricing", label: copy.nav.pricing },
+    { href: "/#price", label: copy.nav.pricing },
     { href: "/library", label: copy.nav.library },
     { href: "/faq", label: copy.nav.faq },
     { href: "/about", label: copy.nav.about },
@@ -61,4 +61,18 @@ export function bricksFor(words: BrickWords, weeks: number, setUp = weeks * bric
     const done = i < setUp;
     return { week, idea, setUp: done, label: `${words.week} ${week}, ${words.idea} ${idea}: ${done ? words.setUp : words.empty}` };
   });
+}
+
+/**
+ * Words the sketches were drawn with that version 1's homepage has since dropped (its third review, November 27,
+ * 2026: the "How it works" section merged into the hero, the second hero link and "Who runs this" removed). The
+ * sketches keep their layouts, so they keep these here. The four steps are still read from version 1's copy.
+ */
+export function sketchWords(copy: V1Copy) {
+  return {
+    secondary: { label: "See how it works", href: "#how" },
+    how: { id: "how", title: "How it works", steps: copy.home.hero.graphic.steps },
+    whoRuns: { title: "Who runs this", leadIn: "Roger is run by Peter Kuperman.", link: { label: "Read Peter’s letter", href: "/about" } },
+    sampleLine: "This is one idea, as it arrives.",
+  };
 }
