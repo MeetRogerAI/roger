@@ -478,7 +478,7 @@ sequenceDiagram
 
 **Verification:** All the money tests pass, and the spike results are noted in the PR.
 
-- [ ] **Unit 5: Credit shown in every B1 charge display**
+- [x] **Unit 5: Credit shown in every B1 charge display**
 
 **Goal:** Members see the credit applied and the amount the card is charged. This creates no "amount changed" hold.
 
@@ -488,7 +488,9 @@ sequenceDiagram
 
 **Files:**
 - Modify: `src/lib/billing/payment-view.ts`, `src/lib/billing/quote.ts`, `src/lib/app/billing.ts`, `src/components/app/billing-panel.tsx`, `src/lib/billing/first-charge.ts` (the "subscribed" email's amounts only), plus `quote.ts`, `charges.ts`, `held.ts`, `held-reminder.ts`, `renewal.ts`, `invoice-itemised.ts` and the subscribed-email template (all in `src/lib/mail/templates/`). Leftover per-run order invoices also consume the balance, which is acceptable, and their displays are left as they are because nothing offers them.
-- Test: the matching `*.test.ts` files, and `src/lib/billing/first-charge.test.ts`
+- Create: `src/lib/billing/credit-lines.ts` (the shared pure helper and every label), `src/lib/billing/credit-display.ts` (`displayCredit` from the cache, `emailCredit` live with the cache as fallback, `cacheInvoiceBalance`)
+- Modify (review round): `src/lib/app/status.ts` (the three told-first-charge lines, credit passed through `StatusFacts` from `src/lib/app/home.ts`, `src/lib/cora/send-job.ts` and `src/lib/admin/user-detail.ts`), `src/lib/billing/switch.ts` (the plan-changed email's first charge), `src/lib/billing/webhook.ts` (cache each `invoice.finalized`/`invoice.paid` ending balance), `src/lib/billing/subscriptions.ts` (invoice credit and card figures), `src/lib/billing/payment-page.ts` and `src/app/start/payment/page.tsx` (`paymentCredit`), `src/app/app/billing/page.tsx`, `src/lib/housekeeping/job.ts`, `src/app/api/cron/send/route.ts`, `src/app/app/zack/actions.ts` (live balance for the emails), `artifacts/wording-signoff.md` (section 9)
+- Test: the matching `*.test.ts` files, and `src/lib/billing/first-charge.test.ts`, `src/lib/billing/credit-lines.test.ts`, `src/lib/billing/credit-display.test.ts`, `src/lib/mail/templates/charge-templates.snapshot.test.ts` (no-credit output recorded from B1)
 
 **Approach:**
 - A shared helper returns `{ totalCents, creditAppliedCents, cardChargedCents }` from the preview total and the cached or fresh customer balance.

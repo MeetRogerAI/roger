@@ -1,0 +1,211 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`charge emails with no credit are unchanged > 48-hour 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">CA$316.40, no earlier than Monday, December 14.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your first charge could be on Monday.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$316.40, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">To stop, cancel before then and nothing is charged.</p><p style="margin:24px 0"><a href="http://localhost:3000/app/billing" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Cancel or change plan</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your first charge could be on Monday",
+  "text": "Your first charge could be on Monday.
+
+If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$316.40, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.
+
+To stop, cancel before then and nothing is charged.
+
+Cancel or change plan: http://localhost:3000/app/billing
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > 48-hour, with a discount 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">CA$253.12, no earlier than Monday, December 14.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your first charge could be on Monday.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$253.12, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">That includes your promo code Launch 20%: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">To stop, cancel before then and nothing is charged.</p><p style="margin:24px 0"><a href="http://localhost:3000/app/billing" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Cancel or change plan</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your first charge could be on Monday",
+  "text": "Your first charge could be on Monday.
+
+If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$253.12, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.
+
+That includes your promo code Launch 20%: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included.
+
+To stop, cancel before then and nothing is charged.
+
+Cancel or change plan: http://localhost:3000/app/billing
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > amount changed 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">It is now CA$316.40.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your first charge amount changed.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your promo code’s discount (Launch 20%) has ended and can no longer be applied, so your first charge is at the full price.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your first charge will be CA$316.40, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.</p><p style="margin:24px 0"><a href="http://localhost:3000/app/billing" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Billing</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your first charge amount changed",
+  "text": "Your first charge amount changed.
+
+Your promo code’s discount (Launch 20%) has ended and can no longer be applied, so your first charge is at the full price.
+
+Your first charge will be CA$316.40, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.
+
+We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.
+
+Billing: http://localhost:3000/app/billing
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > itemised 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">CA$632.80 in total.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your next invoice, itemised.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">On Sunday, January 3 we’ll charge CA$632.80. It includes a higher-rate adjustment for a billing month. Here is every line:</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Roger monthly: CA$280</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Higher-rate difference: CA$280</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Tax: CA$72.80</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Total: CA$632.80</p><p style="margin:24px 0"><a href="http://localhost:3000/app/billing" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Billing</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your invoice of Sunday, January 3, itemised",
+  "text": "Your next invoice, itemised.
+
+On Sunday, January 3 we’ll charge CA$632.80. It includes a higher-rate adjustment for a billing month. Here is every line:
+
+Roger monthly: CA$280
+
+Higher-rate difference: CA$280
+
+Tax: CA$72.80
+
+Total: CA$632.80
+
+Billing: http://localhost:3000/app/billing
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > quote changed 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">Now US$226.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your first charge amount changed.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">After your change, your first charge, no earlier than Monday, December 14, will be US$226, tax included.</p><p style="margin:24px 0"><a href="http://localhost:3000/app/billing" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Billing</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your first charge amount changed",
+  "text": "Your first charge amount changed.
+
+After your change, your first charge, no earlier than Monday, December 14, will be US$226, tax included.
+
+Billing: http://localhost:3000/app/billing
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > second list 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">CA$316.40, no earlier than Monday, December 14.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your next list is your first paid one.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$316.40, tax included, for your first month.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">If you’d rather not continue, cancel before then and nothing is charged.</p><p style="margin:24px 0"><a href="http://localhost:3000/app/billing" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Cancel or change plan</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your next list is your first paid one",
+  "text": "Your next list is your first paid one.
+
+Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$316.40, tax included, for your first month.
+
+If you’d rather not continue, cancel before then and nothing is charged.
+
+Cancel or change plan: http://localhost:3000/app/billing
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > second list, with a discount 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">CA$253.12, no earlier than Monday, December 14.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your next list is your first paid one.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$253.12, tax included, for your first month.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">That includes your promo code Launch 20%: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">If you’d rather not continue, cancel before then and nothing is charged.</p><p style="margin:24px 0"><a href="http://localhost:3000/app/billing" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Cancel or change plan</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your next list is your first paid one",
+  "text": "Your next list is your first paid one.
+
+Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$253.12, tax included, for your first month.
+
+That includes your promo code Launch 20%: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included.
+
+If you’d rather not continue, cancel before then and nothing is charged.
+
+Cancel or change plan: http://localhost:3000/app/billing
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > subscribed 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">Your third list is ready.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">You’re subscribed.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">We charged CA$316.40, tax included. Your third list is ready now, and a new one arrives every Monday.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">You can cancel any time on the billing page, in one click.</p><p style="margin:24px 0"><a href="http://localhost:3000/app" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Open this week’s list</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "You’re subscribed",
+  "text": "You’re subscribed.
+
+We charged CA$316.40, tax included. Your third list is ready now, and a new one arrives every Monday.
+
+You can cancel any time on the billing page, in one click.
+
+Open this week’s list: http://localhost:3000/app
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > subscribed, amount unknown 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">Your third list is ready.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">You’re subscribed.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">We charged your first month. Your third list is ready now, and a new one arrives every Monday.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">You can cancel any time on the billing page, in one click.</p><p style="margin:24px 0"><a href="http://localhost:3000/app" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Open this week’s list</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "You’re subscribed",
+  "text": "You’re subscribed.
+
+We charged your first month. Your third list is ready now, and a new one arrives every Monday.
+
+You can cancel any time on the billing page, in one click.
+
+Open this week’s list: http://localhost:3000/app
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`charge emails with no credit are unchanged > subscribed, promo covered it 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">This week’s list is ready.</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">You’re subscribed.</h1><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your first month is covered by your promo code, so nothing was charged. This week’s list is ready now, and a new one arrives every Monday.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">You can cancel any time on the billing page, in one click.</p><p style="margin:24px 0"><a href="http://localhost:3000/app" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">Open this week’s list</a></p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "You’re subscribed",
+  "text": "You’re subscribed.
+
+Your first month is covered by your promo code, so nothing was charged. This week’s list is ready now, and a new one arrives every Monday.
+
+You can cancel any time on the billing page, in one click.
+
+Open this week’s list: http://localhost:3000/app
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;

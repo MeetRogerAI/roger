@@ -1,5 +1,6 @@
 import type { Query } from "@/lib/db-query";
 import { contributionStatus } from "@/lib/billing/contribution";
+import { displayCredit } from "@/lib/billing/credit-display";
 import type { Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
 import { HAS_CARD_SQL } from "@/lib/billing/has-card";
@@ -77,6 +78,8 @@ export async function loadHome(q: Query, userId: string, s: V3Settings, now: Dat
     switchedFromPerRun: u.switched,
     hasCard: u.has_card,
     firstTeaserAt: u.first_teaser_at,
+    // Referral credit for a told first charge (B2 plan Unit 5); only read when there is one.
+    credit: u.quote ? await displayCredit(q, userId, now) : null,
     now,
   };
   const line = statusLine(facts, s);

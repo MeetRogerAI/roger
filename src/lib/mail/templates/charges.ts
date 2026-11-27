@@ -1,13 +1,34 @@
+import { creditLinesFromInvoice, creditLineText, creditParagraph, type DisplayCredit } from "@/lib/billing/credit-lines";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
 import { longDate } from "@/lib/dates";
 
-/** Spec B.13: the first charge succeeded and the subscription started. */
-export function subscribedEmail(o: { amountCents: number | null; currency: Currency; /** A one-at-a-time member's first monthly charge: not a third list. */ switched?: boolean }): Rendered {
+/** The subscribed email, when referral credit paid the whole first invoice (B2 plan Unit 5; for Peter's sign-off). */
+export const SUBSCRIBED_CREDIT_COVERED = ", and your referral credit covered all of it";
+
+/**
+ * Spec B.13: the first charge succeeded and the subscription started. `amountCents` is what the card paid
+ * (`amount_paid`); `creditAppliedCents` is the referral credit the invoice used (B2 plan Unit 5), from the paid
+ * invoice's own balance figures, so the words are the receipt's real ones.
+ */
+export function subscribedEmail(o: {
+  amountCents: number | null;
+  currency: Currency;
+  /** A one-at-a-time member's first monthly charge: not a third list. */ switched?: boolean;
+  creditAppliedCents?: number | null;
+}): Rendered {
   const paid = o.amountCents != null ? `${moneyCents(o.amountCents, o.currency)}, tax included` : "your first month";
   const list = o.switched ? "This week’s list" : "Your third list";
-  // A promo that covers the whole first invoice (Unit 8 review F7): Stripe starts the subscription and charges nothing.
-  const charged = o.amountCents === 0 ? "Your first month is covered by your promo code, so nothing was charged." : `We charged ${paid}.`;
+  const credit = o.amountCents != null ? (o.creditAppliedCents ?? 0) : 0;
+  let charged: string;
+  if (credit > 0) {
+    const total = o.amountCents! + credit;
+    const line = creditLineText(creditLinesFromInvoice(total, credit, o.amountCents!), o.currency);
+    charged = `Your first month is ${moneyCents(total, o.currency)}, tax included${o.amountCents === 0 ? SUBSCRIBED_CREDIT_COVERED : ""}. ${line}.`;
+  } else {
+    // A promo that covers the whole first invoice (Unit 8 review F7): Stripe starts the subscription and charges nothing.
+    charged = o.amountCents === 0 ? "Your first month is covered by your promo code, so nothing was charged." : `We charged ${paid}.`;
+  }
   return renderEmail({
     subject: "You’re subscribed",
     preview: `${list} is ready.`,
@@ -60,7 +81,13 @@ export function chargeDateMovedEmail(o: { nextMonday: string; reason?: "no_plays
 }
 
 /** The amount changed after the reminder: the list waits a day so the user sees the new amount first. */
-export function amountChangedEmail(o: { amountCents: number; currency: Currency; /** The label of a locked-in discount Stripe no longer applies. */ discountEnded?: string | null }): Rendered {
+export function amountChangedEmail(o: {
+  amountCents: number;
+  currency: Currency;
+  /** The label of a locked-in discount Stripe no longer applies. */ discountEnded?: string | null;
+  /** Referral credit as it stands when the email is sent (B2 plan Unit 5): words only, the amount is the invoice total. */
+  credit?: DisplayCredit;
+}): Rendered {
   return renderEmail({
     subject: "Your first charge amount changed",
     preview: `It is now ${moneyCents(o.amountCents, o.currency)}.`,
@@ -68,6 +95,7 @@ export function amountChangedEmail(o: { amountCents: number; currency: Currency;
     paragraphs: [
       ...(o.discountEnded ? [`Your promo code’s discount (${o.discountEnded}) has ended and can no longer be applied, so your first charge is at the full price.`] : []),
       `Your first charge will be ${moneyCents(o.amountCents, o.currency)}, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.`,
+      ...creditParagraph(o.amountCents, o.currency, o.credit ?? null),
       "We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.",
     ],
     button: { label: "Billing", url: appUrl("/app/billing") },

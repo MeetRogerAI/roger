@@ -5,6 +5,7 @@ import { PAYMENT_PATH, statusLine, type StatusFacts } from "@/lib/app/status";
 import { weekIdeas } from "@/lib/app/week";
 import { HAS_CARD_SQL, isNoCardTrial, NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import type { Currency } from "@/lib/billing/prices";
+import { displayCredit, type BalanceReader } from "@/lib/billing/credit-display";
 import { sendFirstPaidNext } from "@/lib/billing/quote";
 import { contributionStatus, processContributions } from "@/lib/billing/contribution";
 import type { AdjustmentGateway, BillingGateway } from "@/lib/billing/subscriptions";
@@ -23,12 +24,15 @@ import { deliverWeek, NOT_SUPERSEDED_SQL } from "./deliver";
  * pass, so a failed send is tried again by the next pass (the Monday cron, or
  * the hourly late pass for the rest of the week). Safe to run twice.
  */
-export type SendDeps = { settings: V3Settings; now: Date; gw?: BillingGateway; adjust?: AdjustmentGateway } & MailDeps;
+/** `balances`: Stripe's customer balance, for the second-list email's referral credit (B2 plan Unit 5); without it, the cache. */
+export type SendDeps = { settings: V3Settings; now: Date; gw?: BillingGateway; adjust?: AdjustmentGateway; balances?: BalanceReader | null } & MailDeps;
 
 /** The status line with the month's contribution count for an active monthly member (spec B.9 notice 2). */
 async function statusFor(q: Query, d: SendDeps, u: U): Promise<string> {
   const contribution = u.status === "active" && u.plan === "monthly" ? await contributionStatus(q, u.id, d.settings, d.now) : null;
-  return statusLine({ ...facts(u, d.settings, d.now), contribution }, d.settings);
+  // Referral credit for a told first charge (B2 plan Unit 5); only read when there is one.
+  const credit = u.quote ? await displayCredit(q, u.id, d.now) : null;
+  return statusLine({ ...facts(u, d.settings, d.now), contribution, credit }, d.settings);
 }
 
 type U = {
@@ -156,7 +160,7 @@ export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string):
   // After the second free list, what comes next (spec B.13 email 7), before the Monday email, so both state the same date and amount.
   if (now.status === "trial" && !now.sponsored && now.free_lists_used >= d.settings.freeRuns) {
     if (now.plan === "monthly" && d.gw && !(await sentAlready(q, now.id, "first_paid_next", week))) {
-      await sendFirstPaidNext(q, { gw: d.gw, settings: d.settings, now: d.now, ...mailOf(d) }, now.id).catch((e) => console.error("[send] first paid next", e instanceof Error ? e.message : e));
+      await sendFirstPaidNext(q, { gw: d.gw, balances: d.balances, settings: d.settings, now: d.now, ...mailOf(d) }, now.id).catch((e) => console.error("[send] first paid next", e instanceof Error ? e.message : e));
     }
     // A leftover per-run account no longer gets the "order your next list" email (whole-branch review W2):
     // ordering is gone from the app, so the email would point at nothing. `orderNextEmail` stays, dormant.

@@ -1,4 +1,5 @@
 import { AsOfRefused, currentMonday, wallParts } from "@/lib/clock";
+import { stripeCredits } from "@/lib/billing/gateway";
 import { stripeAdjustments, stripeBilling } from "@/lib/billing/subscriptions";
 import { runSendJob } from "@/lib/cora/send-job";
 import { cronAuthorized, cronNow } from "@/lib/cron";
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
     if (wallParts(now).dow !== 1) return Response.json({ status: "skipped", note: "Lists go out on Mondays." });
     const result = await runSendJob(
       query,
-      { settings: await readV3Settings(), now, gw: stripeBilling() ?? undefined, adjust: stripeAdjustments() ?? undefined },
+      { settings: await readV3Settings(), now, gw: stripeBilling() ?? undefined, adjust: stripeAdjustments() ?? undefined, balances: stripeCredits() },
       { week: currentMonday(now) },
     );
     return Response.json(result);

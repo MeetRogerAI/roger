@@ -7,6 +7,7 @@ import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnSwitchScheduled, ANCHOR, carryToFirstCharge, ISO } from "./adjustment";
 import { BUSY, isCancelling, loadPlanUser, undoCancel, unixIso, UNREACHABLE, type PlanDeps, type PlanResult, type PlanUser } from "./cancel";
 import { chargeInFlight } from "./claims";
+import { creditParagraph } from "./credit-lines";
 import { periodAt } from "./period";
 import { amount, money, moneyCents, taxPhrase, type Currency } from "./prices";
 import { tellFirstCharge } from "./quote";
@@ -263,10 +264,14 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
   const plain = () => sendToUser({ id: u.id, email: u.email }, "plan_changed", ref, planChangedEmail({ to, effect: switchEffect(u, d.settings, d.now) }), d);
   if (done.free_lists_used >= d.settings.freeRuns && d.gw) {
     // The email states the first charge, and that amount becomes the told one (spec check 21).
-    const told = await tellFirstCharge(q, { gw: d.gw, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }, u.id, "plan_changed", ref, (quote) =>
+    const told = await tellFirstCharge(q, { gw: d.gw, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }, u.id, "plan_changed", ref, (quote, credit) =>
       planChangedEmail({
         to,
-        effect: `Monthly starts with your next list. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${moneyCents(quote.totalCents, quote.currency)}, tax included, for your first month${carried ? `, with the higher-rate difference of ${moneyCents(carried, quote.currency)} still owed for the month you switched away from` : ""}, then the monthly price every month.`,
+        effect: [
+          `Monthly starts with your next list. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${moneyCents(quote.totalCents, quote.currency)}, tax included, for your first month${carried ? `, with the higher-rate difference of ${moneyCents(carried, quote.currency)} still owed for the month you switched away from` : ""}, then the monthly price every month.`,
+          // B2 plan Unit 5: referral credit on the balance as the email is sent (words only).
+          ...creditParagraph(quote.totalCents, quote.currency, credit),
+        ].join(" "),
       }),
     ).catch((e) => {
       console.error("[billing] switch quote", u.id, e instanceof Error ? e.message : e);

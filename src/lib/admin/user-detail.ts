@@ -1,4 +1,5 @@
 import { statusLine } from "@/lib/app/status";
+import { displayCredit } from "@/lib/billing/credit-display";
 import { contributionStatus } from "@/lib/billing/contribution";
 import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 import type { Currency } from "@/lib/billing/prices";
@@ -107,6 +108,8 @@ async function lineFor(q: Query, userId: string, u: U, s: V3Settings, now: Date)
       hasCard: u.has_card,
       firstTeaserAt: u.first_teaser_at,
       contribution,
+      // The member's own line (B2 plan Unit 5): referral credit for a told first charge.
+      credit: u.quote ? await displayCredit(q, userId, now) : null,
       now,
     },
     s,

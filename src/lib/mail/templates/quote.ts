@@ -1,9 +1,14 @@
 import { discountEnds, discountWords, type DiscountTerms } from "@/lib/billing/discount-words";
+import { creditParagraph, type DisplayCredit } from "@/lib/billing/credit-lines";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 import { longDate } from "@/lib/dates";
 
-type Amount = { week: string; amountCents: number; currency: Currency };
+/**
+ * `credit`: the member's referral credit as it stands when the email is sent (B2 plan Unit 5). The amount stays the
+ * invoice total (what is told and compared); the credit adds "Credit applied −X · Card charged Y" below it.
+ */
+type Amount = { week: string; amountCents: number; currency: Currency; credit?: DisplayCredit };
 /**
  * The promo locked in at card save: its label, the amount it takes off the first charge, how long it lasts, and
  * (for one that ends) the monthly amount after it, tax included.
@@ -31,6 +36,7 @@ export function firstPaidNextEmail(o: Amount & { discount?: DiscountLine }): Ren
     heading: "Your next list is your first paid one.",
     paragraphs: [
       `Your free lists are done. Your next list follows Zack’s next report, no earlier than ${longDate(o.week)}, and that morning we’ll charge ${moneyCents(o.amountCents, o.currency)}, tax included, for your first month.`,
+      ...creditParagraph(o.amountCents, o.currency, o.credit ?? null),
       ...discountLine(o.discount, o.currency),
       "If you’d rather not continue, cancel before then and nothing is charged.",
     ],
@@ -46,6 +52,7 @@ export function firstChargeReminderEmail(o: Amount & { discount?: DiscountLine }
     heading: "Your first charge could be on Monday.",
     paragraphs: [
       `If Zack’s report arrives by Sunday night, your third list comes on ${longDate(o.week)} and we’ll charge ${moneyCents(o.amountCents, o.currency)}, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.`,
+      ...creditParagraph(o.amountCents, o.currency, o.credit ?? null),
       ...discountLine(o.discount, o.currency),
       "To stop, cancel before then and nothing is charged.",
     ],
@@ -59,7 +66,10 @@ export function quoteChangedEmail(o: Amount): Rendered {
     subject: "Your first charge amount changed",
     preview: `Now ${moneyCents(o.amountCents, o.currency)}.`,
     heading: "Your first charge amount changed.",
-    paragraphs: [`After your change, your first charge, no earlier than ${longDate(o.week)}, will be ${moneyCents(o.amountCents, o.currency)}, tax included.`],
+    paragraphs: [
+      `After your change, your first charge, no earlier than ${longDate(o.week)}, will be ${moneyCents(o.amountCents, o.currency)}, tax included.`,
+      ...creditParagraph(o.amountCents, o.currency, o.credit ?? null),
+    ],
     button: { label: "Billing", url: appUrl("/app/billing") },
   });
 }

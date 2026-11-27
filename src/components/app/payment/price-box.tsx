@@ -2,7 +2,8 @@
 
 import { useId, useState, type ReactNode } from "react";
 import type { MonthlyPreview } from "@/lib/billing/gateway";
-import { discountDuration, dueToday, taxLine, thenLine, totalText, type PromoView } from "@/lib/billing/payment-view";
+import type { DisplayCredit } from "@/lib/billing/credit-lines";
+import { creditRows, discountDuration, dueToday, taxLine, thenLine, totalText, type PromoView } from "@/lib/billing/payment-view";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 
 /**
@@ -20,6 +21,7 @@ export function PriceBox({
   currencyBusy = false,
   promoSlot,
   notice,
+  credit,
 }: {
   price: MonthlyPreview;
   promo: PromoView | null;
@@ -28,6 +30,8 @@ export function PriceBox({
   currencyBusy?: boolean;
   promoSlot?: ReactNode;
   notice?: string | null;
+  /** Referral credit on the member's balance (B2 plan Unit 5): "Credit applied" and "Card charged" under the total. */
+  credit?: DisplayCredit;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -39,6 +43,7 @@ export function PriceBox({
   // A discount that ends: the total shown is the first month's, and the regular monthly amount follows it.
   const then = thenLine(promo, price);
   const totalLabel = then ? "First month" : "Total per month";
+  const creditRow = creditRows(price, credit, promo);
   // The currency toggle sits on the same line as the price, on every width, so people see at once that they can switch.
   const toggle = (
     <div role="group" aria-label="Currency" className="inline-flex shrink-0 rounded-full border border-rule bg-ground-2 p-1">
@@ -106,6 +111,22 @@ export function PriceBox({
           </div>
         </dl>
         {then && <p className="mt-1 text-right text-meta text-ink-2">{then}</p>}
+        {/* Referral credit (B2 plan Unit 5): with the first charge it goes to, then the month after it. */}
+        {creditRow && (
+          <>
+            <dl className="mt-3 space-y-3 text-small">
+              <div className="flex justify-between gap-4">
+                <dt>{creditRow.credit.label}</dt>
+                <dd className="tabular-nums">{creditRow.credit.value}</dd>
+              </div>
+              <div className="flex justify-between gap-4 font-semibold text-ink">
+                <dt>{creditRow.card.label}</dt>
+                <dd className="tabular-nums">{creditRow.card.value}</dd>
+              </div>
+            </dl>
+            {creditRow.then && <p className="mt-1 text-right text-meta text-ink-2">{creditRow.then}</p>}
+          </>
+        )}
 
         {promoSlot && <div className="mt-4">{promoSlot}</div>}
 

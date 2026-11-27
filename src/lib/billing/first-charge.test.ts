@@ -287,6 +287,19 @@ describe("tax and amount checks", () => {
     expect(await user()).toMatchObject({ status: "active" });
   });
 
+  // B2 plan Unit 5: a real price change holds as before; the email adds the member's referral credit (words only).
+  it("a real amount change with referral credit on the balance: held, and the email states the credit line", async () => {
+    gw.setTotal(25000);
+    await query("update users set credit_balance_cents = 30000, credit_balance_at = '2026-12-10T12:00:00Z' where id = $1", [uid]);
+    expect(await chargeFirst(query, deps(SIX_AM, { balances: { balance: async () => -10000 } }), uid, WEEK)).toBe("held_amount");
+    expect(await user()).toMatchObject({ status: "held", hold_reason: "amount_changed" });
+    const m = sent.find((x) => x.subject === "Your first charge amount changed")!;
+    expect(m.text).toContain("Your first charge will be US$250, tax included.");
+    expect(m.text).toContain("Credit applied −US$100.00 · Card charged US$150.00. The credit shown is your referral credit balance as this email is sent.");
+    const [q] = await query<{ total: number }>("select (quote->>'totalCents')::int as total from users where id = $1", [uid]);
+    expect(q.total).toBe(25000);
+  });
+
   it("charges a member not sharing at the cutoff the standard price plus one first-invoice item, and records that month as billed", async () => {
     await query("update users set sharing = 'match_only', quote = $1", [JSON.stringify({ totalCents: 23000, currency: "USD", price: "price_monthly_usd", extraCents: 20000 })]);
     const calls: { price: string; extra: unknown }[] = [];

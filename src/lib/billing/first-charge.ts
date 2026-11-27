@@ -6,6 +6,7 @@ import { backToPerRunEmail } from "@/lib/mail/templates/plan-changed";
 import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 import { carriedDifferenceCents, clearCarried } from "./adjustment";
+import { emailCredit, type BalanceReader } from "./credit-display";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, settle, stillChargeable, type Claim } from "./claims";
 import { firstChargePricing, type Currency } from "./prices";
 import { isCouponGone } from "./gateway";
@@ -20,7 +21,8 @@ import { isLive, type AdjustmentGateway, type BillingGateway, type ChargeResult,
  * a retry cannot fix holds the user for an admin; day 7 with nothing charged
  * closes the trial.
  */
-export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; adjust?: AdjustmentGateway; plans?: PlanGateway; settings: V3Settings; now: Date } & MailDeps;
+/** `balances`: Stripe's customer balance, read live for the amount-changed email's referral credit (B2 plan Unit 5). Words only. */
+export type ChargeDeps = { gw: BillingGateway; orders?: OrderGateway; adjust?: AdjustmentGateway; plans?: PlanGateway; balances?: BalanceReader | null; settings: V3Settings; now: Date } & MailDeps;
 export type FirstOutcome = "charged" | "declined" | "held_amount" | "unknown" | "error" | "skipped" | "open";
 
 type Quote = { totalCents?: number; currency?: string; price?: string; extraCents?: number; at?: string; week?: string; coupon?: string | null; discountCents?: number };
@@ -256,7 +258,8 @@ async function holdForAmount(
     { id: u.id, email: u.email },
     "amount_changed",
     `${week}:${total}:${fresh.price}`,
-    amountChangedEmail({ amountCents: total, currency: fresh.currency as Currency, discountEnded: ended }),
+    // Referral credit is words only (B2 plan Unit 5): the told and compared amount stays the invoice total.
+    amountChangedEmail({ amountCents: total, currency: fresh.currency as Currency, discountEnded: ended, credit: await emailCredit(q, u.id, d.now, d.balances) }),
     d,
   ).catch(() => {});
   const why = ended ? ` The locked-in discount (${ended}) no longer applies.` : "";
@@ -337,7 +340,7 @@ export async function applyResult(q: Query, d: ChargeDeps, u: Pick<U, "id" | "em
       await alert("charged_not_active", claim.id, "A first charge succeeded for a user who is no longer in trial", [`User ${u.id}, subscription ${r.object}. Check and refund if needed.`], d);
       return "charged";
     }
-    await sendToUser({ id: u.id, email: u.email }, "subscribed", claim.weekOf, subscribedEmail({ amountCents: r.amountCents, currency: (r.currency ?? u.currency ?? "USD") as Currency, switched: x.switched }), d).catch(() => {});
+    await sendToUser({ id: u.id, email: u.email }, "subscribed", claim.weekOf, subscribedEmail({ amountCents: r.amountCents, currency: (r.currency ?? u.currency ?? "USD") as Currency, switched: x.switched, creditAppliedCents: r.creditAppliedCents ?? null }), d).catch(() => {});
     return "charged";
   }
   if (r.kind === "unknown") {
@@ -563,7 +566,14 @@ export async function repairPaidUsers(q: Query, d: ChargeDeps): Promise<number> 
  */
 export async function settleFromInvoice(
   q: Query,
-  o: { claimId: string; subscription: string; amountCents: number | null; currency: string | null; /** The subscription's billing cycle anchor (unix seconds), from the invoice's plan line. */ anchor?: number | null },
+  o: {
+    claimId: string;
+    subscription: string;
+    amountCents: number | null;
+    currency: string | null;
+    /** The subscription's billing cycle anchor (unix seconds), from the invoice's plan line. */ anchor?: number | null;
+    /** Referral credit the invoice used (its balance figures), for the subscribed email's words. */ creditAppliedCents?: number | null;
+  },
   d: Omit<ChargeDeps, "gw"> & { gw?: BillingGateway },
 ): Promise<FirstOutcome> {
   const [c] = await q<{ id: string; user_id: string; week_of: string; attempt: number; claimed_at: string }>(
@@ -575,7 +585,14 @@ export async function settleFromInvoice(
   const u = await loadUser(q, c.user_id);
   if (!u) return "skipped";
   const claim: Claim = { id: c.id, userId: c.user_id, purpose: "first_charge", weekOf: c.week_of, attempt: c.attempt, claimedAt: c.claimed_at };
-  return applyResult(q, { gw: d.gw as BillingGateway, ...d }, u, claim, { kind: "succeeded", object: o.subscription, amountCents: o.amountCents, currency: o.currency?.toUpperCase() ?? null, anchor: o.anchor ?? null });
+  return applyResult(q, { gw: d.gw as BillingGateway, ...d }, u, claim, {
+    kind: "succeeded",
+    object: o.subscription,
+    amountCents: o.amountCents,
+    currency: o.currency?.toUpperCase() ?? null,
+    anchor: o.anchor ?? null,
+    creditAppliedCents: o.creditAppliedCents ?? null,
+  });
 }
 
 /** The Monday a trial user's first charge would come next, for the "date moved" note. */

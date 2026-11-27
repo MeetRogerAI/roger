@@ -52,6 +52,14 @@ The Stripe balance is one pool, while the events that move it are independent an
 - A cap must count work that's written but not yet posted, and must be checked again at post time.
 - A lease's lifetime must exceed the longest function duration. Check elapsed time before every external write; see `docs/solutions/best-practices/lease-must-guard-every-write-not-just-entry-2026-11-23.md`.
 
+## Showing the balance to members (B2 Unit 5)
+The cached balance (`users.credit_balance_cents`) was written only when Roger posted credit. Stripe spends the balance on every invoice without telling Roger, so a display could state credit that was already gone. Review also found an upcoming-charge email could promise "Card charged $0.00" when a clawback after the email meant a full charge. The rules we ended with:
+- **Refresh the cache on every event that moves the balance**, not only the ones we cause: `invoice.finalized` and `invoice.paid`, using the invoice's own `ending_balance` and `finalized_at`. Never overwrite a newer reading.
+- **Treat a reading older than the last charge as stale**, with a small grace window, because Stripe finalizes the invoice (and the webhook caches) seconds before Roger records the charge.
+- **Read the balance live for emails that state an upcoming charge**, falling back to the cache. Say the amount is "as this email is sent".
+- **Stamp any cache write with `min(jobClock, Date.now())`.** An "as of" clock ahead of real time would otherwise block every later real write behind a guarded "only if newer" update.
+- **Show the credit split only on paid invoices.** Open invoices say "Card due", and void or uncollectible ones show the plain total.
+
 ## Related
 - `docs/solutions/logic-errors/one-money-rule-two-mechanisms-double-charges-2026-11-23.md`
 - `docs/solutions/logic-errors/retry-must-replay-claimed-parameters-2026-11-26.md`

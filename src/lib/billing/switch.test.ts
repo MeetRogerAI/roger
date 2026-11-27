@@ -200,6 +200,16 @@ describe("monthly to one list at a time", () => {
 });
 
 describe("one list at a time to monthly", () => {
+  // B2 plan Unit 5: the plan-changed email that states the first charge adds the member's referral credit.
+  it("the plan-changed email states the referral credit on the balance after the amount", async () => {
+    const id = await member({ status: "trial", plan: "per_run" });
+    await query("update users set credit_balance_cents = 20000, credit_balance_at = '2026-12-10T12:00:00Z' where id = $1", [id]);
+    expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "monthly" })).toMatchObject({ ok: true });
+    expect(sent[0].text).toContain("we’ll charge US$226, tax included, for your first month");
+    expect(sent[0].text).toContain("then the monthly price every month. Credit applied −US$200.00 · Card charged US$26.00. The credit shown is your referral credit balance as this email is sent.");
+    expect(await user(id)).toMatchObject({ quote: { totalCents: 22600 } });
+  });
+
   it("starts the subscription with the next ready list, told first and charged once", async () => {
     const id = await member({ status: "trial", plan: "per_run" });
     expect(await switchOffer(query, settings, SATURDAY, id)).toMatchObject({ to: "monthly", effect: expect.stringContaining("Monthly starts with your next list") });

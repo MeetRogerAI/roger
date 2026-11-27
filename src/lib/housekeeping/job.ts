@@ -130,7 +130,7 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
   { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.
-  { name: "charge_retries", run: (q, d) => dueRetries(q, d) },
+  { name: "charge_retries", run: (q, d) => dueRetries(q, { ...d, balances: hourlyCredits(d) }) },
   // After the retries, so a day-7 attempt runs before its trial closes.
   { name: "close_unpaid_trials", run: (q, d) => closeUnpaidTrials(q, d) },
   // Plan 2026-11-26-001, Unit 2. A welcome that failed when sign-up ended (a server action has no retry): the free-tool
@@ -150,7 +150,7 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Sunday 6:00 PM in the member's time zone: upload-route members with no run yet.
   { name: "upload_reminders", run: (q, d, c) => sendUploadReminders(q, { ...d, deadline: c.deadline }) },
   // 48 hours before a first charge: the reminder with the stored date and amount.
-  { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, d) },
+  { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, { ...d, balances: hourlyCredits(d) }) },
   // Order invoices left open after a failed void.
   { name: "void_leftover_invoices", run: async (q, d) => (d.orders ? voidLeftoverInvoices(q, { ...d, orders: d.orders }) : 0) },
   // Orders for a week Cora failed: closed with no list and no charge, the member told (Unit 17).
@@ -167,7 +167,7 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Stripe deletes of dropped adjustment items that failed, until Stripe confirms them.
   { name: "adjustment_deletes", run: (q, d) => retryDeletes(q, d) },
   // Three days before an invoice carrying an adjustment: the itemised email, from Stripe's preview.
-  { name: "invoice_itemised", run: (q, d) => sendItemisedNotices(q, d) },
+  { name: "invoice_itemised", run: (q, d) => sendItemisedNotices(q, { ...d, balances: hourlyCredits(d) }) },
   // Once a day (4 AM Toronto): pending invoice items with no live adjustment are deleted.
   { name: "reconcile_pending_items", run: async (q, d, c) => (wallParts(d.now).hour === 4 ? reconcilePendingItems(q, d, { deadline: c.deadline }) : "not this hour") },
   // A paid user left held or in trial is made active.

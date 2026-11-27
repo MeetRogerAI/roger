@@ -5,6 +5,7 @@ import { invoiceItemisedEmail } from "@/lib/mail/templates/invoice-itemised";
 import { notSharingMonthEmail, secondMissEmail } from "@/lib/mail/templates/second-miss";
 import type { Rendered } from "@/lib/mail/layout";
 import type { V3Settings } from "@/lib/v3-settings";
+import { emailCredit, type BalanceReader } from "./credit-display";
 import { NOTICE_DAYS, periodAt, periodLabel, placement } from "./period";
 import { amount, differenceCents, money, moneyCents, monthDifferenceCents, type Currency } from "./prices";
 import type { AdjustmentGateway } from "./subscriptions";
@@ -36,7 +37,7 @@ export { differenceCents };
  *   Stripe can no longer delete (its invoice is finalized) is billed: the row
  *   is marked invoiced and admins are told once that a credit is due.
  */
-export type AdjustDeps = { settings: V3Settings; now: Date; adjust?: AdjustmentGateway } & MailDeps;
+export type AdjustDeps = { settings: V3Settings; now: Date; adjust?: AdjustmentGateway; balances?: BalanceReader | null } & MailDeps;
 /**
  * Why a difference was dropped. "switching" is a switch to one at a time still
  * waiting for the month's end (undoable, like "cancel"); it becomes "switch"
@@ -456,7 +457,14 @@ export async function sendItemisedNotices(q: Query, d: AdjustDeps): Promise<numb
         { id: r.user_id, email: r.email },
         "invoice_itemised",
         date,
-        invoiceItemisedEmail({ invoiceDate: date, lines: preview.lines, taxCents: preview.taxCents, totalCents: preview.totalCents, currency: preview.currency as Currency }),
+        invoiceItemisedEmail({
+          invoiceDate: date,
+          lines: preview.lines,
+          taxCents: preview.taxCents,
+          totalCents: preview.totalCents,
+          currency: preview.currency as Currency,
+          credit: await emailCredit(q, r.user_id, d.now, d.balances),
+        }),
         d,
       );
       if (res === "sent") n++;

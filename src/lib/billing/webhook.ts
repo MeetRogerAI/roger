@@ -2,6 +2,8 @@ import type Stripe from "stripe";
 import type { Query } from "@/lib/db-query";
 import { completeCardSetup, completeCardUpdate, type CompleteOptions } from "./card-setup";
 import { adminAlert, alertAdmins } from "@/lib/mail/send";
+import { cacheInvoiceBalance } from "./credit-display";
+import { invoiceCreditCents } from "./credit-lines";
 import { settleFromInvoice } from "./first-charge";
 import type { CardGateway, CreditGateway } from "./gateway";
 import { grantForInvoice } from "@/lib/referrals/credit";
@@ -83,6 +85,18 @@ export async function handleStripeEvent(
       const inv = event.data.object;
       const items = (inv.lines?.data ?? []).map((l) => l.parent?.invoice_item_details?.invoice_item).filter((x): x is string => Boolean(x));
       if (items.length && (await markInvoiced(q, o, inv.id ?? "", items))) outcome = "handled";
+      // B2 Unit 5: an invoice that used (or changed) the referral credit leaves its ending balance as the cached
+      // balance, so the displays do not keep showing credit Stripe has spent. No Stripe call; never over a newer reading.
+      const finalized = inv.status_transitions?.finalized_at ?? event.created;
+      if (
+        await cacheInvoiceBalance(q, {
+          customer: typeof inv.customer === "string" ? inv.customer : (inv.customer?.id ?? null),
+          starting_balance: inv.starting_balance,
+          ending_balance: inv.ending_balance,
+          finalizedAt: new Date(finalized * 1000),
+        })
+      )
+        outcome = "handled";
     }
     // The subscription ended: an adjustment still pending can never be collected, so it is deleted.
     if (event.type === "customer.subscription.deleted") {
@@ -115,7 +129,7 @@ export async function handleStripeEvent(
       const [u] = await q<{ id: string }>(`select id from users where stripe_customer = $1`, [event.data.object.id]);
       if (u) {
         const d = await rdeps();
-        await noticeQuoteChange(q, { gw: o.billing, settings: d.settings, now: d.now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
+        await noticeQuoteChange(q, { gw: o.billing, balances: o.credits ?? null, settings: d.settings, now: d.now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
         outcome = "handled";
       }
     }
@@ -129,7 +143,15 @@ export async function handleStripeEvent(
       if (claimId && sub && !renewal) {
         const r = await settleFromInvoice(
           q,
-          { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, anchor: planLineStart(inv) },
+          {
+            claimId,
+            subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id,
+            amountCents: inv.amount_paid,
+            currency: inv.currency,
+            anchor: planLineStart(inv),
+            // The paid invoice's own balance figures: the subscribed email states the referral credit it used.
+            creditAppliedCents: invoiceCreditCents(inv),
+          },
           { settings: await o.getSettings(), now: o.creditsNow ?? o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
         );
         outcome = "handled";

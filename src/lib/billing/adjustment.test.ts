@@ -303,3 +303,28 @@ describe("the invoice it goes on", () => {
     expect(stripe.pending()).toHaveLength(1);
   });
 });
+
+/** B2 plan Unit 5: an invoice that used referral credit refreshes the cached balance, with no Stripe call. */
+describe("the cached credit balance after an invoice", () => {
+  const event = (id: string, type: string, starting: number, ending: number | null) =>
+    ({
+      id,
+      type,
+      created: Date.parse("2027-01-03T12:00:00Z") / 1000,
+      data: { object: { id: `in_${id}`, customer: "cus_1", lines: { data: [] }, starting_balance: starting, ending_balance: ending, status_transitions: { finalized_at: Date.parse("2027-01-03T11:10:00Z") / 1000 } } },
+    }) as unknown as Stripe.Event;
+  const handle = (e: Stripe.Event) => handleStripeEvent(query, fakeGateway(), e, { getSettings: async () => settings, adjust: stripe, query, transport });
+  const cached = async () => (await query<{ cents: number; at: Date }>("select credit_balance_cents as cents, credit_balance_at as at from users where id = $1", [uid]))[0];
+
+  it("invoice.finalized that used the credit: the cache becomes its ending balance, as of its finalization", async () => {
+    await query("update users set credit_balance_cents = 28000, credit_balance_at = '2026-12-20T12:00:00Z' where id = $1", [uid]);
+    expect(await handle(event("evt_fin", "invoice.finalized", -28000, -5400))).toBe("handled");
+    expect(await cached()).toEqual({ cents: 5400, at: new Date("2027-01-03T11:10:00Z") });
+  });
+
+  it("an invoice that did not touch the balance changes nothing", async () => {
+    await query("update users set credit_balance_cents = 28000, credit_balance_at = '2026-12-20T12:00:00Z' where id = $1", [uid]);
+    expect(await handle(event("evt_none", "invoice.paid", 0, 0))).toBe("ignored");
+    expect(await cached()).toMatchObject({ cents: 28000 });
+  });
+});

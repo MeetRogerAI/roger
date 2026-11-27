@@ -10,7 +10,7 @@ import { requireUser } from "@/lib/auth/access";
 import { ADDRESS_ERROR_FLAG, ADDRESS_MESSAGE } from "@/lib/billing/card-saved";
 import { CHECKOUT_LIMITED, finishCardSave, openEmbeddedSetup } from "@/lib/billing/card-setup";
 import { stripeCredits, stripeGateway } from "@/lib/billing/gateway";
-import { finishedSavePath, paymentAccount, paymentReturnUrl, pendingPromoView, planCents } from "@/lib/billing/payment-page";
+import { finishedSavePath, paymentAccount, paymentCredit, paymentReturnUrl, pendingPromoView, planCents } from "@/lib/billing/payment-page";
 import { basePreview } from "@/lib/billing/payment-view";
 import { query } from "@/lib/db-query";
 import { clientIp } from "@/lib/rate-limit";
@@ -48,6 +48,8 @@ async function Payment({ searchParams }: { searchParams: PageProps<"/start/payme
 
   // A pending code that does not apply in the account's currency is dropped here, and the page says so.
   const pending = await pendingPromoView(query, gw, { ...account, currency: r.currency });
+  // Referral credit already on the balance (B2 plan Unit 5): plain cents and currency for the browser.
+  const credit = await paymentCredit(query, account.userId, new Date());
   return (
     <PaymentForm
       publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || null}
@@ -59,6 +61,7 @@ async function Payment({ searchParams }: { searchParams: PageProps<"/start/payme
       name={account.name}
       addressError={error === ADDRESS_ERROR_FLAG ? ADDRESS_MESSAGE : null}
       supportEmail={siteConfig.contactEmail}
+      credit={credit}
     />
   );
 }

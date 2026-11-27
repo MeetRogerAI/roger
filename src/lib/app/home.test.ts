@@ -56,3 +56,19 @@ describe("/app home", () => {
     expect(home).not.toHaveProperty("order");
   });
 });
+
+/** B2 plan Unit 5: the status line carries the referral credit for a told first charge. */
+describe("/app home with referral credit", () => {
+  it("the first paid list's amount, then the credit line", async () => {
+    const id = await user({
+      free_lists_used: 2,
+      stripe_customer: "cus_a",
+      trial_started_at: "2026-11-30T15:00:00Z",
+      quote: JSON.stringify({ totalCents: 22600, currency: "USD", week: "2026-12-14" }),
+      credit_balance_cents: 20000,
+      credit_balance_at: "2026-12-10T15:00:00Z",
+    });
+    const home = await loadHome(query, id, settings, SATURDAY);
+    expect(home?.statusLine).toBe("Free list 2 of 2. Your next list is your first paid one: Monday, December 14, US$226 with tax. Credit applied −US$200.00 · Card charged US$26.00.");
+  });
+});

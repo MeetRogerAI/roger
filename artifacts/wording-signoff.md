@@ -2,7 +2,7 @@
 
 *Generated on November 26, 2026 from the code on PR #58 (the real templates and screens, with sample names and ideas). Each section names the file the words live in. Mark changes in a comment on the launch list or tell Claude Code; nothing here is live until sign-up opens.*
 
-Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails)
+Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails) · [9. Referral credit wording (Unit 5)](#9-referral-credit-wording-unit-5--pending-peters-sign-off)
 
 ## 1. Step 3, Product and Pricing
 
@@ -240,4 +240,65 @@ Connect Zack: https://meetroger.ai/app/zack
 Roger support
 
 hello@meetroger.ai
+```
+
+## 9. Referral credit wording (Unit 5) — pending Peter's sign-off
+
+*Added on November 27, 2026 from the B2 branch (plan `docs/plans/2026-11-27-001-feat-roger-v3-b2-growth-plan.md`, Unit 5). Sample figures: CA$280.00 of referral credit against a CA$316.40 first month. None of this shows unless the member has referral credit in the charge's currency.*
+
+**Payment page Price Box** (`src/lib/billing/credit-lines.ts` labels, `src/lib/billing/payment-view.ts` `creditRows`, `src/components/app/payment/price-box.tsx`). Shown after the first month's total and any "Then" line, once the tax is known:
+
+```text
+Credit applied to your first charge    −CA$280.00
+Card charged then                       CA$36.40
+Then CA$316.40 a month
+```
+
+The "Then CA$316.40 a month" line is added only when credit is shown and no discount's own "Then" line already says it. "Due today: $0." is unchanged.
+
+**The credit line** (`src/lib/billing/credit-lines.ts` `creditLineText`), used by every email, the billing page and the status line:
+
+```text
+Credit applied −CA$280.00 · Card charged CA$36.40
+Credit applied −CA$280.00 · Card due CA$36.40        (an open invoice on the billing page)
+```
+
+**What is left** (`creditLeftText`), when the credit is more than the charge:
+
+```text
+CA$183.60 of credit stays on your balance.
+```
+
+**In every email that states a coming charge** (`CREDIT_AS_SENT`; second-list, 48-hour reminder, "first charge amount changed" (both), itemised invoice and plan-changed emails: `src/lib/mail/templates/quote.ts`, `charges.ts`, `invoice-itemised.ts`, `src/lib/billing/switch.ts`):
+
+```text
+Credit applied −CA$280.00 · Card charged CA$36.40. The credit shown is your referral credit balance as this email is sent.
+```
+
+**Billing page** (`src/lib/app/billing.ts` `creditNote`, `invoiceAmount`), under the next charge and in the invoice list:
+
+```text
+Credit applied −CA$280.00 · Card charged CA$36.40 (your credit balance as of Thursday, December 10).
+Sunday, January 3 · R-4 · CA$316.40 · Credit applied −CA$280.00 · Card charged CA$36.40 · Paid
+```
+
+**"You’re subscribed" email** (`src/lib/mail/templates/charges.ts`, `SUBSCRIBED_CREDIT_COVERED`), from the paid invoice's figures:
+
+```text
+Your first month is CA$316.40, tax included. Credit applied −CA$280.00 · Card charged CA$36.40. Your third list is ready now, and a new one arrives every Monday.
+Your first month is CA$316.40, tax included, and your referral credit covered all of it. Credit applied −CA$316.40 · Card charged CA$0.00. Your third list is ready now, and a new one arrives every Monday.
+```
+
+**Status line** (`src/lib/app/status.ts`), after the three lines that state a told first charge:
+
+```text
+Free list 2 of 2. Your next list is your first paid one: Monday, December 21, CA$316.40 with tax. Credit applied −CA$280.00 · Card charged CA$36.40.
+Monthly starts with your next list: Monday, December 21 at the earliest, CA$316.40 with tax. Credit applied −CA$280.00 · Card charged CA$36.40.
+Your first charge is now CA$316.40 with tax, not the amount we told you before. We charge it on Tuesday, December 15, … before then. Credit applied −CA$280.00 · Card charged CA$36.40.
+```
+
+**Plan-changed email** (`src/lib/billing/switch.ts`), after "…then the monthly price every month.":
+
+```text
+Credit applied −CA$280.00 · Card charged CA$36.40. The credit shown is your referral credit balance as this email is sent.
 ```
