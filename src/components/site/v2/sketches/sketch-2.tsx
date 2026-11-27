@@ -54,7 +54,7 @@ export function Sketch2({ copy }: SketchProps) {
             {copy.buttons.signIn}
           </Link>
           <StartLink audience="re" className="sk2-btn-line">
-            {copy.buttons.startShort}
+            {copy.buttons.start}
           </StartLink>
         </div>
       </header>

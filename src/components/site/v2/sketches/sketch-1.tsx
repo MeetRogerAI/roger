@@ -59,7 +59,7 @@ export function Sketch1({ copy }: SketchProps) {
             {copy.buttons.signIn}
           </Link>
           <StartLink audience="re" className="sk1-btn sk1-btn-s">
-            {copy.buttons.startShort}
+            {copy.buttons.start}
           </StartLink>
         </div>
       </header>
