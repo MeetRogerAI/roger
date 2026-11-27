@@ -59,6 +59,15 @@ function Message({ outcome }: { outcome: CompleteOutcome | "error" }): ReactNode
           </Link>
         </Body>
       );
+    case "plan_not_offered":
+      // The card page was opened on one at a time, which is no longer offered (billing/offered.ts): no trial started.
+      return (
+        <Body title="Your plan needs confirming." text="The plan you chose isn’t offered any more, so nothing has started and nothing was charged. Confirm the monthly plan, then add your card again.">
+          <Link href="/start/plan" className="btn btn-l">
+            Confirm your plan
+          </Link>
+        </Body>
+      );
     case "not_yours":
     case "unknown_customer":
       return (

@@ -117,6 +117,25 @@ describe("the emails, with monthly the only plan (Peter, November 26, 2026)", ()
     expect(secondMissEmail(owed).text).toContain("you can switch to one Cora Curation at a time on the billing page");
   });
 
+  it("an account still on one at a time is never told to order again while nothing can be ordered", () => {
+    const NOT_OFFERED = "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday.";
+    const told = () => [orderNoListEmail({ week: WEEK, reason: "no_run" }), orderNoListEmail({ week: WEEK, reason: "no_plays" }), orderClosedRogerFailedEmail({ week: WEEK }), orderFailedEmail({ week: WEEK }), backToPerRunEmail()];
+    for (const mail of told()) {
+      expect(all(mail), mail.subject).not.toMatch(/order again|ordering again|you can still order/i);
+      expect(mail.text, mail.subject).toContain(NOT_OFFERED);
+      expect(mail.text, mail.subject).toMatch(/monthly/);
+    }
+    // What happened to the order, and that nothing was charged, is said either way.
+    expect(orderNoListEmail({ week: WEEK, reason: "no_run" }).text).toMatch(/so nothing was charged\.\s+Your order doesn’t carry over\./);
+    expect(orderFailedEmail({ week: WEEK }).text).toContain("so it wasn’t sent and nothing is owed.");
+    offer.on = true;
+    for (const mail of told()) expect(mail.text, mail.subject).not.toContain(NOT_OFFERED);
+    expect(orderNoListEmail({ week: WEEK, reason: "no_run" }).text).toContain("Order again for any Monday you want one.");
+    expect(orderClosedRogerFailedEmail({ week: WEEK }).text).toContain("Order again for any Monday you want one.");
+    expect(orderFailedEmail({ week: WEEK }).text).toContain("Update your card before ordering again.");
+    expect(backToPerRunEmail().text).toContain("You can still order a Cora Curation for any Monday you want one.");
+  });
+
   it("the first-charge emails' button names what the billing page offers", () => {
     for (const mail of [firstPaidNextEmail(amount), firstChargeReminderEmail(amount)]) {
       expect(mail.text).toContain("Cancel or see billing: ");
