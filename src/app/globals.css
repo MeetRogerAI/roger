@@ -521,53 +521,34 @@ h2 {
 }
 
 /* ---------------------------------------------------------------------------
- * Bricks in motion (site version 1: the hero, "how it works", "It compounds").
+ * Bricks in motion (site version 1: the hero's four steps and "It compounds").
  * The markup is always the finished picture. A hidden or dimmed state exists
- * only with motion allowed and only once script is running: html.js for the
- * two heroes and for the "It compounds" loop, whose script marks the bricks of
- * later weeks data-out, and html.reveal-ready for "how it works". With reduced
- * motion or with no script, none of these rules applies and nothing moves. In
- * print every brick and label is forced to its finished state.
+ * only with motion allowed and only once script is running (html.js): the
+ * hero shows one step at a time, and the "It compounds" loop's script marks
+ * the bricks of later weeks data-out. With reduced motion or with no script,
+ * none of these rules applies and nothing moves. In print every brick and
+ * label is forced to its finished state.
  */
 @media (prefers-reduced-motion: no-preference) {
-  /* Hero: the newest three bricks drop onto the stack, one after another */
-  .js .bricks-arrive [data-brick]:nth-last-child(-n + 3) {
-    animation: brick-drop 760ms var(--ease-spring) both;
-    animation-delay: 700ms;
-  }
-  .js .bricks-arrive [data-brick]:nth-last-child(2) {
-    animation-delay: 840ms;
-  }
-  .js .bricks-arrive [data-brick]:nth-last-child(1) {
-    animation-delay: 980ms;
-  }
-
-  /* How it works: each step's stack builds as the steps come in, a step at a time */
-  .reveal-ready [data-reveal] .bricks-grow [data-brick] {
-    opacity: 0;
-    transform: translateY(-10px);
-    transition:
-      opacity 300ms var(--ease-out),
-      transform 520ms var(--ease-spring);
-  }
-  .reveal-ready [data-reveal].is-in .bricks-grow [data-brick] {
-    opacity: 1;
-    transform: none;
-    transition-delay: calc(var(--step, 0) * 240ms + var(--i, 0) * 45ms + 350ms);
-  }
-
-  /* It compounds: the loop. A brick of a later week than the loop's is out; the ones that arrive drop in one after another */
+  /*
+   * It compounds: the loop. Only opacity and transform ever change, so nothing is laid out again.
+   * An idea that arrives eases down into its place, one after another. An idea of a later week than
+   * the loop's is out: it fades where it stands, and only once it can no longer be seen does it move
+   * back up to where it will next arrive from. So the wrap from the last week to the first is one
+   * even fade of the wall, with no idea seen to jump.
+   */
   .js .compounding-loop [data-brick] {
     transition:
-      opacity 240ms var(--ease-out),
-      transform 480ms var(--ease-spring);
+      opacity 320ms var(--ease-out),
+      transform 560ms var(--ease-out);
     transition-delay: calc(max(0, var(--i, 0) - var(--from, 0)) * var(--per, 30ms));
   }
   .js .compounding-loop [data-brick][data-out="yes"] {
     opacity: 0;
-    transform: translateY(-14px) scale(0.9);
-    transition-duration: 200ms;
-    transition-delay: 0ms;
+    transform: translateY(-12px);
+    transition:
+      opacity 420ms var(--ease-out),
+      transform 0s linear 420ms;
   }
   .js .compounding-loop [data-loop-pause] {
     display: inline-flex;
@@ -584,15 +565,16 @@ h2 {
   }
 
   /*
-   * The hero's four parts (site version 1, the homepage). The markup is a still list of the four, each its
-   * label and its headline. Here it becomes a loop: the labels are the row of buttons above the frame, and
-   * the frame holds one headline at a time, all four in the same place so the frame keeps its height.
+   * The hero's four steps (site version 1, the homepage). The markup is a still list of the four, each its
+   * label, number, headline, text and stack. Here it becomes a loop: the labels are the row of buttons above
+   * the frame, and the frame holds one step at a time, all four in the same grid cell, so the frame is always
+   * as tall as its tallest step and nothing under it moves when the step changes.
    */
   .js .hero-steps [data-step-tabs] {
     display: grid;
   }
-  .js .hero-steps [data-step-pause] {
-    display: inline-flex;
+  .js .hero-steps [data-step-controls] {
+    display: flex;
   }
   .js .hero-steps [data-step-label] {
     display: none;
@@ -600,14 +582,12 @@ h2 {
   .js .hero-steps [data-step-list] {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    align-items: center;
-    min-height: 7.5rem;
   }
   .js .hero-steps [data-step] {
     grid-area: 1 / 1;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(12px);
+    transform: translateY(10px);
     transition:
       opacity 260ms var(--ease-out),
       transform 520ms var(--ease-out),
@@ -617,48 +597,50 @@ h2 {
     opacity: 1;
     visibility: visible;
     transform: none;
-    transition-delay: 180ms, 180ms, 0s;
+    transition-delay: 200ms, 200ms, 0s;
   }
-  .js .hero-steps [data-step-headline] {
-    margin-top: 0;
-    font-size: var(--text-h3);
-    line-height: var(--text-h3--line-height);
-    letter-spacing: var(--text-h3--letter-spacing);
-    font-weight: var(--text-h3--font-weight);
-    text-wrap: balance;
+  /* The step's ideas drop onto its stack one after another as the step comes up, and are out again before it is next shown */
+  .js .hero-steps [data-step] [data-brick] {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition:
+      opacity 200ms var(--ease-out),
+      transform 0s linear 260ms;
   }
-  .js .hero-steps [data-step-bricks] li {
+  .js .hero-steps [data-step][data-active="yes"] [data-brick] {
+    opacity: 1;
+    transform: none;
     transition:
       opacity 300ms var(--ease-out),
       transform 520ms var(--ease-spring);
-  }
-  .js .hero-steps [data-step-bricks] [data-lit="no"] {
-    opacity: 0.22;
-    transform: scale(0.84);
+    transition-delay: calc(var(--i, 0) * 45ms + 320ms);
   }
 }
-@keyframes brick-drop {
-  from {
-    opacity: 0;
-    transform: translateY(-48px);
-  }
+/*
+ * "Cora Curation Examples": with script running, the row of short titles is a set of tabs and one example
+ * shows at a time. The server marks the first one selected, so nothing moves when the script starts. With
+ * no script every example is in the page, one under another, and each short title is a link to its example.
+ */
+.js .examples [data-example-panel][data-selected="no"] {
+  display: none;
 }
-/* Failsafe, as for the headline: the hero's bricks end in place even on a slow device */
-.settled .bricks-arrive [data-brick] {
-  animation: none !important;
+.js .examples [data-example-tab][data-selected="yes"] {
+  background-color: var(--color-ink);
+  color: var(--color-ground);
 }
 /* On paper it is always the finished picture, whatever classes script has added and wherever the page was scrolled to */
 @media print {
-  .bricks-arrive [data-brick],
-  .bricks-grow [data-brick],
   .compounding-loop [data-brick],
-  .hero-steps [data-step-bricks] li {
+  .hero-steps [data-brick] {
     animation: none !important;
     transition: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
-  /* The hero's four parts go back to the still list, and no control is printed */
+  /* The hero's four steps go back to the still list, and no control is printed */
+  .hero-steps [data-step-list] {
+    gap: 2.5rem !important;
+  }
   .hero-steps [data-step] {
     grid-area: auto !important;
     opacity: 1 !important;
@@ -669,15 +651,20 @@ h2 {
     display: block !important;
   }
   .hero-steps [data-step-tabs],
-  .hero-steps [data-step-pause],
+  .hero-steps [data-step-controls],
   .compounding-loop [data-loop-pause] {
     display: none !important;
   }
+  /* The examples are all printed, one under another */
+  .examples [data-example-tabs] {
+    display: none !important;
+  }
+  .examples [data-example-panel] {
+    display: block !important;
+  }
   /* A brick is a filled square: without this a printer leaves the fill out */
-  .bricks-arrive [data-brick],
-  .bricks-grow [data-brick],
   .compounding-loop [data-brick],
-  .hero-steps [data-step-bricks] li {
+  .hero-steps [data-brick] {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

@@ -11,7 +11,12 @@ import type { PlaySource } from "./idea-view";
  * so the public section is simply absent.
  *
  * Cached and tagged "sample-play": choosing a new one in the admin calls
- * updateTag("sample-play") and the public pages show it on the next view.
+ * updateTag("sample-play").
+ *
+ * NOT READ BY ANY PUBLIC PAGE since November 27, 2026: the marketing site
+ * shows the bundled examples in src/data/site/examples.ts and nothing from
+ * the pool. The choice at /admin/sample is still stored, and this reader is
+ * kept for the day a pool play is shown in public again.
  */
 export type SamplePlay = PlaySource;
 

@@ -360,9 +360,10 @@ describe("terms say each point in the spec's list", () => {
     // Both words capitalised, wherever it is named.
     expect(termsText.match(/cora curations?/gi) ?? []).toEqual(termsText.match(/Cora Curations?/g) ?? []);
     expect((termsText.match(/Cora Curation/g) ?? []).length).toBeGreaterThanOrEqual(8);
-    // The same promises as the pricing page and the FAQ make (src/data/site/v1.ts).
-    expect(fill(v1.pricing.explained.body)).toBe("A Cora Curation every Monday. Your first two are free. Your card is charged once a month, starting with your third Cora Curation.");
-    expect(fill(v1.trialLine)).toContain("It is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
+    // The same promises as the line under the price, /how-it-works and the FAQ make (src/data/site/v1.ts).
+    expect(fill(v1.trialLine)).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
+    expect(fill(v1.howItWorks.firstWeeks.steps[4])).toBe("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
+    expect(fill(v1.questions.flatMap((group) => group.items).find((item) => item.id === "card-charged")!.a)).toContain("The first charge comes with your third Cora Curation, and the charge repeats once a month after that.");
   });
 
   it("the contributor rule", () => {

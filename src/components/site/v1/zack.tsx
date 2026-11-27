@@ -12,7 +12,8 @@ import { SectionHead } from "./blocks/section-head";
 
 /**
  * /zack and /zack/[agent] on site version 1: the free Zack run, for people
- * who already run agents (spec A.11). Linked from /agents only.
+ * who already run agents (spec A.11). No page links to it since /agents was
+ * deleted on November 27, 2026; it is served and is in the sitemap.
  *
  *   /zack           1. pick your agent
  *   /zack/[agent]   2. your email

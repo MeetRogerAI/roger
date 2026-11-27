@@ -117,6 +117,71 @@ Screenshots are outside the repo, in the working folder `monthly-only`.
 - "Open defects", item 1 (`/getstarted` says "agent" without "AI") stays open. Its reason is no longer that the page could not be touched; the line is the daily-goal sentence, which is Peter's to reword.
 - Check 11's note that a mouse over a loop holds it is out of date: a pointer no longer holds either loop.
 
+## Peter's third homepage review, and `/pricing` and `/agents` deleted, November 27, 2026
+
+Peter read the preview again and asked for ten changes to the homepage, a questions editor in the admin, and then for `/agents` and `/pricing` to be deleted with "Pricing" going to the homepage's price section. Every string, the two example plays and what is no longer on the site are in section 9 of `docs/site/v1-copy-changes.md`.
+
+**The site now has these public pages:** `/`, `/faq`, `/how-it-works`, `/about`, `/zack` (and `/zack/[agent]`), `/library`, `/getstarted`, `/privacy`, `/terms`. `/pricing` redirects to `/#price` and `/agents` to `/`, both permanently.
+
+**The homepage's sections:** hero (with the four steps), the problem, Cora Curation Examples, It compounds, What people say (absent while no quote is cleared), You decide what Zack shares, Price, Questions, closing band.
+
+**Waiting on Peter before merging** (copy changes, the list at the top of section 9): the text of the two example plays; the missing third example; "member" in the plays; three places where the new wording and the product differ; and what deleting the two pages removed.
+
+### How it was run
+
+- `npm run lint`: 0 errors, 6 warnings, as before. `npx next typegen && npx tsc --noEmit`: clean. `npm test`: 1,729 pass, 13 skipped (it was 1,720; the tests of the two deleted pages went, and the examples, the on-screen rule, the redirects and the questions editor came). `npm run test:scenarios`: 27 pass. `npm run build`: passes.
+- **Browser.** Headless Chrome over the DevTools protocol with real input only: mouse moves, clicks and wheel, touch taps, and key events. A production build (`npm run build`, `next start` on port 3370) backed by a local stand-in database with one admin account and one ordinary account. At 375 (touch), 768, 1024 and 1440 pixels: 90 checks at each of 1024 and 1440, 89 at 768 and 75 at 375 (the keyboard checks are not run on touch), all passing, with a clean console. Three checks failed on a first run because the script was wrong for that width (it looked for a header link that is behind the menu at 768, and for the hero's frame at the top of the page on a phone, where it is under the headline); each passed once the script did what a visitor would. The questions editor: 27 checks at 1440 and at 375, all passing.
+- **The deployed preview, before the change.** "It compounds" was watched on `preview.meetroger.ai` under seven kinds of real input, to find what Peter saw.
+- **Not exercised.** A real phone, and browsers other than Chrome. Vercel's own cache: the questions editor's "shows on the next page view" was measured on `next start`, where a saved answer was on the served homepage 0.8 seconds after the click. A visitor with the page already open keeps what they have until they load it again.
+
+### What was seen
+
+| What | Result |
+|---|---|
+| Hero, left side | The headline, the sub-line and one button. No card sentence, no "See how it works" |
+| Hero, right side | Four label buttons (Use, Collect, Curate, Deploy) over a frame. Each step shows its number, headline, text and 3, 6, 9 or 12 ideas in one colour, alone. The frame is the same size and in the same place at every step: 480 by 383 at 1440, 432 by 419 at 1024, 705 by 357 at 768, 343 by 429 at 375. Step 4 reads "Approve The Ideas / Say yes to the ideas you like and see them in action for you." |
+| Hero loop | Goes round with the mouse resting on it, about 5 seconds a step. Pause stops it and reads Play; Play starts it with focus still on the button. Held while the hero is off screen, and goes on when it is back. Tab onto a label holds it; Tab past the last control lets it go |
+| "It compounds", off screen | Not begun and not moving, however long the page is open |
+| "It compounds", on arriving | Starts from week 1 about half a second after it comes into view, then 1, 2, 3, 4, 10, 17, 26 and week 1 again, with the mouse resting on it. Every state 2.1 to 2.3 seconds, week 26 the same |
+| "It compounds", the wrap | The 75 ideas that leave fade together where they stand; the three of week 1 stay; no visible idea is off its place |
+| "It compounds", after input | Still moving after a click or a tap on it; after Pause and Play; after Tab has gone onto its button (which holds it, with a ring) and past it; after tabbing and then clicking. Scrolled away, it waits at the state it had reached; back, it goes on from that state after a full wait. Held while `/faq` is open by a click from the homepage, and moving after coming back by the logo |
+| "It compounds" on the deployed preview, before the change | It went round under every input tried, the mouse resting on it included. Only keyboard focus on its own Pause button held it. See copy changes 9.2 for what Peter most likely met |
+| Layout shift | None on load, on the way down the page, or while either loop ran. The only entries the browser reported score under 0.001 and are the loop's centred caption settling as "Week 26" becomes "Week 1" |
+| Cora Curation Examples | The heading with no line under it. A tablist named "Examples" with "On-demand video creation" and "20 new prospects every day"; the first selected and showing. A click or tap shows the other alone, without changing the address. Left, Right, Home and End move between tabs and show the one landed on; Tab goes from the tabs into the showing example; Enter opens a row |
+| Inside an example | Summary, What To Copy and the playbook row: one open at a time. Under What To Copy the copy button is last, with nothing beneath it. The playbook row opens to eight steps, one open at a time, and stays open around them. A row opened in one example does not close a row in the other. No sideways scroll with rows open at 375 |
+| With no script | Checked in the rendered markup, not in a browser: every example is in the page, each short title is a link to its example, and no tab role is claimed |
+| "You decide what Zack shares", third column | "Turn sharing off any time in your dashboard." in the larger size, over "Protect your privacy and your most valuable ideas at any time.", and nothing else. Right-most of three from 768 up; last of three at 375 |
+| Note under the price | "Your first two Cora Curations are free. Payment starts in week 3." Also under the button of `/library`'s closing band |
+| Closing section | The heading and one button, "Level up your use of AI Agents Now.", with no paragraph in the section. The hero's and the price block's buttons still read "Get two free Cora Curations" |
+| "Pricing", header, phone menu and footer | On the homepage it scrolls to the price section. From `/faq` and `/about` it loads the homepage there. The section's top is flush under the 60-pixel header and its heading is clear of it |
+| `/pricing`, `/agents` | `/pricing` lands on the homepage's price section; `/agents` on the homepage. No link to either, or to the deleted `#how`, on any public page, the sign-up start or the sign-in page. The header's "How it works" goes to `/how-it-works` |
+| `/faq`, `/how-it-works`, `/about`, `/library`, `/zack`, `/terms` | Each renders with no sideways scroll and a clean console. `/how-it-works` takes apart the first example. `/faq` still has the card line under its start button |
+| Questions editor, signed out, and signed in with an address not in `ADMIN_EMAILS` | The admin gate. No editor and no question |
+| Questions editor, as an admin | "Edit Questions" in the admin navigation. Eighteen questions, each with the pages that show it. Typing a new answer to "What does it cost?" and pressing Save: "Saved. The site shows it from the next page view.", and the homepage and `/faq` served it, amounts filled in, within a second. The question is marked Edited and offers Reset |
+| Questions editor, a forbidden answer | "Ask your agent. It will earn the price back." is refused: "The answer breaks the site’s rules: it says “agent” without “AI” in front (…)". What was typed stays in the field. An income claim is refused by name. The site keeps the last good answer |
+| Questions editor, reset | "Reset. The site shows the built-in wording from the next page view.", and the homepage did within a second. One settings row holds every edit; the admin log has each save and reset with who made it, and nothing for a refused save |
+| `/admin/sample` | Opens with "Not used by the public site." |
+
+Screenshots are outside the repo, in the working folder `round3`: the whole homepage at 1440 and at 375, the hero at four widths, and the editor.
+
+### The questions editor: who, where, how
+
+- **Who can open it.** Whoever the admin area already lets in: a person signed in by email link whose address is in the `ADMIN_EMAILS` environment variable, which the owner sets in Vercel. While the `ADMIN_PASSWORD` variable is also set, someone with that shared password can too; removing the variable ends that. No address is written in the code. The layout checks, the page checks again, and the action that saves checks for itself.
+- **Where an edit is kept.** One row of the existing `settings` table, key `site.questions`: a JSON object from question id to the edited question, answer or both. No table, column or migration. A save merges one question into it and a reset takes one out, each in a single statement.
+- **How it reaches the site.** The homepage and `/faq` read the edits through a cached reader tagged `site-questions`. Save and reset expire that tag, so the next page view is rendered with the change. With no database, or on any error, the pages show the built-in wording.
+- **What a save refuses.** Empty text; a question over 200 characters or an answer over 1,500; a "<" or ">" (text is printed as text, never as markup); a name in braces that is not an amount; and anything the site's claims and vocabulary rules refuse, with the rule and the words named. Nothing is stored or logged for a refused save.
+- **The log.** Each save and reset is a row in the admin action log (`site_question_saved`, `site_question_reset`) with who made it and the text.
+- **Not covered.** The check runs when an answer is saved, with the amounts of that moment. An answer is not re-checked when a setting changes later. The claims test renders the built-in wording, not production's edits.
+
+### Rows elsewhere in this record that this changes
+
+- **Routes.** Wherever a check below lists `/agents` or `/pricing`, the page is gone. Check 5 (price block) is now the homepage's alone. Check 9 ("Monthly marked; no non-contributor plan") has no `/pricing` to read; the homepage's one plan card is the whole of it.
+- **Check 8, sample idea section.** The section is "Cora Curation Examples", with two bundled plays, on the homepage only. `/how-it-works` takes apart the first.
+- **Check 11.** A loop also holds while it is off screen. The "How it works" stacks that built on scroll are gone with the section.
+- **"Resolve before merging", item 5** is now the text of the two example plays (copy changes 9.3), not "Client email in two tones". **Item 7** no longer needs a look at the sample play chosen in production: no public page reads it. **Item 8**'s "A compounding view of what you have set up" went with `/pricing`. **Item 9**: the photograph is now only on `/about`. **Item 11**: of the three summaries that say details are "removed", the homepage's second step is now in the hero, and the `/agents` one is gone.
+- **"Open defects", item 4** says "Open `/pricing`"; any marketing page shows the same. This round met the same fact from the other side: a homepage left by a click stays in the document, hidden, so the examples' tabs never look an element up by its id, and a loop on a hidden page counts as off screen. **Item 6** is closed: no public page shows a play chosen in the admin.
+- **"Sections absent for lack of data"** and **"Settled exceptions"** are corrected in place below.
+
 ## Resolve before merging, because merging goes live
 
 Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What was decided and what was done is recorded once, in `docs/site/v1-copy-changes.md`, and each item below links to its section there. Items 5 to 10 are still Peter's to settle before the pull request is merged, and item 11 lists the smaller notes that remain from items 1 to 4. Later on November 26, 2026 Peter made five more decisions, which closed five of those notes: they are item 12, and are recorded in [copy changes 6.5](v1-copy-changes.md#65-five-more-decisions-of-november-26-2026).
@@ -125,7 +190,7 @@ Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What
 2. **Resolved: the site's wording follows the Zack 2.0 instructions.** See [copy changes 2.5](v1-copy-changes.md#25-what-zack-reads-skips-removes-and-sends), and [6.4](v1-copy-changes.md#64-what-the-accuracy-audit-of-the-privacy-and-terms-drafts-left-open) (a) and (b).
 3. **Resolved: privacy and terms are reviewed**, and render without "Draft, under review." See [copy changes 6.3](v1-copy-changes.md#63-resolved-privacy-and-terms-are-reviewed).
 4. **Resolved: a deleted account's shared plays say "unknown author".** See [copy changes 6.4](v1-copy-changes.md#64-what-the-accuracy-audit-of-the-privacy-and-terms-drafts-left-open) (c), which also has what code review added on November 26: the admin log no longer ties a deleted account to a seed contributor, and the hourly task changes nothing while the `users` table is empty.
-5. **The sample play text** (plan R12; copy changes 2.2). The homepage, `/agents` and `/how-it-works` print one real play, cleaned. Peter approves the text, including that it names Claude.
+5. **The text of the two example plays** (plan R12; copy changes 9.3, which replaces 2.2). The homepage prints two real plays, cleaned, and `/how-it-works` the first of them. Peter approves the text, including that both name Grok Bot and say "the member". A third example he asked for is not there (copy changes 9.4).
 6. **The one change to Peter's letter** (copy changes 2.1), and the letter edit the spec asks for. Until the edit arrives the pages show only the paragraphs still true.
 7. **Production values the pages read** (the plan's go-live check). A preview uses a separate database, so nobody has seen v1 with production data. Before merging, check in production: the six `v3.*` prices against US$200 / US$200 / CA$280 / CA$280 / US$400 / CA$560; whether a sample play is chosen in the admin and reads cleanly (see "Open defects", item 6: the claims test cannot see it); which testimonials are cleared, and that each reads acceptably word for word; and the labels of the library's categories (item 7).
 8. **Lesser copy items** (copy changes 6.2): "A compounding view of what you have set up" while the app's graph is planned for later; `/how-it-works` not saying sharing can be turned off; the free run's risks accepted in the plan (KTD12).
@@ -365,32 +430,40 @@ None blocks the checks above. Each is outside the marketing files, or is a decis
 1. **`/getstarted` says "agent" without "AI".** Open `/getstarted`; the text includes "use your agent setup every day". It is the app's page (spec A.2) and is in the sitemap, so check 10 covers it. Not changed: it is the daily-goal sentence, which is Peter's to reword. (The page's search description was changed on November 26, 2026 to say "Cora Curation"; its button still reads "Start free".)
 4. **After a click from a marketing page to `/start`, the page left behind is still in the document, hidden.** Open `/pricing`, click a start button, then look for `[data-site]`: one element, inside a `display: none` wrapper. A full load of `/start` has none. Nothing in v1 depends on it. It matters for v2: plan KTD13 keys v2's look on `html:has([data-site="v2"])`, and that selector would match on `/start` after such a click. U12 must use the fallback KTD13 names.
 5. **`/library` rows carry dollar amounts and time figures.** For example "$650 saved in four weeks" and "2–3 hours saved weekly". They are summaries of named people's public posts, read from the database, on a page that says "None of them are Roger clients", and the spec keeps the library as it is (A.12). The claims check treats each row as a public use case and reads only the page's own words. Whether such figures belong on a Roger page is Peter's call.
-6. **A play chosen in the admin is not covered by the claims test.** The test can only render the bundled play. The made-up seed play (`db/seeds/sample-play.fixture.json`) says "the agent reads yesterday's buyer inquiries", which would break check 10 on the homepage; a test shows the rules catch it. A real choice is read before merging (item 7 of "Resolve before merging").
+6. **Closed on November 27, 2026: no public page shows a play chosen in the admin**, and the claims test renders both bundled examples. What follows is the record of the defect as it stood. **A play chosen in the admin is not covered by the claims test.** The test can only render the bundled play. The made-up seed play (`db/seeds/sample-play.fixture.json`) says "the agent reads yesterday's buyer inquiries", which would break check 10 on the homepage; a test shows the rules catch it. A real choice is read before merging (item 7 of "Resolve before merging").
 7. **A library category is labelled "Real Estate Agents".** It is a filter on `/library` that shows once a use case is filed under it; none is in the bundled data. On a site whose rule exists because readers are also called agents, the label would read correctly but would trip the vocabulary sweep. Check the production library.
 
 ## Sections absent for lack of data
 
 | Section | State now | What shows instead |
 |---|---|---|
-| Testimonials ("What people say") on `/` and `/agents` | No quote is cleared, so the section is absent: no heading, no wrapper | Nothing. The neighbouring sections close up, and night and ground still alternate |
-| Peter's photograph on `/` ("Who runs this") and `/about` | `siteConfig.founder.photo` is empty | The text column alone, centred, with no image element and no frame |
+| Testimonials ("What people say") on `/` (`/agents` was deleted on November 27, 2026) | No quote is cleared, so the section is absent: no heading, no wrapper | Nothing. The neighbouring sections close up, and no two night chapters meet |
+| Peter's photograph on `/about` (the homepage's "Who runs this" was removed on November 27, 2026, and the homepage has no photograph or signature) | `siteConfig.founder.photo` is empty | The text column alone, centred, with no image element and no frame |
 | Peter's signature on `/about` | `siteConfig.founder.signature` is empty | His name, typed |
-| The letter's later paragraphs | They mention Circles and applications | Only the paragraphs still true: three on the homepage, and those plus the greeting and sign-off on `/about` |
-| A sample play chosen in the admin | None chosen; a preview's database has none | The bundled cleaned play, "Client email in two tones", with no score section because it has no scores |
-| The weekly group session line on `/pricing` | That part of the product is not live | Left out of "What is included" |
+| The letter's later paragraphs | They mention Circles and applications | Only the paragraphs still true, with the greeting and sign-off, on `/about`. None is on the homepage since November 27, 2026 |
+| A third example under "Cora Curation Examples" | The repo has no playbook for the daily paper Peter named (copy changes 9.4) | Two examples. The row of short titles and the cards take any number |
+| A sample play chosen in the admin | Not read by any public page since November 27, 2026 | The two bundled examples, with no score row because neither has scores |
+| The weekly group session line | It was left out of "What is included" on `/pricing`, which is deleted | Nothing |
 
 ## Settled exceptions to the spec's checks
 
 | Exception | Decision |
 |---|---|
 | "It compounds" prints week numbers and counts of ideas (Week 1, 2, 3, 4, 10, 17 and 26; 3, 6, 9, 12, 30, 51 and 78 ideas, called "bricks" on the page until November 26, 2026), against "no hard-coded numbers" | Plan Key Decision "The compounding section is animated in all three, with week labels and brick counts"; R10, as changed by Peter's homepage review of November 26, 2026, which added weeks 4, 10 and 17. The claims check allows exactly these fourteen numbers inside that section only (`compoundingNumbers` in `src/data/site/compounding.ts`), and a test holds that a week or count between them is still a violation. It ends at 78 bricks (Peter, November 26, 2026) |
-| The section is a loop that plays by itself, where the spec says a static picture | The same Key Decision; KTD11. It was a scroll story until Peter's homepage review of November 26, 2026. With no script or under reduced motion it is the finished picture, week 26, with all seven states as text. It has a "Pause" button, and stops under the pointer and on focus |
-| The hero's picture changes by itself every few seconds | Peter's homepage review, November 26, 2026: "a 4 part animation across the 4 parts of the how it works section". With no script or under reduced motion it is a still list of the four. It has a "Pause" button, stops under the pointer and on focus, and announces nothing to a screen reader |
+| The section is a loop that plays by itself, where the spec says a static picture | The same Key Decision; KTD11. It was a scroll story until Peter's homepage review of November 26, 2026. With no script or under reduced motion it is the finished picture, week 26, with all seven states as text. It has a "Pause" button, and stops for keyboard focus, a hidden tab and being off screen. A pointer does not stop it (November 26, 2026), and it moves only on screen (November 27, 2026) |
+| The hero's right side changes by itself every few seconds | Peter's homepage reviews: "a 4 part animation across the 4 parts of the how it works section" (November 26, 2026), then "merge the How It Works section and the right side of the hero" (November 27, 2026). With no script or under reduced motion it is a still list of the four steps. It has a "Pause" button, stops for keyboard focus, a hidden tab and being off screen, and announces nothing to a screen reader |
+| The hero prints the numbers 1 to 4 | The step numbers of the deleted "How it works" section, moved with it. Each is in a numeral mark, which the claims check allows for a step's number and nothing longer |
+| "Payment starts in week 3." under the price | Peter's words, November 27, 2026. The claims check allows that phrase with the week the settings give (the number of free Cora Curations plus one) and no other number; "week 3" in any other sentence is still a violation |
+| The short title "20 new prospects every day" | Peter's words, November 27, 2026. The claims check allows that title, in those words only. It is what a play drafts each morning, not a count of users |
+| In an example: "Save this as a skill called", "Save each email as an unsent draft", "save nothing and report the error", "how many drafts were saved" | The two example plays' own words, where "save" means store. Allowed in those four phrases, inside an example only. The retired play's phrases ("Save a skill called", "a saved note", "saved context") are no longer allowed |
+| In an example: "a 20-minute call" | The prospects play's own setup question, as an example of what an email asks for: the length of a meeting, not time saved. Allowed in those words, inside an example only |
+| The closing band's button reads "Level up your use of AI Agents Now." | Peter's words, November 27, 2026. Every other start button reads "Get two free Cora Curations". No allowance was needed: "AI Agents" passes the vocabulary rule |
+| `/agents` may no longer say "agent" without "AI" | The page is deleted, so its exemption from the vocabulary rule is removed. `/zack` keeps its own |
 | The free Zack run accepts 40,000 characters, not 20,000 | Copy changes 6.2: ten of thirteen real reports are longer than 20,000. One constant, `FREE_RUN_REPORT_CHARS` |
 | `robots.txt` allows `/api/zack/instructions` while disallowing `/api` | Copy changes section 4: a user's own AI agent fetches that address during Zack setup, and many fetch tools obey robots |
 | One list costs US$200 / CA$280, not US$100 / CA$140 | Plan Key Decision "Single list is US$200 / CA$280"; R8. Since November 26, 2026 one at a time is not offered at launch and its price is printed nowhere: not on a marketing page, in sign-up, in the app, in an email or in the terms. The setting and the Stripe prices remain |
 | The higher rate is given in both currencies where the spec gives US dollars alone | Copy changes 2.3 |
-| The sample idea shows before any play is chosen in the admin | Plan Key Decision "The sample idea card shows a real play now"; R11 |
+| The examples are bundled real plays, not a play chosen in the admin | Plan Key Decision "The sample idea card shows a real play now"; R11, as changed on November 27, 2026: two cleaned plays from Zack runs, in `src/data/site/examples.ts`. Their text awaits Peter's approval (copy changes 9.3) |
 
 ## What each environment serves
 

@@ -17,7 +17,8 @@ import { SectionHead } from "./blocks/section-head";
  * (src/data/site/letter.ts).
  *
  * The photograph and the signature are each optional, and each is
- * configuration, not a look at the disk (see V1Home). With no photograph the
+ * configuration, not a look at the disk: a page regenerated inside a serverless
+ * function may not have public/ beside it. With no photograph the
  * page is the text column alone, with no image element and no empty frame.
  * With no signature file his name is typed.
  */

@@ -6,7 +6,7 @@ import { bricksPerWeek, compoundingSteps } from "@/data/site/compounding";
 import { currencies, priceLine } from "@/lib/site/amounts";
 import { compoundingCaption } from "@/lib/site/compounding";
 import { Placeholder } from "../placeholder";
-import { bricksFor, LogoSlot, navItems, SkipLink, type SketchProps } from "../sketch-kit";
+import { bricksFor, LogoSlot, navItems, SkipLink, type SketchProps, sketchWords } from "../sketch-kit";
 import { SketchPrice } from "../sketch-price";
 import "./sketch-3.css";
 
@@ -33,7 +33,7 @@ const SET_UP = WEEK.bricks - 2;
 
 export function Sketch3({ copy, amounts }: SketchProps) {
   const hero = copy.home.hero;
-  const how = copy.home.how;
+  const { how, secondary } = sketchWords(copy);
   const bricks = bricksFor(copy.bricks, WEEK.week, SET_UP);
   const caption = compoundingCaption(copy.bricks.caption, WEEK);
 
@@ -72,8 +72,8 @@ export function Sketch3({ copy, amounts }: SketchProps) {
             <StartLink audience="re" className="sk3-pill">
               {copy.buttons.start}
             </StartLink>
-            <Link href={hero.secondary.href} className="sk3-link">
-              {hero.secondary.label}
+            <Link href={secondary.href} className="sk3-link">
+              {secondary.label}
             </Link>
           </div>
           <p className="sk3-card">{copy.cardLine}</p>

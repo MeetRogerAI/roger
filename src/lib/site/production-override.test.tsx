@@ -54,7 +54,7 @@ describe("production with SITE_VERSION=circles set", () => {
   });
 
   it("serves v1's sitemap and v1's production robots rules", () => {
-    expect(sitemap().map((entry) => entry.url.replace(siteConfig.domain, ""))).toEqual(["/", "/agents", "/pricing", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"]);
+    expect(sitemap().map((entry) => entry.url.replace(siteConfig.domain, ""))).toEqual(["/", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"]);
     const rules = robots().rules as { allow: string[]; disallow: string[] };
     expect(rules.allow).toEqual(["/", "/api/zack/instructions"]);
     expect(rules.disallow).toEqual(expect.arrayContaining(["/apply", "/app/", "/app$", "/admin", "/start", "/api"]));

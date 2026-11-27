@@ -43,7 +43,7 @@ function subscribe(listener: () => void) {
 }
 
 export type StartContext = {
-  /** The audience of the page this button is on: "re" on the homepage, "agents" on /agents, none elsewhere. */
+  /** The audience of the page this button is on: "re" on the homepage, "agents" on the free Zack run (/zack), none elsewhere. */
   audience?: SiteAudience;
   /** The token of a free Zack run, on /zack. */
   zack?: string;

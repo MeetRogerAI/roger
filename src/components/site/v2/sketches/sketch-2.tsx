@@ -5,7 +5,7 @@ import { StartLink } from "@/components/site/shared/start-link";
 import { compoundingSteps } from "@/data/site/compounding";
 import { compoundingCaption } from "@/lib/site/compounding";
 import { Placeholder } from "../placeholder";
-import { bricksFor, LogoSlot, navItems, SkipLink, type SketchProps } from "../sketch-kit";
+import { bricksFor, LogoSlot, navItems, SkipLink, type SketchProps, sketchWords } from "../sketch-kit";
 import { Sketch2Stage } from "./sketch-2-stage";
 import "./sketch-2.css";
 
@@ -29,7 +29,7 @@ const sans = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500"], varia
 export function Sketch2({ copy }: SketchProps) {
   const hero = copy.home.hero;
   const problem = copy.home.problem;
-  const how = copy.home.how;
+  const { how, secondary } = sketchWords(copy);
   const weeks = compoundingSteps.slice(0, 3);
 
   return (
@@ -68,8 +68,8 @@ export function Sketch2({ copy }: SketchProps) {
               <StartLink audience="re" className="sk2-btn">
                 {copy.buttons.start}
               </StartLink>
-              <Link href={hero.secondary.href} className="sk2-link">
-                {hero.secondary.label}
+              <Link href={secondary.href} className="sk2-link">
+                {secondary.label}
               </Link>
             </div>
             <p className="sk2-card">{copy.cardLine}</p>

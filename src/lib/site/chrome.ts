@@ -10,7 +10,7 @@
  */
 import type { Metadata } from "next";
 import type { SharedCopy } from "@/data/site/copy-types";
-import { v1, v1Agents, v1Zack } from "@/data/site/v1";
+import { v1, v1Zack } from "@/data/site/v1";
 import { fillCopy, getAmounts, type Amounts } from "./amounts";
 import { isBuiltVersion, type BuiltVersion, type ServedSite } from "./version";
 
@@ -35,10 +35,10 @@ export type SiteChrome = {
 /** The parts of a version's copy the header, the footer and the not-found page read. `meta` is read as written, by siteMeta. */
 export type ChromeCopy = Pick<SharedCopy, "buttons" | "nav" | "footer" | "notFound">;
 
-/** A version's three copy files: the site's, the /agents page's and the free Zack run's. */
-type VersionCopy = { main: typeof v1; agents: typeof v1Agents; zack: typeof v1Zack };
+/** A version's two copy files: the site's and the free Zack run's. */
+type VersionCopy = { main: typeof v1; zack: typeof v1Zack };
 
-const v1Files: VersionCopy = { main: v1, agents: v1Agents, zack: v1Zack };
+const v1Files: VersionCopy = { main: v1, zack: v1Zack };
 
 /**
  * Which copy each version reads. v2 and v3 use v1's words, and show v1's
@@ -49,17 +49,18 @@ const copyByVersion: Record<BuiltVersion, VersionCopy> = { v1: v1Files, v2: v1Fi
 
 const copyFor = (version: BuiltVersion): ChromeCopy & Pick<SharedCopy, "meta"> => copyByVersion[version].main;
 
-/** The eleven public pages of a site version, in the spec's sitemap order. */
-export const builtSitemapPaths = ["/", "/agents", "/pricing", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"] as const;
+/**
+ * The nine public pages of a site version, in the spec's sitemap order. /agents and /pricing were deleted on
+ * November 27, 2026 (Peter): each answers with a permanent redirect (next.config.ts), and neither is listed.
+ */
+export const builtSitemapPaths = ["/", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"] as const;
+
+/** Where "Pricing" goes, from every page: the price section of the homepage (PriceBlock's id, which has a scroll margin for the sticky header). */
+export const PRICE_SECTION_HREF = "/#price";
 
 /** A site version's title, description and social card line. No amounts, so static metadata can read it at build. */
 export function siteMeta(version: BuiltVersion): SharedCopy["meta"] {
   return copyFor(version).meta;
-}
-
-/** The same three for /agents, from that page's own copy. */
-export function agentsMeta(version: BuiltVersion): SharedCopy["meta"] {
-  return copyByVersion[version].agents.meta;
 }
 
 /** The same three for /zack and /zack/[agent], from the free run's own copy. */
@@ -67,16 +68,16 @@ export function zackMeta(version: BuiltVersion): SharedCopy["meta"] {
   return copyByVersion[version].zack.meta;
 }
 
-/** The four reading pages, by their name in a version's copy. */
-export type ReadingPage = "pricing" | "howItWorks" | "faq" | "about";
+/** The three reading pages, by their name in a version's copy. */
+export type ReadingPage = "howItWorks" | "faq" | "about";
 
-/** The same three for /pricing, /how-it-works, /faq and /about, from each page's own copy. */
+/** The same three for /how-it-works, /faq and /about, from each page's own copy. */
 export function pageMeta(version: BuiltVersion, page: ReadingPage): SharedCopy["meta"] {
   return copyByVersion[version].main[page].meta;
 }
 
-/** A page that has a title, a description and a social card line of its own: a reading page, /agents or the free Zack run. */
-export type MetaPage = ReadingPage | "agents" | "zack";
+/** A page that has a title, a description and a social card line of its own: a reading page or the free Zack run. */
+export type MetaPage = ReadingPage | "zack";
 
 /**
  * The metadata of a route that exists only in a site version (plan KTD4):
@@ -86,7 +87,7 @@ export type MetaPage = ReadingPage | "agents" | "zack";
  */
 export function builtPageMetadata(site: ServedSite, page: MetaPage, path: string): Metadata {
   if (!isBuiltVersion(site)) return { robots: { index: false, follow: false } };
-  const meta = page === "agents" ? agentsMeta(site) : page === "zack" ? zackMeta(site) : pageMeta(site, page);
+  const meta = page === "zack" ? zackMeta(site) : pageMeta(site, page);
   return {
     title: { absolute: meta.title },
     description: meta.description,
@@ -103,7 +104,7 @@ export function builtPageMetadata(site: ServedSite, page: MetaPage, path: string
  */
 export function chromeFrom(copy: ChromeCopy, amounts: Amounts): SiteChrome {
   const { buttons, nav, footer, notFound } = fillCopy({ buttons: copy.buttons, nav: copy.nav, footer: copy.footer, notFound: copy.notFound }, amounts);
-  const pricing = { href: "/pricing", label: nav.pricing };
+  const pricing = { href: PRICE_SECTION_HREF, label: nav.pricing };
   const howItWorks = { href: "/how-it-works", label: nav.howItWorks };
   const library = { href: "/library", label: nav.library };
   const faq = { href: "/faq", label: nav.faq };
@@ -114,7 +115,7 @@ export function chromeFrom(copy: ChromeCopy, amounts: Amounts): SiteChrome {
     signIn: { href: "/signin", label: buttons.signIn },
     openApp: { href: "/app", label: buttons.openApp },
     place: footer.place,
-    footer: [pricing, howItWorks, faq, about, library, { href: "/agents", label: footer.agents }],
+    footer: [pricing, howItWorks, faq, about, library],
     legal: [
       { href: "/privacy", label: footer.privacy },
       { href: "/terms", label: footer.terms },

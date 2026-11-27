@@ -3,9 +3,9 @@ import { DM_Mono, Fraunces } from "next/font/google";
 import { StartLink } from "@/components/site/shared/start-link";
 import { compoundingSteps } from "@/data/site/compounding";
 import { letter, letterShown } from "@/data/site/letter";
-import { samplePlay } from "@/data/site/sample-play";
+import { firstExample } from "@/data/site/examples";
 import { Placeholder } from "../placeholder";
-import { bricksFor, LogoSlot, navItems, SkipLink, type SketchProps } from "../sketch-kit";
+import { bricksFor, LogoSlot, navItems, SkipLink, type SketchProps, sketchWords } from "../sketch-kit";
 import { Sketch5Wall } from "./sketch-5-wall";
 import "./sketch-5.css";
 
@@ -36,8 +36,8 @@ const NOTE_PARAGRAPHS = 2;
 
 export function Sketch5({ copy }: SketchProps) {
   const hero = copy.home.hero;
-  const how = copy.home.how;
-  const who = copy.home.whoRuns;
+  const { how, secondary } = sketchWords(copy);
+  const who = sketchWords(copy).whoRuns;
   const bricks = bricksFor(copy.bricks, WEEK.week, SET_UP);
 
   return (
@@ -79,7 +79,7 @@ export function Sketch5({ copy }: SketchProps) {
           <Sketch5Wall
             bricks={bricks}
             sampleAt={SET_UP}
-            sample={{ title: samplePlay.title, line: copy.sample.line }}
+            sample={{ title: firstExample.play.title, line: sketchWords(copy).sampleLine }}
             groupLabel={copy.home.compounds.title}
             hint="Point at a brick, or use the arrow keys."
           />
@@ -93,8 +93,8 @@ export function Sketch5({ copy }: SketchProps) {
             <StartLink audience="re" className="sk5-btn">
               {copy.buttons.start}
             </StartLink>
-            <Link href={hero.secondary.href} className="sk5-link">
-              {hero.secondary.label}
+            <Link href={secondary.href} className="sk5-link">
+              {secondary.label}
             </Link>
           </div>
           <p className="sk5-card">{copy.cardLine}</p>

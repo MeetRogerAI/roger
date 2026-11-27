@@ -15,7 +15,7 @@ import { OneOpen } from "./one-open";
  * Two headings that do not fold, and under each its folded rows:
  *
  *   The Idea       Summary          the play's description
- *                  What To Copy     the install prompt, its copy button and the AI agent it was written on
+ *                  What To Copy     the install prompt and its copy button, with nothing under the button
  *                  Cora's scores    only for a play Cora has scored
  *   The Playbook   8 steps          one row, which opens to a row for each part of the playbook,
  *                                   each of which opens to that part's text
@@ -101,8 +101,8 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
           <Fold fold="copy" name={rows} label={copy.idea.copy}>
             <p className="text-small text-ink-2">{copy.install.help}</p>
             <blockquote className="mt-4 border-l-2 border-rule-strong pl-4 text-small">{idea.pasteToInstall}</blockquote>
+            {/* Nothing is printed under the button (Peter, November 27, 2026). */}
             <CopyTextButton text={idea.copyText} label={copy.install.copy} className="btn btn-m btn-ink mt-5" />
-            {idea.writtenOn && <p className="mt-4 text-meta text-ink-2">{`${copy.install.writtenOn} ${idea.writtenOn}. ${copy.install.writtenOnNote}`}</p>}
           </Fold>
 
           {scored && (

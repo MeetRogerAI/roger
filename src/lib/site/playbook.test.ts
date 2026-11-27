@@ -1,23 +1,30 @@
 /**
- * The sample card's steps (src/lib/site/playbook.ts), against the bundled
- * play and against playbooks of other shapes: a play chosen in the admin is
- * written by someone else's AI agent and need not look like the bundled one.
+ * The example card's steps (src/lib/site/playbook.ts), against the bundled
+ * examples and against playbooks of other shapes: a play is written by
+ * someone's AI agent and need not look like the bundled ones.
  */
 import { describe, expect, it } from "vitest";
-import { samplePlay } from "@/data/site/sample-play";
+import { examples } from "@/data/site/examples";
 import { playbookSteps } from "./playbook";
 
 describe("playbookSteps", () => {
-  it("takes the bundled play apart into its eight parts, with every line of the playbook in a heading or a body", () => {
-    const steps = playbookSteps(samplePlay.playbookMd)!;
-    expect(steps.map((s) => s.heading)).toEqual(["1. Play", "2. Trigger", "3. Setup first", "4. Steps", "5. Guardrails", "6. Output", "7. Pitfalls seen", "8. Done when"]);
-    expect(steps.map((s) => `## ${s.heading}\n${s.body}`).join("\n\n")).toBe(samplePlay.playbookMd);
-    // The nine numbered lines of "4. Steps" stay inside that one step.
-    expect(steps[3].body.split("\n")).toHaveLength(9);
+  it("takes each bundled example apart into its eight parts, with every line of the playbook in a heading or a body", () => {
+    expect(examples.length).toBeGreaterThanOrEqual(2);
+    for (const { id, play } of examples) {
+      const steps = playbookSteps(play.playbookMd)!;
+      const headings = steps.map((s) => s.heading);
+      // The play written by us heads its seventh part "Pitfalls to watch for": nobody has seen them yet.
+      // "3. Setup first" carries the source's own "(answer once)" in one of the plays.
+      expect(headings.map((h) => h.replace(" (answer once)", "").replace("Pitfalls to watch for", "Pitfalls seen")), id).toEqual(["1. Play", "2. Trigger", "3. Setup first", "4. Steps", "5. Guardrails", "6. Output", "7. Pitfalls seen", "8. Done when"]);
+      expect(steps.map((s) => `## ${s.heading}\n${s.body}`).join("\n\n"), id).toBe(play.playbookMd);
+      // The eight numbered lines of "4. Steps" stay inside that one step.
+      expect(steps[3].body.split("\n"), id).toHaveLength(8);
+    }
   });
 
   it("reads Windows line ends the same way", () => {
-    expect(playbookSteps(samplePlay.playbookMd.replace(/\n/g, "\r\n"))).toEqual(playbookSteps(samplePlay.playbookMd));
+    const md = examples[0].play.playbookMd;
+    expect(playbookSteps(md.replace(/\n/g, "\r\n"))).toEqual(playbookSteps(md));
   });
 
   it("takes parts with no numbers, and any heading level, as long as the parts share it", () => {

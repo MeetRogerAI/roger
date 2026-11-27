@@ -14,10 +14,11 @@ import { SectionHead } from "@/components/site/v1/blocks/section-head";
 import { Testimonials } from "@/components/site/v1/blocks/testimonials";
 import { compoundingFinal, compoundingSteps } from "@/data/site/compounding";
 import { letter, letterShown } from "@/data/site/letter";
-import { samplePlay } from "@/data/site/sample-play";
+import { ExamplesSection } from "@/components/site/v1/blocks/sections";
+import { examples, firstExample } from "@/data/site/examples";
 import { closingBandCopy, priceBlockCopy, questionsOn, v1Copy } from "@/data/site/v1";
 import { getAmounts } from "@/lib/site/amounts";
-import { getPlaybookPreface, publicIdeaView, resolveSamplePlay, type SamplePlay } from "@/lib/site/sample";
+import { exampleViews, getPlaybookPreface, publicIdeaView, type SamplePlay } from "@/lib/site/sample";
 import type { Testimonial } from "@/lib/site/testimonials";
 import { isKnownNonProduction } from "@/lib/site/version";
 
@@ -41,10 +42,9 @@ const madeUpScores: SamplePlay["scores"] = { hours: 7, reach: 8, ease: 6, proof:
  */
 export default async function SiteBlocksPreview() {
   if (!isKnownNonProduction()) notFound();
-  const [amounts, preface, play] = await Promise.all([getAmounts(), getPlaybookPreface(), resolveSamplePlay(samplePlay)]);
-  const { copy, agents } = v1Copy(amounts);
-  const idea = publicIdeaView(play, preface);
-  const scoredIdea = publicIdeaView({ ...play, scores: madeUpScores }, preface);
+  const [amounts, preface] = await Promise.all([getAmounts(), getPlaybookPreface()]);
+  const { copy } = v1Copy(amounts);
+  const scoredIdea = publicIdeaView({ ...firstExample.play, scores: madeUpScores }, preface);
   const priceCopy = priceBlockCopy(copy);
 
   const stacks = (night: boolean) => (
@@ -67,17 +67,17 @@ export default async function SiteBlocksPreview() {
         <SectionHead title={copy.home.compounds.title} sub={copy.home.compounds.line} />
       </div>
       <div className="on-night bg-night py-16 text-night-ink">
-        <SectionHead title={copy.home.how.title} sub={copy.home.hero.sub} night />
+        <SectionHead title={copy.priceBlock.title} sub={copy.home.hero.sub} night />
       </div>
 
       <Label>Brick stack: weeks 1, 2, 3, 4 and 26, part set up, and the five levels</Label>
       <div className="bg-ground py-16">{stacks(false)}</div>
       <div className="on-night bg-night py-16 text-night-ink">{stacks(true)}</div>
 
-      <Label>The hero’s four parts (night): a loop with script and motion, a still list without</Label>
+      <Label>The hero’s four steps (night): a loop with script and motion, a still list without. Each step is its label, number, headline, text and stack.</Label>
       <div className="on-night bg-night py-16 text-night-ink">
         <div className="wrap flex justify-center">
-          <HeroSteps copy={copy.home.hero.graphic} headlines={copy.home.how.steps.map((step) => step.title)} />
+          <HeroSteps copy={copy.home.hero.graphic} words={copy.bricks} />
         </div>
       </div>
 
@@ -91,14 +91,9 @@ export default async function SiteBlocksPreview() {
       <ControlBlock copy={copy.control} />
       <ControlBlock copy={copy.control} night id="control-night" />
 
-      <Label>Sample idea card on ground, as the site shows it, every row folded: a play with no scores has no score row</Label>
-      <div className="bg-ground py-16">
-        <SectionHead title={copy.sample.title} sub={copy.sample.line} className="mb-10" />
-        <div className="wrap">
-          <SampleCard idea={idea} copy={copy.sample} />
-        </div>
-      </div>
-      <Label>Sample idea card on night, with made-up scores to show the five bars</Label>
+      <Label>“Cora Curation Examples”, as the homepage shows it: tabs with script, every example stacked without. A play with no scores has no score row.</Label>
+      <ExamplesSection examples={exampleViews(examples, preface)} copy={copy.sample} />
+      <Label>One example’s card on night, with made-up scores to show the five bars</Label>
       <div className="on-night bg-night py-16 text-night-ink">
         <div className="wrap">
           <SampleCard idea={scoredIdea} copy={copy.sample} id="sample-night" />
@@ -110,9 +105,9 @@ export default async function SiteBlocksPreview() {
       <Testimonials title={copy.testimonials.title} items={madeUpQuotes} />
       <Testimonials title={copy.testimonials.title} items={madeUpQuotes.slice(0, 1)} night id="say-night" />
 
-      <Label>Questions: the homepage subset on ground, the /agents subset on night</Label>
+      <Label>Questions: the homepage subset, on ground and on night</Label>
       <Questions title={copy.questionsBlock.title} items={questionsOn(copy, "home")} more={copy.questionsBlock.more} />
-      <Questions title={copy.questionsBlock.title} items={questionsOn(copy, "agents")} night id="questions-night" />
+      <Questions title={copy.questionsBlock.title} items={questionsOn(copy, "home")} night id="questions-night" />
 
       <Label>Letter paragraphs that are still true</Label>
       <div className="bg-ground py-16">
@@ -124,9 +119,9 @@ export default async function SiteBlocksPreview() {
         </div>
       </div>
 
-      <Label>Closing band (night): the homepage line, then the /agents line</Label>
-      <ClosingBand copy={closingBandCopy(copy, copy.home.closing.line)} audience="re" />
-      <ClosingBand copy={closingBandCopy(copy, agents.closing.line)} audience="agents" id="closing-agents" />
+      <Label>Closing band (night): the homepage’s, a line and its own button; then the /library one, with the line under the price and the trial line</Label>
+      <ClosingBand copy={{ line: copy.home.closing.line, start: copy.home.closing.start }} audience="re" />
+      <ClosingBand copy={closingBandCopy(copy, copy.library.band)} id="closing-library" />
     </>
   );
 }
