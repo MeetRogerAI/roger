@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mergeV3 } from "@/lib/v3-settings";
-import { longDate, welcomeEmail } from "./welcome";
+import { longDate } from "@/lib/dates";
+import { welcomeEmail } from "./welcome";
 
 const settings = mergeV3([]);
 

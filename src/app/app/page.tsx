@@ -11,7 +11,7 @@ import { heldHeading } from "@/lib/app/held";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export const metadata: Metadata = { title: "This week" };

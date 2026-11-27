@@ -1,6 +1,6 @@
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /** Spec B.13: the first charge succeeded and the subscription started. */
 export function subscribedEmail(o: { amountCents: number | null; currency: Currency; /** A one-at-a-time member's first monthly charge: not a third list. */ switched?: boolean }): Rendered {

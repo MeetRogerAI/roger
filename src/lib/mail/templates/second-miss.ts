@@ -1,6 +1,6 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
 import { MISSED_FIX } from "./missed-forgiven";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 type Owed = { higher: string; difference: string; invoiceDate: string };
 /** For an email: when the month it is owed for has already ended, it is named instead of "this month". */

@@ -1,7 +1,7 @@
 import { addDays, weekOf } from "@/lib/clock";
 import { amount, money, type Currency, type Plan } from "@/lib/billing/prices";
 import { SHARING_OFF } from "@/lib/app/status";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 import type { Sharing } from "./settings";
 

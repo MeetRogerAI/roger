@@ -1,12 +1,12 @@
 import type { Query } from "@/lib/db-query";
-import type { MailDeps } from "@/lib/mail/send";
+import { adminAlert, alertAdmins, type MailDeps } from "@/lib/mail/send";
 import { counterFor, hit, limits, type Counter } from "@/lib/rate-limit";
 import type { V3Settings } from "@/lib/v3-settings";
 import { deliverUnlock, newestDeliveredWeek, UnlockEmailNotSent } from "@/lib/cora/unlock";
-import { CLOSED_NO_CARD } from "@/lib/housekeeping/clocks";
 import type { CardSaveResult } from "./card-saved";
 import { refusePromotion, type CardGateway, type Promotion, type SetupSession } from "./gateway";
 import { hasCard, isNoCardTrial } from "./has-card";
+import { CLOSED_NO_CARD } from "./no-card";
 import type { Currency, Plan } from "./prices";
 
 /**
@@ -17,8 +17,8 @@ import type { Currency, Plan } from "./prices";
  * (`src/lib/signup/finish.ts`). The card is saved on the Payment page
  * (`openEmbeddedSetup`), and `completeCardSetup` (Unit 5) is the unlock: it
  * saves the card, locks in the promo code and delivers the held list. The
- * hosted `startCardSetup` is kept only for the scenario tests' sign-up until
- * Unit 10 rewrites them; it still moves a `signup` account to `trial`.
+ * hosted card-at-sign-up page (`startCardSetup`) is gone (whole-branch review
+ * W8); the hosted page is still used by "Update card" (`startCardUpdate`).
  */
 
 type SignupUser = {
@@ -39,29 +39,6 @@ const USER_COLUMNS = "id, email, name, status, plan, currency, stripe_customer, 
 async function loadUser(q: Query, id: string): Promise<SignupUser | null> {
   const rows = await q<SignupUser>(`select ${USER_COLUMNS} from users where id = $1`, [id]);
   return rows[0] ?? null;
-}
-
-/**
- * Opens Stripe's hosted card page. Creates the Stripe customer once (one per
- * user, kept on the user). Only for a signed-in user who has agreed to the
- * terms and not saved a card yet. The consent is checked here, not only on
- * the page, because a server action can be called directly.
- */
-export async function startCardSetup(
-  q: Query,
-  gw: CardGateway,
-  o: { userId: string; currency: Currency; successUrl: string; cancelUrl: string },
-): Promise<{ ok: true; url: string } | { ok: false; reason: "not_found" | "already_saved" | "not_consented" }> {
-  const u = await loadUser(q, o.userId);
-  if (!u) return { ok: false, reason: "not_found" };
-  if (u.status !== "signup") return { ok: false, reason: "already_saved" };
-  if (!u.consent_at) return { ok: false, reason: "not_consented" };
-
-  const customer = await ensureCustomer(q, gw, u);
-  const session = await gw.createSetupSession({ userId: u.id, customer, currency: o.currency, successUrl: o.successUrl, cancelUrl: o.cancelUrl });
-  // The completion accepts only the stored session (Unit 5); the newest one opened is the one stored.
-  await q(`update users set setup_session = $2 where id = $1`, [u.id, session.id]);
-  return { ok: true, url: session.url };
 }
 
 /** The user's Stripe customer, created once (one per user, kept on the user). */
@@ -224,6 +201,64 @@ export async function discardSetupSession(q: Query, gw: CardGateway, userId: str
 }
 
 /**
+ * Whole-branch review W3 (and Unit 9 F5's cancel): an account that has just
+ * ended for good (an admin close, a cancel) and can never save its first
+ * card. Its stored Payment session is expired and cleared, so an open tab
+ * cannot confirm a card; if the member confirmed it already, Roger does not
+ * save that card: it is taken off the Stripe customer, then the session is
+ * cleared. "removed" says a confirmed card was taken off. Throws when Stripe
+ * fails (the caller logs it); the session then stays stored, so a late
+ * webhook's completion answers "closed" and removes the card itself
+ * (`removeStrandedCard`).
+ */
+export async function retireSessionForGood(q: Query, gw: CardGateway, userId: string): Promise<"none" | "discarded" | "removed"> {
+  const r = await discardSetupSession(q, gw, userId);
+  if (r !== "complete") return r;
+  const [u] = await q<{ setup_session: string | null }>(`select setup_session from users where id = $1`, [userId]);
+  if (!u?.setup_session) return "none";
+  const s = await readSession(gw, u.setup_session);
+  if (s?.paymentMethod) await gw.detachPaymentMethod(s.paymentMethod);
+  await q(`update users set setup_session = null where id = $1 and setup_session = $2`, [userId, u.setup_session]);
+  return "removed";
+}
+
+/**
+ * Whole-branch review W4: a card confirmed on the stored Payment session of an
+ * account that is cancelled or closed (and not reopenable) is never saved by
+ * Roger, so it must not stay on the Stripe customer, where a later charge or
+ * an admin could find it. It is detached, whether or not the cancellation's
+ * card removal already ran (`cards_removed_at` set), and the admins are told.
+ * A detach that fails throws, so the webhook answers 500 and Stripe sends the
+ * event again; the alert goes once per session.
+ */
+async function removeStrandedCard(
+  q: Query,
+  gw: CardGateway,
+  u: { id: string; status: string; closed_reason: string | null },
+  s: SetupSession,
+  o: MailDeps,
+): Promise<void> {
+  const why = `${u.status}${u.closed_reason ? ` (${u.closed_reason})` : ""}`;
+  let removed = true;
+  try {
+    if (s.paymentMethod) await gw.detachPaymentMethod(s.paymentMethod);
+  } catch (e) {
+    removed = false;
+    console.error("[card] a card confirmed on a closed account could not be removed", { userId: u.id, session: s.id, message: (e as Error)?.message });
+  }
+  await alertAdmins(
+    "card_on_closed_account",
+    s.id,
+    adminAlert("A card was confirmed on an account that has ended", [
+      `User ${u.id}, account ${why}, Stripe session ${s.id}, customer ${s.customer}. Roger did not save the card and nothing was charged.`,
+      removed ? "The card was removed from the Stripe customer." : "Removing the card from the Stripe customer failed; Stripe's retry of the event tries again. If it stays, remove it in Stripe.",
+    ]),
+    { ...o, query: o.query ?? q },
+  ).catch(() => {});
+  if (!removed) throw new Error("A card confirmed on a closed account could not be removed yet");
+}
+
+/**
  * The stored Payment session, completed if the member has confirmed it
  * (review fixes Unit 7, F1: the no-card close asks before it closes, and again
  * after it has closed the session). "none": nothing stored, or not complete.
@@ -271,7 +306,7 @@ const reopenable = (u: ReopenFacts, now: Date) =>
  * cancelled before saving one); nothing changes. A no-card close within
  * REOPEN_DAYS is reopened instead (review fixes Unit 7, F1).
  */
-export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer" | "not_consented" | "closed";
+export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer" | "closed";
 
 export type CompleteOptions = {
   expectUserId?: string;
@@ -332,9 +367,9 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
 
   const now = o.now ?? new Date();
   if (u.trial_started_at == null) {
-    // The account state is checked before anything is changed in Stripe.
-    if (u.status === "signup" && !u.consent_at) return "not_consented";
-    if (u.status !== "signup" && u.status !== "trial" && !reopenable(u, now)) return "closed";
+    // The account state is checked before anything is changed in Stripe. Only a trial (or a no-card close
+    // still within its grace) can save its first card.
+    if (u.status !== "trial" && !reopenable(u, now)) return closedWithCard(q, gw, u, s, o);
     await gw.setDefaultCard(s.customer, s.paymentMethod);
     if ((await gw.checkTaxLocation(s.customer)) === "invalid") {
       // This session is used up (complete) and can never save the card: drop it, so the next Payment
@@ -343,12 +378,26 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
       return "address_invalid";
     }
     const claimed = await claimCardSave(q, gw, u.id, s, now);
-    if (claimed !== "saved") return claimed;
+    // Cancelled or closed between the check above and the claim: the card was made the default, and goes again.
+    if (claimed === "closed") {
+      const [after] = await q<{ status: string; closed_reason: string | null }>(`select status, closed_reason from users where id = $1`, [u.id]);
+      return closedWithCard(q, gw, { id: u.id, status: after?.status ?? u.status, closed_reason: after?.closed_reason ?? null }, s, o);
+    }
   }
 
   const settings = await o.getSettings();
   await deliverUnlock(q, { settings, now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
   return "done";
+}
+
+/**
+ * "closed": the account can no longer save its first card. A cancelled or
+ * closed account's confirmed card is taken off the customer (W4); any other
+ * state (a legacy row with no card stamp) is left as it is.
+ */
+async function closedWithCard(q: Query, gw: CardGateway, u: { id: string; status: string; closed_reason: string | null }, s: SetupSession, o: MailDeps): Promise<"closed"> {
+  if (u.status === "cancelled" || u.status === "closed") await removeStrandedCard(q, gw, u, s, o);
+  return "closed";
 }
 
 /**
@@ -382,7 +431,7 @@ export const CARD_SAVE_CLAIM_SQL = `
 with u as (
   select id from users
   where id = $1 and trial_started_at is null and promo_code is not distinct from $5::text
-    and (status = 'trial' or (status = 'signup' and consent_at is not null) or ${REOPENABLE_SQL("$2")})
+    and (status = 'trial' or ${REOPENABLE_SQL("$2")})
   for update
 ),
 others as (
@@ -395,6 +444,8 @@ first_blocked as (
   select ($9::boolean and (
        exists (select 1 from promo_reservations pr where pr.user_id = $1 and pr.promotion_code <> $6::text)
     or ($10::text is not null and exists (select 1 from promo_reservations pr where pr.card_fingerprint = $10::text and pr.user_id <> $1))
+    -- Whole-branch review W7: the same card saved by another member (users.card_fingerprint is stamped at every save).
+    or ($10::text is not null and exists (select 1 from users fu where fu.card_fingerprint = $10::text and fu.id <> $1))
     or exists (select 1 from users pu where pu.id = $1 and pu.first_charge_at is not null)
     or exists (select 1 from orders po where po.user_id = $1 and po.status in ('charged', 'sent'))
   )) as yes
@@ -422,7 +473,7 @@ upd as (
     -- A reopened no-card close (REOPENABLE_SQL): the close's fields go (SET reads the row as it was).
     closed_reason = case when status = 'closed' then null else closed_reason end,
     access_ends_at = case when status = 'closed' then null else access_ends_at end,
-    currency = $3, country = coalesce($4::text, country),
+    currency = $3, country = coalesce($4::text, country), card_fingerprint = coalesce($10::text, card_fingerprint),
     promo_code = case when (select v from verdict) = 'refused' then null else promo_code end,
     promo_coupon = case when (select v from verdict) = 'refused' then null else promo_coupon end,
     promo_label = case when (select v from verdict) = 'refused' then null else promo_label end,
@@ -438,18 +489,17 @@ select (select v from verdict) as verdict, exists (select 1 from upd) as saved`;
 /**
  * Re-reads the pending code, re-checks it in Stripe (its limits and
  * first-time rule as they are now) and runs the claim. Returns "saved" once
- * the card is saved, by this call or another; "closed" or "not_consented" if
- * the account can no longer save its first card.
+ * the card is saved, by this call or another; "closed" if the account can no
+ * longer save its first card.
  */
-async function claimCardSave(q: Query, gw: CardGateway, userId: string, s: { customer: string | null; country: string | null; currency: Currency | null; cardFingerprint?: string | null }, now: Date): Promise<"saved" | "closed" | "not_consented"> {
+async function claimCardSave(q: Query, gw: CardGateway, userId: string, s: { customer: string | null; country: string | null; currency: Currency | null; cardFingerprint?: string | null }, now: Date): Promise<"saved" | "closed"> {
   for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt++) {
-    const [u] = await q<ReopenFacts & { consent_at: string | null; currency: Currency | null; promo_code: string | null; promo_coupon: string | null }>(
-      `select status, consent_at, currency, trial_started_at, promo_code, promo_coupon, closed_reason, access_ends_at from users where id = $1`,
+    const [u] = await q<ReopenFacts & { currency: Currency | null; promo_code: string | null; promo_coupon: string | null }>(
+      `select status, currency, trial_started_at, promo_code, promo_coupon, closed_reason, access_ends_at from users where id = $1`,
       [userId],
     );
     if (!u || u.trial_started_at != null) return "saved";
-    if (u.status === "signup" && !u.consent_at) return "not_consented";
-    if (u.status !== "signup" && u.status !== "trial" && !reopenable(u, now)) return "closed";
+    if (u.status !== "trial" && !reopenable(u, now)) return "closed";
     // The user's own last choice wins over the currency an older card tab was opened with.
     const currency: Currency = u.currency ?? s.currency ?? "USD";
 
@@ -611,7 +661,11 @@ export async function completeCardUpdate(
   try {
     await gw.setDefaultCard(s.customer, s.paymentMethod);
     if ((await gw.checkTaxLocation(s.customer)) === "invalid") outcome = "address_invalid";
-    else await o.after(u.id);
+    else {
+      // The member's card now (whole-branch review W7: first-time-only promo codes refuse a card another member saved).
+      if (s.cardFingerprint) await q(`update users set card_fingerprint = $2 where id = $1`, [u.id, s.cardFingerprint]);
+      await o.after(u.id);
+    }
   } catch (e) {
     // Released at once, so the webhook's retry (or a reload) does it all again.
     await q(`update card_updates set claimed_at = 'epoch' where session_id = $1 and done_at is null`, [s.id]).catch(() => {});

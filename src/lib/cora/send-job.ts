@@ -4,14 +4,14 @@ import { HELD_WEEK_SQL, heldTitles } from "@/lib/app/held";
 import { PAYMENT_PATH, statusLine, type StatusFacts } from "@/lib/app/status";
 import { weekIdeas } from "@/lib/app/week";
 import { HAS_CARD_SQL, isNoCardTrial, NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
-import { amount, money, type Currency } from "@/lib/billing/prices";
+import type { Currency } from "@/lib/billing/prices";
 import { sendFirstPaidNext } from "@/lib/billing/quote";
 import { contributionStatus, processContributions } from "@/lib/billing/contribution";
 import type { AdjustmentGateway, BillingGateway } from "@/lib/billing/subscriptions";
 import { adminAlert, alertAdmins, MAX_ATTEMPTS, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { appUrl } from "@/lib/mail/layout";
 import { firstListHeldEmail } from "@/lib/mail/templates/held";
-import { mondayListEmail, noIdeasThisWeekEmail, noRunThisWeekEmail, orderNextEmail } from "@/lib/mail/templates/monday";
+import { mondayListEmail, noIdeasThisWeekEmail, noRunThisWeekEmail } from "@/lib/mail/templates/monday";
 import type { V3Settings } from "@/lib/v3-settings";
 import { teaserQuiet } from "@/lib/housekeeping/clocks";
 import { deliverWeek, NOT_SUPERSEDED_SQL } from "./deliver";
@@ -158,10 +158,8 @@ export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string):
     if (now.plan === "monthly" && d.gw && !(await sentAlready(q, now.id, "first_paid_next", week))) {
       await sendFirstPaidNext(q, { gw: d.gw, settings: d.settings, now: d.now, ...mailOf(d) }, now.id).catch((e) => console.error("[send] first paid next", e instanceof Error ? e.message : e));
     }
-    if (now.plan === "per_run") {
-      const cur = now.currency ?? "USD";
-      await sendToUser({ id: now.id, email: now.email }, "order_next", week, orderNextEmail({ price: money(amount(d.settings, "per_run", cur), cur) }), d).catch(() => {});
-    }
+    // A leftover per-run account no longer gets the "order your next list" email (whole-branch review W2):
+    // ordering is gone from the app, so the email would point at nothing. `orderNextEmail` stays, dormant.
   }
 
   const [after] = await usersFor(q, week, [u.id]);

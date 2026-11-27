@@ -5,7 +5,7 @@ import { mergeV3 } from "@/lib/v3-settings";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { testDb } from "@/test-helpers/pglite-db";
 import { sendSignupWelcome } from "@/lib/signup/finish";
-import { completeCardSetup, startCardSetup } from "./card-setup";
+import { completeCardSetup, openEmbeddedSetup } from "./card-setup";
 import { claimEvent, handleStripeEvent } from "./webhook";
 
 // Cases from the Unit 7 code review.
@@ -20,35 +20,32 @@ const transport: Transport = async (m) => {
   return { ok: true };
 };
 let userId: string;
-const urls = { successUrl: "https://x/start/done", cancelUrl: "https://x/start/card" };
 const setupEvent = (id: string, sessionId: string) => ({ id, type: "checkout.session.completed", data: { object: { id: sessionId, mode: "setup" } } }) as never;
 
+/** Sign-up ends at Step 3 with a trial and no card (Unit 2); the card is saved on Payment's embedded session. */
 beforeEach(async () => {
   ({ query } = await testDb());
   sent = [];
   process.env.ADMIN_EMAILS = "";
   [{ id: userId }] = await query<{ id: string }>(
-    "insert into users (email, name, plan, currency, path, email_verified_at, signup_step, consent_at) values ('ana@example.com', 'Ana Silva', 'monthly', 'CAD', 'new', now(), 'card', now()) returning id",
+    "insert into users (email, name, status, plan, currency, path, email_verified_at, signup_step, consent_at) values ('ana@example.com', 'Ana Silva', 'trial', 'monthly', 'CAD', 'new', now(), 'done', now()) returning id",
   );
 });
 
-async function opened(gw: ReturnType<typeof fakeGateway>, currency: "USD" | "CAD" = "CAD") {
-  await startCardSetup(query, gw, { userId, currency, ...urls });
-  return [...gw.sessions.keys()].pop()!;
+/** Opens the Payment page's session in the account's currency (`currency` sets it first). */
+async function opened(gw: ReturnType<typeof fakeGateway>, currency?: "USD" | "CAD") {
+  if (currency) await query("update users set currency = $1", [currency]);
+  const r = await openEmbeddedSetup(query, gw, { userId, ip: "203.0.113.9", returnUrl: "https://x/start/payment/done?session_id={CHECKOUT_SESSION_ID}" });
+  if (!r.ok) throw new Error(`no session: ${r.reason}`);
+  return r.sessionId;
 }
 
-describe("consent", () => {
-  it("is required to open the card page and to start the trial, not only on the page", async () => {
-    await query("update users set consent_at = null");
-    expect(await startCardSetup(query, fakeGateway(), { userId, currency: "CAD", ...urls })).toEqual({ ok: false, reason: "not_consented" });
-    await query("update users set consent_at = now()");
+describe("the account state", () => {
+  it("an account still signing up (no consent) can open no Payment session and save no card", async () => {
+    await query("update users set status = 'signup', signup_step = 'plan', consent_at = null");
     const gw = fakeGateway();
-    const id = await opened(gw);
-    await query("update users set consent_at = null");
-    gw.complete(id);
-    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("not_consented");
-    const [u] = await query<{ status: string }>("select status from users");
-    expect(u.status).toBe("signup");
+    expect(await openEmbeddedSetup(query, gw, { userId, ip: "203.0.113.9", returnUrl: "https://x" })).toEqual({ ok: false, reason: "not_allowed" });
+    expect(gw.sessions.size).toBe(0);
   });
 });
 

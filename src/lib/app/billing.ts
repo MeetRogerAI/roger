@@ -5,7 +5,7 @@ import { HAS_CARD_SQL, NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import { periodAt } from "@/lib/billing/period";
 import { amount, money, moneyCents, priceId, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { AdjustmentGateway, InvoiceRow, OrderGateway, PlanGateway } from "@/lib/billing/subscriptions";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import { heldTeaser } from "./held";
 import { changedAmountChargeDate, PAYMENT_PATH } from "./status";
 import type { V3Settings } from "@/lib/v3-settings";

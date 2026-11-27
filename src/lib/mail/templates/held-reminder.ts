@@ -1,6 +1,6 @@
 import { HELD_BUTTON, heldHeading } from "@/lib/app/held";
 import { renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * "Your ideas are waiting" (plan 2026-11-26-001, Unit 7; origin R11): days 2

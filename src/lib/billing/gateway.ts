@@ -93,6 +93,8 @@ export type CardGateway = {
   expireSetupSession(id: string): Promise<void>;
   getSetupSession(id: string): Promise<SetupSession>;
   setDefaultCard(customer: string, paymentMethod: string): Promise<void>;
+  /** Takes a card off its customer (whole-branch review W4); one already detached or gone is left as it is. */
+  detachPaymentMethod(paymentMethod: string): Promise<void>;
   checkTaxLocation(customer: string): Promise<TaxLocation>;
   /** The monthly plan's first invoice for a country and postal code, optionally with a coupon. Throws CouponUnavailable for a coupon that no longer applies. */
   previewMonthly(o: { customer?: string | null; currency: Currency; country: BillingCountry; postal: string; coupon?: string | null }): Promise<MonthlyPreview>;
@@ -234,6 +236,17 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
 
     async setDefaultCard(customer, paymentMethod) {
       await s.customers.update(customer, { invoice_settings: { default_payment_method: paymentMethod } });
+    },
+
+    async detachPaymentMethod(paymentMethod) {
+      try {
+        await s.paymentMethods.detach(paymentMethod);
+      } catch (e) {
+        // Already off its customer ("…is not attached to a customer…"), or gone: nothing left to remove.
+        const err = e as { code?: string; message?: string };
+        if (err.code === "resource_missing" || /not attached/i.test(err.message ?? "")) return;
+        throw e;
+      }
     },
 
     async checkTaxLocation(customer) {

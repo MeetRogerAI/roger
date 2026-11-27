@@ -1,5 +1,5 @@
 import { appUrl, esc, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * Spec B.8 item 3: the Monday email. Each idea with its title, the reason it

@@ -33,7 +33,8 @@ const orderStatus = async (week: string) => (await w.query<{ status: string }>(`
 
 describe("one list at a time", () => {
   it("charges an order with a run once, on its own invoice, and sends the list with its receipt; an order with no run charges nothing", async () => {
-    expect(w.subjects(m.email)).toContain("Your free lists are done");
+    // Whole-branch review W2: ordering is gone from the app, so no "order your next list" email after the free lists.
+    expect(w.subjects(m.email)).not.toContain("Your free lists are done");
     expect(await userRow(w, m.id)).toMatchObject({ status: "trial", plan: "per_run", free_lists_used: 2 });
 
     // Saturday: order for Monday; Sunday: Zack's run; Monday: invoiced, paid, sent.

@@ -174,14 +174,15 @@ export async function sendTrialNudges(q: Query, d: TrialDeps): Promise<number> {
     );
     if (r !== "already") sent++;
   }
-  // Unit 7: the same nudges for a no-card trial that has had no teaser, counted from consent (Toronto calendar days)
-  // and keyed by it. A teaser (which needs a run) moves the member to the held reminders; a saved card takes them off.
+  // Unit 7: the same nudges for a no-card trial that has had no teaser, counted from the end of sign-up (Toronto
+  // calendar days) and keyed by it (`finishedAt`: signup_finished_at, else consent for older rows, whole-branch
+  // review W1). A teaser (which needs a run) moves the member to the held reminders; a saved card takes them off.
   for (const t of await clocksFor(q, d)) {
     if (sent >= MAX_SENDS || outOfTime(d)) break;
     if (t.firstTeaserAt || t.hasRun || d.now >= t.closesAt) continue;
     const day = wallDayReached(NUDGE_DAYS, t.start, d.now);
     if (day == null) continue;
-    const r = await sendToUser({ id: t.id, email: t.email }, "zack_not_yet", `${t.consentAt.toISOString()}:${day}`, zackNotYetEmail({ day, closesOn: torontoDate(t.closesAt) }), d).catch(
+    const r = await sendToUser({ id: t.id, email: t.email }, "zack_not_yet", `${t.finishedAt.toISOString()}:${day}`, zackNotYetEmail({ day, closesOn: torontoDate(t.closesAt) }), d).catch(
       () => "failed" as const,
     );
     if (r !== "already") sent++;

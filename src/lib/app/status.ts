@@ -4,7 +4,7 @@ import type { ContributionStatus } from "@/lib/billing/contribution";
 import { holdDate } from "@/lib/billing/period";
 import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
 import { carriedMissText, notSharingText, secondMissText } from "@/lib/mail/templates/second-miss";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**

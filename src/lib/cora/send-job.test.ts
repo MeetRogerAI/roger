@@ -143,6 +143,17 @@ describe("the Monday send", () => {
     expect(await user(a)).toEqual({ free_lists_used: 1 });
   });
 
+  it("a leftover per-run trial's second free list sends no 'order your next list' email (whole-branch review W2)", async () => {
+    const a = await member("a@example.com", { plan: "per_run", free_lists_used: 1 });
+    await picked(a);
+    await runSendJob(query, deps(), { week: WEEK });
+    expect(await user(a)).toEqual({ free_lists_used: 2 });
+    expect(to("a@example.com").map((m) => m.subject)).not.toContain("Your free lists are done");
+    expect(await query("select 1 from notifications where kind = 'order_next'")).toEqual([]);
+    // The list itself still goes.
+    expect(await delivered(a)).toBe(3);
+  });
+
   it("sends a charged order one 'Your list, and your receipt' email", async () => {
     const a = await member("a@example.com", { status: "active", plan: "per_run", free_lists_used: 2 });
     await picked(a);

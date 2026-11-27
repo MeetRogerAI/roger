@@ -3,10 +3,10 @@ import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { cancelledEmail, cancelUndoneEmail } from "@/lib/mail/templates/cancelled";
 import { planChangedEmail } from "@/lib/mail/templates/plan-changed";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnCancelScheduled, adjustmentOnCancelUndone, ANCHOR, ISO, placeAdjustments } from "./adjustment";
-import { completeStoredSession, discardSetupSession } from "./card-setup";
+import { completeStoredSession, retireSessionForGood } from "./card-setup";
 import { chargeInFlight } from "./claims";
 import type { CardGateway } from "./gateway";
 import { isNoCardTrialUser } from "./has-card";
@@ -180,13 +180,15 @@ export const CARD_SAVED_NOT_CANCELLED = "Your card was saved just now, so your t
  * in docs/solutions/logic-errors): the stored Payment session is expired in
  * Stripe and cleared, so an open tab cannot save a card on a cancelled
  * account. A card confirmed in the moment before the expiry is not saved by
- * Roger (the account is cancelled; the completion answers "closed") and the
- * cancellation's card removal (finishCancellation, right after) takes it off
- * the customer. Best effort: a failure is logged.
+ * Roger (the account is cancelled) and is taken off the customer here
+ * (`retireSessionForGood`, whole-branch review W4), whatever the
+ * cancellation's own card removal does. Best effort: a failure is logged, and
+ * the session stays stored, so the completion of a card confirmed later
+ * answers "closed" and removes that card itself.
  */
 async function retireStoredSession(q: Query, card: CardGateway, userId: string): Promise<void> {
   try {
-    if ((await discardSetupSession(q, card, userId)) === "complete") console.warn("[billing] a card was confirmed as the trial was cancelled; removed with the cancellation", userId);
+    if ((await retireSessionForGood(q, card, userId)) === "removed") console.warn("[billing] a card was confirmed as the trial was cancelled; removed from the customer", userId);
   } catch (e) {
     console.warn("[billing] stored session after a cancel", userId, e instanceof Error ? e.message : e);
   }

@@ -15,7 +15,7 @@ function Message({ ok, text }: { ok: boolean; text?: string }) {
 }
 
 /** Name, display name, time zone and which emails to receive. */
-export function ProfileForm({ values, zones, perRun }: { values: ProfileValues; zones: readonly string[]; perRun: boolean }) {
+export function ProfileForm({ values, zones }: { values: ProfileValues; zones: readonly string[] }) {
   const [state, action, pending] = useActionState<ProfileState, FormData>(saveProfileAction, { status: "idle" });
   // The saved values after a save, what was typed after an error, so a form reset never brings back old ones.
   const shown = state.values ?? values;
@@ -60,15 +60,8 @@ export function ProfileForm({ values, zones, perRun }: { values: ProfileValues; 
               <span className="block text-ink-2">Switched off, your ideas still arrive on this site each Monday.</span>
             </span>
           </label>
-          {/* A leftover per-run account (preview only) can still switch off its Friday reminder; nothing here promises an order (review fixes Unit 9, F3). */}
-          {perRun ? (
-            <label className="flex gap-3">
-              <input type="checkbox" name="pref_friday_prompt" defaultChecked={shown.prefs.friday_prompt} className="mt-1 size-4 accent-accent" />
-              <span>The Friday reminder email</span>
-            </label>
-          ) : (
-            <input type="hidden" name="pref_friday_prompt" value={shown.prefs.friday_prompt ? "on" : ""} />
-          )}
+          {/* The Friday order reminder is no longer sent to anyone (whole-branch review W2), so there is no checkbox; the stored choice is kept as it was. */}
+          <input type="hidden" name="pref_friday_prompt" value={shown.prefs.friday_prompt ? "on" : ""} />
           <p className="text-ink-2">Billing emails (receipts, charges, card problems) and security emails always go: they can’t be switched off.</p>
         </div>
       </fieldset>

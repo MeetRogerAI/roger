@@ -48,7 +48,8 @@ const DORMANT_IMPORTERS: Record<string, { names?: string[]; from: string[] }> = 
   "src/lib/mail/templates/plan-changed.ts": { from: ["src/lib/billing/cancel.ts", "src/lib/billing/first-charge.ts", "src/lib/billing/renewals.ts", "src/lib/billing/switch.ts"] },
   "src/lib/mail/templates/order-closed.ts": { from: ["src/lib/billing/orders.ts"] },
   "src/lib/mail/templates/order-prompt.ts": { from: ["src/lib/billing/orders.ts"] },
-  "src/lib/mail/templates/monday.ts": { names: ["orderNextEmail"], from: ["src/lib/cora/send-job.ts"] },
+  // Whole-branch review W2: the Monday send no longer sends "order your next list", so nothing imports it.
+  "src/lib/mail/templates/monday.ts": { names: ["orderNextEmail"], from: [] },
   "src/lib/mail/templates/charges.ts": { names: ["listOrderedEmail"], from: ["src/lib/billing/orders.ts"] },
   "src/app/app/order-actions.ts": { from: [] },
 };

@@ -1,4 +1,5 @@
 import type { Query } from "@/lib/db-query";
+import { NO_CARD_FLOW_FROM } from "@/lib/billing/no-card";
 import { MAX_ATTEMPTS } from "@/lib/mail/send";
 import { FIRST_LIST_PENDING_SQL } from "./deliver";
 import { deliverAndTell, usersFor, type SendDeps } from "./send-job";
@@ -56,6 +57,16 @@ const LIST_EMAIL_KINDS = `('monday_list', 'order_receipt')`;
 const LIST_EMAIL_SETTLED_SQL = (clock: string) =>
   `exists (select 1 from notifications n where n.recipient = u.id::text and n.kind in ${LIST_EMAIL_KINDS} and n.ref = to_char(cw.week_of, 'YYYY-MM-DD')
   and ${EMAIL_SETTLED_SQL(clock)})`;
+
+/**
+ * SQL (alias `u`): a card saved in the card-at-the-first-list flow, the only
+ * members the hourly sweep unlocks for (whole-branch review W5): teasered
+ * (`first_teaser_at`, only this flow sets it), or the card saved on or after
+ * NO_CARD_FLOW_FROM (`from`, a parameter). An old-flow trial (card at sign-up,
+ * a leftover preview account) is left to the Monday send, so the first hourly
+ * pass after the deploy never emails it an old list.
+ */
+export const NEW_FLOW_CARD_SQL = (from: string) => `(u.first_teaser_at is not null or u.trial_started_at >= ${from}::timestamptz)`;
 
 /**
  * SQL (aliases `cw`, `w`, `u`): `cw` is the list this user's saved card
@@ -146,18 +157,18 @@ export const UNLOCK_COOL_DOWN = "50 minutes";
  * pass takes members never tried, then the longest since their last try,
  * skipping those tried within UNLOCK_COOL_DOWN: members whose unlock keeps
  * failing cannot hold all MAX_UNLOCKS places and starve the rest. Stops at the
- * deadline.
+ * deadline. Only new-flow cards (NEW_FLOW_CARD_SQL, whole-branch review W5).
  */
 export async function sendPendingUnlocks(q: Query, d: SendDeps & { deadline?: number }): Promise<number> {
   const clock = d.now ? d.now.toISOString() : null;
   const due = await q<{ id: string }>(
     `select u.id from users u
-     where ${CARDED_TRIAL_SQL}
+     where ${CARDED_TRIAL_SQL} and ${NEW_FLOW_CARD_SQL("$3")}
        and (u.unlock_attempted_at is null or u.unlock_attempted_at <= coalesce($2::timestamptz, now()) - interval '${UNLOCK_COOL_DOWN}')
        and exists (select 1 from cora_user_weeks cw join cora_weeks w on w.week_of = cw.week_of where ${UNLOCK_DUE_SQL("$2")})
      order by u.unlock_attempted_at nulls first, u.trial_started_at, u.id
      limit $1`,
-    [MAX_UNLOCKS, clock],
+    [MAX_UNLOCKS, clock, NO_CARD_FLOW_FROM],
   );
   let done = 0;
   for (const { id } of due) {

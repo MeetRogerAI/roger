@@ -20,7 +20,7 @@ import { syncStripeEmails } from "@/lib/auth/email-change";
 import { stripe } from "@/lib/billing/stripe";
 import { stripeGateway, type CardGateway } from "@/lib/billing/gateway";
 import { handleStripeEvent } from "@/lib/billing/webhook";
-import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { closeFailedWeekOrders, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { applyRetention, cleanUpExpired } from "./retention";
 import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
 import { noCardClocks, type NoCardClock } from "./clocks";
@@ -138,8 +138,10 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "renewal_holds", run: (q, d) => holdUnpaidRenewals(q, d) },
   // A cancellation whose card removal or confirmation email failed.
   { name: "finish_cancellations", run: async (q, d) => (d.plans ? finishCancellations(q, { ...d, card: undefined, plans: d.plans }) : "Stripe is not set up.") },
-  // Fridays: "Want a list this Monday?" to one-at-a-time users without an order (switchable in settings).
-  { name: "order_prompts", run: (q, d) => sendOrderPrompts(q, d) },
+  // Fridays' "Want a list this Monday?" to one-at-a-time users is no longer sent (whole-branch review W2): ordering is
+  // gone from the app, so the email would point at nothing. The task stays registered, doing nothing; `sendOrderPrompts`
+  // is kept, dormant, with the per-run code until its cleanup after launch.
+  { name: "order_prompts", run: async () => "Ordering is off: monthly is the only plan." },
   // Stripe customers still holding an address the user has since changed (Unit 16).
   {
     name: "stripe_email_sync",

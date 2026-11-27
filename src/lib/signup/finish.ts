@@ -1,6 +1,7 @@
 import type { Query } from "@/lib/db-query";
 import { MAX_ATTEMPTS, sendToUser, type MailDeps, type SendResult } from "@/lib/mail/send";
 import { welcomeEmail } from "@/lib/mail/templates/welcome";
+import { NO_CARD_FLOW_FROM } from "@/lib/billing/no-card";
 import type { Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
 import { claimFreeRun } from "@/lib/zack/receive";
@@ -19,12 +20,15 @@ import { claimFreeRun } from "@/lib/zack/receive";
  */
 
 /**
- * The hourly retry only looks at accounts that consented on or after this
- * moment, the day this flow was built. Earlier accounts were welcomed at the
- * old card step (or never finished it), so leftover preview accounts are
- * never welcomed again.
+ * The hourly retry only looks at accounts that finished Step 3 in this flow
+ * (`signup_finished_at`, stamped by `finishSignup` only) on or after this
+ * moment, the day this flow was built (`NO_CARD_FLOW_FROM`). Earlier accounts,
+ * and every old-flow trial (welcomed at the old card step, or never), have no
+ * stamp, so leftover preview accounts are never welcomed again (whole-branch
+ * review W5). A legacy sign-up resumed at Step 3 now gets the stamp, and its
+ * welcome is retried like any other.
  */
-export const WELCOME_SWEEP_FROM = "2026-11-26T00:00:00Z";
+export const WELCOME_SWEEP_FROM = NO_CARD_FLOW_FROM;
 
 /** How many welcomes one hourly pass sends at most. */
 export const MAX_WELCOMES = 50;
@@ -35,10 +39,15 @@ export const MAX_WELCOMES = 50;
  * whether this call moved it. `now` is the job clock; the server action
  * passes it. The database's now() is only a fallback for callers that have
  * no clock.
+ *
+ * `signup_finished_at` records when this happened (whole-branch review W1): a
+ * legacy sign-up resumed here keeps its old consent, so the no-card clock and
+ * its nudges count from this stamp, not from consent.
  */
 export async function finishSignup(q: Query, userId: string, now?: Date): Promise<boolean> {
   const rows = await q(
-    `update users set plan = 'monthly', consent_at = coalesce(consent_at, coalesce($2::timestamptz, now())), status = 'trial', signup_step = 'done'
+    `update users set plan = 'monthly', consent_at = coalesce(consent_at, coalesce($2::timestamptz, now())), status = 'trial', signup_step = 'done',
+       signup_finished_at = coalesce(signup_finished_at, coalesce($2::timestamptz, now()))
      where id = $1 and status = 'signup' returning id`,
     [userId, now?.toISOString() ?? null],
   );
@@ -68,7 +77,7 @@ export async function sendSignupWelcome(q: Query, userId: string, d: WelcomeDeps
 }
 
 /**
- * The hourly `welcome_unsent` task: a trial that consented after
+ * The hourly `welcome_unsent` task: a trial that finished Step 3 after
  * WELCOME_SWEEP_FROM and has no welcome sent (and none given up on after
  * MAX_ATTEMPTS) gets the free-tool claim re-run and the welcome sent, whether
  * or not it has saved a card since (a card saved before the retry must not
@@ -77,11 +86,11 @@ export async function sendSignupWelcome(q: Query, userId: string, d: WelcomeDeps
 export async function sendUnsentWelcomes(q: Query, d: WelcomeDeps & { deadline?: number }): Promise<number> {
   const due = await q<{ id: string }>(
     `select u.id from users u
-     where u.status = 'trial' and u.consent_at >= $1::timestamptz
+     where u.status = 'trial' and u.signup_finished_at >= $1::timestamptz
        and not exists (
          select 1 from notifications n where n.recipient = u.id::text and n.kind = 'welcome' and n.ref = 'signup'
            and (n.status in ('sent', 'skipped') or n.attempts >= $2))
-     order by u.consent_at
+     order by u.signup_finished_at
      limit $3`,
     [WELCOME_SWEEP_FROM, MAX_ATTEMPTS, MAX_WELCOMES],
   );

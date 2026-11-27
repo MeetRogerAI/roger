@@ -14,7 +14,7 @@ import { afterCardChange } from "@/lib/billing/renewals";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { torontoDate } from "@/lib/clock";
 import { query } from "@/lib/db-query";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export const metadata: Metadata = { title: "Billing" };

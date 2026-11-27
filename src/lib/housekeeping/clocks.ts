@@ -1,4 +1,5 @@
 import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
+import { CLOSED_NO_CARD } from "@/lib/billing/no-card";
 import { addWallDays, currentMonday, torontoDate, wallParts, wallToInstant, weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { CYCLE_LIVE_SINCE, type V3Settings } from "@/lib/v3-settings";
@@ -90,8 +91,9 @@ export function closeMoment(start: Date, days: number, rogerWeeks: string[], sen
  * - **Teasered** (`first_teaser_at` set): closes `HELD_CLOSE_DAYS` (14) after
  *   the first teaser, closed_reason `no_card`. A later teaser (the held list
  *   replaced) never restarts it: `first_teaser_at` is stamped once.
- * - **Never teasered**: closes `trialCloseDays` (21) after consent (or the
- *   first go-live, if later), closed_reason `no_first_list`, the reason the
+ * - **Never teasered**: closes `trialCloseDays` (21) after Step 3 finished
+ *   (`signup_finished_at`; consent for older rows; or the first go-live, if
+ *   later), closed_reason `no_first_list`, the reason the
  *   card-saved 21-day close uses. Never while a run for this week or a later
  *   one waits on Cora (it may bring the first teaser, and with it the 14-day
  *   clock).
@@ -112,17 +114,24 @@ export function closeMoment(start: Date, days: number, rogerWeeks: string[], sen
 export const HELD_CLOSE_DAYS = 14;
 export const HELD_REMINDER_DAYS = [2, 7] as const;
 export const HELD_REMINDER_KIND = "held_reminder";
-export const CLOSED_NO_CARD = "no_card";
+/** Defined with billing (billing/no-card.ts), which reads it too; re-exported here for the clock tasks. */
+export { CLOSED_NO_CARD };
 export const CLOSED_NO_LIST = "no_first_list";
 
 export type NoCardClock = {
   id: string;
   email: string;
-  /** Consent at Step 3: the never-teasered nudges are keyed by it. */
+  /** Consent at Step 3 (the first consent stays on record, so a resumed legacy sign-up's may be old). */
   consentAt: Date;
+  /**
+   * When Step 3 finished (`users.signup_finished_at`, job clock), else consent
+   * for rows from before the column (whole-branch review W1). The
+   * never-teasered clock starts from it and its nudges are keyed by it.
+   */
+  finishedAt: Date;
   /** The first teaser; null while none was sent. The held reminders are keyed by it. */
   firstTeaserAt: Date | null;
-  /** When the clock started: the first teaser, or consent (or the first go-live, if later). */
+  /** When the clock started: the first teaser, or the end of sign-up (or the first go-live, if later). */
   start: Date;
   closesAt: Date;
   /** Whether Zack has sent a real (not test) run. */
@@ -139,6 +148,7 @@ export async function noCardClocks(q: Query, s: V3Settings, now: Date, onlyIds?:
     id: string;
     email: string;
     consent_at: string;
+    finished_at: string;
     first_teaser_at: string | null;
     start: string;
     has_run: boolean;
@@ -146,15 +156,19 @@ export async function noCardClocks(q: Query, s: V3Settings, now: Date, onlyIds?:
     roger_weeks: string[] | null;
     reminded: string[] | null;
   }>(
+    // Whole-branch review W1: the never-teasered clock starts when Step 3 finished, not at consent. A legacy
+    // sign-up resumed at Step 3 keeps its old consent (the first one stays on record), and counting from it
+    // could close the account, and send every nudge at once, minutes after it finished.
     `with ${LIVE_SINCE_CTE},
      t as (
-       select u.id, u.email, u.consent_at, u.first_teaser_at,
-         coalesce(u.first_teaser_at, greatest(u.consent_at, ${LIVE_SINCE})) as start
+       select u.id, u.email, u.consent_at, u.first_teaser_at, coalesce(u.signup_finished_at, u.consent_at) as finished_at,
+         coalesce(u.first_teaser_at, greatest(coalesce(u.signup_finished_at, u.consent_at), ${LIVE_SINCE})) as start
        from users u
        where ${NO_CARD_TRIAL_SQL("u")} and u.consent_at is not null and ($1::uuid[] is null or u.id = any($1::uuid[]))
      )
      select t.id, t.email,
        to_char(t.consent_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as consent_at,
+       to_char(t.finished_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as finished_at,
        to_char(t.first_teaser_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as first_teaser_at,
        to_char(t.start at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as start,
        exists (select 1 from runs r where r.user_id = t.id and not r.is_test and r.status <> 'deleted') as has_run,
@@ -172,6 +186,7 @@ export async function noCardClocks(q: Query, s: V3Settings, now: Date, onlyIds?:
       id: r.id,
       email: r.email,
       consentAt: new Date(r.consent_at),
+      finishedAt: new Date(r.finished_at),
       firstTeaserAt,
       start,
       hasRun: r.has_run,

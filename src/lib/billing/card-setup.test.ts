@@ -4,7 +4,7 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import type { Counter } from "@/lib/rate-limit";
-import { CHECKOUT_LIMITED, completeCardSetup, discardSetupSession, openEmbeddedSetup, startCardSetup, startCardUpdate } from "./card-setup";
+import { CHECKOUT_LIMITED, completeCardSetup, discardSetupSession, openEmbeddedSetup, startCardUpdate } from "./card-setup";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { claimEvent, handleStripeEvent } from "./webhook";
 
@@ -21,41 +21,25 @@ const transport: Transport = async (m) => {
 
 
 let userId: string;
-const urls = { successUrl: "https://x/start/done?session_id={CHECKOUT_SESSION_ID}", cancelUrl: "https://x/start/card" };
 
+/** Sign-up ends at Step 3 with a trial and no card (Unit 2); the hosted card-at-sign-up page is gone (whole-branch review W8). */
 beforeEach(async () => {
   ({ query } = await testDb());
   sent = [];
   [{ id: userId }] = await query<{ id: string }>(
-    "insert into users (email, name, plan, currency, path, email_verified_at, signup_step, consent_at) values ('ana@example.com', 'Ana Silva', 'monthly', 'CAD', 'new', now(), 'card', now()) returning id",
+    "insert into users (email, name, status, plan, currency, path, email_verified_at, signup_step, consent_at) values ('ana@example.com', 'Ana Silva', 'trial', 'monthly', 'CAD', 'new', now(), 'done', now()) returning id",
   );
 });
 
-describe("startCardSetup", () => {
-  it("creates one Stripe customer per user and opens the hosted card page", async () => {
-    const gw = fakeGateway();
-    const a = await startCardSetup(query, gw, { userId, currency: "CAD", ...urls });
-    const b = await startCardSetup(query, gw, { userId, currency: "USD", ...urls });
-    expect(a.ok && b.ok).toBe(true);
-    expect(gw.customersCreated()).toBe(1);
-    const [u] = await query<{ stripe_customer: string; status: string }>("select stripe_customer, status from users");
-    expect(u.stripe_customer).toMatch(/^cus_/);
-    expect(u.status).toBe("signup");
-  });
-
-  it("refuses once the card is saved", async () => {
-    await query("update users set status = 'trial'");
-    expect(await startCardSetup(query, fakeGateway(), { userId, currency: "CAD", ...urls })).toEqual({ ok: false, reason: "already_saved" });
-  });
-});
+/** The Payment page's stored embedded session (the one the completion accepts). */
+async function opened(gw: ReturnType<typeof fakeGateway>) {
+  const r = await openEmbeddedSetup(query, gw, { userId, ip: "203.0.113.9", returnUrl: "https://x/start/payment/done?session_id={CHECKOUT_SESSION_ID}" });
+  if (!r.ok) throw new Error(`no session: ${r.reason}`);
+  return r.sessionId;
+}
 
 describe("completeCardSetup", () => {
-  async function opened(gw: ReturnType<typeof fakeGateway>) {
-    await startCardSetup(query, gw, { userId, currency: "CAD", ...urls });
-    return [...gw.sessions.keys()].pop()!;
-  }
-
-  it("starts the trial and sets the default card, charging nothing and sending no welcome (it moved to Step 3, Unit 2)", async () => {
+  it("saves the card on a no-card trial and sets the default card, charging nothing and sending no welcome (it moved to Step 3, Unit 2)", async () => {
     const gw = fakeGateway();
     const id = await opened(gw);
     gw.complete(id);
@@ -94,18 +78,31 @@ describe("completeCardSetup", () => {
     const id = await opened(gw);
     gw.complete(id);
     expect(await completeCardSetup(query, gw, id, { expectUserId: "00000000-0000-0000-0000-000000000000", getSettings, query, transport })).toBe("not_yours");
-    const [u] = await query<{ status: string }>("select status from users");
-    expect(u.status).toBe("signup");
+    const [u] = await query<{ status: string; trial_started_at: string | null }>("select status, trial_started_at from users");
+    expect(u).toEqual({ status: "trial", trial_started_at: null });
   });
 
-  it("keeps the user at the card step when the address is not good enough for tax", async () => {
+  it("leaves the card unsaved when the address is not good enough for tax", async () => {
     const gw = fakeGateway("invalid");
     const id = await opened(gw);
     gw.complete(id);
     expect(await completeCardSetup(query, gw, id, { expectUserId: userId, getSettings, query, transport })).toBe("address_invalid");
-    const [u] = await query<{ status: string }>("select status from users");
-    expect(u.status).toBe("signup");
+    const [u] = await query<{ status: string; trial_started_at: string | null }>("select status, trial_started_at from users");
+    expect(u).toEqual({ status: "trial", trial_started_at: null });
     expect(sent).toHaveLength(0);
+  });
+
+  it("an account still signing up never saves a card through it (the old card-at-sign-up branch is gone, W8)", async () => {
+    const gw = fakeGateway();
+    const id = await opened(gw);
+    gw.complete(id);
+    await query("update users set status = 'signup', signup_step = 'card'");
+    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("closed");
+    const [u] = await query<{ status: string; trial_started_at: string | null }>("select status, trial_started_at from users");
+    expect(u).toEqual({ status: "signup", trial_started_at: null });
+    expect(gw.defaults.size).toBe(0);
+    // Not a cancelled or closed account: its card is not touched either.
+    expect(gw.detached).toEqual([]);
   });
 
   it("still starts the trial where Stripe collects no tax (no registration there)", async () => {
@@ -119,8 +116,7 @@ describe("completeCardSetup", () => {
 describe("Stripe webhook handling", () => {
   it("handles a setup checkout once, however many times Stripe sends it", async () => {
     const gw = fakeGateway();
-    await startCardSetup(query, gw, { userId, currency: "CAD", ...urls });
-    const id = [...gw.sessions.keys()].pop()!;
+    const id = await opened(gw);
     gw.complete(id);
     const event = { id: "evt_1", type: "checkout.session.completed", data: { object: { id, mode: "setup" } } } as never;
     expect(await handleStripeEvent(query, gw, event, { getSettings, query, transport })).toBe("handled");

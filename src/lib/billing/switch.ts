@@ -2,7 +2,7 @@ import { addDays, cutoffInstant, torontoDate, wallToInstant, weekOf } from "@/li
 import type { Query } from "@/lib/db-query";
 import { sendToUser } from "@/lib/mail/send";
 import { bookedSwitchDroppedEmail, planChangedEmail } from "@/lib/mail/templates/plan-changed";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnSwitchScheduled, ANCHOR, carryToFirstCharge, ISO } from "./adjustment";
 import { BUSY, isCancelling, loadPlanUser, undoCancel, unixIso, UNREACHABLE, type PlanDeps, type PlanResult, type PlanUser } from "./cancel";

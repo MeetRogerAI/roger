@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deliverWeek } from "@/lib/cora/deliver";
 import type { Query } from "@/lib/db-query";
-import { runHourly } from "@/lib/housekeeping/job";
+import { HOURLY_TASKS, runHourly } from "@/lib/housekeeping/job";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
@@ -296,6 +296,16 @@ describe("the Friday order prompt (spec B.13 email 23)", () => {
       { recipient: plain, status: "sent" },
       { recipient: off, status: "skipped" },
     ]);
+  });
+
+  it("is no longer sent by the hourly pass: ordering is gone from the app (whole-branch review W2)", async () => {
+    await member({ status: "active", plan: "per_run" });
+    sent = [];
+    const task = HOURLY_TASKS.find((t) => t.name === "order_prompts")!;
+    const r = await runHourly(query, { gw: {} as BillingGateway, settings, now: FRIDAY, query, transport }, [task]);
+    expect(r.order_prompts).toBe("Ordering is off: monthly is the only plan.");
+    expect(sent).toEqual([]);
+    expect(await query("select 1 from notifications where kind = 'order_prompt'")).toEqual([]);
   });
 });
 

@@ -1,5 +1,5 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 const SHARING_WORDS = {
   share: "share with the pool",

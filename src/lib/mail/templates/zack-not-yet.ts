@@ -1,5 +1,5 @@
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * Spec B.13 email 4, "Zack hasn't sent a report yet": trial days 3, 10 and 17

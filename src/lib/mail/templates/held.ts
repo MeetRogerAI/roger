@@ -1,6 +1,6 @@
 import { HELD_BUTTON, heldHeading } from "@/lib/app/held";
 import { renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * A held list's teaser (plan 2026-11-26-001, Unit 3; origin R8): a trial with

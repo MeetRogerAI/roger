@@ -85,10 +85,11 @@ describe("welcome_unsent (plan 2026-11-26-001, Unit 2)", () => {
   };
   const task = HOURLY_TASKS.find((t) => t.name === "welcome_unsent")!;
   const pass = (now = NOW) => runHourly(query, { gw: {} as BillingGateway, settings, now, query, transport: recording, sleep: async () => {} }, [task], { deadline: Date.now() + 60_000 });
+  /** A trial that finished Step 3 in this flow at `consentAt` (finishSignup stamps signup_finished_at); `extra`: its card's time. */
   const trial = (email: string, consentAt = "2026-12-01T10:00:00Z", extra = "") =>
     query<{ id: string }>(
-      `insert into users (email, name, path, currency, status, plan, signup_step, consent_at${extra ? ", trial_started_at" : ""})
-       values ($1, 'Ana', 'running', 'CAD', 'trial', 'monthly', 'done', $2${extra ? `, '${extra}'` : ""}) returning id`,
+      `insert into users (email, name, path, currency, status, plan, signup_step, consent_at, signup_finished_at${extra ? ", trial_started_at" : ""})
+       values ($1, 'Ana', 'running', 'CAD', 'trial', 'monthly', 'done', $2, $2${extra ? `, '${extra}'` : ""}) returning id`,
       [email, consentAt],
     ).then((r) => r[0].id);
 
@@ -125,6 +126,27 @@ describe("welcome_unsent (plan 2026-11-26-001, Unit 2)", () => {
     await query("insert into notifications (recipient, kind, ref, status) values ($1, 'welcome', 'signup', 'sent')", [done]);
     expect(await pass()).toEqual({ welcome_unsent: 0 });
     expect(sent).toHaveLength(0);
+  });
+
+  it("never welcomes an old-flow trial, even one that consented after the cutoff (no signup_finished_at; whole-branch review W5)", async () => {
+    // The old card step moved signup → trial itself; finishSignup never ran, so the stamp is missing.
+    await query(
+      `insert into users (email, name, path, currency, status, plan, signup_step, consent_at, trial_started_at)
+       values ('oldflow@example.com', 'O', 'running', 'CAD', 'trial', 'monthly', 'done', '2026-12-01T10:00:00Z', '2026-12-01T10:05:00Z'),
+              ('oldflow2@example.com', 'O', 'running', 'CAD', 'trial', 'monthly', 'done', '2026-12-01T10:00:00Z', null)`,
+    );
+    expect(await pass()).toEqual({ welcome_unsent: 0 });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("welcomes a legacy sign-up resumed at Step 3 (old consent, stamped by finishSignup now) once", async () => {
+    const [{ id }] = await query<{ id: string }>(
+      "insert into users (email, name, path, currency, status, plan, signup_step, consent_at) values ('resumed@example.com', 'R', 'running', 'CAD', 'signup', 'monthly', 'card', '2026-11-01T10:00:00Z') returning id",
+    );
+    const { finishSignup } = await import("@/lib/signup/finish");
+    expect(await finishSignup(query, id, new Date("2026-12-14T15:00:00Z"))).toBe(true);
+    expect(await pass()).toEqual({ welcome_unsent: 1 });
+    expect(await pass()).toEqual({ welcome_unsent: 0 });
   });
 
   it("stops retrying a welcome the mail layer gave up on", async () => {

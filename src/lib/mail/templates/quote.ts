@@ -1,7 +1,7 @@
 import { discountEnds, discountWords, type DiscountTerms } from "@/lib/billing/discount-words";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 type Amount = { week: string; amountCents: number; currency: Currency };
 /**

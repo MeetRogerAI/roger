@@ -269,6 +269,12 @@ export function fakeStripe(now: () => Date): FakeStripe {
     async setDefaultCard(customer, pm) {
       call("customers.update.default_payment_method", { customer, pm });
     },
+    async detachPaymentMethod(pm) {
+      call("payment_methods.detach", { pm });
+      const s = [...sessions.values()].find((x) => x.paymentMethod === pm);
+      const c = s?.customer ? customers.get(s.customer) : undefined;
+      if (c && c.cards > 0) c.cards -= 1;
+    },
     async checkTaxLocation(customer) {
       return (TAX_RATE[country(customer)] ?? 0) > 0 ? "ok" : "not_collecting";
     },

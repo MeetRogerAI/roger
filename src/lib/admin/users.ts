@@ -1,4 +1,6 @@
 import { adjustmentOnAccountClosed, type AdjustDeps } from "@/lib/billing/adjustment";
+import { retireSessionForGood } from "@/lib/billing/card-setup";
+import type { CardGateway } from "@/lib/billing/gateway";
 import { HAS_CARD_OR_SPONSORED_SQL, WAITING_FOR_CARD } from "@/lib/billing/has-card";
 import { isLive, type BillingGateway } from "@/lib/billing/subscriptions";
 import { isRealDate, wallParts } from "@/lib/clock";
@@ -149,7 +151,7 @@ export async function linkContributor(q: Query, by: string, contributorId: strin
  * (each is safe to repeat) and nothing more is logged, so a clean-up that
  * failed half-way can be finished.
  */
-export async function closeAccount(q: Query, d: AdjustDeps & { gw?: BillingGateway | null }, by: string, userId: string): Promise<Done> {
+export async function closeAccount(q: Query, d: CloseDeps, by: string, userId: string): Promise<Done> {
   const [u] = await q<{ email: string; status: string; stripe_customer: string | null; stripe_subscription: string | null; open: boolean }>(
     `select email, status, stripe_customer, stripe_subscription, ${OPEN_CLAIM} as open from users u where id = $1`,
     [userId],
@@ -181,11 +183,27 @@ export async function closeAccount(q: Query, d: AdjustDeps & { gw?: BillingGatew
   return ok(`Account closed. Nothing more will be charged or sent.${dropped ? ` ${dropped} pending difference${dropped === 1 ? "" : "s"} dropped.` : ""}`);
 }
 
+/**
+ * `card`: Stripe's card gateway, to settle a no-card trial's stored Payment
+ * session (whole-branch review W3). Absent or null (Stripe not set up): there
+ * is no session to settle.
+ */
+export type CloseDeps = AdjustDeps & { gw?: BillingGateway | null; card?: CardGateway | null };
+
 /** Ends what a closed account still has open. Every step is safe to run again. */
-async function cleanUpClosed(q: Query, d: AdjustDeps, userId: string): Promise<number> {
+async function cleanUpClosed(q: Query, d: CloseDeps, userId: string): Promise<number> {
   await revokeUserSessions(q, userId);
   await q(`update login_tokens set revoked_at = now() where user_id = $1 and used_at is null and revoked_at is null`, [userId]);
   await q(`update orders set status = 'cancelled', updated_at = now() where user_id = $1 and status = 'ordered'`, [userId]);
+  // Whole-branch review W3 (the closing lesson, as cancel and the no-card close do): the stored Payment session is
+  // expired and cleared, so an open tab cannot confirm a card on the closed account; a card confirmed already is
+  // never saved, and is taken off the Stripe customer. Best effort: a failure is logged, and a card confirmed later
+  // is removed by its completion (which answers "closed").
+  if (d.card) {
+    await retireSessionForGood(q, d.card, userId)
+      .then((r) => r === "removed" && console.warn("[admin] a card confirmed on a closed account was removed from the customer", userId))
+      .catch((e) => console.error("[admin] stored Payment session after a close", userId, e instanceof Error ? e.message : e));
+  }
   return adjustmentOnAccountClosed(q, d, userId);
 }
 

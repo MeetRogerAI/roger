@@ -3,6 +3,7 @@
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { stripeGateway } from "@/lib/billing/gateway";
 import { closeFailedWeekOrders } from "@/lib/billing/orders";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -166,7 +167,7 @@ export async function closeAccountAction(_p: V3State, fd: FormData): Promise<V3S
   if (!userId) return bad("No such user.");
   if (field(fd, "confirm", 5) !== "yes") return bad("Tick the box to confirm.");
   const settings = await readV3Settings();
-  const r = await closeAccount(query, { settings, now: new Date(), adjust: stripeAdjustments() ?? undefined, gw: stripeBilling(), ...mail }, by, userId);
+  const r = await closeAccount(query, { settings, now: new Date(), adjust: stripeAdjustments() ?? undefined, gw: stripeBilling(), card: stripeGateway(), ...mail }, by, userId);
   refresh();
   return state(r);
 }

@@ -1,5 +1,5 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * Spec B.5, the upload fallback: members who send Zack's report by hand get

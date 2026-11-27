@@ -10,7 +10,7 @@ import { weekIdeas } from "@/lib/app/week";
 import { isRealDate } from "@/lib/clock";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export const metadata: Metadata = { title: "A past week" };

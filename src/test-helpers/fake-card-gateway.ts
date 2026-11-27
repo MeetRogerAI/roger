@@ -137,6 +137,7 @@ export function fakeGateway(tax: TaxLocation = "ok") {
   const sessions = new Map<string, SetupSession>();
   const defaults = new Map<string, string>();
   const expired: string[] = [];
+  const detached: string[] = [];
   const payment = fakePaymentStripe();
   let n = 0;
   const gw: CardGateway & {
@@ -147,6 +148,8 @@ export function fakeGateway(tax: TaxLocation = "ok") {
     sessions: typeof sessions;
     defaults: typeof defaults;
     expired: typeof expired;
+    /** Payment methods taken off their customer, in order. */
+    detached: typeof detached;
     customersCreated: () => number;
     payment: typeof payment;
   } = {
@@ -180,6 +183,10 @@ export function fakeGateway(tax: TaxLocation = "ok") {
     async setDefaultCard(customer, pm) {
       defaults.set(customer, pm);
     },
+    async detachPaymentMethod(pm) {
+      detached.push(pm);
+      for (const [c, d] of defaults) if (d === pm) defaults.delete(c);
+    },
     async checkTaxLocation() {
       return tax;
     },
@@ -195,6 +202,7 @@ export function fakeGateway(tax: TaxLocation = "ok") {
     sessions,
     defaults,
     expired,
+    detached,
     customersCreated: () => customers.size,
     payment,
   };

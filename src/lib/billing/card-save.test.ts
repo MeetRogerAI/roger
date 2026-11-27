@@ -340,7 +340,8 @@ describe("ownership", () => {
     ["closed", "closed"],
     ["cancelled", "closed"],
     ["active", "closed"],
-    ["signup without consent", "not_consented"],
+    // The card-at-sign-up branch is gone (whole-branch review W8): an account still signing up is "closed" to this.
+    ["signup without consent", "closed"],
   ] as const)("the account state is checked before any Stripe side effect: %s → %s", async (state, outcome) => {
     const a = await member("a@example.com");
     const sid = await savedCard(a);
@@ -600,6 +601,29 @@ describe("the promo code locked in at card save", () => {
     await pending(b, "FIRST");
     await completeCardSetup(query, gw, await savedCard(b, { fingerprint: "fp_new" }), opts());
     expect(await userRow(b)).toMatchObject({ promo_code: "FIRST", promo_refused_at: null });
+  });
+
+  it("whole-branch review W7: every card save stores its fingerprint, and a first-time-only code refuses a card another member saved with no promo", async () => {
+    const fingerprint = async (id: string) => (await query<{ card_fingerprint: string | null }>("select card_fingerprint from users where id = $1", [id]))[0].card_fingerprint;
+    gw.payment.addPromotion({ code: "FIRST", firstTimeOnly: true });
+    // A member saves the card with no code at all: no reservation, but the fingerprint is on the account.
+    const x = await member("x@example.com");
+    expect(await completeCardSetup(query, gw, await savedCard(x, { fingerprint: "fp_family" }), opts())).toBe("done");
+    expect(await fingerprint(x)).toBe("fp_family");
+    expect(await reservations()).toEqual([]);
+    // The same card on a second account cannot take a first-time-only code.
+    const a = await member("a@example.com");
+    await pending(a, "FIRST");
+    expect(await completeCardSetup(query, gw, await savedCard(a, { fingerprint: "fp_family" }), opts())).toBe("done");
+    expect(await userRow(a)).toMatchObject({ trial_started_at: NOW_TEXT, promo_code: null, promo_refused_at: NOW_TEXT });
+    expect(await fingerprint(a)).toBe("fp_family");
+    expect(await reservations()).toEqual([]);
+    // Another card is still a first time.
+    const b = await member("b@example.com");
+    await pending(b, "FIRST");
+    await completeCardSetup(query, gw, await savedCard(b, { fingerprint: "fp_other" }), opts());
+    expect(await userRow(b)).toMatchObject({ promo_code: "FIRST", promo_refused_at: null });
+    expect((await reservations()).map((r) => [r.user_id, r.card_fingerprint])).toEqual([[b, "fp_other"]]);
   });
 
   it("a code Stripe no longer accepts (deactivated while the person was on the page) is refused", async () => {

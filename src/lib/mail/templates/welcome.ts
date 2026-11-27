@@ -2,12 +2,6 @@ import { amount, money, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 
-/** "Monday, December 7" for a "YYYY-MM-DD" Monday. */
-export function longDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
-}
-
 /**
  * Email 2 (spec B.13): welcome, sent when sign-up ends at Step 3 (plan
  * 2026-11-26-001, Unit 2). No card has been asked for yet: it is asked for

@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { amountChangedEmail, chargeFailedEmail, subscribedEmail, trialClosedEmail } from "@/lib/mail/templates/charges";
 import { backToPerRunEmail } from "@/lib/mail/templates/plan-changed";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 import { carriedDifferenceCents, clearCarried } from "./adjustment";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, settle, stillChargeable, type Claim } from "./claims";
@@ -421,7 +421,16 @@ export async function dueRetries(q: Query, d: ChargeDeps): Promise<Record<FirstO
   );
   // A changed amount told 24 hours ago is a new attempt whatever ended the last one (a refusal that a new card fixed
   // and whose retry found the amount moved would otherwise wait for an admin for ever, never charged nor closed).
-  for (const r of due) tally[await chargeFirst(q, d, r.user_id, r.week_of, { reset: r.changed })]++;
+  for (const r of due) {
+    // One member throwing never blocks the rest (whole-branch review W6, as runChargeJob). A failure before Stripe was
+    // reached leaves the claim open; the hourly pass takes it over after 15 minutes, and the next pass tries again.
+    try {
+      tally[await chargeFirst(q, d, r.user_id, r.week_of, { reset: r.changed })]++;
+    } catch (e) {
+      console.error("[charge] first charge retry", r.user_id, e instanceof Error ? e.message : e);
+      tally.unknown++;
+    }
+  }
   return tally;
 }
 

@@ -772,3 +772,16 @@ alter table charge_attempts add column if not exists coupon text;
 alter table users add column if not exists promo_ended_label text;
 alter table users add column if not exists promo_duration text;
 alter table users add column if not exists promo_duration_months integer;
+
+-- 2026-11-26, payment at first list, whole-branch review: signup_finished_at
+-- is when Step 3 moved the account to a trial (job clock, stamped once by
+-- finishSignup). A legacy sign-up resumed at Step 3 keeps its first, older
+-- consent, so the never-teasered no-card clock, its nudges and the welcome
+-- retry count from this stamp instead (rows without it fall back to
+-- consent_at). card_fingerprint is the member's saved card (Stripe's
+-- fingerprint, the same card number gives the same value), written at every
+-- card save and card update, so a first-time-only promo code refuses a card
+-- another member has saved.
+alter table users add column if not exists signup_finished_at timestamptz;
+alter table users add column if not exists card_fingerprint text;
+create index if not exists users_card_fingerprint on users (card_fingerprint) where card_fingerprint is not null;
