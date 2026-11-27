@@ -16,6 +16,60 @@ This file records each acceptance check for site version 1: what was done, the r
 
 Results are one of: **pass**, **fail**, **not applicable**, **not exercised** (with the reason).
 
+## Peter's homepage review, November 26, 2026: what changed and the re-run
+
+Peter read the homepage on the preview and asked for changes. Every string, before and after, is in section 7 of `docs/site/v1-copy-changes.md`. In short:
+
+- The site speaks to anyone who uses AI agents, not to people in real estate.
+- The marketing pages show monthly only. The second plan card, its FAQ entry and the two-column comparison on `/pricing` are removed.
+- What arrives each Monday is a "Cora Curation". Every start button, the header's included, reads "Get two free Cora Curations".
+- The line under the price, and under the closing band's line, is "Get two Cora Curations for free and pay only after you have tried the product for two full weeks."
+- The hero's picture is the four parts of "How it works", one headline at a time, under the labels Use, Collect, Curate, Deploy.
+- The sample idea is an accordion, folded when the page loads: The Idea (Summary, What To Copy) and The Playbook (one row, "8 steps", which opens to a row for each step).
+- "It compounds" is a loop of seven states (weeks 1, 2, 3, 4, 10, 17 and 26) in place of the scroll story of four.
+
+Parts of this record written before the review describe the earlier page. Where a check below quotes "Monday lists", "/ list", "Most people choose this", "One list at a time" or the scroll story, the re-run here is the current result. Checks 4, 5, 6, 9 and 11 were re-run; the others were not affected.
+
+**Before merging, Peter needs to decide the items in section 7.5 of the copy changes.** The marketing pages now say monthly is the price, while sign-up (`/start/plan`), the app's billing panel and the terms still offer one list at a time, and sign-up, the app and the emails still say "list". Nothing under `src/app/start`, `src/app/signin`, `src/app/app`, `src/app/admin` or `src/components/app` was changed.
+
+### The re-run
+
+Commands, in the worktree for `feat/site-v1`:
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 6 warnings, the same six as before |
+| `npx next typegen && npx tsc --noEmit` | no errors |
+| `npm test` | 128 files passed, 1 skipped; 1,658 tests passed, 13 skipped (1,634 before the review) |
+| `npm run test:scenarios` | 8 files, 23 tests passed, as before |
+| `npm run build` | compiled, 98 static pages generated |
+
+In this worktree `node_modules` is a link to another folder's, which Turbopack does not follow. The dev server and the build were run with `turbopack.root` set to the parent folder for the run only; the line is not in `next.config.ts`.
+
+Browser: headless Chrome over the DevTools protocol against `npm run dev -p 3330` with `SITE_VERSION=v1` and no database, at 375, 768, 1024 and 1440. 86 checks, all passed.
+
+| Check | Seen |
+|---|---|
+| `/`, `/pricing`, `/faq`, `/how-it-works`, `/agents` at each of the four widths, scrolled top to bottom | Console clean and no horizontal scroll on all 20 loads |
+| Start links on `/` (check 4) | Four, the header's and the page's three, each reading exactly "Get two free Cora Curations", each to `/start?path=re`; after choosing CAD each is `/start?path=re&cur=CAD` |
+| Hero loop, at 1440 and 375 | Goes through all four parts, one headline on screen at a time, under the row Use, Collect, Curate, Deploy. "Pause" holds the part and the button reads "Play"; "Play" resumes. The pointer over it pauses it and leaving resumes it. Tab reaches the label "Use" with a visible 2-pixel outline and the loop holds while it has focus; Enter jumps to that part; Tab reaches "Pause". Clicking "Deploy" jumps to part four |
+| Sample idea, at 1440 and 375 (check 11) | Eleven rows, none open on load. A click opens "Summary" and a second closes it. By keyboard: Enter on "8 steps" opens it, Tab reaches "1. Play" with a visible outline, Space opens it and its text shows; the same keys close them. Folded, the playbook is one row about 50 pixels tall, against about 390 for eight rows. The same on `/agents` |
+| "It compounds" loop, at 1440 and 375 | Goes 1, 2, 3, 4, 10, 17, 26 and round again. At each state the bricks on show are 3, 6, 9, 12, 30, 51 and 78, the caption reads that week and count, and that state's line is the marked one. "Pause" holds it, "Play" resumes, the pointer over it and focus on its button each hold it. The stack is 512 pixels wide at 1440 and 228 at 375 |
+| Reduced motion, at 1440 and 375 | The hero is the still list of all four labels and headlines, with no row of buttons and no "Pause", and nothing changes in seven seconds. "It compounds" is week 26 with all 78 bricks, the seven lines of text and no button, and nothing changes in six seconds |
+| Currency (check 5), on `/`, `/pricing` and `/agents` | One plan card. USD shows "US$200 / month USD plus tax where it applies" and no Canadian price; CAD shows "CA$280 / month CAD plus HST" and no US price |
+| `/faq` | "What does it cost?" is there; no question about one list at a time |
+
+Not re-run in the browser: the 1920 width, the pass with a stand-in database (testimonials, the free Zack run), the production server, and the no-script page. The no-script state of the three new blocks is held by tests on the served markup (`src/components/site/v1/blocks/loops.test.tsx`, `blocks.test.tsx`, `home.test.tsx`): all four hero parts and all seven compounding states are in the markup as readable text, and every rule that hides one is under `html.js` and `prefers-reduced-motion: no-preference`.
+
+### Checks whose earlier text is now out of date
+
+- **4. Start links.** The addresses are unchanged. The label is "Get two free Cora Curations" everywhere; the header no longer has a shorter label below 1280 pixels, and on a phone its button takes two lines.
+- **5. Price block.** One plan. The lines seen are "US$200 / month USD plus tax where it applies" and "CA$280 / month CAD plus HST"; there is no "/ list" line. The trial line now reads "Your first two Cora Curations are free. We ask for a card when you start. It is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.", still directly after the price and before the button.
+- **6. Numbers and claims.** Zero violations, with and without testimonials. Neither of Peter's two lines needs an exception, and a test holds that no allow-list entry touches them. The numbers allowed inside "It compounds" are now exactly 1, 2, 3, 4, 10, 17, 26 and 3, 6, 9, 12, 30, 51, 78.
+- **9. Monthly marked; no non-contributor plan.** Monthly is the only plan, so the "Most people choose this" mark is removed. The US$400 / CA$560 rate still appears only in sentences about sharing being off or a second missed week, never as a plan; it is now also in the answer to "What does it cost?".
+- **11. Accordion, toggle and reduced motion.** As in the table above. The sample idea's rows are native `details` elements, so each exposes its state with no script.
+- **The pass after Peter's four decisions.** Its last line names the button "Get two free Monday lists"; the button is the same one under its new label.
+
 ## Resolve before merging, because merging goes live
 
 Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What was decided and what was done is recorded once, in `docs/site/v1-copy-changes.md`, and each item below links to its section there. Items 5 to 10 are still Peter's to settle before the pull request is merged, and item 11 lists the smaller notes that remain from items 1 to 4. Later on November 26, 2026 Peter made five more decisions, which closed five of those notes: they are item 12, and are recorded in [copy changes 6.5](v1-copy-changes.md#65-five-more-decisions-of-november-26-2026).
@@ -57,11 +111,11 @@ Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What
 | 2 | With the version switched back, the Circles preview returns | not applicable now: see below |
 | 3 | The unlisted pages render as before | pass for `/rlpsignature`; `/hampton`, `/rlp` and `/founders` were deleted afterwards by Peter's decision and redirect to `/zack`: see below |
 | 4 | Every start button reaches `/start` with the right `path` and `cur` | pass |
-| 5 | Price block: currency by country, choice kept in the tab, no bare "$", trial line under the price | pass |
+| 5 | Price block: currency by country, choice kept in the tab, no bare "$", trial line under the price | pass; one plan since Peter's homepage review: see the re-run above |
 | 6 | No user count, hard-coded number, brokerage name or income claim | pass, with the settled exceptions; the brokerage rule ships with an empty list, by Peter's decision of November 26, 2026 |
 | 7 | Testimonials absent with none switched on, present with one, word for word | pass |
 | 8 | Sample idea section absent until a play is chosen | settled exception: a bundled play shows |
-| 9 | Monthly is the marked choice; no non-contributor plan | pass |
+| 9 | Monthly is the marked choice; no non-contributor plan | pass; since Peter's homepage review monthly is the only plan shown, so nothing is marked: see the re-run above |
 | 10 | "agent" never without "AI", outside `/agents` and `/zack` | pass after a fix on `/library`; one line on the app's `/getstarted` is open |
 | 11 | Forms by keyboard; accordion and toggle expose state; nothing moves under reduced motion | pass; the two small items in shared styles and the `/library` fields were fixed on November 26 (see "Defects fixed", 3 and 4) |
 | 12 | `npm run build` and `npm run lint` pass | pass |
@@ -282,12 +336,14 @@ None blocks the checks above. Each is outside the marketing files, or is a decis
 
 | Exception | Decision |
 |---|---|
-| "It compounds" prints week numbers and brick counts (Week 1, 2, 3 and 26; 3, 6, 9 and 78 bricks), against "no hard-coded numbers" | Plan Key Decision "The compounding section is animated in all three, with week labels and brick counts"; R10. The claims check allows these numbers inside that section only. The story ends at 78 bricks (Peter, November 26, 2026): the data no longer holds a week 27 or an 81, and the claims check no longer allows them |
-| The section is a scroll story, where the spec says a static picture | The same Key Decision; KTD11. Under reduced motion it is the finished picture |
+| "It compounds" prints week numbers and brick counts (Week 1, 2, 3, 4, 10, 17 and 26; 3, 6, 9, 12, 30, 51 and 78 bricks), against "no hard-coded numbers" | Plan Key Decision "The compounding section is animated in all three, with week labels and brick counts"; R10, as changed by Peter's homepage review of November 26, 2026, which added weeks 4, 10 and 17. The claims check allows exactly these fourteen numbers inside that section only (`compoundingNumbers` in `src/data/site/compounding.ts`), and a test holds that a week or count between them is still a violation. It ends at 78 bricks (Peter, November 26, 2026) |
+| The section is a loop that plays by itself, where the spec says a static picture | The same Key Decision; KTD11. It was a scroll story until Peter's homepage review of November 26, 2026. With no script or under reduced motion it is the finished picture, week 26, with all seven states as text. It has a "Pause" button, and stops under the pointer and on focus |
+| The hero's picture changes by itself every few seconds | Peter's homepage review, November 26, 2026: "a 4 part animation across the 4 parts of the how it works section". With no script or under reduced motion it is a still list of the four. It has a "Pause" button, stops under the pointer and on focus, and announces nothing to a screen reader |
+| The marketing pages show monthly only, while sign-up, billing and the terms still offer one list at a time | Peter's homepage review, November 26, 2026: "For price, only show the Monthly. Remove the one list at a time option." The app was out of scope. Open for Peter: copy changes 7.5 |
 | The free Zack run accepts 40,000 characters, not 20,000 | Copy changes 6.2: ten of thirteen real reports are longer than 20,000. One constant, `FREE_RUN_REPORT_CHARS` |
 | `robots.txt` allows `/api/zack/instructions` while disallowing `/api` | Copy changes section 4: a user's own AI agent fetches that address during Zack setup, and many fetch tools obey robots |
-| One list costs US$200 / CA$280, not US$100 / CA$140 | Plan Key Decision "Single list is US$200 / CA$280"; R8 |
-| The higher rate and the one-list price are given in both currencies where the spec gives US dollars alone | Copy changes 2.3 |
+| One list costs US$200 / CA$280, not US$100 / CA$140 | Plan Key Decision "Single list is US$200 / CA$280"; R8. Since Peter's homepage review the price of one list is printed on no marketing page; only the terms state it |
+| The higher rate is given in both currencies where the spec gives US dollars alone | Copy changes 2.3 |
 | The sample idea shows before any play is chosen in the admin | Plan Key Decision "The sample idea card shows a real play now"; R11 |
 
 ## What each environment serves

@@ -13,8 +13,8 @@ import { compoundingCaption } from "@/lib/site/compounding";
  * the week and the count in words.
  *
  * Nothing here moves. Each brick carries data-week, data-brick and --i (its
- * place in the stack) so the hero, "how it works" and the scroll story can
- * stage them (globals.css, "Bricks in motion").
+ * place in the stack) so "how it works", the /agents hero and the "It
+ * compounds" loop can stage them (globals.css, "Bricks in motion").
  */
 export type BrickLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -55,6 +55,7 @@ export function BrickStack({
   wide,
   night = false,
   caption = false,
+  shownWeeks,
   words,
   className = "",
 }: {
@@ -72,6 +73,11 @@ export function BrickStack({
   night?: boolean;
   /** Shows the week and the count under the stack, such as "Week 26" and "78 bricks", in the words of `words.caption`. */
   caption?: boolean;
+  /**
+   * For the "It compounds" loop: the week the loop is at. A brick of a later week is marked data-out="yes", which
+   * hides it only where the loop is running (globals.css). Left out, no brick is marked.
+   */
+  shownWeeks?: number;
   /** The words in each brick's label, and the caption's. */
   words: BrickWords;
   className?: string;
@@ -104,6 +110,7 @@ export function BrickStack({
               data-week={week}
               data-brick={i + 1}
               data-set-up={isSetUp ? "yes" : "no"}
+              data-out={shownWeeks !== undefined && week > shownWeeks ? "yes" : undefined}
               style={{ "--i": i } as CSSProperties}
               className={`${brick} ${isSetUp ? colour : outline}`}
             >

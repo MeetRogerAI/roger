@@ -1,12 +1,14 @@
 /**
- * The "It compounds" story (plan R10, KTD11): three ideas arrive each Monday
- * and each one set up stays set up. The story shows weeks 1, 2 and 3, then
- * jumps to week 26, where it ends at 78 bricks (Peter's decision of
- * November 26, 2026: there is no step after week 26).
+ * The "It compounds" loop (plan R10, KTD11): three ideas arrive each Monday
+ * and each one set up stays set up. The loop shows seven weeks, 1, 2, 3, 4,
+ * 10, 17 and 26, and ends at 78 bricks (Peter's decisions of November 26,
+ * 2026: there is no state after week 26, and weeks 4, 10 and 17 were added in
+ * his homepage review).
  *
- * This is the only place these week numbers and brick counts live. They are
- * the one agreed exception to the "no hard-coded numbers" rule, and no number
- * here is about time or money.
+ * This is the only place these week numbers live, and a brick count is always
+ * its week times three, worked out here and nowhere else. They are the one
+ * agreed exception to the "no hard-coded numbers" rule, and no number here is
+ * about time or money.
  *
  * Numbers only. The words around them ("Week 26", "78 bricks") are in each
  * version's copy file, and compoundingCaption in src/lib/site/compounding.ts
@@ -22,8 +24,14 @@ export type CompoundingStep = {
 
 const step = (week: number): CompoundingStep => ({ week, bricks: week * bricksPerWeek });
 
-/** In order: 3, 6, 9, then 78, the last. */
-export const compoundingSteps: CompoundingStep[] = [step(1), step(2), step(3), step(26)];
+/** The weeks the loop shows, in order. */
+export const compoundingWeeks: readonly number[] = [1, 2, 3, 4, 10, 17, 26];
 
-/** The finished picture, and the story's last step: what shows with no script, and under reduced motion. */
-export const compoundingFinal: CompoundingStep = step(26);
+/** In order: 3, 6, 9, 12, 30, 51, then 78, the last. */
+export const compoundingSteps: CompoundingStep[] = compoundingWeeks.map(step);
+
+/** The finished picture, and the loop's last state: what shows with no script, and under reduced motion. */
+export const compoundingFinal: CompoundingStep = compoundingSteps[compoundingSteps.length - 1];
+
+/** Every number "It compounds" may print: each week and each brick count. The claims check allows these there and no others. */
+export const compoundingNumbers: readonly number[] = [...new Set(compoundingSteps.flatMap((s) => [s.week, s.bricks]))];

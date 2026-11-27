@@ -9,10 +9,10 @@ import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import { getPlaybookPreface, publicIdeaView, resolveSamplePlay, type IdeaView } from "@/lib/site/sample";
 import { getTestimonials, type Testimonial } from "@/lib/site/testimonials";
 import type { BuiltVersion } from "@/lib/site/version";
-import { BrickStack } from "./blocks/brick-stack";
 import { ClosingBand } from "./blocks/closing-band";
 import { Compounding } from "./blocks/compounding";
 import { ControlBlock } from "./blocks/control-block";
+import { HeroSteps } from "./blocks/hero-steps";
 import { HowItWorks } from "./blocks/how-it-works";
 import { PriceBlock } from "./blocks/price-block";
 import { Questions } from "./blocks/questions";
@@ -21,9 +21,10 @@ import { Testimonials } from "./blocks/testimonials";
 import { WhoRunsThis } from "./blocks/who-runs-this";
 
 /**
- * The real estate homepage of site version 1, in the spec's order (A.5):
+ * The homepage of site version 1, for anyone who uses AI agents (Peter's
+ * homepage review, November 26, 2026), in the spec's order (A.5):
  *
- *    1. hero                          night
+ *    1. hero, with the four parts     night
  *    2. the problem                   ground
  *    3. how it works, id "how"        night
  *    4. what arrives on Monday        ground
@@ -38,15 +39,13 @@ import { WhoRunsThis } from "./blocks/who-runs-this";
  * No two night chapters are neighbours, with or without testimonials. Where
  * two ground sections are neighbours, a hairline keeps them apart.
  *
- * Every start button carries the audience "re". Nothing here links to /zack:
+ * Every start button carries the audience "re", which is the name sign-up
+ * knows this page by, not a word any visitor reads. Nothing here links to /zack:
  * the free Zack run is reached from /agents only.
  */
 
 /** How many letter paragraphs "Who runs this" prints: the first three that are still true. */
 const LETTER_PARAGRAPHS = 3;
-
-// The hero's stack is a picture, not a claim: a few Mondays already in place and the newest three arriving. No number is printed.
-const HERO_WEEKS = 4;
 
 /**
  * Reads what the page shows, all of it cached, so the page keeps its static shell.
@@ -104,7 +103,8 @@ export function V1HomeView({
               <p className="mt-5 text-meta text-night-ink-2">{copy.cardLine}</p>
             </div>
           </div>
-          <BrickStack weeks={HERO_WEEKS} size="xl" night words={copy.bricks} className="bricks-arrive justify-self-start lg:justify-self-end" />
+          {/* The four parts of "How it works" below, by their own headlines */}
+          <HeroSteps copy={home.hero.graphic} headlines={home.how.steps.map((step) => step.title)} className="after-lines justify-self-start lg:justify-self-end" />
         </div>
       </section>
 

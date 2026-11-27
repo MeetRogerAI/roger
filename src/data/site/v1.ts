@@ -4,19 +4,20 @@
  *
  * The wording is the draft copy in artifacts/v3-marketing-website-spec.md
  * ("Messaging and copy direction") and A.14 of artifacts/Roger v3 - design
- * spec.md, word for word. Two kinds of line are not the spec's own words, and
- * each one is listed for Peter in docs/site/v1-copy-changes.md:
- * - lines the single-list price made false (plan R8), rewritten to say that
- *   monthly brings a list every Monday for the price of one list;
+ * spec.md, as changed by Peter's decisions. Every line that is not the spec's
+ * own words is listed for Peter in docs/site/v1-copy-changes.md:
  * - short labels and the /how-it-works paragraphs, which the spec describes
  *   but does not write;
- * - the lines that state the higher rate, and the one that states the price
- *   of one list in US dollars alone, which now give the Canadian figure beside
- *   the US one.
+ * - the lines that state the higher rate, which give the Canadian figure
+ *   beside the US one;
+ * - Peter's homepage review of November 26, 2026 (section 7 there): the site
+ *   speaks to anyone who uses AI agents, not to people in real estate; the
+ *   marketing pages show the monthly price only; what arrives each Monday is
+ *   called a "Cora Curation"; and every start button reads the same.
  *
  * Amounts are never typed here. A line names them in braces, {monthlyUsd},
- * {monthlyCad}, {listUsd}, {listCad}, {higherUsd}, {higherCad}, {freeLists},
- * {firstPaidList}, {lastFreeList} and {trialCloseDays}, and fillCopy in
+ * {monthlyCad}, {higherUsd}, {higherCad}, {freeLists}, {firstPaidList},
+ * {lastFreeList} and {trialCloseDays}, and fillCopy in
  * src/lib/site/amounts.ts puts the values in.
  *
  * The week numbers and brick counts of "It compounds" live in
@@ -25,8 +26,8 @@
  * src/lib/site/compounding.ts fills for each stack.
  *
  * Vocabulary (spec 0.4): outside `v1Agents` and `v1Zack`, and the one line
- * `zackWarning`, "agent" never appears without "AI" in front, because readers
- * in real estate are also called agents. A test holds this file to it.
+ * `zackWarning`, "agent" never appears without "AI" in front, because some
+ * readers are called agents in their own work. A test holds this file to it.
  */
 import { fillCopy, type Amounts } from "@/lib/site/amounts";
 import type { BrickWords, ClosingBandCopy, ControlBlockCopy, PriceBlockCopy, Question, QuestionGroup, SampleCardCopy, SharedCopy } from "./copy-types";
@@ -49,6 +50,15 @@ const zackReads =
 const zackSkips = "He skips email, calendar and Drive, chats and projects shared with other people, and other people’s messages. He reads no other account.";
 const zackRemoves = "Zack is instructed to replace names, clients, addresses, amounts and other private details with placeholders, and Roger checks again when the report arrives.";
 
+/**
+ * The line under the price (Peter's words, November 26, 2026), which "What does
+ * it cost?" and the closing band repeat. Both of its counts are the number of
+ * free Cora Curations: one arrives each Monday, so that many weeks pass first.
+ */
+const valueLine = "Get {freeLists} Cora Curations for free and pay only after you have tried the product for {freeLists} full weeks.";
+/** What a Cora Curation is, said once on each page that names one. */
+const curationIs = "three ideas picked for you by Cora, each with a full playbook";
+
 const questions: V1QuestionGroup[] = [
   {
     id: "getting-started",
@@ -56,7 +66,7 @@ const questions: V1QuestionGroup[] = [
     items: [
       {
         q: "I don’t use AI agents yet. Can I start?",
-        a: "Yes. The startup page walks you through installing one and setting up a starter team for real estate. Most people finish in about half an hour.",
+        a: "Yes. The startup page walks you through installing one and setting up a starter team. Most people finish in about half an hour.",
         on: ["home"],
       },
       {
@@ -97,7 +107,7 @@ const questions: V1QuestionGroup[] = [
       },
       {
         q: "I compete with other people on Roger. What if I don’t want to share?",
-        a: "You decide exactly what Zack shares, down to skipping whole subjects and blocking names. If you switch sharing off completely in your dashboard, monthly still brings three ideas every Monday and costs {higherUsd} a month ({higherCad} in Canada).",
+        a: "You decide exactly what Zack shares, down to skipping whole subjects and blocking names. If you switch sharing off completely in your dashboard, your Cora Curation still arrives every Monday and the price becomes {higherUsd} a month ({higherCad} in Canada).",
         on: ["agents"],
       },
       {
@@ -111,6 +121,11 @@ const questions: V1QuestionGroup[] = [
     id: "cora-and-the-ideas",
     title: "Cora and the ideas",
     items: [
+      {
+        q: "What is a Cora Curation?",
+        a: `What arrives each Monday: ${curationIs}. Cora is the AI agent that ranks every play in Roger.`,
+        on: ["home", "agents"],
+      },
       {
         q: "How are my three ideas chosen?",
         a: "Cora scores every play on hours saved, reach, ease to copy, proof and surprise, then matches plays to the kind of work your own week shows. She never sends something you already run.",
@@ -134,12 +149,12 @@ const questions: V1QuestionGroup[] = [
     items: [
       {
         q: "What does it cost?",
-        a: "{monthlyUsd} a month, or {listUsd} for one list at a time, plus tax where it applies. In Canada it is {monthlyCad} a month or {listCad} a list, plus HST. Monthly brings a list every Monday for the price of one list.",
+        a: `{monthlyUsd} a month, plus tax where it applies. In Canada it is {monthlyCad} a month, plus HST. ${valueLine} If you turn sharing off in your dashboard, the price becomes {higherUsd} a month ({higherCad} in Canada).`,
         on: ["home"],
       },
       {
         q: "When is my card charged?",
-        a: "On monthly, with your {firstPaidList} Monday list and not before. On one at a time, only when you order a list. Your first {freeLists} lists are free either way, and we email you after your {lastFreeList} list with what happens next.",
+        a: "A card is required when you sign up, and it is not charged then. The first charge comes with your {firstPaidList} Cora Curation, and the charge repeats once a month after that. Your first {freeLists} Cora Curations are free, and we email you after the {lastFreeList} one with what happens next.",
         on: ["home", "agents"],
       },
       {
@@ -149,17 +164,12 @@ const questions: V1QuestionGroup[] = [
       },
       {
         q: "What if Zack misses a week?",
-        a: "On monthly, the first miss each month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). We email you both times.",
+        a: "The first miss each month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). We email you both times.",
         on: [],
       },
       {
         q: "Can I get a refund?",
-        a: "No. You get {freeLists} free lists before any charge, and you can cancel any time.",
-        on: [],
-      },
-      {
-        q: "Can I buy one list at a time?",
-        a: "Yes. One list costs {listUsd} ({listCad} in Canada), and you order it for any Monday you want. For the same price, monthly brings a new list every Monday.",
+        a: "No. You get {freeLists} free Cora Curations before any charge, and you can cancel any time.",
         on: [],
       },
     ],
@@ -168,12 +178,12 @@ const questions: V1QuestionGroup[] = [
 
 // The homepage headline and sub-line, which the browser title, the search description and the social card repeat.
 const headline = "Your AI agents, smarter every Monday.";
-const subLine = "Roger makes your AI agents smarter every week, with ideas that worked for other real estate users.";
+const subLine = "Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.";
 
 // Lines of /pricing, /how-it-works and /about that each page's search description repeats. None names an amount, so static metadata can read them.
-const firstIncluded = "Three ideas every Monday, each with a full playbook.";
-const underBothColumns = "One list on its own costs the same as a whole month. Monthly brings a list every Monday for that price.";
-const mondayOfTheWeek = "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. You receive your three ideas, each with a full playbook.";
+const firstIncluded = `A Cora Curation every Monday: ${curationIs}.`;
+const underMonthly = "One price, charged once a month. Cancel in one click.";
+const mondayOfTheWeek = "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. They arrive as your Cora Curation, each with a full playbook.";
 const runBy = "Roger is run by Peter Kuperman.";
 
 /** A reading page's browser title, search description and shared-link line, from its own heading and one of its own lines. */
@@ -183,19 +193,17 @@ const pageMeta = (title: string, description: string) => ({ title: `Roger: ${tit
 export const v1 = {
   // --- The strings shared behaviour needs (SharedCopy) ---
   buttons: {
-    start: "Get {freeLists} free Monday lists",
-    startShort: "Start free",
+    /** Every start button and link on the site, the header's included, reads this (Peter, November 26, 2026). */
+    start: "Get {freeLists} free Cora Curations",
     signIn: "Sign in",
     openApp: "Open Roger",
   },
-  cardLine: "Card required. Charged only with your {firstPaidList} list.",
+  cardLine: "Card required. Charged only with your {firstPaidList} Cora Curation.",
   trialLine:
-    "Your first {freeLists} Monday lists are free. We ask for a card when you start. On monthly it is charged with your {firstPaidList} list. On one at a time it is charged only when you order a list. Cancel before then and you pay nothing.",
+    "Your first {freeLists} Cora Curations are free. We ask for a card when you start. It is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
   price: {
     switchLabel: "Show prices in",
     perMonth: "month",
-    perList: "list",
-    popular: "Most people choose this",
     tax: { USD: "plus tax where it applies", CAD: "plus HST" },
   },
   /**
@@ -235,8 +243,8 @@ export const v1 = {
   // --- Shared blocks ---
   priceBlock: {
     title: "Price",
-    monthly: { name: "Monthly", note: "A new list every Monday." },
-    list: { name: "One list at a time", note: "One list, for one Monday." },
+    sub: valueLine,
+    monthly: { name: "Monthly", note: `A new Cora Curation every Monday: ${curationIs}.` },
   },
   control: {
     title: "You decide what Zack shares",
@@ -244,7 +252,10 @@ export const v1 = {
     points: [
       { title: "Read every line.", body: "The exact instructions your Zack runs are in your dashboard." },
       { title: "Set your own rules.", body: "Skip whole subjects, block names and words, or add rules in your own words." },
-      { title: "Turn sharing off any time in your dashboard.", body: "On monthly your ideas keep coming and the price becomes {higherUsd} a month ({higherCad} in Canada)." },
+      {
+        title: "Protect your privacy and your most valuable ideas at any time.",
+        body: "Turn sharing off any time in your dashboard. Your Cora Curations keep coming and the price becomes {higherUsd} a month ({higherCad} in Canada).",
+      },
     ],
     link: { label: "How Zack works", href: "/how-it-works#zack" },
   } satisfies ControlBlockCopy,
@@ -256,8 +267,9 @@ export const v1 = {
   sample: {
     title: "What arrives on Monday",
     line: "This is one idea, as it arrives.",
+    /** The first of the card's two headings, and the two rows under it. Every row is folded until it is opened. */
+    idea: { title: "The Idea", summary: "Summary", copy: "What To Copy" },
     install: {
-      title: "Paste to install",
       help: "The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions.",
       copy: "Copy prompt and playbook",
       writtenOn: "Written on",
@@ -270,7 +282,11 @@ export const v1 = {
       // The spec's five score names, and nothing more: the app's own help text under each is not public copy.
       names: { hours: "Hours saved", reach: "Reach", ease: "Ease to copy", proof: "Proof", surprise: "Surprise" },
     },
-    playbook: { title: "The playbook" },
+    /**
+     * The second heading. Under it is one folded row, "8 steps" with the count from the play, which opens to a row for each step.
+     * `whole` is that row's label for a play whose playbook is not written as numbered parts.
+     */
+    playbook: { title: "The Playbook", steps: "steps", whole: "The full playbook" },
   } satisfies SampleCardCopy & { title: string; line: string },
   bricks: {
     /** Each brick's label for screen readers: "Week 2, idea 1: set up". */
@@ -288,11 +304,21 @@ export const v1 = {
       headline,
       sub: subLine,
       secondary: { label: "See how it works", href: "#how" },
+      /**
+       * The picture beside the headline: the four steps of "How it works" below, one headline at a time.
+       * One label for each step, in the steps' order: Use is step 1, Collect step 2, Curate step 3, Deploy step 4.
+       */
+      graphic: {
+        name: "How Roger works, in four parts",
+        labels: ["Use", "Collect", "Curate", "Deploy"],
+        pause: "Pause",
+        play: "Play",
+      },
     },
     problem: {
       title: "The problem",
       statements: [
-        "Everyone in real estate is being told to use AI. Almost nobody is told what to use it for.",
+        "Everyone is being told to use AI. Almost nobody is told what to use it for.",
         "The people getting real work out of AI agents rarely post how. It involves their clients and their business.",
         "So each person works out the same things alone, a few months apart.",
       ],
@@ -302,14 +328,16 @@ export const v1 = {
       title: "How it works",
       steps: [
         { title: "Set up your AI agents", body: "Set up your AI agents. If you don’t have any, our starter team takes about half an hour to install." },
-        { title: "Zack reviews your week", body: "Each Sunday, an AI agent called Zack reviews your week and writes up what worked, with client details removed." },
-        { title: "Cora picks your three ideas", body: "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best." },
+        { title: "Zack reviews your week", body: "Each Sunday, an AI agent called Zack reviews your week and writes up what worked, with private details removed." },
+        { title: "Cora picks your three ideas", body: "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. That is your Cora Curation." },
         { title: "Paste to install", body: "Open one, press copy, paste it into your AI agent. It sets itself up and asks you what it needs to know." },
       ],
     },
     compounds: {
       title: "It compounds",
       line: "Three ideas a week. Each one you set up stays set up. Six months in, your AI agents do things you would not have thought to ask for.",
+      /** The loop's own words: its name for a screen reader, and its one button. */
+      loop: { name: "The stack, week by week", pause: "Pause", play: "Play" },
     },
     whoRuns: {
       title: "Who runs this",
@@ -318,12 +346,14 @@ export const v1 = {
       photoAlt: "Peter Kuperman",
       link: { label: "Read Peter’s letter", href: "/about" },
     },
-    closing: { line: "See what your first {freeLists} Mondays bring." },
+    closing: { line: "See what your first {freeLists} Cora Curations bring." },
   },
+  /** Under the closing band's line, on every page that ends on one: the line under the price. */
+  closingSub: valueLine,
 
   pricing: {
     title: "Pricing",
-    meta: pageMeta("Pricing", `${firstIncluded} ${underBothColumns}`),
+    meta: pageMeta("Pricing", `${firstIncluded} ${underMonthly}`),
     included: {
       title: "What is included",
       items: [
@@ -334,18 +364,17 @@ export const v1 = {
       ],
     },
     explained: {
-      title: "Monthly or one at a time, explained",
-      monthly: { title: "Monthly", body: "Three ideas every Monday. Charged once a month, starting with your {firstPaidList} list." },
-      list: { title: "One at a time", body: "Order a list for any Monday you want one. You are charged only for the lists you order." },
-      under: underBothColumns,
+      title: "Monthly, explained",
+      body: "A Cora Curation every Monday. Your first {freeLists} are free. Your card is charged once a month, starting with your {firstPaidList} Cora Curation.",
+      under: underMonthly,
     },
     contributing: {
       title: "How contributing works",
-      body: "Roger works because everyone’s Zack contributes. On monthly, if Zack misses a week, the first miss each month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). We email you both times, and the difference appears on your next invoice. If you switch sharing off in your dashboard, the monthly price is {higherUsd} ({higherCad} in Canada). One-at-a-time lists need that week’s Zack report.",
+      body: "Roger works because everyone’s Zack contributes. If Zack misses a week, the first miss each month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). We email you both times, and the difference appears on your next invoice. If you switch sharing off in your dashboard, the monthly price is {higherUsd} ({higherCad} in Canada).",
     },
     refunds: {
       title: "No refunds",
-      body: "There are no refunds. You get {freeLists} free lists before any charge, and you can cancel in one click.",
+      body: "There are no refunds. You get {freeLists} free Cora Curations before any charge, and you can cancel in one click.",
     },
   },
 
@@ -355,7 +384,7 @@ export const v1 = {
     week: {
       title: "The week",
       days: [
-        { day: "Sunday", body: "Zack reviews the past seven days of your own AI agent activity and writes up what worked, with client details removed. He runs on his own, or you can upload his report yourself." },
+        { day: "Sunday", body: "Zack reviews the past seven days of your own AI agent activity and writes up what worked, with private details removed. He runs on his own, or you can upload his report yourself." },
         { day: "Monday", body: mondayOfTheWeek },
         { day: "Tuesday", body: "Open an idea, press copy and paste it into your AI agent. It sets itself up and asks you what it needs to know." },
         { day: "Wednesday", body: "Each idea you set up stays set up, and your three ideas stay in your dashboard for when you want them." },
@@ -396,15 +425,15 @@ export const v1 = {
       steps: [
         "You start, and we ask for a card. It is not charged.",
         "Zack runs on Sunday.",
-        "Your first {freeLists} Monday lists arrive. They are free.",
-        "After your {lastFreeList} list, we email you with what happens next.",
-        "On monthly, your card is charged with your {firstPaidList} list. On one at a time, it is charged only when you order a list. Cancel before then and you pay nothing.",
-        "If no first list is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
+        "Your first {freeLists} Cora Curations arrive, one each Monday. They are free.",
+        "After your {lastFreeList} Cora Curation, we email you with what happens next.",
+        "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
+        "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
       ],
     },
     noAgent: {
       title: "If you have no AI agent yet",
-      body: "You can still start. The startup page walks you through installing one and setting up a starter team for real estate.",
+      body: "You can still start. The startup page walks you through installing one and setting up a starter team.",
       link: { label: "Go to the startup page", href: "/getstarted" },
     },
   },
@@ -606,9 +635,9 @@ export function priceBlockCopy(copy: Pick<V1Copy, "priceBlock" | "price" | "tria
   return { ...copy.priceBlock, ...copy.price, trialLine: copy.trialLine, start: copy.buttons.start };
 }
 
-/** What ClosingBand takes, from filled copy and the page's own closing line. */
-export function closingBandCopy(copy: Pick<V1Copy, "trialLine" | "buttons">, line: string): ClosingBandCopy {
-  return { line, start: copy.buttons.start, trialLine: copy.trialLine };
+/** What ClosingBand takes, from filled copy and the page's own closing line. The line under it is the one under the price. */
+export function closingBandCopy(copy: Pick<V1Copy, "trialLine" | "buttons" | "closingSub">, line: string): ClosingBandCopy {
+  return { line, sub: copy.closingSub, start: copy.buttons.start, trialLine: copy.trialLine };
 }
 
 /** The questions a page shows: its own subset in the order of /faq. */

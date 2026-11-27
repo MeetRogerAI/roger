@@ -247,7 +247,7 @@ describe("/zack/[agent] on v1: the steps", () => {
   it("with a report already in, offers the one start button, carrying the token and the audience", async () => {
     const markup = await flow("claude", { token: TOKEN, run: { agent: "claude", hasReport: true } });
     expect(hrefs(markup).filter((h) => h.startsWith("/start"))).toEqual([`/start?path=agents&zack=${TOKEN}`]);
-    expect(markup).toMatch(/<a class="btn btn-l" href="\/start\?path=agents&amp;zack=[^"]+">Get two free Monday lists<\/a>/);
+    expect(markup).toMatch(/<a class="btn btn-l" href="\/start\?path=agents&amp;zack=[^"]+">Get two free Cora Curations<\/a>/);
     expect(text(markup)).toContain("We have your report for this run. Pasting another replaces it.");
     expect(text(markup)).toContain(copy.cardLine);
     // The paste box is still there, under its warning.
@@ -359,7 +359,7 @@ describe("/zack/[agent] on v1: after an answer from the server", () => {
     expect([...list.matchAll(/<li\b[^>]*>([^<]*)<\/li>/g)].map((m) => m[1])).toEqual(titles);
     expect(text(markup)).not.toContain(zack.afterPaste.noPlays);
     expect(startLinks(markup)).toEqual([START]);
-    expect(markup).toMatch(/<a class="btn btn-l" href="\/start\?path=agents&amp;zack=[^"]+">Get two free Monday lists<\/a>/);
+    expect(markup).toMatch(/<a class="btn btn-l" href="\/start\?path=agents&amp;zack=[^"]+">Get two free Cora Curations<\/a>/);
     expect(text(markup)).toContain(copy.cardLine);
     // The summary stands in for the paste box, with a way back to it.
     expect(markup).not.toContain("<textarea");

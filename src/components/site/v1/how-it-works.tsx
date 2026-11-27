@@ -6,6 +6,7 @@ import { samplePlay } from "@/data/site/sample-play";
 import { v1Copy } from "@/data/site/v1";
 import { zackAgents } from "@/data/zack";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
+import { playbookParts } from "@/lib/site/playbook";
 import { getPlaybookPreface, publicIdeaView, resolveSamplePlay, type IdeaView } from "@/lib/site/sample";
 import type { BuiltVersion } from "@/lib/site/version";
 import { PageHead, ReadingSection, StartBand } from "./blocks/reading";
@@ -48,15 +49,7 @@ export function zackFiles(agents: readonly { name: string; file: string; availab
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
 }
 
-/** A playbook's parts in order: each "##" heading with the lines under it. Lines before the first heading are a part of their own. */
-export function playbookParts(md: string): string[] {
-  const parts: string[][] = [];
-  for (const line of md.replace(/\r\n/g, "\n").split("\n")) {
-    if (/^\s*#{1,6}\s+/.test(line) || parts.length === 0) parts.push([]);
-    parts.at(-1)!.push(line);
-  }
-  return parts.map((lines) => lines.join("\n").trim()).filter((part) => part !== "");
-}
+export { playbookParts };
 
 type Note = { part: string; note: string };
 

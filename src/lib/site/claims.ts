@@ -58,7 +58,7 @@ export type Violation = {
 export type ClaimsContext = {
   /** The amounts the pages were rendered with: its prices and periods are the only ones a page may print. */
   amounts: Amounts;
-  /** The week numbers and brick counts of "It compounds" (src/data/site/compounding.ts). */
+  /** The week numbers and brick counts of "It compounds": compoundingNumbers in src/data/site/compounding.ts. */
   compounding: readonly number[];
   /**
    * Names that must never appear: the brokerage (spec 0.4). Peter decided on
@@ -257,7 +257,7 @@ export const allowed: readonly Allowed[] = [
   // --- numbers --------------------------------------------------------------
   {
     rule: "number",
-    why: "A price from the settings (plan KTD8, R8): the monthly price, the one-list price and the higher rate, each with its country in front.",
+    why: "A price from the settings (plan KTD8, R8): the monthly price, the higher rate and the one-list price (which only the terms still state), each with its country in front.",
     words: ({ context: { amounts } }) =>
       anyOf(
         (["USD", "CAD"] as const).flatMap((currency) => [amounts.monthly, amounts.list, amounts.higher].map((price) => `${currency === "CAD" ? "CA" : "US"}$${price[currency].toLocaleString("en-US")}`)),
@@ -281,7 +281,7 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "number",
-    why: "Plan R10, the one settled exception to “no hard-coded numbers”: the week numbers and brick counts of “It compounds”, inside that section only.",
+    why: "Plan R10, the one settled exception to “no hard-coded numbers”: the seven week numbers and seven brick counts of the “It compounds” loop (compoundingNumbers in src/data/site/compounding.ts), inside that section only. Any other number there is still a violation.",
     words: ({ segment, context }) => (inZone(segment, "compounding") && context.compounding.length > 0 ? new RegExp(`(?<!\\d|\\d[.,])(?:${context.compounding.join("|")})(?!\\d|[.,]\\d)`, "g") : null),
   },
   {

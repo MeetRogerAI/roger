@@ -32,7 +32,7 @@ describe("navFor", () => {
     for (const p of ["/", "/pricing", "/library", "/getstarted", "/privacy", "/nothing-here"]) {
       const nav = navFor(p, "v1");
       expect(nav.links, p).toEqual(fiveLinks);
-      expect(nav.cta, p).toEqual({ href: "/start", label: "Get two free Monday lists", short: "Start free" });
+      expect(nav.cta, p).toEqual({ href: "/start", label: "Get two free Cora Curations", short: "Get two free Cora Curations" });
       expect(nav.account, p).toEqual({ signIn: { href: "/signin", label: "Sign in" }, openApp: { href: "/app", label: "Open Roger" } });
     }
   });
