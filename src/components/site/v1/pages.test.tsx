@@ -10,7 +10,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { siteConfig, v3Defaults } from "@/data/config";
 import { firstExample } from "@/data/site/examples";
 import { letter, letterShown } from "@/data/site/letter";
-import { v1Copy, type QuestionOverrides } from "@/data/site/v1";
+import { emptyOverlay, type Overlay } from "@/lib/site/content/format";
+import { v1Copy } from "@/lib/site/content/model";
 import { amountsFrom, hasBareDollar } from "@/lib/site/amounts";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
@@ -86,7 +87,7 @@ const bareAgent = /(?<!\bAI )\bagents?\b/i;
 const timeFigure = /\d\s*(?:hours?|hrs?|minutes?|mins?)\b/i;
 const emoji = /\p{Extended_Pictographic}/u;
 
-const faq = async (over: { amounts?: typeof amounts; questions?: QuestionOverrides } = {}) => shell(await pageMarkup(<V1FaqView version="v1" amounts={over.amounts ?? amounts} questions={over.questions} />));
+const faq = async (over: { amounts?: typeof amounts; content?: Overlay } = {}) => shell(await pageMarkup(<V1FaqView version="v1" amounts={over.amounts ?? amounts} content={over.content} />));
 const how = async (over: { amounts?: typeof amounts; idea?: typeof idea; preface?: string; files?: typeof files } = {}) =>
   shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={over.amounts ?? amounts} idea={over.idea ?? idea} preface={over.preface ?? preface} files={over.files ?? files} />));
 const about = async (over: { photo?: string; signature?: string } = {}) =>
@@ -171,13 +172,18 @@ describe("/faq on v1", () => {
 
   it("prints a question or an answer edited in the admin in place of the built-in one, as plain text, with its amounts filled in", async () => {
     const markup = await faq({
-      questions: {
-        refund: { a: "No. Your first {freeLists} Cora Curations are free, at {monthlyUsd} a month after that. <b>Cancel</b> any time." },
-        "who-sees": { q: "Who can see my plays?" },
-        // An edit naming an amount that does not exist is not printed: the built-in answer stays.
-        "missed-week": { a: "It costs {nothing}." },
-        // An id that is no question's is ignored.
-        "not-a-question": { q: "Hello?", a: "Hello." },
+      // The edits as the page is handed them: one overlay on the code copy, each text under its field's id.
+      content: {
+        ...emptyOverlay,
+        text: {
+          "questions.price-and-billing.items.refund.a": "No. Your first {freeLists} Cora Curations are free, at {monthlyUsd} a month after that. <b>Cancel</b> any time.",
+          "questions.zack-and-privacy.items.who-sees.q": "Who can see my plays?",
+          // An edit naming an amount that does not exist is not printed: the built-in answer stays.
+          "questions.price-and-billing.items.missed-week.a": "It costs {nothing}.",
+          // An id that is no question's is ignored.
+          "questions.price-and-billing.items.not-a-question.q": "Hello?",
+          "questions.price-and-billing.items.not-a-question.a": "Hello.",
+        },
       },
     });
     const seen = text(markup);
@@ -191,7 +197,7 @@ describe("/faq on v1", () => {
     expect(seen).not.toMatch(/\{nothing\}|Hello/);
     expect(markup.match(/<details/g)).toHaveLength(18);
     // With no edits the page is the built-in copy, which is what a build with no database shows.
-    expect(await faq({ questions: {} })).toBe(await faq());
+    expect(await faq({ content: emptyOverlay })).toBe(await faq());
   });
 });
 

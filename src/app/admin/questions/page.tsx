@@ -2,8 +2,8 @@ import { connection } from "next/server";
 import { builtInQuestions } from "@/data/site/v1";
 import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
-import { getAmounts } from "@/lib/site/amounts";
-import { ANSWER_MAX, QUESTION_MAX, amountPlaceholders, pagesShowing, readQuestionOverrides } from "@/lib/site/questions";
+import { amountPlaceholders } from "@/lib/site/content/text";
+import { ANSWER_MAX, QUESTION_MAX, pagesShowing, readQuestionOverrides } from "@/lib/site/questions";
 import { QuestionEditor, type EditableQuestion } from "./editor";
 
 /**
@@ -19,7 +19,7 @@ import { QuestionEditor, type EditableQuestion } from "./editor";
 export default async function QuestionsPage() {
   await connection();
   if (!(await isAdmin())) return null;
-  const [overrides, amounts] = await Promise.all([readQuestionOverrides(query), getAmounts()]);
+  const overrides = await readQuestionOverrides(query);
   const all = builtInQuestions();
   const groups = [...new Set(all.map((item) => item.group))];
   const editable = (item: (typeof all)[number]): EditableQuestion => {
@@ -33,7 +33,7 @@ export default async function QuestionsPage() {
         <h1 className="text-h3">Edit Questions</h1>
         <p className="mt-2 text-small text-ink-2">
           Every question on the marketing pages. A saved change shows on the site from the next page view. Text is printed as plain text. An amount is written as a name in braces and filled in from the settings:{" "}
-          {amountPlaceholders(amounts).join(", ")}. A change that breaks the site’s wording rules (for example “agent” without “AI” in front, or a claim about time saved or income) is refused, with the reason.
+          {amountPlaceholders.join(", ")}. A change that breaks the site’s wording rules (for example “agent” without “AI” in front, or a claim about time saved or income) is refused, with the reason.
         </p>
       </header>
       {groups.map((group) => (

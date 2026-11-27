@@ -8,7 +8,8 @@ import { bricksPerWeek, compoundingFinal, compoundingNumbers, compoundingSteps, 
 import type { SharedCopy } from "@/data/site/copy-types";
 import { letter, letterShown } from "@/data/site/letter";
 import { examples } from "@/data/site/examples";
-import { closingBandCopy, priceBlockCopy, questionsOn, v1, v1Copy, v1Zack } from "@/data/site/v1";
+import { closingBandCopy, priceBlockCopy, questionsOn, v1, v1Zack } from "@/data/site/v1";
+import { v1Copy } from "@/lib/site/content/model";
 import { buildIdeaView, factors } from "@/lib/cora/idea-view";
 import { amountsFrom, currencies, hasBareDollar, priceLine } from "@/lib/site/amounts";
 import { compoundingCaption } from "@/lib/site/compounding";
@@ -664,7 +665,7 @@ describe("v1 copy", () => {
   it("speaks to anyone who uses AI agents: no real estate wording anywhere in the copy", () => {
     for (const s of filled) expect(s.text, s.path).not.toMatch(/real estate|realtor|brokerage|open house|\blistings?\b|\bbuyers?\b|\bsellers?\b|home evaluation/i);
     expect(copy.home.hero.sub).toBe("Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network.");
-    expect(copy.home.problem.statements[0]).toBe("Everyone is being told to use AI. Almost nobody is told what to use it for.");
+    expect(copy.home.problem.statements[0].text).toBe("Everyone is being told to use AI. Almost nobody is told what to use it for.");
   });
 
   it("names only amounts that exist, and shows no bare dollar sign once filled", () => {

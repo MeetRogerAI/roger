@@ -1,9 +1,11 @@
 import { CountryDefault } from "@/components/site/shared/country-default";
 import { StartLink } from "@/components/site/shared/start-link";
 import { examples } from "@/data/site/examples";
-import { priceBlockCopy, v1Copy, questionsOn, type QuestionOverrides } from "@/data/site/v1";
+import { priceBlockCopy, questionsOn } from "@/data/site/v1";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
-import { getQuestionOverrides } from "@/lib/site/questions";
+import type { Overlay } from "@/lib/site/content/format";
+import { v1Copy } from "@/lib/site/content/model";
+import { getQuestionOverrides, questionOverlay } from "@/lib/site/questions";
 import { exampleViews, getPlaybookPreface, type ExampleView } from "@/lib/site/sample";
 import { getTestimonials, type Testimonial } from "@/lib/site/testimonials";
 import type { BuiltVersion } from "@/lib/site/version";
@@ -44,7 +46,7 @@ import { Testimonials } from "./blocks/testimonials";
 /** Reads what the page shows, all of it cached, so the page keeps its static shell. */
 export async function V1Home({ version }: { version: BuiltVersion }) {
   const [amounts, preface, testimonials, questions] = await Promise.all([getAmounts(), getPlaybookPreface(), getTestimonials("re"), getQuestionOverrides()]);
-  return <V1HomeView version={version} amounts={amounts} examples={exampleViews(examples, preface)} testimonials={testimonials} questions={questions} />;
+  return <V1HomeView version={version} amounts={amounts} examples={exampleViews(examples, preface)} testimonials={testimonials} content={questionOverlay(questions)} />;
 }
 
 export function V1HomeView({
@@ -52,7 +54,7 @@ export function V1HomeView({
   amounts,
   examples: shown,
   testimonials,
-  questions = {},
+  content,
 }: {
   /** The version being served. v2 and v3 show this page until they have their own. */
   version: BuiltVersion;
@@ -61,10 +63,10 @@ export function V1HomeView({
   examples: ExampleView[];
   /** Cleared quotes for the audience "re". Empty leaves the section out. */
   testimonials: Testimonial[];
-  /** Questions and answers edited in the admin. Left out, every question has its built-in wording. */
-  questions?: QuestionOverrides;
+  /** The stored edits to show, as one overlay on the code copy. Left out, the page prints the code copy alone. */
+  content?: Overlay;
 }) {
-  const { copy } = v1Copy(amounts, questions);
+  const { copy } = v1Copy(amounts, content);
   const home = copy.home;
   const priceCopy = priceBlockCopy(copy);
 

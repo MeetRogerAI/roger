@@ -409,6 +409,22 @@ docs/site/content-release.md
   - A question edit expressed as an overlay prints on the homepage and `/faq` with its amounts filled, as the two existing tests on admin-edited answers assert.
 - **Verification:** The full test suite passes with no change to any rendered page, and `released.json` is an empty overlay.
 
+### U2b. Sidebar groups fold (added November 27, 2026)
+
+- **Goal:** Peter asked that the sidebar's main sections can be folded "to create less clutter".
+- **Behaviour:** each of the five headings is a button that folds or unfolds its screens, with a small arrow for the state and `aria-expanded`. Everything is unfolded on first visit. The choice is remembered in that browser. A folded group that holds the current screen keeps its heading marked. The same applies inside the phone menu. With no script every group is open.
+- **Files:** `src/components/admin-ui.tsx`, its test, `src/app/globals.css` if needed.
+- **Test scenarios:** all open by default in server markup; folded state hides the links from the tab order; the current group's heading is marked when folded; stored state with unknown group names is ignored; no hydration mismatch (stored state is applied after mount).
+- **Verification:** browser check signed in at 1440 and 375 with the U2 helpers.
+
+### Notes for U4 to U10 from the U3 review (November 27, 2026)
+
+- U4: every caller of `v1Copy` must pass the overlay. `about.tsx`, `how-it-works.tsx`, `library/page.tsx` (two calls) and `zack.tsx` pass none today, and would silently ignore `released.json` after the first snapshot.
+- U5: client components must not import `content/text.ts` or `registry.ts` (they pull in the settings reader); pass limits and placeholders as props. Save with `plainLine` for `line` fields and `plainBlock` for `block` fields, then normalise against the baseline. Label a list item by position or current text, never by its raw id.
+- U7: the text of an added item (`<listId>.x-….<field>`) is dropped by both parsers and by `normaliseOverlay` today, because they look ids up among built-in fields only. U7 needs a resolver for added-item fields before anything stores one. List semantics (`order` against items, an id both removed and ordered) are not validated yet. Never key a plain object by item id.
+- U6, U10: an empty entry (`{order: [], off: []}`) is accepted by the strict parse and dropped by the lenient one, so the differ must never write one.
+- Everyone: never rename an id. A rename orphans the edit and the next save deletes it.
+
 ### U4. Storage, reader, public pages read published text
 
 - **Goal:** Published text edits reach every covered page and the header and footer through one cached reader, and the questions edits saved before this release are still live.

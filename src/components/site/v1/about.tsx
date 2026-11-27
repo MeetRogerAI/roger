@@ -1,8 +1,8 @@
 import Image from "next/image";
 import { siteConfig } from "@/data/config";
 import { letter, letterShown } from "@/data/site/letter";
-import { v1Copy } from "@/data/site/v1";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
+import { v1Copy } from "@/lib/site/content/model";
 import type { BuiltVersion } from "@/lib/site/version";
 import { StartBand } from "./blocks/reading";
 import { SectionHead } from "./blocks/section-head";

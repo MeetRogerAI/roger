@@ -11,7 +11,7 @@ import type { ReportState, StartRunState } from "@/app/zack/actions";
 import type { ReportCopy } from "@/components/site/shared/free-run-form";
 import { v3Defaults } from "@/data/config";
 import { siteLegal } from "@/data/site/legal";
-import { v1Copy } from "@/data/site/v1";
+import { v1Copy } from "@/lib/site/content/model";
 import { amountsFrom } from "@/lib/site/amounts";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";

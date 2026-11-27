@@ -13,7 +13,7 @@ import fixture from "../../../db/seeds/sample-play.fixture.json";
 import { v3Defaults } from "@/data/config";
 import { compoundingNumbers } from "@/data/site/compounding";
 import { examples } from "@/data/site/examples";
-import { v1Copy } from "@/data/site/v1";
+import { v1Copy } from "@/lib/site/content/model";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
 import { at, renderSitePages, sitePagePaths, WATCH_TOKEN, type RenderedPage } from "@/test-helpers/site-pages";
