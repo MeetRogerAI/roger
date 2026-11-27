@@ -116,31 +116,34 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
         </div>
       </section>
 
-      <section className="mt-8" aria-labelledby={`${id}-the-playbook`}>
-        <h4 id={`${id}-the-playbook`} className="pb-3 text-meta font-semibold uppercase tracking-wider text-ink-2">
-          {copy.playbook.title}
-        </h4>
-        <div className="border-b border-rule">
-          {/* One row when folded, however many steps the playbook has. */}
-          <Fold fold="playbook" label={steps ? `${steps.length} ${copy.playbook.steps}` : copy.playbook.whole}>
-            {steps ? (
-              <div data-steps={steps.length} className="rounded-[8px] bg-ground px-4 sm:px-5">
-                {steps.map((step, i) => (
-                  <details key={i} data-fold="step" className="group/step border-t border-rule first:border-t-0">
-                    <summary className={`${summaryRow} text-small font-[620]`}>
-                      {step.heading}
-                      <Mark open="group-open/step:rotate-45" />
-                    </summary>
-                    <SimpleMarkdown source={step.body} className="pb-5 text-small" />
-                  </details>
-                ))}
-              </div>
-            ) : (
-              <SimpleMarkdown source={idea.playbookMd} className="text-small" />
-            )}
-          </Fold>
-        </div>
-      </section>
+      {/* A play with no playbook text has no Playbook heading: a row there would open to nothing. */}
+      {idea.playbookMd.trim() !== "" && (
+        <section className="mt-8" aria-labelledby={`${id}-the-playbook`}>
+          <h4 id={`${id}-the-playbook`} className="pb-3 text-meta font-semibold uppercase tracking-wider text-ink-2">
+            {copy.playbook.title}
+          </h4>
+          <div className="border-b border-rule">
+            {/* One row when folded, however many steps the playbook has. */}
+            <Fold fold="playbook" label={steps ? `${steps.length} ${copy.playbook.steps}` : copy.playbook.whole}>
+              {steps ? (
+                <div data-steps={steps.length} className="rounded-[8px] bg-ground px-4 sm:px-5">
+                  {steps.map((step, i) => (
+                    <details key={i} data-fold="step" className="group/step border-t border-rule first:border-t-0">
+                      <summary className={`${summaryRow} text-small font-[620]`}>
+                        {step.heading}
+                        <Mark open="group-open/step:rotate-45" />
+                      </summary>
+                      <SimpleMarkdown source={step.body} className="pb-5 text-small" />
+                    </details>
+                  ))}
+                </div>
+              ) : (
+                <SimpleMarkdown source={idea.playbookMd} className="text-small" />
+              )}
+            </Fold>
+          </div>
+        </section>
+      )}
     </article>
   );
 }

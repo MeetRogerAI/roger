@@ -56,6 +56,8 @@ describe("a site version's header for a signed-in visitor", () => {
     expect(inside.match(/<span/g)!.length).toBe(inside.match(/<\/span>/g)!.length);
     expect(hrefs(inside)).toEqual(["/signin", "/start"]);
     expect(inside).toContain(">Sign in</a>");
+    // Under 375 pixels Sign in leaves the row (the menu lists it), so the button's two lines have room: at 360 they took three beside it.
+    expect(inside).toMatch(/<a class="[^"]*max-\[374px\]:hidden[^"]*" href="\/signin">Sign in<\/a>/);
     // Nothing before the wrapper is hidden with it.
     expect(hrefs(markup.slice(0, wrapper.index))).toEqual(["#main", "/", "/how-it-works", "/pricing", "/library", "/faq", "/about"]);
   });

@@ -22,20 +22,40 @@ export type PlaybookStep = {
 };
 
 /**
- * The parts as steps, each under its own heading, when every part has one.
- * Null for a playbook written another way (a play chosen in the admin may
- * be): the caller then shows the whole text in one piece, so no words are
- * given a heading they did not have.
+ * The playbook as steps, each under its own heading, for the sample card's
+ * folded rows. A step is a heading of the playbook's top level with
+ * everything under it: a smaller heading inside a step stays in that step's
+ * text, and a "#" line inside a fenced code block is not a heading. So the
+ * count the card prints is the count of the playbook's own parts.
+ *
+ * Null for a playbook that is not written that way (a play chosen in the
+ * admin may be): no heading, one heading only, words before the first
+ * heading, or a heading with nothing under it. The caller then shows the
+ * whole text in one piece, so no words are given a heading they did not have
+ * and no row opens to nothing.
  */
 export function playbookSteps(md: string): PlaybookStep[] | null {
-  const parts = playbookParts(md);
-  if (parts.length === 0) return null;
-  const steps: PlaybookStep[] = [];
-  for (const part of parts) {
-    const [first, ...rest] = part.split("\n");
-    const heading = /^\s*#{1,6}\s+(.*)$/.exec(first);
-    if (!heading || !heading[1].trim()) return null;
-    steps.push({ heading: heading[1].trim(), body: rest.join("\n").trim() });
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const headings: { at: number; level: number; text: string }[] = [];
+  let fenced = false;
+  for (const [at, line] of lines.entries()) {
+    if (/^\s*(?:```|~~~)/.test(line)) fenced = !fenced;
+    else if (!fenced) {
+      const heading = /^\s*(#{1,6})\s+(.*)$/.exec(line);
+      if (heading) headings.push({ at, level: heading[1].length, text: heading[2].trim() });
+    }
   }
-  return steps;
+  if (headings.length === 0) return null;
+  const top = Math.min(...headings.map((h) => h.level));
+  const tops = headings.filter((h) => h.level === top);
+  if (tops.length < 2) return null;
+  if (lines.slice(0, tops[0].at).join("").trim() !== "") return null;
+  const steps = tops.map((h, i) => ({
+    heading: h.text,
+    body: lines
+      .slice(h.at + 1, tops[i + 1]?.at)
+      .join("\n")
+      .trim(),
+  }));
+  return steps.every((step) => step.heading !== "" && step.body !== "") ? steps : null;
 }
