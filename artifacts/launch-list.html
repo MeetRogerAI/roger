@@ -1,34 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Roger v3 launch list</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <!--
   FOR CLAUDE CODE: how to use this file
 
   This is the live checklist for Roger v3. The spec is "Roger v3 - design spec.md" in this folder.
+  Published at https://claude.ai/artifact/PvCLU9uLcV2abfxwNqd7tE (republish this file there after editing).
 
-  1. Read this file before starting work on any version (A1, A2, B1, B2, B3).
+  Three tabs:
+  - "PR #57" and "Everything else" are checklists. Each item is an <li class="item" data-id="...">.
+    Ticks are NOT stored in this file. They live in the artifact's shared data, collection "checks",
+    one document per item id ({done: true, by, at}). Read them with the ArtifactData tool (list "checks").
+    Items with data-gate="1" must all be ticked before PR #57 may be merged.
+    Never rename an item's data-id (its tick would be lost); add new items with new ids.
+  - "Reference" keeps the detail rows. Rules for those rows:
+  1. Read this file before starting work on any version (A1, A2, B1, B2, B3, B4).
   2. Every row is a <tr> with a stable data-id and a data-status.
-       Supply items (S1 to S14):  data-status is "open" or "done".
+       Supply items (S1 to S22):  data-status is "open" or "done".
        Defaults (D1 to D12):      data-status is "unconfirmed", "confirmed" or "changed".
   3. If a row with data-blocks naming the version you are about to build is still "open",
      stop and ask Peter for it. Do not invent the content. The only exceptions are rows
      whose "Until then" cell names a fallback; build with that fallback.
   4. When Peter supplies an item, check it against its "Done when" cell. If it passes:
-     set data-status="done", set data-done-on="YYYY-MM-DD", change the status cell's text
+     set data-status="done", set data-done-on="YYYY-MM-DD", change the status cell text
      to "Done" and its class to "st done", and add one line to the Notes cell saying where
      it now lives. Never mark an item done without evidence in the repo, in the database
-     settings, or from Peter in the conversation.
+     settings, or from Peter in the conversation. Tick the matching checklist item too.
   5. Build every default as written while it is "unconfirmed". When Peter confirms one,
      set data-status="confirmed" and the status cell to "Confirmed". When Peter changes one,
      set data-status="changed", write the new value in the Notes cell, and update the
      matching section of the spec and the setting or rule in code in the same change.
   6. Never delete a row. Never renumber. Add new rows at the end of their table with the
      next number.
-  7. The counts at the top are computed from data-status when the page is opened.
+  7. The counts in the Reference tab are computed from data-status when the page is opened.
 -->
 <style>
   :root{
@@ -97,12 +101,183 @@
   footer{margin-top:48px;font-size:13px;color:var(--ink-2)}
   @media print{body{background:#fff}.scroll{overflow:visible;border:0}table{min-width:0;font-size:11px}.how{break-inside:avoid}}
 </style>
-</head>
-<body>
-<div class="wrap">
+<style>
+  /* Checklist tabs: same tokens as the reference page above. */
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:28px 0 0;border-bottom:1px solid var(--rule)}
+  .tab{appearance:none;border:1px solid transparent;border-bottom:0;background:none;color:var(--ink-2);font:inherit;font-size:15px;font-weight:600;padding:10px 16px;border-radius:8px 8px 0 0;cursor:pointer;margin-bottom:-1px;min-height:44px}
+  .tab[aria-selected="true"]{background:var(--surface);border-color:var(--rule);color:var(--ink)}
+  .tab:focus-visible,.check input:focus-visible+.box{outline:2px solid var(--accent);outline-offset:2px}
+  .tab .count{font-size:12.5px;font-weight:650;color:var(--ink-2);margin-left:6px;font-variant-numeric:tabular-nums}
+  .panel{padding-top:24px}
+  .panel-intro{color:var(--ink-2);max-width:68ch;margin:0 0 8px}
+  .group{margin-top:32px}
+  .group h2{font-size:22px;margin:0 0 4px}
+  .group .sub{margin:0 0 12px}
+  .list{list-style:none;margin:0;padding:0;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+  .item{display:grid;grid-template-columns:auto 1fr;gap:12px;padding:14px 16px;border-bottom:1px solid var(--rule)}
+  .item:last-child{border-bottom:0}
+  .check{position:relative;display:flex;align-items:flex-start;padding-top:2px;cursor:pointer}
+  .check input{position:absolute;opacity:0;width:24px;height:24px;margin:0;cursor:pointer}
+  .box{width:22px;height:22px;border:1.5px solid var(--rule-strong);border-radius:5px;background:var(--surface);display:grid;place-items:center}
+  .box svg{width:14px;height:14px;opacity:0}
+  .check input:checked+.box{background:var(--ok);border-color:var(--ok)}
+  .check input:checked+.box svg{opacity:1}
+  .check input:disabled{cursor:default}
+  .body{min-width:0}
+  .what{font-weight:620;margin:0}
+  .item.done .what{color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--rule-strong)}
+  .detail{margin:4px 0 0;font-size:14.5px;color:var(--ink-2)}
+  .detail p{margin:4px 0 0}
+  .panel{margin-top:0}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .tag{font-size:12px;font-weight:650;border-radius:999px;padding:2px 9px;background:var(--ground-2);color:var(--ink-2)}
+  .tag.who-claude{background:var(--chg-wash);color:var(--chg)}
+  .tag.who-you{background:var(--accent-wash);color:var(--accent)}
+  .tag.optional{background:var(--ground-2);color:var(--ink-2)}
+  .tag.later{background:var(--wait-wash);color:var(--wait)}
+  .ticked{font-size:12.5px;color:var(--ok);margin-top:6px}
+  .gate{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:14px 16px;margin-top:16px;display:flex;gap:12px;align-items:flex-start}
+  .gate b{display:block}
+  .gate .dot{width:12px;height:12px;border-radius:50%;margin-top:6px;flex:none;background:var(--wait)}
+  .gate.ready .dot{background:var(--ok)}
+  .status-note{font-size:13px;color:var(--ink-2);margin:12px 0 0}
+  pre.sql{background:var(--ground-2);border-radius:6px;padding:10px 12px;overflow-x:auto;font-size:12.5px;margin:8px 0 0}
+  #reference .wrap-ref h1{font-size:28px}
+</style>
 
+<div class="wrap">
   <p class="eyebrow">Roger v3 · launch list</p>
-  <h1>What Peter still has to supply, and the defaults waiting for his yes</h1>
+  <h1>Roger v3 launch list</h1>
+  <p class="lead">Three tabs. <b>PR #57</b> is what to do before merging the payment change, and what it leaves for you before sign-up opens. <b>Everything else</b> is the rest of go-live, plus later versions. <b>Reference</b> keeps the full detail rows (S1 to S22, D1 to D12).</p>
+  <p class="meta">Updated November 26, 2026 for PR #57 (payment at the first Cora list) and spec 1.5 (Roger AI Levels and the build order) · Tick a box when it's done; ticks are saved on this page for everyone · Owner: Peter Kuperman</p>
+
+  <div class="tabs" role="tablist" aria-label="Launch list sections">
+    <button class="tab" role="tab" id="tab-pr57" aria-controls="pr57" data-tab="pr57">PR #57<span class="count" data-count="pr57"></span></button>
+    <button class="tab" role="tab" id="tab-golive" aria-controls="golive" data-tab="golive">Everything else<span class="count" data-count="golive"></span></button>
+    <button class="tab" role="tab" id="tab-reference" aria-controls="reference" data-tab="reference">Reference</button>
+  </div>
+
+  <section class="panel" id="pr57" role="tabpanel" aria-labelledby="tab-pr57">
+    <p class="panel-intro">PR #57 moves the card from sign-up to the moment the first Cora list is ready, and makes monthly the only plan. Merging it deploys meetroger.ai, but sign-up stays switched off in production, so members see nothing until you open it. <a class="tlink" href="https://github.com/MeetRogerAI/roger/pull/57">Open PR #57</a></p>
+    <div class="gate" id="merge-gate"><span class="dot"></span><div><b id="merge-gate-title">Not ready to merge yet</b><span id="merge-gate-text">Tick everything under "Before you merge" except the merge itself.</span></div></div>
+
+    <div class="group">
+      <h2>Before you merge</h2>
+      <p class="sub">In this order. The new code needs the new database columns, so the database step comes before the merge.</p>
+      <ul class="list" data-group="merge">
+        <li class="item" data-id="m-setup-preview" data-gate="1"><div class="what">Add the new columns to the preview database</div><div class="detail"><p>Done by Claude Code on November 26 (<code>db/setup.mjs</code> run twice on preview).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="m-setup-prod" data-gate="1"><div class="what">Add the new columns to the production database</div><div class="detail"><p>Run <code>node --env-file=&lt;production env file&gt; db/setup.mjs</code> twice; the second run should change nothing. Claude Code can do it if you put production's <code>DATABASE_URL</code> in a local env file and ask. There is no scenario-test database yet (Reference, S17), so nothing to run there.</p></div><div class="tags"><span class="tag who-you">You, or ask Claude Code</span></div></li>
+        <li class="item" data-id="m-verify-prod" data-gate="1"><div class="what">Check the columns are on production</div><div class="detail"><p>This query should return 16 rows. It is also in the PR description.</p><pre class="sql">select table_name, column_name from information_schema.columns
+where (table_name='users' and column_name in ('first_teaser_at','setup_session','promo_code','promo_coupon','promo_label','promo_refused_at','unlock_attempted_at','promo_ended_label','promo_duration','promo_duration_months','signup_finished_at','card_fingerprint'))
+   or (table_name='cora_user_weeks' and column_name='superseded_at')
+   or (table_name='charge_attempts' and column_name='coupon')
+   or (table_name='promo_reservations' and column_name in ('slot','card_fingerprint'));</pre></div><div class="tags"><span class="tag who-you">You, or ask Claude Code</span></div></li>
+        <li class="item" data-id="m-pk-preview" data-gate="1"><div class="what">Stripe publishable key on Vercel Preview</div><div class="detail"><p>Done by Claude Code on November 26 (the sandbox <code>pk_test_</code> key).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="m-pk-prod" data-gate="1"><div class="what">Add the live Stripe publishable key to Vercel Production</div><div class="detail"><p>In Stripe (live mode, not the sandbox): Developers, then API keys, then copy the <code>pk_live_</code> key. In Vercel: Settings, then Environment Variables, add <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> for Production only.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="m-browser" data-gate="1"><div class="what">Browser check of the Payment page on preview</div><div class="detail"><p>Done by Claude Code on November 26: tax line, a 3D Secure card, a declined card and a bad promo code all worked, after two fixes. Results are on the PR.</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="m-phone"><div class="what">Look at the Payment page on your phone</div><div class="detail"><p>The one thing the browser check could not cover. Sign in on preview as a test member (ask Claude Code for a fresh one) and check the summary bar, the card fields and the button at phone width.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
+        <li class="item" data-id="m-merge"><div class="what">Merge PR #57 into main</div><div class="detail"><p>Tell Claude Code "merge PR #57" once everything above is ticked. Vercel then deploys meetroger.ai. Sign-up stays off in production.</p></div><div class="tags"><span class="tag who-you">You say go</span><span class="tag who-claude">Claude Code merges</span></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h2>Before sign-up opens</h2>
+      <p class="sub">These come from PR #57 but don't block the merge, because sign-up stays off. They do block opening sign-up.</p>
+      <ul class="list" data-group="after57">
+        <li class="item" data-id="s-wording"><div class="what">Sign off the new wording</div><div class="detail"><p>Step 3 "Product and Pricing", the welcome email, the "first list ready" email, the day 2 and day 7 reminders, the no-card closing email, the Payment page and the discount-length lines ("CA$56 off your first month, then CA$316.40 a month").</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="s-due-today"><div class="what">Choose "Due today: CA$0" or "Due today: $0"</div><div class="detail"><p>The page names the currency because every Roger price does. Your original request said "$0".</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="s-terms"><div class="what">Add a monthly "no refunds, cancel any time" section to the terms</div><div class="detail"><p>The Payment page's "Terms and refunds" link goes to <code>/terms</code>, which still holds the old setups terms with a 14-day money-back guarantee. Claude Code can draft the section for you to approve.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="s-test-members"><div class="what">Keep or delete the two preview test members</div><div class="detail"><p><code>hello+paycheck@meetroger.ai</code> and <code>hello+paycheck2@meetroger.ai</code>, on preview only. Their emails go to the hello@ inbox.</p></div><div class="tags"><span class="tag who-you">You decide</span></div></li>
+        <li class="item" data-id="s-csp"><div class="what">Decide when to enforce the Payment page's security policy</div><div class="detail"><p>It ships report-only. The preview check showed no violations. Enforcing it needs a short follow-up change.</p></div><div class="tags"><span class="tag who-you">You decide</span><span class="tag optional">Optional</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="panel" id="golive" role="tabpanel" aria-labelledby="tab-golive" hidden>
+    <p class="panel-intro">Everything not in PR #57. The first six groups must be done before you turn sign-up on; the last group is later versions from spec 1.5. Row numbers (S1, D10) point to the Reference tab.</p>
+
+    <div class="group">
+      <h2>Content</h2>
+      <ul class="list">
+        <li class="item" data-id="g-zack"><div class="what">Approve Zack 2.0 for Claude, Duet, Grok Bot and Hark</div><div class="detail"><p>Drafts are in the repo (S1).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-cora"><div class="what">Approve Cora 2.0</div><div class="detail"><p>Draft in <code>content/cora/cora.md</code> (S2).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-categories"><div class="what">Confirm the category list</div><div class="detail"><p>Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands (D10, closes S3).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-setup-file"><div class="what">Supply and publish the starter setup file</div><div class="detail"><p>Send <code>Real estate Grok Bot Setup.md</code>, read version 1, publish it, and give the Grok Bot download link (S9).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-emails"><div class="what">Read the other automatic emails</div><div class="detail"><p>The ~30 emails and sign-up screens from the first build, including "tax included" vs "plus tax" and the higher-rate invoice line (S18).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-privacy"><div class="what">Have privacy and terms read, then remove the "draft" label</div><div class="detail"><p>Include the AI provider's position on training (S10) and the privacy points the build raised (S22).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h2>Stripe live mode</h2>
+      <ul class="list">
+        <li class="item" data-id="g-live-prices"><div class="what">Create the live products and the four monthly prices</div><div class="detail"><p>US$200, CA$280, and the higher rate US$400, CA$560, before tax. One-list prices are not needed in production. Claude Code can script this.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag who-claude">or Claude Code</span></div></li>
+        <li class="item" data-id="g-live-keys"><div class="what">Put the live keys, price ids and webhook secret in Vercel Production</div><div class="detail"><p><code>STRIPE_SECRET_KEY</code>, <code>STRIPE_WEBHOOK_SECRET</code> and the four <code>STRIPE_PRICE_MONTHLY_*</code> ids (S13).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-live-webhook"><div class="what">Create the live webhook</div><div class="detail"><p>To <code>https://meetroger.ai/api/stripe/webhook</code> on API version <code>2026-11-18.endive</code> with the seven events in S16.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-live-settings"><div class="what">Set the live dashboard settings</div><div class="detail"><p>Failed renewals end unpaid (not cancelled); Stripe's own customer emails off; Radar on; Link off (S16).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-hst-invoice"><div class="what">See HST as its own line on a Canadian test invoice</div><div class="detail"><p>Needs a test charge on preview (a member's third list).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="g-accountant"><div class="what">Get the accountant's word on charging US customers</div><div class="detail"><p>And on the product tax category (S4).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-old-webhooks"><div class="what">Delete leftover webhooks from old projects</div><div class="detail"><p>An active "the120" endpoint is still in the sandbox.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
+        <li class="item" data-id="g-old-key"><div class="what">Find where the old preview key came from</div><div class="detail"><p>Preview held a live key (<code>sk_live_51H8a…</code>) that isn't Roger's live key. Roll it in that account if it was pasted somewhere it shouldn't be.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h2>Accounts</h2>
+      <ul class="list">
+        <li class="item" data-id="g-resend-key"><div class="what">Delete the Resend key that appeared in a screenshot</div><div class="detail"><p>If not done already.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-admin-accounts"><div class="what">Both admin addresses sign up on production</div><div class="detail"><p><code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code> need Roger accounts to open <code>/admin</code> (S13).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-google"><div class="what">Set up "Sign in with Google"</div><div class="detail"><p>A Google OAuth client with <code>https://meetroger.ai/auth/google/callback</code>, keys in Vercel (S5). Hidden until then.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h2>Checks on preview</h2>
+      <ul class="list">
+        <li class="item" data-id="g-ai-gateway"><div class="what">The AI Gateway reads a run on preview</div><div class="detail"><p>Plus the Monday cron jobs show in Vercel and a Cora dry run completes (S15).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="g-scenario-db"><div class="what">Create a scenario-test database branch</div><div class="detail"><p>A third Neon branch with the non-production marker, URL in <code>SCENARIO_DATABASE_URL</code> (S17). The tests run in-process meanwhile.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h2>Decisions</h2>
+      <ul class="list">
+        <li class="item" data-id="g-nextjs"><div class="what">Take the Next.js security release</div><div class="detail"><p>Done: main is on Next.js 16.4.6, merged November 26 (S19).</p></div><div class="tags"><span class="tag who-claude">Done</span></div></li>
+        <li class="item" data-id="g-cora-decisions"><div class="what">Rule on Cora's six literal readings and the three unbuilt Cora 2.0 changes</div><div class="detail"><p>Listed in S20.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-defaults"><div class="what">Confirm or change the eleven defaults</div><div class="detail"><p>D1 to D12 on the Reference tab, section 2.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h2>Public site and go-live</h2>
+      <ul class="list">
+        <li class="item" data-id="g-public-site"><div class="what">Build the public v3 site</div><div class="detail"><p>meetroger.ai is still the Circles preview. The v3 pages, the "Start free" header and the switch that hides Circles (spec Part A) are the largest build left. Needs your letter (S6), headshot and signature (S7), testimonial attributions and a quote from Grace (S8), and the demo video and "one real week" figures (S12).</p></div><div class="tags"><span class="tag who-claude">Claude Code builds</span><span class="tag who-you">You supply content</span></div></li>
+        <li class="item" data-id="g-pilot-runs"><div class="what">Import the 13 pilot runs on production</div><div class="detail"><p>Read by the model first, then imported, pilots linked, and a Cora dry run read by an admin (S14).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="g-higher-price"><div class="what">Check no subscription is on the higher price by mistake</div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
+        <li class="item" data-id="g-open"><div class="what">Turn on the weekly cycle, then sign-up</div><div class="detail"><p>An admin turns on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-password"><div class="what">After launch: remove the shared admin password</div><div class="detail"><p>Once both admins have signed in by email on production, unset <code>ADMIN_PASSWORD</code> (S21).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h2>Later, not needed for launch</h2>
+      <p class="sub">From spec 1.5 (Roger AI Levels and the build order). Each version is built in full.</p>
+      <ul class="list">
+        <li class="item" data-id="l-levels-docs"><div class="what">Approve the Levels documents</div><div class="detail"><p>Roger AI Agent Levels and Check Charts v1.1, and the Levels Build Spec v1.2.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag later">Later</span></div></li>
+        <li class="item" data-id="l-zack21"><div class="what">Zack 2.1 content, once B1 is live</div><div class="detail"><p>Collects level evidence in a private <code>roger-level</code> block.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
+        <li class="item" data-id="l-b2"><div class="what">B2: growth</div><div class="detail"><p>About 13.5 half-days: referrals and credit, the Wednesday stats email, bricks and Seasons, leaderboard and points, the group session and guests (needs S11), sponsors, and quiz question 5 moved to Levels 0 to 9.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
+        <li class="item" data-id="l-b3"><div class="what">B3</div><div class="detail"><p>As in spec 1.5.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
+        <li class="item" data-id="l-b4"><div class="what">B4: levels</div><div class="detail"><p>About 10.5 half-days after B3: level intake, the level engine, the dashboard check chart, the stats email Level line, and Cora's use of levels.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="panel" id="reference" role="tabpanel" aria-labelledby="tab-reference" hidden>
+    <p class="panel-intro">The full detail rows, as kept since November 21. The two tabs before this one are the checklist; this tab is for looking things up.</p>
+    <div class="wrap-ref">
+
+
+  <h2>What Peter still has to supply, and the defaults waiting for his yes</h2>
   <p class="lead">The build spec leaves 14 things only Peter can provide and 12 choices made on his behalf; the B1 build added eight more owner-only go-live items (S15 to S22). Nothing here is finished until its row says so.</p>
   <p class="meta">Created November 21, 2026 · Updated the same day for spec version 1.1 (monthly or one list at a time; no non-contributor plan offered) · Updated November 23, 2026 for spec version 1.2 and the B1 build (section 3) · Updated November 25, 2026 for spec version 1.3 (one list now US$200 or CA$280, the same as a month) · Updated November 26, 2026: go-live status by area (section 0), progress on S13, S15, S16 and S17, and the sign-up changes (section 3) · Updated again November 26, 2026 for spec version 1.4 (no card at sign-up: the card is asked for on a new Payment page when the first list is ready; monthly is the only plan): the Stripe area, S13, S16, S18, S19 done, the schema step and the Payment browser check before go-live · Source: <code>artifacts/Roger v3 - design spec.md</code>, sections "Needed from Peter" and "Defaults to confirm" · Owner: Peter Kuperman</p>
 
@@ -681,8 +856,160 @@
   <footer>
     <p>Statuses are stored in this file. To change one, edit the row's <code>data-status</code> and its status label; the counts at the top update when the page is opened.</p>
   </footer>
+
+    </div>
+  </section>
+
+  <p class="status-note" id="save-status" aria-live="polite"></p>
 </div>
 
+<script>
+(function () {
+  var TICK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var items = Array.prototype.slice.call(document.querySelectorAll('.item[data-id]'));
+  var state = {};
+  var db = null, user = null, canWrite = false;
+  var status = document.getElementById('save-status');
+
+  // Build a checkbox for each item.
+  items.forEach(function (li) {
+    var id = li.getAttribute('data-id');
+    var label = document.createElement('label');
+    label.className = 'check';
+    var input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = 'chk-' + id;
+    input.disabled = true;
+    input.setAttribute('aria-label', li.querySelector('.what').textContent);
+    var box = document.createElement('span');
+    box.className = 'box';
+    box.innerHTML = TICK;
+    label.appendChild(input);
+    label.appendChild(box);
+    var body = document.createElement('div');
+    body.className = 'body';
+    while (li.firstChild) body.appendChild(li.firstChild);
+    var who = document.createElement('div');
+    who.className = 'ticked';
+    who.hidden = true;
+    body.appendChild(who);
+    li.appendChild(label);
+    li.appendChild(body);
+    input.addEventListener('change', function () { toggle(id, input.checked, input); });
+  });
+
+  function fmtDate(iso) {
+    try { return new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }); } catch (e) { return ''; }
+  }
+
+  async function render() {
+    var ids = [];
+    Object.keys(state).forEach(function (k) { var b = state[k] && state[k].by; if (b && ids.indexOf(b) < 0) ids.push(b); });
+    var profiles = {};
+    if (user && ids.length) { try { profiles = await user.profiles(ids); } catch (e) { profiles = {}; } }
+    items.forEach(function (li) {
+      var id = li.getAttribute('data-id');
+      var s = state[id];
+      var done = !!(s && s.done);
+      var input = document.getElementById('chk-' + id);
+      input.checked = done;
+      input.disabled = !canWrite;
+      li.classList.toggle('done', done);
+      var who = li.querySelector('.ticked');
+      if (done) {
+        var name = (s.by && profiles[s.by] && profiles[s.by].name) || s.byLabel || 'Someone';
+        who.textContent = 'Done' + (name ? ' · ' + name : '') + (s.at ? ', ' + fmtDate(s.at) : '');
+        who.hidden = false;
+      } else { who.hidden = true; }
+    });
+    counts();
+    gate();
+  }
+
+  function counts() {
+    ['pr57', 'golive'].forEach(function (tab) {
+      var lis = document.querySelectorAll('#' + tab + ' .item[data-id]');
+      var n = 0;
+      lis.forEach(function (li) { var s = state[li.getAttribute('data-id')]; if (s && s.done) n++; });
+      var el = document.querySelector('[data-count="' + tab + '"]');
+      if (el) el.textContent = n + '/' + lis.length;
+    });
+  }
+
+  function gate() {
+    var need = document.querySelectorAll('.item[data-gate="1"]');
+    var left = 0;
+    need.forEach(function (li) { var s = state[li.getAttribute('data-id')]; if (!(s && s.done)) left++; });
+    var merged = state['m-merge'] && state['m-merge'].done;
+    var g = document.getElementById('merge-gate');
+    var t = document.getElementById('merge-gate-title');
+    var x = document.getElementById('merge-gate-text');
+    g.classList.toggle('ready', left === 0);
+    if (merged) { t.textContent = 'PR #57 is merged'; x.textContent = 'Next: the "Before sign-up opens" list below.'; }
+    else if (left === 0) { t.textContent = 'Ready to merge'; x.textContent = 'Everything before the merge is ticked. Tell Claude Code "merge PR #57".'; }
+    else { t.textContent = 'Not ready to merge yet'; x.textContent = left + ' step' + (left === 1 ? '' : 's') + ' left under "Before you merge".'; }
+  }
+
+  async function toggle(id, done, input) {
+    if (!db || !canWrite) return;
+    input.disabled = true;
+    status.textContent = 'Saving…';
+    try {
+      var me = null;
+      try { me = await user.id(); } catch (e) { me = null; }
+      if (done) await db.collection('checks').doc(id).set({ done: true, by: me, at: new Date().toISOString() });
+      else await db.collection('checks').doc(id).delete();
+      status.textContent = 'Saved.';
+    } catch (e) {
+      input.checked = !done;
+      status.textContent = 'Could not save that tick. Check your connection and try again.';
+    } finally { input.disabled = !canWrite; }
+  }
+
+  // Tabs, routed on the hash so a link can open one.
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+  function show(name) {
+    if (['pr57', 'golive', 'reference'].indexOf(name) < 0) name = 'pr57';
+    tabs.forEach(function (b) {
+      var on = b.getAttribute('data-tab') === name;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      document.getElementById(b.getAttribute('data-tab')).hidden = !on;
+    });
+  }
+  tabs.forEach(function (b, i) {
+    b.addEventListener('click', function () { location.hash = b.getAttribute('data-tab'); show(b.getAttribute('data-tab')); });
+    b.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      var n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      n.focus(); n.click();
+    });
+  });
+  window.addEventListener('hashchange', function () { show(location.hash.slice(1)); });
+  show(location.hash.slice(1));
+  counts(); gate();
+
+  // Shared ticks.
+  (async function () {
+    if (!window.claude || !window.claude.use) { status.textContent = 'Ticks show here when the page is opened on claude.ai.'; return; }
+    try { db = await window.claude.use('db'); user = await window.claude.use('user'); } catch (e) { db = null; }
+    if (!db) { status.textContent = 'Sign in to claude.ai to see and save ticks.'; return; }
+    try { canWrite = user ? (await user.can('data.write')) !== false : true; } catch (e) { canWrite = true; }
+    var timer = setTimeout(function () { status.textContent = 'Ticks are taking a while to load.'; }, 10000);
+    db.collection('checks').onSnapshot(function (snap) {
+      clearTimeout(timer);
+      var next = {};
+      snap.docs.forEach(function (d) { if (d.exists) next[d.id] = d.data(); });
+      state = next;
+      if (status.textContent.indexOf('taking') >= 0) status.textContent = '';
+      render();
+    }, function () {
+      clearTimeout(timer);
+      status.textContent = 'Could not load ticks. Reload the page to try again.';
+    });
+  })();
+})();
+</script>
 <script>
   (function () {
     function count(table, status) {
@@ -695,5 +1022,3 @@
     set('n-conf', count('defaults', 'confirmed') + count('defaults', 'changed'));
   })();
 </script>
-</body>
-</html>
