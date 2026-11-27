@@ -1,20 +1,30 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
-import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords } from "./retention";
+import { applyIdleRetention, applyRetention, cleanUpExpired, IDLE_CLOCK_FROM, KEEP_NOTIFICATION_KINDS, purgeOldRecords } from "./retention";
+import { sendUnsentWelcomes } from "@/lib/signup/finish";
+import type { Transport } from "@/lib/mail/send";
+import { mergeV3 } from "@/lib/v3-settings";
 
 let query: Query;
 const NOW = new Date("2027-03-01T12:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
+const EPOCH = "2000-01-01T00:00:00Z";
 
-async function member(email: string, cols: Record<string, unknown>): Promise<{ id: string; run: string; pooled: string; unshared: string; pool: string }> {
+async function member(
+  email: string,
+  cols: Record<string, unknown>,
+  has: { run?: "live" | "deleted"; unshared?: boolean; profile?: boolean } = {},
+): Promise<{ id: string; run: string; pooled: string; unshared: string; pool: string }> {
   const keys = Object.keys(cols);
   const [{ id }] = await query<{ id: string }>(
     `insert into users (email, ${keys.join(", ")}) values ($1, ${keys.map((_, i) => `$${i + 2}`).join(", ")}) returning id`,
     [email, ...Object.values(cols)],
   );
   const [{ id: run }] = await query<{ id: string }>(
-    "insert into runs (user_id, week_of, route, agent, sharing, raw_text, parsed) values ($1, '2026-11-30', 'connector', 'hark', 'share', 'the report', '{}'::jsonb) returning id",
+    has.run === "deleted"
+      ? "insert into runs (user_id, week_of, route, agent, sharing, raw_text, parsed, status) values ($1, '2026-11-30', 'connector', 'hark', 'share', '', null, 'deleted') returning id"
+      : "insert into runs (user_id, week_of, route, agent, sharing, raw_text, parsed) values ($1, '2026-11-30', 'connector', 'hark', 'share', 'the report', '{}'::jsonb) returning id",
     [id],
   );
   const [{ id: pool }] = await query<{ id: string }>(
@@ -28,8 +38,8 @@ async function member(email: string, cols: Record<string, unknown>): Promise<{ i
       )
     )[0].id;
   const pooled = await play(1, pool);
-  const unshared = await play(2, null);
-  await query("insert into zack_profiles (user_id, week_of, route, raw_text) values ($1, '2026-11-30', 'connector', 'profile')", [id]);
+  const unshared = has.unshared === false ? "" : await play(2, null);
+  if (has.profile !== false) await query("insert into zack_profiles (user_id, week_of, route, raw_text) values ($1, '2026-11-30', 'connector', 'profile')", [id]);
   return { id, run, pooled, unshared, pool };
 }
 
@@ -88,17 +98,17 @@ describe("retention for idle members (privacy P3, 2026-11-27)", () => {
   it("erases a one-at-a-time member idle for over a year, keeping their pooled plays", async () => {
     const m = await member("idle@example.com", { status: "active", plan: "per_run", ...idle(400) });
     await age(m, 366);
-    expect(await applyIdleRetention(query, { now: NOW })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1 });
     expect(await query("select status, raw_text, parsed from runs")).toEqual([{ status: "deleted", raw_text: "", parsed: null }]);
     expect((await query<{ id: string }>("select id from plays")).map((p) => p.id)).toEqual([m.pooled]);
     expect(await query("select status, raw_text from zack_profiles")).toEqual([{ status: "deleted", raw_text: "" }]);
-    expect(await applyIdleRetention(query, { now: NOW })).toEqual({ users: 0, runs: 0, plays: 0, profiles: 0 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 0, runs: 0, plays: 0, profiles: 0 });
   });
 
   it("erases a held member idle for over a year", async () => {
     const m = await member("held@example.com", { status: "held", hold_reason: "renewal_unpaid", ...idle(500) });
     await age(m, 400);
-    expect(await applyIdleRetention(query, { now: NOW })).toMatchObject({ users: 1 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toMatchObject({ users: 1 });
   });
 
   it("leaves a member at exactly 365 days idle, and one with a recent run, order, sign-in or live session", async () => {
@@ -114,7 +124,7 @@ describe("retention for idle members (privacy P3, 2026-11-27)", () => {
     const live = await member("live@example.com", { status: "held", hold_reason: "renewal_unpaid", ...idle(400) });
     await age(live, 400);
     await query("insert into sessions (id_hash, user_id, method, created_at, expires_at, last_seen_at) values ('s', $1, 'email', $2, $3, $2)", [live.id, daysAgo(5), daysAgo(-25)]);
-    expect(await applyIdleRetention(query, { now: NOW })).toMatchObject({ users: 0 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toMatchObject({ users: 0 });
     expect(await query("select count(*)::int as n from runs where status = 'deleted'")).toEqual([{ n: 0 }]);
   });
 
@@ -123,18 +133,68 @@ describe("retention for idle members (privacy P3, 2026-11-27)", () => {
     await age(a, 800);
     const t = await member("trial@example.com", { status: "trial", ...idle(800) });
     await age(t, 800);
-    expect(await applyIdleRetention(query, { now: NOW })).toMatchObject({ users: 0 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toMatchObject({ users: 0 });
+  });
+
+  it("leaves cancelled and closed members to the 90-day rule, whatever their plan", async () => {
+    const c = await member("cancelled@example.com", { status: "cancelled", plan: "per_run", access_ends_at: daysAgo(30), ...idle(400) });
+    await age(c, 400);
+    const z = await member("closed@example.com", { status: "closed", plan: "per_run", access_ends_at: daysAgo(30), ...idle(400) });
+    await age(z, 400);
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toMatchObject({ users: 0 });
+    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toMatchObject({ users: 0 });
+    expect(await applyRetention(query, { now: new Date(NOW.getTime() + 61 * 86_400_000), retentionDays: 90 })).toMatchObject({ users: 2 });
+  });
+
+  it("erases whatever is left: an unshared play alone, or a profile alone; a member with only pooled plays is done", async () => {
+    const p = await member("plays@example.com", { status: "active", plan: "per_run", ...idle(400) }, { run: "deleted", profile: false });
+    await age(p, 400);
+    const z = await member("profile@example.com", { status: "held", hold_reason: "renewal_unpaid", ...idle(400) }, { run: "deleted", unshared: false });
+    await age(z, 400);
+    const d = await member("done@example.com", { status: "active", plan: "per_run", ...idle(400) }, { run: "deleted", unshared: false, profile: false });
+    await age(d, 400);
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 2, runs: 0, plays: 1, profiles: 1 });
+  });
+
+  it("counts a new account as activity even with no sign-in recorded, and erases an old one with none", async () => {
+    const fresh = await member("fresh@example.com", { status: "active", plan: "per_run", created_at: daysAgo(30), last_seen_at: null });
+    await age(fresh, 400);
+    const old = await member("old@example.com", { status: "active", plan: "per_run", created_at: daysAgo(400), last_seen_at: null });
+    await age(old, 400);
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toMatchObject({ users: 1 });
+    expect(await query("select u.email from users u join runs r on r.user_id = u.id where r.status = 'deleted'")).toEqual([{ email: "old@example.com" }]);
+  });
+
+  it("counts a charge or a card saved in the last year as activity", async () => {
+    const charged = await member("charged@example.com", { status: "held", hold_reason: "first_charge_failed", ...idle(400) });
+    await age(charged, 400);
+    await query("insert into charge_attempts (user_id, purpose, week_of, attempt, claimed_at) values ($1, 'first_charge', '2027-01-04', 1, $2)", [charged.id, daysAgo(40)]);
+    const carded = await member("carded@example.com", { status: "held", hold_reason: "renewal_unpaid", ...idle(400) });
+    await age(carded, 400);
+    await query("insert into card_updates (session_id, user_id, created_at) values ('cs_test', $1, $2)", [carded.id, daysAgo(40)]);
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toMatchObject({ users: 0 });
+  });
+
+  it("starts the idle clock no earlier than the day P3 shipped, so silence from before it erases no one", async () => {
+    const shipped = new Date(IDLE_CLOCK_FROM);
+    const at = (days: number) => new Date(shipped.getTime() + days * 86_400_000);
+    const m = await member("legacy@example.com", { status: "active", plan: "per_run", created_at: daysAgo(900), last_seen_at: null });
+    await age(m, 900);
+    expect(await applyIdleRetention(query, { now: at(100) })).toMatchObject({ users: 0 });
+    expect(await applyIdleRetention(query, { now: at(365) })).toMatchObject({ users: 0 });
+    expect(await applyIdleRetention(query, { now: at(366) })).toMatchObject({ users: 1 });
   });
 
   it("works through a backlog in bounded passes", async () => {
     for (const e of ["a", "b", "c"]) await age(await member(`${e}@example.com`, { status: "active", plan: "per_run", ...idle(400) }), 400);
-    expect(await applyIdleRetention(query, { now: NOW, limit: 2 })).toMatchObject({ users: 2 });
-    expect(await applyIdleRetention(query, { now: NOW, limit: 2 })).toMatchObject({ users: 1 });
-    expect(await applyIdleRetention(query, { now: NOW, limit: 2 })).toMatchObject({ users: 0 });
+    expect(await applyIdleRetention(query, { now: NOW, limit: 2, clockFrom: EPOCH })).toMatchObject({ users: 2 });
+    expect(await applyIdleRetention(query, { now: NOW, limit: 2, clockFrom: EPOCH })).toMatchObject({ users: 1 });
+    expect(await applyIdleRetention(query, { now: NOW, limit: 2, clockFrom: EPOCH })).toMatchObject({ users: 0 });
   });
 });
 
 describe("old records (privacy P6, 2026-11-27)", () => {
+  // NOW is the 1st of a month, so stepping months back never overflows a month end.
   const monthsAgo = (n: number) => {
     const d = new Date(NOW);
     d.setUTCMonth(d.getUTCMonth() - n);
@@ -142,14 +202,14 @@ describe("old records (privacy P6, 2026-11-27)", () => {
   };
 
   it("deletes sign-up interest over 12 months old that never became an account", async () => {
-    await query("insert into users (email) values ('Joined@example.com')");
+    await query("insert into users (email) values ('Joined@example.com'), ('lower@example.com')");
     await query(
       `insert into leads (email, kind, persona, created_at) values
-        ('old@example.com', 'interest', 'p', $1), ('joined@example.com', 'interest', 'p', $1), ('young@example.com', 'interest', 'p', $2)`,
+        ('old@example.com', 'interest', 'p', $1), ('joined@example.com', 'interest', 'p', $1), ('LOWER@Example.com', 'pack', 'p', $1), ('young@example.com', 'interest', 'p', $2)`,
       [monthsAgo(13), monthsAgo(11)],
     );
     expect(await purgeOldRecords(query, { now: NOW })).toMatchObject({ leads: 1 });
-    expect((await query<{ email: string }>("select email from leads order by 1")).map((r) => r.email)).toEqual(["joined@example.com", "young@example.com"]);
+    expect((await query<{ email: string }>("select email from leads order by 1")).map((r) => r.email)).toEqual(["LOWER@Example.com", "joined@example.com", "young@example.com"]);
   });
 
   it("deletes notification records over 12 months old, but keeps the welcome record so it is never sent twice", async () => {
@@ -170,6 +230,44 @@ describe("old records (privacy P6, 2026-11-27)", () => {
     );
     expect(await purgeOldRecords(query, { now: NOW })).toMatchObject({ stripeEvents: 2 });
     expect((await query<{ id: string }>("select id from stripe_events order by 1")).map((r) => r.id)).toEqual(["evt_17", "evt_stuck"]);
+  });
+
+  it("cuts at exactly 12 and 18 months: on the line is kept, a second past it is deleted", async () => {
+    const cut = async (months: number, extraMs: number) => (await query<{ at: string }>(`select ($1::timestamptz - make_interval(months => $2) - make_interval(secs => $3))::text as at`, [NOW.toISOString(), months, extraMs / 1000]))[0].at;
+    await query("insert into leads (email, kind, persona, created_at) values ('on@example.com', 'interest', 'p', $1), ('past@example.com', 'interest', 'p', $2)", [await cut(12, 0), await cut(12, 1000)]);
+    await query("insert into notifications (recipient, kind, ref, claimed_at) values ('u', 'monday_list', 'on', $1), ('u', 'monday_list', 'past', $2)", [await cut(12, 0), await cut(12, 1000)]);
+    await query("insert into stripe_events (id, type, status, claimed_at) values ('evt_on', 't', 'done', $1), ('evt_past', 't', 'done', $2)", [await cut(18, 0), await cut(18, 1000)]);
+    expect(await purgeOldRecords(query, { now: NOW })).toEqual({ leads: 1, notifications: 1, stripeEvents: 1 });
+    expect(await query("select email from leads")).toEqual([{ email: "on@example.com" }]);
+    expect(await query("select ref from notifications")).toEqual([{ ref: "on" }]);
+    expect(await query("select id from stripe_events")).toEqual([{ id: "evt_on" }]);
+  });
+
+  it("dates a notification by when it was sent, and a Stripe event by when it was finished", async () => {
+    await query("insert into notifications (recipient, kind, ref, status, claimed_at, sent_at) values ('u', 'monday_list', 'retried', 'sent', $1, $2), ('u', 'monday_list', 'failed', 'failed', $1, null)", [monthsAgo(14), monthsAgo(2)]);
+    await query("insert into stripe_events (id, type, status, claimed_at, done_at) values ('evt_late', 't', 'done', $1, $2)", [monthsAgo(20), monthsAgo(1)]);
+    expect(await purgeOldRecords(query, { now: NOW })).toEqual({ leads: 0, notifications: 1, stripeEvents: 0 });
+    expect(await query("select ref from notifications")).toEqual([{ ref: "retried" }]);
+  });
+
+  it("never sends a welcome twice after the purge: the kept welcome record still guards the sweep", async () => {
+    expect(KEEP_NOTIFICATION_KINDS).toContain("welcome");
+    const signedUp = "2026-12-01T15:00:00Z";
+    const later = new Date("2028-01-15T15:00:00Z");
+    const [{ id }] = await query<{ id: string }>(
+      "insert into users (email, status, signup_finished_at, signup_step) values ('ana@example.com', 'trial', $1, 'done') returning id",
+      [signedUp],
+    );
+    await query("insert into notifications (recipient, kind, ref, status, claimed_at, sent_at) values ($1, 'welcome', 'signup', 'sent', $2, $2)", [id, signedUp]);
+    await purgeOldRecords(query, { now: later });
+    expect(await query("select kind from notifications")).toEqual([{ kind: "welcome" }]);
+    const sent: unknown[] = [];
+    const transport: Transport = async (m) => {
+      sent.push(m);
+      return { ok: true };
+    };
+    expect(await sendUnsentWelcomes(query, { settings: mergeV3([]), now: later, query, transport, sleep: async () => {} })).toBe(0);
+    expect(sent).toEqual([]);
   });
 
   it("is bounded per pass", async () => {

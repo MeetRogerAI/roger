@@ -49,28 +49,41 @@ export async function applyRetention(q: Query, o: { now: Date; retentionDays: nu
 export const IDLE_RETENTION_DAYS = 365;
 
 /**
+ * The idle clock starts no earlier than the day P3 was decided and shipped.
+ * Before it a sign-in was not always recorded (users.last_seen_at was set only
+ * on renewal, and expired sessions are deleted), so older silence proves
+ * nothing: no member can be erased by P3 before November 27, 2027.
+ */
+export const IDLE_CLOCK_FROM = "2026-11-27T05:00:00Z";
+
+/**
  * Retention for members whose access never ends on its own (privacy P3):
  * one-at-a-time members (`per_run`, still active) and held members are
- * erased as applyRetention erases, once they have had no run, order or
- * sign-in for IDLE_RETENTION_DAYS. Sign-in is the user's last_seen_at (set
+ * erased as applyRetention erases, once they have had no run, order,
+ * charge, card save or sign-in for IDLE_RETENTION_DAYS (counted from no
+ * earlier than IDLE_CLOCK_FROM). A held member whose renewal is paid is
+ * released to monthly and leaves this rule. Sign-in is the user's last_seen_at (set
  * when a session is created or renewed) or a live session's; the account's
  * creation counts as activity too. Job clock, bounded per pass.
  */
-export async function applyIdleRetention(q: Query, o: { now: Date; idleDays?: number; limit?: number }): Promise<{ users: number; runs: number; plays: number; profiles: number }> {
+export async function applyIdleRetention(q: Query, o: { now: Date; idleDays?: number; limit?: number; clockFrom?: string }): Promise<{ users: number; runs: number; plays: number; profiles: number }> {
   const [r] = await q<{ users: number; runs: number; plays: number; profiles: number }>(
     ERASE_SQL(`select x.id from users x
        where ((x.status = 'active' and x.plan = 'per_run') or x.status = 'held')
          and greatest(
+               $4::timestamptz,
                x.created_at,
                coalesce(x.last_seen_at, x.created_at),
                coalesce((select max(s.last_seen_at) from sessions s where s.user_id = x.id), x.created_at),
                coalesce((select max(r.received_at) from runs r where r.user_id = x.id), x.created_at),
-               coalesce((select max(o.created_at) from orders o where o.user_id = x.id), x.created_at)
+               coalesce((select max(o.created_at) from orders o where o.user_id = x.id), x.created_at),
+               coalesce((select max(coalesce(c.settled_at, c.claimed_at)) from charge_attempts c where c.user_id = x.id), x.created_at),
+               coalesce((select max(cu.created_at) from card_updates cu where cu.user_id = x.id), x.created_at)
              ) < $1::timestamptz - make_interval(days => $2)
          and ${HOLDS_DATA_SQL("x")}
        order by x.created_at
        limit $3`),
-    [o.now.toISOString(), o.idleDays ?? IDLE_RETENTION_DAYS, o.limit ?? 200],
+    [o.now.toISOString(), o.idleDays ?? IDLE_RETENTION_DAYS, o.limit ?? 200, o.clockFrom ?? IDLE_CLOCK_FROM],
   );
   return r;
 }
