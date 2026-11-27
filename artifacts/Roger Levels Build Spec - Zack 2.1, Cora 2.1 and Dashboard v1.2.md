@@ -182,7 +182,7 @@ Sized in half-days, as Peter plans. These are estimates for Claude Code and agen
 | Tests on the pilot users' real runs | 1 |
 | Cora's use of levels: eligibility and the three slots (2.1, 2.2) | 2 |
 
-**Before B4 starts:** Zack 2.1 is approved and live (launch list S24), and Cora 2.0 change 8, profile matching, is built (launch list S20). Every row above is built; nothing in B4 is optional.
+**Before B4 starts:** Zack 2.1 is approved and live, and Cora 2.0 change 8, profile matching, is built (both now tracked in design spec B.16a, not the launch list). Every row above is built; nothing in B4 is optional.
 
 The earlier figure of "about 11 half-days" for the product work is now 0.5 in B2 plus 10.5 in B4.
 
@@ -191,7 +191,7 @@ The earlier figure of "about 11 half-days" for the product work is now 0.5 in B2
 | File | What it says about levels |
 |---|---|
 | `Roger v3 - design spec.md` (1.5) | "What changed in 1.5"; decision row "Roger AI Levels" (0.2); Season tokens (0.7); quiz question 5 (B.4); Bricks and Seasons and the stats email (B.15); **B.16a Version B4: levels**; sizes for B2 and B4 (B.17); acceptance checks 51 to 58 (B.18) |
-| `launch-list.html` | S20 (Cora change 8 before B4), S23 (levels files approved), S24 (Zack 2.1), and the area note in section 0 |
+| `launch-list.html` | Nothing since November 27, 2026: S20, S23 and S24 moved to design spec B.16a |
 | `Roger AI Agent Levels and Check Charts v1.1.md` | The ten levels, rules and check charts |
 | `Strategy/Roger-Strategy-v3.1.md` | R6g: bricks and Seasons, and a pointer to Roger AI Levels |
 
