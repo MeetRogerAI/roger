@@ -117,29 +117,27 @@ describe("/pricing on v1", () => {
     expect(markup.match(/data-hairline/g)).toHaveLength(3);
   });
 
-  it("opens with the price block as the page's one h1, monthly first and marked as the choice most people make", async () => {
+  it("opens with the price block as the page's one h1, Peter's line under it, and monthly as the one plan", async () => {
     const markup = await pricing();
     expect(markup.match(/<h1\b/g)).toHaveLength(1);
     expect(markup).toMatch(/<h1 id="price-title"[^>]*>Pricing<\/h1>/);
     const price = sectionMarkup(markup, "price");
-    expect(price.indexOf('data-plan="monthly"')).toBeGreaterThan(-1);
-    expect(price.indexOf('data-plan="monthly"')).toBeLessThan(price.indexOf('data-plan="list"'));
-    expect(price.match(/Most people choose this/g)).toHaveLength(1);
-    expect(price.indexOf("Most people choose this")).toBeLessThan(price.indexOf('data-plan="list"'));
-    for (const line of ["US$200 / month USD", "US$200 / list USD", "CA$280 / month CAD", "CA$280 / list CAD"]) expect(text(price)).toContain(line);
+    expect(text(price).startsWith("Pricing Get two Cora Curations for free and pay only after you have tried the product for two full weeks.")).toBe(true);
+    expect([...price.matchAll(/data-plan="(\w+)"/g)].map((m) => m[1])).toEqual(["monthly"]);
+    expect(text(price)).not.toMatch(/Most people choose this|one list|one at a time|\/ list\b/i);
+    for (const line of ["US$200 / month USD", "CA$280 / month CAD"]) expect(text(price)).toContain(line);
     expect(text(price)).toContain(copy.trialLine);
   });
 
-  it("never skips a heading level: the plan names are h2 under the h1, and each h3 follows an h2", async () => {
+  it("never skips a heading level: the plan's name is an h2 under the h1, and no level is jumped after it", async () => {
     const full = await pageMarkup(<V1PricingView version="v1" amounts={amounts} />);
     // The shell, and a streamed copy of the price block if there is one.
     for (const part of [shell(full), streamed(full)].filter(Boolean)) {
       const price = sectionMarkup(part, "price");
-      expect([...price.matchAll(/<(h[1-6])\b[^>]*>(.*?)<\/\1>/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual(["h1 Pricing", "h2 Monthly", "h2 One list at a time"]);
+      expect([...price.matchAll(/<(h[1-6])\b[^>]*>(.*?)<\/\1>/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual(["h1 Pricing", "h2 Monthly"]);
     }
     const levels = [...shell(full).matchAll(/<h([1-6])\b/g)].map((m) => Number(m[1]));
     expect(levels[0]).toBe(1);
-    expect(levels).toContain(3);
     for (const [i, level] of levels.entries()) if (i > 0) expect(level, `heading ${i + 1} of ${levels.join(" ")}`).toBeLessThanOrEqual(levels[i - 1] + 1);
   });
 
@@ -159,7 +157,7 @@ describe("/pricing on v1", () => {
   it("lists what is included as a plain list of four, with no group session line", async () => {
     const included = sectionMarkup(await pricing(), "included");
     expect([...included.matchAll(/<li[^>]*>(.*?)<\/li>/g)].map((m) => text(m[1]))).toEqual([
-      "Three ideas every Monday, each with a full playbook.",
+      "A Cora Curation every Monday: three ideas picked for you by Cora, each with a full playbook.",
       "Your own history of every idea you have received.",
       "Your Zack controls.",
       "A compounding view of what you have set up.",
@@ -167,18 +165,19 @@ describe("/pricing on v1", () => {
     expect(text(await pricing())).not.toMatch(/group session|weekly session/i);
   });
 
-  it("explains the two ways to buy in two columns, with one line under both (covers AE3)", async () => {
+  it("explains monthly, the one way to buy, in one paragraph with one line under it (covers AE3)", async () => {
     const markup = await pricing();
     const explained = sectionMarkup(markup, "explained");
-    expect([...explained.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map((m) => m[1])).toEqual(["Monthly", "One at a time"]);
+    // No columns to compare: there is nothing to compare monthly with.
+    expect(explained).not.toMatch(/<h3\b|grid-cols-2/);
     expect(text(explained)).toBe(
-      "Monthly or one at a time, explained Monthly Three ideas every Monday. Charged once a month, starting with your third list. One at a time Order a list for any Monday you want one. You are charged only for the lists you order. One list on its own costs the same as a whole month. Monthly brings a list every Monday for that price.",
+      "Monthly, explained A Cora Curation every Monday. Your first two are free. Your card is charged once a month, starting with your third Cora Curation. One price, charged once a month. Cancel in one click.",
     );
-    expect(explained).toMatch(/<p data-under-both[^>]*>One list on its own costs the same as a whole month\./);
-    // The line the single-list price made false is nowhere in the markup, in any spelling of its spaces.
-    expect(markup).not.toContain("Two lists one at a time cost the same as a whole month");
-    expect(text(markup)).not.toMatch(/two lists one at a time/i);
-    expect(text(await pageMarkup(<V1Pricing version="v1" />))).not.toMatch(/two lists one at a time/i);
+    expect(explained).toMatch(/<p data-under-monthly[^>]*>One price, charged once a month\./);
+    // Nothing on the page offers or explains buying one list, as the page serves it too.
+    for (const page of [markup, await pageMarkup(<V1Pricing version="v1" />)]) {
+      expect(text(page)).not.toMatch(/one list|one at a time|one-at-a-time|lists you order|Monday lists?\b/i);
+    }
   });
 
   it("explains contributing in the copy's words, with both currencies for the higher rate", async () => {
@@ -189,15 +188,15 @@ describe("/pricing on v1", () => {
       "A second miss makes that month US$400 (CA$560 in Canada).",
       "We email you both times, and the difference appears on your next invoice.",
       "If you switch sharing off in your dashboard, the monthly price is US$400 (CA$560 in Canada).",
-      "One-at-a-time lists need that week’s Zack report.",
     ])
       expect(contributing).toContain(fact);
+    expect(contributing).not.toMatch(/one-at-a-time|On monthly/i);
   });
 
   it("never presents the higher rate as a plan to choose", async () => {
     const markup = await pageMarkup(<V1PricingView version="v1" amounts={amounts} />);
-    // Two plans, in the price block and nowhere else, in the shell and in a streamed copy of the block if there is one.
-    for (const part of [shell(markup), streamed(markup)].filter(Boolean)) expect([...part.matchAll(/data-plan="(\w+)"/g)].map((m) => m[1])).toEqual(["monthly", "list"]);
+    // One plan, in the price block and nowhere else, in the shell and in a streamed copy of the block if there is one.
+    for (const part of [shell(markup), streamed(markup)].filter(Boolean)) expect([...part.matchAll(/data-plan="(\w+)"/g)].map((m) => m[1])).toEqual(["monthly"]);
     const page = shell(markup);
     // The higher rate is in the running text of one section, and in no other.
     for (const s of sections(page)) expect(/US\$400|CA\$560/.test(sectionMarkup(page, s.name)), s.name).toBe(s.name === "contributing");
@@ -214,21 +213,29 @@ describe("/pricing on v1", () => {
 
   it("states the no-refund line plainly", async () => {
     const refunds = text(sectionMarkup(await pricing(), "refunds"));
-    expect(refunds).toBe("No refunds There are no refunds. You get two free lists before any charge, and you can cancel in one click.");
+    expect(refunds).toBe("No refunds There are no refunds. You get two free Cora Curations before any charge, and you can cancel in one click.");
   });
 
   it("ends on the primary start button, with the card line under it", async () => {
     const band = startBand(await pricing());
-    expect(text(band)).toBe("Get two free Monday lists Card required. Charged only with your third list.");
+    expect(text(band)).toBe("Get two free Cora Curations Card required. Charged only with your third Cora Curation.");
     expect(band).toMatch(/<a class="btn btn-l" href="\/start">/);
   });
 
   it("takes every price from the amounts, never from the copy", async () => {
     const other = amountsFrom({ ...v3Defaults, priceUsd: 311, priceCad: 433, priceRunUsd: 322, priceRunCad: 444, priceHigherUsd: 655, priceHigherCad: 877, freeRuns: 3 });
     const seen = text(await pricing({ amounts: other }));
-    for (const line of ["US$311 / month USD", "CA$433 / month CAD", "US$322 / list USD", "CA$444 / list CAD", "A second miss makes that month US$655 (CA$877 in Canada).", "You get three free lists before any charge"])
+    for (const line of [
+      "US$311 / month USD",
+      "CA$433 / month CAD",
+      "A second miss makes that month US$655 (CA$877 in Canada).",
+      "You get three free Cora Curations before any charge",
+      // Both counts in Peter's line are the number of free Cora Curations.
+      "Get three Cora Curations for free and pay only after you have tried the product for three full weeks.",
+    ])
       expect(seen).toContain(line);
-    expect([...new Set(seen.match(/(?:US|CA)\$\d+(?:,\d{3})*/g))].sort()).toEqual(["CA$433", "CA$444", "CA$877", "US$311", "US$322", "US$655"]);
+    // The price of one list is not on the page.
+    expect([...new Set(seen.match(/(?:US|CA)\$\d+(?:,\d{3})*/g))].sort()).toEqual(["CA$433", "CA$877", "US$311", "US$655"]);
   });
 });
 
@@ -252,7 +259,9 @@ describe("/faq on v1", () => {
       expect(text(part), group.id).toBe([group.title, ...group.items.map((item) => `${item.q} ${item.a}`)].join(" "));
     }
     // The answers name amounts, and each is filled.
-    expect(text(markup)).toContain("US$200 a month, or US$200 for one list at a time, plus tax where it applies.");
+    expect(text(markup)).toContain("US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. Get two Cora Curations for free and pay only after you have tried the product for two full weeks.");
+    // No question is there only to explain buying one list.
+    expect(text(markup)).not.toMatch(/one list|one at a time|Monday lists?\b/i);
     expect(text(markup)).toContain("A second miss makes that month US$400 (CA$560 in Canada).");
     expect(text(markup)).not.toMatch(/[{}]/);
   });
@@ -263,7 +272,7 @@ describe("/faq on v1", () => {
     // Closed until asked for: no details element carries the open attribute.
     expect(markup).not.toMatch(/<details[^>]*\sopen(?:[\s=>])/);
     expect(hrefs(markup)).toEqual(["/start"]);
-    expect(text(startBand(markup))).toBe("Get two free Monday lists Card required. Charged only with your third list.");
+    expect(text(startBand(markup))).toBe("Get two free Cora Curations Card required. Charged only with your third Cora Curation.");
   });
 });
 
@@ -413,18 +422,21 @@ describe("/how-it-works on v1", () => {
     const first = sectionMarkup(await how(), "first-weeks");
     expect(first.match(/<li/g)).toHaveLength(6);
     expect(text(first)).toContain("You start, and we ask for a card. It is not charged.");
-    expect(text(first)).toContain("On monthly, your card is charged with your third list. On one at a time, it is charged only when you order a list. Cancel before then and you pay nothing.");
-    expect(text(first)).toContain("If no first list is delivered within 21 days of sign-up, the trial closes without a charge.");
-    // The count of free lists and the days are the settings', in the heading too.
+    expect(text(first)).toContain("Your first two Cora Curations arrive, one each Monday. They are free.");
+    expect(text(first)).toContain("After your second Cora Curation, we email you with what happens next.");
+    expect(text(first)).toContain("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
+    expect(text(first)).toContain("If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge.");
+    expect(text(first)).not.toMatch(/\blists?\b|one at a time|On monthly/i);
+    // The count of free Cora Curations and the days are the settings', in the heading too.
     const other = text(sectionMarkup(await how({ amounts: amountsFrom({ ...v3Defaults, freeRuns: 3, trialCloseDays: 30 }) }), "first-weeks"));
     expect(other).toContain("Your first three weeks");
-    expect(other).toContain("charged with your fourth list");
+    expect(other).toContain("charged with your fourth Cora Curation");
     expect(other).toContain("within 30 days of sign-up");
   });
 
   it("if you have no AI agent yet: two sentences and a link to /getstarted", async () => {
     const none = sectionMarkup(await how(), "no-agent");
-    expect(text(none)).toBe("If you have no AI agent yet You can still start. The startup page walks you through installing one and setting up a starter team for real estate. Go to the startup page");
+    expect(text(none)).toBe("If you have no AI agent yet You can still start. The startup page walks you through installing one and setting up a starter team. Go to the startup page");
     expect(none).toMatch(/<a class="tlink chev" href="\/getstarted">Go to the startup page<\/a>/);
     expect(hrefs(none)).toEqual(["/getstarted"]);
   });
@@ -503,7 +515,7 @@ describe("/about on v1", () => {
 
   it("ends on the start button", async () => {
     const markup = await about();
-    expect(text(startBand(markup))).toBe("Get two free Monday lists Card required. Charged only with your third list.");
+    expect(text(startBand(markup))).toBe("Get two free Cora Curations Card required. Charged only with your third Cora Curation.");
     expect(hrefs(markup)).toEqual(["/start"]);
   });
 });
@@ -550,9 +562,11 @@ describe("the four reading pages together", () => {
 
   it("show no dollar figure but the settings' amounts", async () => {
     const seen = (await Promise.all(each.map(([, page]) => page.served()))).map(text).join(" ");
-    // Six amounts, four different figures: a month and a list cost the same today.
+    // Four amounts: the monthly price and the higher rate, each in two currencies. The price of one list is on none of these pages.
     expect([...new Set(seen.match(/(?:US|CA)\$\d+(?:,\d{3})*/g))].sort()).toEqual(["CA$280", "CA$560", "US$200", "US$400"]);
-    expect(amounts.monthly).toEqual(amounts.list);
+    const dearerList = amountsFrom({ ...v3Defaults, priceRunUsd: 322, priceRunCad: 444 });
+    const withList = [await pricing({ amounts: dearerList }), await faq({ amounts: dearerList }), await how({ amounts: dearerList })].map(text).join(" ");
+    expect(withList).not.toMatch(/322|444/);
   });
 
   it("give no start button a path in its server-rendered address, so a remembered audience carries through (AE11)", async () => {
@@ -562,7 +576,7 @@ describe("the four reading pages together", () => {
       for (const markup of [shell(await page.served()), await page.view()]) {
         const starts = hrefs(markup).filter((h) => h.startsWith("/start"));
         expect(starts, name).toEqual(Array(counts[name as keyof typeof counts]).fill("/start"));
-        expect(markup.match(/>Get two free Monday lists<\/a>/g), name).toHaveLength(starts.length);
+        expect(markup.match(/>Get two free Cora Curations<\/a>/g), name).toHaveLength(starts.length);
         expect(markup, name).not.toMatch(/path=|cur=/);
       }
     }
@@ -578,7 +592,7 @@ describe("the four reading pages together", () => {
       const markup = await page.view();
       const band = startBand(markup);
       expect(band, name).toMatch(/^<div data-start-band="true" class="on-night bg-night text-night-ink">/);
-      expect(band, name).toMatch(/<a class="btn btn-l" href="\/start">Get two free Monday lists<\/a>/);
+      expect(band, name).toMatch(/<a class="btn btn-l" href="\/start">Get two free Cora Curations<\/a>/);
       expect(markup.endsWith(`${band}</div>`), name).toBe(true);
     }
   });

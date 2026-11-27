@@ -19,7 +19,7 @@ export type ChromeLink = { href: string; label: string };
 export type SiteChrome = {
   /** The header's links, in order. */
   links: ChromeLink[];
-  /** The start button: the long label where there is room, the short one elsewhere. */
+  /** The start button. `short` is the same words: a site version's button reads the same at every width. */
   start: ChromeLink & { short: string };
   signIn: ChromeLink;
   /** Shown to a signed-in visitor in place of the two above. */
@@ -110,7 +110,7 @@ export function chromeFrom(copy: ChromeCopy, amounts: Amounts): SiteChrome {
   const about = { href: "/about", label: nav.about };
   return {
     links: [howItWorks, pricing, library, faq, about],
-    start: { href: "/start", label: buttons.start, short: buttons.startShort },
+    start: { href: "/start", label: buttons.start, short: buttons.start },
     signIn: { href: "/signin", label: buttons.signIn },
     openApp: { href: "/app", label: buttons.openApp },
     place: footer.place,

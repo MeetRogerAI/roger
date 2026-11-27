@@ -9,8 +9,8 @@
  * them without importing from another version's look.
  *
  * Amounts are never typed into copy. A string marked "names amounts" may hold
- * {monthlyUsd}, {monthlyCad}, {listUsd}, {listCad}, {higherUsd}, {higherCad},
- * {freeLists}, {firstPaidList}, {lastFreeList} and {trialCloseDays}, filled by fillAmounts in
+ * {monthlyUsd}, {monthlyCad}, {higherUsd}, {higherCad}, {freeLists},
+ * {firstPaidList}, {lastFreeList} and {trialCloseDays}, filled by fillAmounts in
  * src/lib/site/amounts.ts.
  */
 
@@ -23,21 +23,16 @@ export type QuestionGroup = { id: string; title: string; items: Question[] };
 export type PriceWords = {
   /** The label on the USD and CAD switch, for screen readers. */
   switchLabel: string;
-  /** The unit words in "US$200 / month USD" and "US$200 / list USD". */
+  /** The unit word in "US$200 / month USD". */
   perMonth: string;
-  perList: string;
-  /** The mark on monthly. */
-  popular: string;
   /** The note under a price, by currency. Prices are shown before tax. */
   tax: { USD: string; CAD: string };
 };
 
 export type SharedCopy = {
   buttons: {
-    /** The primary button on every page, to /start. Names amounts. */
+    /** The primary button on every page and in the header, to /start. Names amounts. */
     start: string;
-    /** The short form for the header. */
-    startShort: string;
     signIn: string;
     /** Shown to a signed-in visitor in place of the two above. */
     openApp: string;
@@ -70,15 +65,17 @@ export type SharedCopy = {
 /** The price block: the shared price words, the block's own, the trial line and the button. */
 export type PriceBlockCopy = PriceWords & {
   title: string;
+  /** The line under the title. Names amounts. */
+  sub: string;
+  /** The one plan the marketing pages show. */
   monthly: { name: string; note: string };
-  list: { name: string; note: string };
   trialLine: string;
   /** The primary button's label. */
   start: string;
 };
 
-/** The closing band: one line, the primary button's label and the trial line. */
-export type ClosingBandCopy = { line: string; start: string; trialLine: string };
+/** The closing band: one line, the line under it, the primary button's label and the trial line. */
+export type ClosingBandCopy = { line: string; sub: string; start: string; trialLine: string };
 
 /** "You decide what Zack shares": each point is a short title and the sentences under it. */
 export type ControlBlockCopy = {
@@ -91,7 +88,9 @@ export type ControlBlockCopy = {
 export type ScoreNames = { hours: string; reach: string; ease: string; proof: string; surprise: string };
 
 export type SampleCardCopy = {
-  install: { title: string; help: string; copy: string; writtenOn: string; writtenOnNote: string };
+  /** The card's first heading, and the labels of the two folded rows under it. */
+  idea: { title: string; summary: string; copy: string };
+  install: { help: string; copy: string; writtenOn: string; writtenOnNote: string };
   scores: {
     title: string;
     /** After a score, as in "8 of 10". */
@@ -100,7 +99,8 @@ export type SampleCardCopy = {
     notScored: string;
     names: ScoreNames;
   };
-  playbook: { title: string };
+  /** The card's second heading; the word after the count on its one folded row ("8 steps"); and that row's label when the playbook has no numbered parts. */
+  playbook: { title: string; steps: string; whole: string };
 };
 
 /**

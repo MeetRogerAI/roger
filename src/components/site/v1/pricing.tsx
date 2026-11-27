@@ -11,13 +11,14 @@ import { Hairline } from "./blocks/sections";
  *
  *   1. the price block, as the page's heading   night
  *   2. what is included                         ground
- *   3. monthly or one at a time, explained      ground
+ *   3. monthly, explained                       ground
  *   4. how contributing works                   ground
  *   5. no refunds                               ground
  *   6. the start button                         night
  *
- * The two ways to buy are the price block's two, and nothing else on the page
- * is a plan. The higher rate is named only inside the running text of "How
+ * Monthly is the one way to buy the page shows (Peter's homepage review,
+ * November 26, 2026), and nothing else on the page is a plan. The higher rate
+ * is named only inside the running text of "How
  * contributing works": it has no card, no price line and no button of its own.
  *
  * The weekly group session is not in "What is included" until that part of
@@ -61,18 +62,11 @@ export function V1PricingView({
         </ul>
       </ReadingSection>
 
-      {/* 3. Monthly or one at a time: two short columns, and one line under both */}
+      {/* 3. Monthly, explained: when the card is charged, and one line under it */}
       <Hairline />
-      <ReadingSection id="explained" title={pricing.explained.title} width="head">
-        <div className="grid gap-10 sm:grid-cols-2 sm:gap-12">
-          {[pricing.explained.monthly, pricing.explained.list].map((column) => (
-            <div key={column.title} className="border-t border-rule-strong pt-6">
-              <h3 className="text-title">{column.title}</h3>
-              <p className="mt-3 text-body text-ink-2">{column.body}</p>
-            </div>
-          ))}
-        </div>
-        <p data-under-both className="mt-10 border-t border-rule pt-6 text-body">
+      <ReadingSection id="explained" title={pricing.explained.title}>
+        <p className="text-body">{pricing.explained.body}</p>
+        <p data-under-monthly className="mt-6 border-t border-rule pt-6 text-body text-ink-2">
           {pricing.explained.under}
         </p>
       </ReadingSection>

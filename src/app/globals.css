@@ -524,11 +524,10 @@ h2 {
  * Bricks in motion (site version 1: the hero, "how it works", "It compounds").
  * The markup is always the finished picture. A hidden or dimmed state exists
  * only with motion allowed and only once script is running: html.js for the
- * hero, html.reveal-ready for "how it works", and .is-staged, which the scroll
- * story's own script adds, for "It compounds". With reduced motion or with no
- * script, none of these rules applies and nothing moves. The scroll story is
- * staged only while it is still below the screen, and in print every brick and
- * label is forced to its finished state.
+ * two heroes and for the "It compounds" loop, whose script marks the bricks of
+ * later weeks data-out, and html.reveal-ready for "how it works". With reduced
+ * motion or with no script, none of these rules applies and nothing moves. In
+ * print every brick and label is forced to its finished state.
  */
 @media (prefers-reduced-motion: no-preference) {
   /* Hero: the newest three bricks drop onto the stack, one after another */
@@ -557,30 +556,85 @@ h2 {
     transition-delay: calc(var(--step, 0) * 240ms + var(--i, 0) * 45ms + 350ms);
   }
 
-  /* It compounds: a step is shown as its label crosses the middle of the screen, and stays shown */
-  .compounding.is-staged [data-brick] {
-    opacity: 0;
-    transform: translateY(-16px) scale(0.92);
-  }
-  .compounding.is-staged [data-brick].is-in {
-    opacity: 1;
-    transform: none;
+  /* It compounds: the loop. A brick of a later week than the loop's is out; the ones that arrive drop in one after another */
+  .js .compounding-loop [data-brick] {
     transition:
-      opacity 260ms var(--ease-out) var(--d, 0ms),
-      transform 560ms var(--ease-spring) var(--d, 0ms);
+      opacity 240ms var(--ease-out),
+      transform 480ms var(--ease-spring);
+    transition-delay: calc(max(0, var(--i, 0) - var(--from, 0)) * var(--per, 30ms));
   }
-  .compounding.is-staged [data-step-week] {
-    opacity: 0.6;
-    transition: opacity 400ms var(--ease-out);
+  .js .compounding-loop [data-brick][data-out="yes"] {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.9);
+    transition-duration: 200ms;
+    transition-delay: 0ms;
   }
-  .compounding.is-staged [data-step-week].is-in {
+  .js .compounding-loop [data-loop-pause] {
+    display: inline-flex;
+  }
+  /* The current state's line is marked by its rule and its ink. The others keep a readable ink: nothing is dimmed below contrast */
+  .js .compounding-loop [data-loop-state] {
+    transition: border-color 300ms var(--ease-out);
+  }
+  .js .compounding-loop [data-loop-state][data-active="no"] > :first-child {
+    color: var(--color-ink-2);
+  }
+  .js .compounding-loop [data-loop-state][data-active="yes"] {
+    border-color: var(--color-level-1);
+  }
+
+  /*
+   * The hero's four parts (site version 1, the homepage). The markup is a still list of the four, each its
+   * label and its headline. Here it becomes a loop: the labels are the row of buttons above the frame, and
+   * the frame holds one headline at a time, all four in the same place so the frame keeps its height.
+   */
+  .js .hero-steps [data-step-tabs] {
+    display: grid;
+  }
+  .js .hero-steps [data-step-pause] {
+    display: inline-flex;
+  }
+  .js .hero-steps [data-step-label] {
+    display: none;
+  }
+  .js .hero-steps [data-step-list] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    align-items: center;
+    min-height: 7.5rem;
+  }
+  .js .hero-steps [data-step] {
+    grid-area: 1 / 1;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(12px);
+    transition:
+      opacity 260ms var(--ease-out),
+      transform 520ms var(--ease-out),
+      visibility 0s linear 260ms;
+  }
+  .js .hero-steps [data-step][data-active="yes"] {
     opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition-delay: 180ms, 180ms, 0s;
   }
-  .compounding.is-staged [data-step-dot] {
-    transition: background-color 400ms var(--ease-out);
+  .js .hero-steps [data-step-headline] {
+    margin-top: 0;
+    font-size: var(--text-h3);
+    line-height: var(--text-h3--line-height);
+    letter-spacing: var(--text-h3--letter-spacing);
+    font-weight: var(--text-h3--font-weight);
+    text-wrap: balance;
   }
-  .compounding.is-staged [data-step-week]:not(.is-in) [data-step-dot] {
-    background-color: var(--color-ground-2);
+  .js .hero-steps [data-step-bricks] li {
+    transition:
+      opacity 300ms var(--ease-out),
+      transform 520ms var(--ease-spring);
+  }
+  .js .hero-steps [data-step-bricks] [data-lit="no"] {
+    opacity: 0.22;
+    transform: scale(0.84);
   }
 }
 @keyframes brick-drop {
@@ -597,22 +651,33 @@ h2 {
 @media print {
   .bricks-arrive [data-brick],
   .bricks-grow [data-brick],
-  .compounding [data-brick],
-  .compounding [data-step-week] {
+  .compounding-loop [data-brick],
+  .hero-steps [data-step-bricks] li {
     animation: none !important;
     transition: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
-  .compounding [data-step-dot] {
-    transition: none !important;
-    background-color: var(--color-level-1) !important;
+  /* The hero's four parts go back to the still list, and no control is printed */
+  .hero-steps [data-step] {
+    grid-area: auto !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+  .hero-steps [data-step-label] {
+    display: block !important;
+  }
+  .hero-steps [data-step-tabs],
+  .hero-steps [data-step-pause],
+  .compounding-loop [data-loop-pause] {
+    display: none !important;
   }
   /* A brick is a filled square: without this a printer leaves the fill out */
   .bricks-arrive [data-brick],
   .bricks-grow [data-brick],
-  .compounding [data-brick],
-  .compounding [data-step-dot] {
+  .compounding-loop [data-brick],
+  .hero-steps [data-step-bricks] li {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

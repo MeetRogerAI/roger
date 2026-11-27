@@ -24,7 +24,7 @@ describe("chromeFrom", () => {
   });
 
   it("fills the amounts its own labels name", () => {
-    expect(siteChrome("v1", amounts).start).toEqual({ href: "/start", label: "Get two free Monday lists", short: "Start free" });
+    expect(siteChrome("v1", amounts).start).toEqual({ href: "/start", label: "Get two free Cora Curations", short: "Get two free Cora Curations" });
     expect(JSON.stringify(siteChrome("v1", amounts))).not.toMatch(/[{}]\w|\w\}/);
   });
 });

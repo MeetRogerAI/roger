@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 import { CountryDefault } from "@/components/site/shared/country-default";
 import { BrickStack, type BrickLevel } from "@/components/site/v1/blocks/brick-stack";
 import { ClosingBand } from "@/components/site/v1/blocks/closing-band";
+import { Compounding } from "@/components/site/v1/blocks/compounding";
 import { ControlBlock } from "@/components/site/v1/blocks/control-block";
+import { HeroSteps } from "@/components/site/v1/blocks/hero-steps";
 import { PriceBlock } from "@/components/site/v1/blocks/price-block";
 import { Questions } from "@/components/site/v1/blocks/questions";
 import { SampleCard } from "@/components/site/v1/blocks/sample-card";
@@ -47,7 +49,7 @@ export default async function SiteBlocksPreview() {
 
   const stacks = (night: boolean) => (
     <div className="flex flex-wrap items-end justify-center gap-10">
-      {compoundingSteps.slice(0, 3).map((s) => (
+      {compoundingSteps.slice(0, 4).map((s) => (
         <BrickStack key={s.week} weeks={s.week} size="l" night={night} words={copy.bricks} caption />
       ))}
       <BrickStack weeks={compoundingFinal.week} perRow={13} night={night} words={copy.bricks} caption />
@@ -68,18 +70,28 @@ export default async function SiteBlocksPreview() {
         <SectionHead title={copy.home.how.title} sub={copy.home.hero.sub} night />
       </div>
 
-      <Label>Brick stack: weeks 1, 2, 3 and 26, part set up, and the five levels</Label>
+      <Label>Brick stack: weeks 1, 2, 3, 4 and 26, part set up, and the five levels</Label>
       <div className="bg-ground py-16">{stacks(false)}</div>
       <div className="on-night bg-night py-16 text-night-ink">{stacks(true)}</div>
 
-      <Label>Price block (night), with the currency for this visitor’s country</Label>
+      <Label>The hero’s four parts (night): a loop with script and motion, a still list without</Label>
+      <div className="on-night bg-night py-16 text-night-ink">
+        <div className="wrap flex justify-center">
+          <HeroSteps copy={copy.home.hero.graphic} headlines={copy.home.how.steps.map((step) => step.title)} />
+        </div>
+      </div>
+
+      <Label>“It compounds”: the seven-state loop, which is the last state with no script or with reduced motion</Label>
+      <Compounding copy={copy.home.compounds} words={copy.bricks} />
+
+      <Label>Price block (night): monthly only, with the currency for this visitor’s country</Label>
       <CountryDefault>{(currency) => <PriceBlock amounts={amounts} copy={priceCopy} initialCurrency={currency} audience="re" />}</CountryDefault>
 
       <Label>Control block, on ground and on night</Label>
       <ControlBlock copy={copy.control} />
       <ControlBlock copy={copy.control} night id="control-night" />
 
-      <Label>Sample idea card on ground, as the site shows it: a play with no scores has no score section</Label>
+      <Label>Sample idea card on ground, as the site shows it, every row folded: a play with no scores has no score row</Label>
       <div className="bg-ground py-16">
         <SectionHead title={copy.sample.title} sub={copy.sample.line} className="mb-10" />
         <div className="wrap">

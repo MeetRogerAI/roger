@@ -51,6 +51,11 @@ describe("/site-preview/blocks", () => {
     expect(markup).toContain('data-plan="monthly"');
     expect(markup).toContain("You decide what Zack shares");
     expect(markup).toContain("Client email in two tones");
+    // The blocks of Peter's homepage review (November 26, 2026): the hero's four parts, the seven-state loop, one plan, and the folded card.
+    expect(markup).toContain("data-hero-steps");
+    expect(markup.match(/data-loop-state="/g)).toHaveLength(7);
+    expect(markup).not.toContain('data-plan="list"');
+    expect(markup).toContain('data-fold="playbook"');
     // The bundled play has no scores, and the made-up scored card shows the five bars.
     expect(markup.match(/data-score="/g)).toHaveLength(5);
   });

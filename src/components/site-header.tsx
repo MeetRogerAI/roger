@@ -109,15 +109,16 @@ function AccountLinks({ cta, account }: { cta: NonNullable<NavSet["cta"]>; accou
   return (
     <span className="grid items-center justify-items-end">
       <span className={`col-start-1 row-start-1 flex items-center gap-4 sm:gap-5 ${signedIn ? "invisible" : ""}`} aria-hidden={signedIn || undefined}>
-        {/* On the narrowest phones there is no room beside the button: the menu carries it there. */}
-        <Link href={account.signIn.href} className="whitespace-nowrap rounded px-0.5 py-1 text-small text-ink-2 transition-colors duration-[180ms] hover:text-ink max-[359px]:hidden">
+        {/*
+          Under 375 pixels there is no room beside the button: the menu carries it there. At 360, a common
+          phone width, the button's words took three lines beside it and the button filled the header's height.
+        */}
+        <Link href={account.signIn.href} className="whitespace-nowrap rounded px-0.5 py-1 text-small text-ink-2 transition-colors duration-[180ms] hover:text-ink max-[374px]:hidden">
           {account.signIn.label}
         </Link>
         <span className="header-cta">
-          <StartLink className="btn btn-m">
-            <span className="hidden xl:inline">{cta.label}</span>
-            <span className="xl:hidden">{cta.short}</span>
-          </StartLink>
+          {/* The same words at every width (Peter, November 26, 2026). On a phone they take two lines, in a smaller size, so the row still fits. */}
+          <StartLink className="btn btn-m max-sm:max-w-[8.5rem] max-sm:px-3.5 max-sm:text-[0.8125rem] max-sm:leading-[1.15]">{cta.label}</StartLink>
         </span>
       </span>
       {signedIn && (

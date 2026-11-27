@@ -4,8 +4,8 @@ import type { ClosingBandCopy } from "@/data/site/copy-types";
 import type { SiteAudience } from "@/lib/site/start-link";
 
 /**
- * The closing band, a night chapter (spec A.4): one line, the primary button
- * and the trial line. Build `copy` with closingBandCopy in src/data/site/v1.ts.
+ * The closing band, a night chapter (spec A.4): one line, the line under the
+ * price repeated under it, the primary button and the trial line. Build `copy` with closingBandCopy in src/data/site/v1.ts.
  */
 export function ClosingBand({
   copy,
@@ -24,6 +24,9 @@ export function ClosingBand({
         <h2 id={titleId} className="mx-auto max-w-[44rem] text-h2">
           {copy.line}
         </h2>
+        <p data-closing-sub className="mx-auto mt-4 max-w-[44rem] text-lead text-night-ink-2">
+          {copy.sub}
+        </p>
         <div className="mt-10">
           <StartLink audience={audience} className="btn btn-l">
             {copy.start}

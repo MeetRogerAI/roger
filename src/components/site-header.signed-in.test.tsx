@@ -50,11 +50,14 @@ describe("a site version's header for a signed-in visitor", () => {
     const ends = "</a></span></span>";
     expect(markup.slice(to - ends.length, to)).toBe(ends);
     const inside = markup.slice(from, to - "</span>".length);
+    // One label at every width: no shorter one beside it.
+    expect(inside).toMatch(/<a class="btn btn-m [^"]*" href="\/start">Get two free Cora Curations<\/a>/);
+    expect(inside).not.toContain("Start free");
     expect(inside.match(/<span/g)!.length).toBe(inside.match(/<\/span>/g)!.length);
     expect(hrefs(inside)).toEqual(["/signin", "/start"]);
     expect(inside).toContain(">Sign in</a>");
-    expect(inside).toContain(">Get two free Monday lists</span>");
-    expect(inside).toContain(">Start free</span>");
+    // Under 375 pixels Sign in leaves the row (the menu lists it), so the button's two lines have room: at 360 they took three beside it.
+    expect(inside).toMatch(/<a class="[^"]*max-\[374px\]:hidden[^"]*" href="\/signin">Sign in<\/a>/);
     // Nothing before the wrapper is hidden with it.
     expect(hrefs(markup.slice(0, wrapper.index))).toEqual(["#main", "/", "/how-it-works", "/pricing", "/library", "/faq", "/about"]);
   });

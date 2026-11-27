@@ -1,6 +1,6 @@
 /**
- * The v1 homepage (plan U5): the spec's eleven sections in order, the
- * compounding scroll story's markup with no script, and the rules a homepage
+ * The v1 homepage (plan U5): the spec's eleven sections in order, the hero's
+ * four parts and the compounding loop as the server sends them, and the rules a homepage
  * must keep (card line, audience, no /zack link, no broken image, copy rules).
  */
 import { readFileSync } from "node:fs";
@@ -28,7 +28,7 @@ vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cach
 
 const { publicIdeaView } = await import("@/lib/site/sample");
 const { V1Home, V1HomeView } = await import("./home");
-const { Compounding, storySteps, storyText } = await import("./blocks/compounding");
+const { Compounding } = await import("./blocks/compounding");
 
 const amounts = amountsFrom(v3Defaults);
 const { copy } = v1Copy(amounts);
@@ -175,19 +175,33 @@ describe("the v1 homepage's sections", () => {
     const actions = /<div data-hero-actions[\s\S]*?<\/div>/.exec(hero)![0];
     expect(text(actions)).toBe(`${copy.buttons.start} ${copy.home.hero.secondary.label}`);
     expect(hrefs(actions)).toEqual(["/start?path=re", "#how"]);
-    expect(copy.cardLine).toBe("Card required. Charged only with your third list.");
+    expect(copy.cardLine).toBe("Card required. Charged only with your third Cora Curation.");
     // The very next element after the buttons is the card line.
-    expect(hero.slice(hero.indexOf(actions) + actions.length)).toMatch(/^<p class="[^"]*text-meta[^"]*">Card required\. Charged only with your third list\.<\/p>/);
+    expect(hero.slice(hero.indexOf(actions) + actions.length)).toMatch(/^<p class="[^"]*text-meta[^"]*">Card required\. Charged only with your third Cora Curation\.<\/p>/);
   });
 
-  it("hero: a brick stack whose bricks all carry a label, with nothing hidden in the markup", async () => {
+  it("hero: the sub-line is Peter's, for anyone and not for one trade", async () => {
     const hero = sectionMarkup(await view(), "hero");
-    expect(hero).toContain("bricks-arrive");
-    const bricks = hero.match(/<li[^>]*data-brick[^>]*>.*?<\/li>/g) ?? [];
-    expect(bricks.length).toBeGreaterThanOrEqual(3);
-    for (const brick of bricks) expect(brick).toMatch(/<span class="sr-only">Week \d+, idea [123]: set up<\/span>/);
-    // No number is printed in the hero.
-    expect(text(hero.replace(/<span class="sr-only">.*?<\/span>/g, ""))).not.toMatch(/\d/);
+    expect(text(hero)).toContain("Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.");
+    expect(text(hero)).not.toMatch(/real estate/i);
+  });
+
+  it("hero: the picture is the four parts of “How it works”, each under its label, all readable with no script", async () => {
+    const page = await view();
+    const hero = sectionMarkup(page, "hero");
+    // The old picture, the brick stack that dropped three bricks, is gone from this page.
+    expect(hero).not.toContain("bricks-arrive");
+    expect(hero).toContain("data-hero-steps");
+    const parts = [...hero.matchAll(/<li data-step="\d"[^>]*>(.*?)<\/li>/g)].map((m) => text(m[1]));
+    // The headlines are the section's own, read from the copy and not typed again: Use is step 1, and so on.
+    const labels = ["Use", "Collect", "Curate", "Deploy"];
+    expect(parts).toEqual(copy.home.how.steps.map((step, i) => `${labels[i]} ${step.title}`));
+    const how = text(sectionMarkup(page, "how"));
+    for (const step of copy.home.how.steps) expect(how).toContain(step.title);
+    // Headline only: no step's body is in the hero, and no number is printed there.
+    for (const step of copy.home.how.steps) expect(text(hero)).not.toContain(step.body);
+    expect(text(hero)).not.toMatch(/\d/);
+    expect(hero).not.toMatch(/aria-live/);
   });
 
   it("the problem: the three statements", async () => {
@@ -219,6 +233,20 @@ describe("the v1 homepage's sections", () => {
     const sample = sectionMarkup(await view(), "sample");
     expect(text(sample).startsWith(`${copy.sample.title} This is one idea, as it arrives. ${idea.category} ${idea.title}`)).toBe(true);
     expect(sample).not.toMatch(/<dialog/i);
+  });
+
+  it("what arrives on Monday: folded when the page loads, with all of the play's text still in the page", async () => {
+    const sample = sectionMarkup(await view(), "sample");
+    const rows = sample.match(/<details\b[^>]*>/g) ?? [];
+    // Summary, What To Copy, the one playbook row, and the eight steps inside it.
+    expect(rows).toHaveLength(11);
+    for (const row of rows) expect(row).not.toMatch(/\sopen\b/);
+    const seen = text(sample);
+    expect(seen).toContain(samplePlay.description);
+    expect(seen).toContain(samplePlay.pasteToInstall);
+    expect(seen).toContain("Claude drafts only. It never sends.");
+    expect(seen).toContain("The Idea");
+    expect(seen).toContain("The Playbook");
   });
 
   it("who runs this: the lead-in, the first three still-true letter paragraphs as shown, and the link to /about", async () => {
@@ -262,8 +290,12 @@ describe("the v1 homepage's sections", () => {
   it("price: the price block for the visitor's country, both currencies in the markup", async () => {
     const usd = sectionMarkup(await view(), "price");
     expect(usd).toMatch(/aria-pressed="true"[^>]*>USD</);
-    for (const line of ["US$200 / month USD", "US$200 / list USD", "CA$280 / month CAD", "CA$280 / list CAD"]) expect(text(usd)).toContain(line);
+    for (const line of ["US$200 / month USD", "CA$280 / month CAD"]) expect(text(usd)).toContain(line);
     expect(text(usd)).toContain(copy.trialLine);
+    // Monthly only, under Peter's line.
+    expect(usd.match(/data-plan="/g)).toHaveLength(1);
+    expect(text(usd)).not.toMatch(/one list|one at a time|\/ list\b/i);
+    expect(text(usd).startsWith(`${copy.priceBlock.title} Get two Cora Curations for free and pay only after you have tried the product for two full weeks.`)).toBe(true);
 
     // The block is the child of CountryDefault: the part streamed in for a visitor in Canada opens on CAD, with the same audience.
     expect(streamed(await full())).toMatch(/aria-pressed="true"[^>]*>USD</);
@@ -275,17 +307,19 @@ describe("the v1 homepage's sections", () => {
     expect(sections(streamed(canada)).map((s) => s.name)).toEqual(["price"]);
   });
 
-  it("questions: the six tagged for the homepage, and the link to /faq", async () => {
+  it("questions: the seven tagged for the homepage, and the link to /faq", async () => {
     const questions = sectionMarkup(await view(), "questions");
-    const six = questionsOn(copy, "home");
-    expect(six).toHaveLength(6);
-    expect(questions.match(/<details/g)).toHaveLength(6);
-    for (const q of six) expect(text(questions)).toContain(`${q.q} ${q.a}`);
+    const seven = questionsOn(copy, "home");
+    expect(seven).toHaveLength(7);
+    expect(questions.match(/<details/g)).toHaveLength(7);
+    for (const q of seven) expect(text(questions)).toContain(`${q.q} ${q.a}`);
     expect(hrefs(questions)).toEqual(["/faq"]);
   });
 
-  it("closing band: the line, the button and the trial line", async () => {
-    expect(text(sectionMarkup(await view(), "closing"))).toBe(`See what your first two Mondays bring. ${copy.buttons.start} ${copy.trialLine}`);
+  it("closing band: the line, the line under the price, the button and the trial line, all about Cora Curations", async () => {
+    expect(text(sectionMarkup(await view(), "closing"))).toBe(
+      `See what your first two Cora Curations bring. Get two Cora Curations for free and pay only after you have tried the product for two full weeks. ${copy.buttons.start} ${copy.trialLine}`,
+    );
   });
 });
 
@@ -295,7 +329,10 @@ describe("the v1 homepage's links", () => {
       const starts = hrefs(markup).filter((h) => h.startsWith("/start"));
       // The hero, the price block and the closing band.
       expect(starts).toEqual(["/start?path=re", "/start?path=re", "/start?path=re"]);
-      expect(markup.match(/>Get two free Monday lists<\/a>/g)).toHaveLength(3);
+      expect(markup.match(/>Get two free Cora Curations<\/a>/g)).toHaveLength(3);
+      // Every link to /start reads exactly that, and nothing else.
+      const labels = [...markup.matchAll(/<a\b[^>]*href="\/start[^"]*"[^>]*>(.*?)<\/a>/g)].map((m) => text(m[1]));
+      expect(labels).toEqual(["Get two free Cora Curations", "Get two free Cora Curations", "Get two free Cora Curations"]);
     }
   });
 
@@ -306,15 +343,17 @@ describe("the v1 homepage's links", () => {
   });
 });
 
-describe("the compounding scroll story, with no script", () => {
+describe("the compounding loop, with no script", () => {
   const markup = renderToStaticMarkup(<Compounding copy={copy.home.compounds} words={copy.bricks} />);
   const seen = text(markup);
+  const storySteps = compoundingSteps;
 
-  it("tells weeks 1, 2 and 3, then the finished stack, from the data", () => {
-    expect(storySteps).toEqual(compoundingSteps);
-    expect(storySteps.map((s) => s.week)).toEqual([1, 2, 3, 26]);
+  it("has seven states, weeks 1, 2, 3, 4, 10, 17 and 26, each at three bricks a week, from the data", () => {
+    expect(storySteps).toHaveLength(7);
+    expect(storySteps.map((s) => s.week)).toEqual([1, 2, 3, 4, 10, 17, 26]);
     expect(storySteps.at(-1)).toEqual(compoundingFinal);
     expect(storySteps.map((s) => s.bricks)).toEqual(storySteps.map((s) => s.week * 3));
+    expect(storySteps.map((s) => s.bricks)).toEqual([3, 6, 9, 12, 30, 51, 78]);
   });
 
   it("is the finished week 26 stack: every brick there, set up and labelled, and none hidden", () => {
@@ -326,29 +365,26 @@ describe("the compounding scroll story, with no script", () => {
       expect(brick).toMatch(/<span class="sr-only">Week \d+, idea [123]: set up<\/span>/);
     }
     expect(bricks.at(-1)).toContain(`data-week="${compoundingFinal.week}"`);
-    // The states the script adds are not in the markup: with no script this is what stays on screen.
-    expect(markup).not.toContain("is-staged");
-    expect(markup).not.toContain("is-in");
-    expect(markup).not.toMatch(/opacity|\shidden[\s=>]|display:\s*none/);
+    // No brick is marked out, and nothing but the one button is hidden: with no script this is what stays on screen.
+    expect(markup).not.toContain("data-out=");
+    expect(markup).not.toMatch(/opacity|display:\s*none/);
+    expect(markup.match(/class="[^"]*\bhidden\b[^"]*"/g)).toHaveLength(1);
+    expect(markup).toMatch(/<button type="button" data-loop-pause="true" class="[^"]*\bhidden\b/);
   });
 
-  it("shows every step's week and brick count, in the copy's words and the data's numbers", () => {
-    const labels = [...markup.matchAll(/<li data-step-week="(\d+)"[^>]*>(.*?)<\/li>/g)];
+  it("shows every state's week and brick count as text, in the copy's words and the data's numbers", () => {
+    const labels = [...markup.matchAll(/<li data-loop-state="(\d+)"[^>]*>(.*?)<\/li>/g)];
     expect(labels.map((m) => Number(m[1]))).toEqual(storySteps.map((s) => s.week));
     for (const [i, step] of storySteps.entries()) {
       const caption = compoundingCaption(copy.bricks.caption, step);
       expect(text(labels[i][2])).toBe(`${caption.week} ${caption.bricks}`);
     }
-    expect(seen).toContain("Week 1 3 bricks Week 2 6 bricks Week 3 9 bricks Week 26 78 bricks");
-    // Readable at 375 pixels: a label never wraps or shrinks below the type floor.
-    expect(markup.match(/<span class="whitespace-nowrap">/g)).toHaveLength(storySteps.length);
-  });
-
-  it("carries a visually hidden description of the sequence for a screen reader", () => {
-    expect(storyText(copy.bricks)).toBe("Week 1: 3 bricks. Week 2: 6 bricks. Week 3: 9 bricks. Week 26: 78 bricks.");
-    expect(markup).toContain(`<p class="sr-only">${storyText(copy.bricks)}</p>`);
-    // The visible labels repeat it, so they are the half kept from a screen reader.
-    expect(markup).toMatch(/<ol aria-hidden="true"/);
+    expect(seen).toContain("Week 1 3 bricks Week 2 6 bricks Week 3 9 bricks Week 4 12 bricks Week 10 30 bricks Week 17 51 bricks Week 26 78 bricks");
+    // The list is read by everyone. The large caption above the stack repeats its last line, so that one is kept from a screen reader.
+    expect(markup).toMatch(/<ol data-loop-states="true"/);
+    expect(markup).not.toMatch(/<ol[^>]*aria-hidden/);
+    expect(markup).toMatch(/<p aria-hidden="true" data-loop-caption="true"/);
+    expect(markup).not.toMatch(/aria-live/);
   });
 
   it("has one sentence of copy, and no number about time or money", () => {
@@ -356,9 +392,9 @@ describe("the compounding scroll story, with no script", () => {
     expect(copy.home.compounds.line).toBe("Three ideas a week. Each one you set up stays set up. Six months in, your AI agents do things you would not have thought to ask for.");
     expect(seen).not.toContain("$");
     expect(seen).not.toMatch(timeFigure);
-    // Every digit on show belongs to a week label or a brick count.
-    const visible = text(markup.replace(/<span class="sr-only">.*?<\/span>/g, "").replace(/<p class="sr-only">.*?<\/p>/g, ""));
-    expect(visible.match(/\d+/g)).toEqual(storySteps.flatMap((s) => [String(s.week), String(s.bricks)]));
+    // Every digit on show belongs to a week label or a brick count: the large caption of the last state, then the seven lines.
+    const visible = text(markup.replace(/<span class="sr-only">.*?<\/span>/g, ""));
+    expect(visible.match(/\d+/g)).toEqual([String(compoundingFinal.week), String(compoundingFinal.bricks), ...storySteps.flatMap((s) => [String(s.week), String(s.bricks)])]);
   });
 
   it("is on ground-2, and nothing in it is pinned", () => {
@@ -402,26 +438,29 @@ describe("the motion rules for the bricks", () => {
     const outside = block.replace(inside, "").replace(printRules(block), "");
     // Outside the media block there is only the keyframe, the failsafe that ends an animation, and the print rules (below).
     expect(outside).not.toMatch(/opacity: 0(?:\.\d+)?;[\s\S]*opacity: 0/);
-    expect(outside).not.toContain("is-staged");
+    expect(outside).not.toContain("data-out");
     expect(outside).not.toContain("bricks-grow");
     // Inside it, every rule starts from a class that only script adds.
     const selectors = [...inside.matchAll(/^ {2}(\.[^{]+) \{$/gm)].map((m) => m[1]);
     expect(selectors.length).toBeGreaterThan(8);
-    for (const selector of selectors) expect(selector).toMatch(/^\.js |^\.reveal-ready |^\.compounding\.is-staged /);
+    for (const selector of selectors) expect(selector).toMatch(/^\.js |^\.reveal-ready /);
   });
 
   it("force the finished picture in print, whatever classes script has added", () => {
     const print = printRules(block);
     const rules = [...print.matchAll(/^ {2}((?:\.[^{]+?,\n {2})*\.[^{]+?) \{\n([\s\S]*?)\n {2}\}/gm)].map((m) => ({ selectors: m[1].split(/,\n\s*/), body: m[2] }));
     const shows = rules.find((r) => r.body.includes("opacity: 1 !important"))!;
-    // Every brick the rules above can hide or move, and the scroll story's labels.
-    expect(shows.selectors).toEqual([".bricks-arrive [data-brick]", ".bricks-grow [data-brick]", ".compounding [data-brick]", ".compounding [data-step-week]"]);
+    // Every brick the rules above can hide or move: the two stacks, the loop's, and the four of the hero's picture.
+    expect(shows.selectors).toEqual([".bricks-arrive [data-brick]", ".bricks-grow [data-brick]", ".compounding-loop [data-brick]", ".hero-steps [data-step-bricks] li"]);
     for (const line of ["animation: none !important;", "transition: none !important;", "opacity: 1 !important;", "transform: none !important;"]) expect(shows.body).toContain(line);
-    // A label's dot is filled, as it is in the finished picture.
-    const dot = rules.find((r) => r.selectors.includes(".compounding [data-step-dot]") && r.body.includes("background-color"))!;
-    expect(dot.body).toContain("background-color: var(--color-level-1) !important;");
+    // The hero's four parts are printed as the still list: every part shown, with its label, and no control.
+    const parts = rules.find((r) => r.selectors.includes(".hero-steps [data-step]"))!;
+    for (const line of ["opacity: 1 !important;", "visibility: visible !important;", "grid-area: auto !important;"]) expect(parts.body).toContain(line);
+    const controls = rules.find((r) => r.selectors.includes(".compounding-loop [data-loop-pause]"))!;
+    expect(controls.selectors).toEqual([".hero-steps [data-step-tabs]", ".hero-steps [data-step-pause]", ".compounding-loop [data-loop-pause]"]);
+    expect(controls.body).toContain("display: none !important;");
     // No print selector waits on a class that script adds, so none can miss.
-    for (const rule of rules) for (const selector of rule.selectors) expect(selector).not.toMatch(/is-staged|is-in|\.js\b|reveal-ready|settled/);
+    for (const rule of rules) for (const selector of rule.selectors) expect(selector).not.toMatch(/data-out|is-in|\.js\b|reveal-ready|settled/);
     // Every hidden state above is beaten: none of the rules that hide is marked important, and each of these is.
     const media = "@media (prefers-reduced-motion: no-preference) {";
     expect(block.slice(block.indexOf(media), block.indexOf("@keyframes"))).not.toContain("!important");
@@ -445,9 +484,20 @@ describe("the v1 homepage's words", () => {
     expect(seen).not.toContain("!");
     expect(seen).not.toMatch(emoji);
     expect(seen).not.toMatch(/Circle/);
-    // The higher rate appears once, in the control block, with both currencies.
-    expect(seen.match(/US\$400/g)).toHaveLength(1);
-    expect(seen).toContain("the price becomes US$400 a month (CA$560 in Canada).");
+    // The higher rate appears twice, in the control block and in the answer to "What does it cost?", each time with both currencies and as what turning sharing off does.
+    expect(seen.match(/US\$400/g)).toHaveLength(2);
+    expect(seen.match(/the price becomes US\$400 a month \(CA\$560 in Canada\)\./g)).toHaveLength(2);
+  });
+
+  it("speak to anyone, of Cora Curations and of one monthly price (Peter's homepage review, November 26, 2026)", async () => {
+    const page = await view({ testimonials: [] });
+    // Peter's own letter keeps his own history, word for word; nothing else on the page names a trade.
+    const outsideLetter = text(page.replace(sectionMarkup(page, "who"), ""));
+    expect(outsideLetter).not.toMatch(/real estate/i);
+    expect(text(sectionMarkup(page, "who"))).toContain("I made my first real estate investment");
+    const seen = text(page);
+    expect(seen).not.toMatch(/Monday lists?\b|one list at a time|one at a time/i);
+    expect(seen.match(/Cora Curations?/g)!.length).toBeGreaterThan(10);
   });
 });
 
