@@ -45,7 +45,6 @@ export type AdminGroup = { heading: string; screens: readonly AdminScreen[] };
 /**
  * Every admin screen, under the five headings the sidebar shows, in the order it shows them
  * (Peter's choice of November 27, 2026). This list is the only place a screen is named or placed.
- * "Pages" opens the questions editor until the Pages editor replaces it.
  */
 export const adminGroups: readonly AdminGroup[] = [
   {
@@ -74,7 +73,7 @@ export const adminGroups: readonly AdminGroup[] = [
   {
     heading: "Website",
     screens: [
-      { href: "/admin/questions", label: "Pages" },
+      { href: "/admin/pages", label: "Pages" },
       { href: "/admin/testimonials", label: "Testimonials" },
       { href: "/admin/use-cases", label: "Use cases" },
       { href: "/admin/watches", label: "Watches" },

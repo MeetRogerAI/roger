@@ -185,6 +185,34 @@ describe("publishing", () => {
     expect(await log()).toEqual([]);
   });
 
+  it("changes nothing, and says so, when what is live is no longer what the list of changes was made against", async () => {
+    await saveDraft(query, [{ field: HEADLINE, text: "First headline." }]);
+    await publish(query, ADMIN, (await readStored(query)).draft);
+    await saveDraft(query, [{ field: SUB, text: "A sub-line." }]);
+    // The review lists one change, the sub-line, against a site that shows the first headline.
+    const read = await readStored(query);
+    // Another tab undoes the last publish: the same draft would now change the headline as well.
+    await undoPublish(query, ADMIN);
+    const before = await value();
+    ran = [];
+    expect(await publish(query, ADMIN, read.draft, { over: read.published })).toEqual({ ok: false, reason: "draft-changed" });
+    expect(writes()).toEqual([]);
+    expect(await value()).toEqual(before);
+    expect(await readPublished(query)).toEqual(none);
+    // Against what is live now, it goes through. Without `over` only the draft is compared, as before.
+    expect(await publish(query, ADMIN, read.draft, { over: none })).toMatchObject({ ok: true, changed: true });
+    expect((await readPublished(query)).text).toEqual({ [HEADLINE]: "First headline.", [SUB]: "A sub-line." });
+  });
+
+  it("has nothing to publish, and does not call it a change, when another tab has already made the same draft live", async () => {
+    await saveDraft(query, [{ field: HEADLINE, text: "First headline." }]);
+    const read = await readStored(query);
+    await publish(query, ADMIN, read.draft);
+    const before = await value();
+    expect(await publish(query, ADMIN, read.draft, { over: read.published })).toMatchObject({ ok: true, changed: false });
+    expect(await value()).toEqual(before);
+  });
+
   it("compares the drafts by what they say, not by how they were written down", async () => {
     await saveDraft(query, [
       { field: HEADLINE, text: "A headline." },
