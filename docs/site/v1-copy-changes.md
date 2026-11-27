@@ -2,13 +2,13 @@
 
 Site version 1 uses the spec's draft copy word for word (plan R14a). This file lists every line that is not the spec's own wording, and why.
 
-**Read section 7 first.** Peter's homepage review of November 26, 2026 changed the audience, the price shown, the name of what arrives each Monday and every start button. Sections 1 to 6 are the record before that review, and several lines they quote ("Monday lists", "one list at a time", "for real estate") are no longer on the site.
+**Read sections 9 and 7 first.** Section 9 is Peter's third homepage review, of November 27, 2026: "How it works" merged into the hero, the two example plays, the shorter note under the price, the closing button, and `/pricing` and `/agents` deleted. It has what is waiting for his approval. Section 7 is his review of November 26, 2026, which changed the audience, the price shown, the name of what arrives each Monday and every start button. Sections 1 to 6 are the record before that, and several lines they quote ("Monday lists", "one list at a time", "for real estate", the sample play "Client email in two tones", anything on `/pricing` or `/agents`) are no longer on the site.
 
 Sources compared:
 
 - **Marketing spec**: `artifacts/v3-marketing-website-spec.md`, "Messaging and copy direction".
 - **Design spec 1.3**: `artifacts/Roger v3 - design spec.md`, A.4, A.7 and A.14.
-- **The copy file**: `src/data/site/v1.ts`. Peter's letter is in `src/data/site/letter.ts` and the sample play in `src/data/site/sample-play.ts`.
+- **The copy file**: `src/data/site/v1.ts`. Peter's letter is in `src/data/site/letter.ts` and the example plays in `src/data/site/examples.ts` (until November 27, 2026 there was one sample play, in `src/data/site/sample-play.ts`; see 9.5).
 
 Amounts are never typed in the copy file. A line names them, such as `{monthlyUsd}`, and the page fills them from the settings. Below, the filled text is shown as a visitor reads it with today's settings: US$200 a month, US$200 a list, CA$280 a month, CA$280 a list, two free lists, 21 days. The higher rate is US$400 a month, or CA$560 in Canada. The spec's copy gives only the US figure. v1 gives both, which is a change to the spec's wording and is listed in section 2.3.
 
@@ -915,3 +915,145 @@ Peter's words, and what was done.
 1. **"Charged only with your third Cora Curation, and once a month after that."** The first charge is made by the Monday charge job (`src/lib/billing/charge-job.ts`) at 6:00 AM Toronto, for a monthly member in the trial who has had both free ones and has picks that week. It starts a Stripe subscription, and Stripe renews it on the same day of each month (`billing_cycle_anchor`), so a renewal is by calendar month and does not usually fall on a Monday. Where the sentence would not hold as written: a card that is declined is charged later, when a new card is given or a retry works, and the Cora Curation waits for it; a first charge whose amount changed after the reminder is charged a day later, on the Tuesday; a month at the higher rate has the difference on that month's one invoice, so it is still one charge, but larger; a failed renewal is tried again by Stripe over the following days; and an account already on one at a time is charged per order.
 2. **"pay only after you have tried the product for two full weeks."** The first charge can never come sooner than 14 days after sign-up. A report counts for the coming Monday up to Sunday 11:59 PM; from a Monday, that is the Monday after (`weekOf` in `src/lib/clock.ts`). Each Cora Curation is one Monday, the charge comes with the third, so it is at least two Mondays after the first. The soonest case is a person who signs up late on a Sunday and whose Zack reports before midnight: first one the next morning, charge 14 days and about 6 hours after sign-up. A person who signs up on a Monday is charged no sooner than 21 days later. The card step states the date ("no earlier than Monday, December 14" for a sign-up in the week of November 26). Counted from the moment the first one arrives, it is one hour short of two full weeks, because the send is at 7:00 AM and the charge at 6:00 AM two Mondays later. And the charge is automatic unless the person cancels first.
 3. **"three ideas."** A week delivers two or one when fewer fit (`pickThree` in `src/lib/cora/pick.ts`, outcome "short"). A short week counts as a delivered Cora Curation: it uses a free one, and it is charged as the third. The app and the Monday email say so that week ("This week there are 2 ideas that fit you, not three. We only send ideas that fit."). The marketing pages and "What is a Cora Curation?" say three with no qualifier. "Up to three ideas" would be exact; it is Peter's line to change. The terms' new definition gives no count.
+
+## 9. Peter's third homepage review, November 27, 2026
+
+Peter reviewed the preview and asked for ten changes to the homepage, then two more the same day: use the cold-emails play for the second example, and "delete /agents and /pricing. The nav bar on pricing should go to the right section on the home page." This section lists every string that changed, the text of the two example plays with every change made to their sources, and what is no longer anywhere on the marketing pages.
+
+**For Peter to approve or decide, in one list:**
+
+1. The cleaned text of the two example plays (9.3). It is on the branch preview and has not been approved.
+2. The third example is missing: the repo has no playbook for the daily paper (9.4).
+3. The plays say "the member". The site says "user" everywhere else. Left as the plays wrote it (9.3).
+4. Three places where the new wording says something the product does differently (9.8).
+5. What a visitor can no longer find now that `/pricing` and `/agents` are gone (9.6).
+
+### 9.1 Strings changed on the homepage
+
+| Where | Before | Now |
+|---|---|---|
+| Hero, under the button | Card required. Charged only with your third Cora Curation. | Removed from the homepage hero. The same line is still under the start button that ends `/faq`, `/how-it-works` and `/about` |
+| Hero, second link | See how it works (to `#how`) | Removed |
+| Hero, right side | Four labels and one headline at a time, over four squares in four colours | "How it works" whole: for each step its label (Use, Collect, Curate, Deploy), its number, its headline, its text and its ideas, 3, 6, 9 and 12 of them, drawn as the deleted section drew them |
+| Step 4, headline | Paste to install | Approve The Ideas |
+| Step 4, text | Open one, press copy, paste it into your AI agent. It sets itself up and asks you what it needs to know. | Say yes to the ideas you like and see them in action for you. |
+| Section heading "How it works" | How it works | Removed with the section. Steps 1 to 3 keep their words, now in the hero |
+| Examples, heading | What arrives on Monday | Cora Curation Examples |
+| Examples, line under the heading | This is one idea, as it arrives. | Removed |
+| Examples, short titles (new) | | On-demand video creation; 20 new prospects every day |
+| Examples, the row of short titles, read out by a screen reader (new) | | Examples |
+| Under "What To Copy", below the copy button | Written on Claude. Words like “skill” or “routine” may have another name on your AI agent. | Removed. Nothing is printed under the button |
+| "Who runs this" | The heading, "Roger is run by Peter Kuperman.", three paragraphs of the letter, "Read Peter’s letter" (to `/about`) and the place for the photograph | Removed from the homepage. `/about` keeps the letter. No homepage section links to `/about` now; the header and the footer do |
+| Note under the price | Your first two Cora Curations are free. We ask for a card when you start. It is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing. | Your first two Cora Curations are free. Payment starts in week 3. |
+| Closing section, line under the heading | Get two Cora Curations for free and pay only after you have tried the product for two full weeks. | Removed |
+| Closing section, text under the button | (the note under the price) | Removed |
+| Closing section, button | Get two free Cora Curations | Level up your use of AI Agents Now. |
+
+Notes on these.
+
+- **"You decide what Zack shares", third column.** Already as Peter wrote it: the heading "Turn sharing off any time in your dashboard." and under it "Protect your privacy and your most valuable ideas at any time." Checked in a browser at four widths; nothing changed.
+- **The note under the price is shared.** The same line is under the button of `/library`'s closing band, so it changed there too. "3" is not typed: it is the number of free Cora Curations in the settings plus one (`{firstPaidWeek}`), so three free ones would read "week 4".
+- **The closing button is the one exception** to "every start button reads the same". The header's, the hero's and the price block's still read "Get two free Cora Curations". "AI Agents" with a capital A passes the vocabulary rule ("agent" never without "AI" in front).
+- **The same line under the price is still the Price section's own subhead** ("Get two Cora Curations for free and pay only after you have tried the product for two full weeks."), and still ends the answer to "What does it cost?". Peter asked for it to go from the closing section only.
+
+### 9.2 The two loops
+
+- **"It compounds".** It now moves only while its stage (the week, the count and the stack) is on screen: at least half of it in the window. The first time it comes into view it starts from week 1. Scrolled away, it waits at the state it had reached and goes on from there. Every state stays up 2.2 seconds, week 26 included (it was 1.7, and 2.4 for week 26). At the wrap from week 26 to week 1 the wall fades where it stands; no idea is seen to jump. Only opacity and transform change.
+- **Why Peter saw it not moving.** The fault could not be reproduced as a stopped clock. On the deployed preview, driven with a real mouse, wheel, keyboard and touch, the loop went round in every case tried: the mouse resting on it after scrolling to it, after a click on it, after tabbing through the page, after leaving by a link and coming back, and on a phone after a tap. The one thing that held it was keyboard focus on its own Pause button, which is meant to. What a reader met was this: the loop ran whether or not anyone was looking, so a reader arrived at whatever state it happened to be in. For more than half of each round (weeks 1 to 4, 6.8 of 12.6 seconds) the wall is nearly empty and changes by three squares in one row; and once a round every square but three vanishes at once. Arriving in that stretch reads as a loop that is not moving, and scrolling away and back shows a different state, which reads as moving only when nobody is there. That is a reading of the evidence, not a reproduced fault. The change answers it either way: it starts at week 1 when the reader arrives and does nothing while they are elsewhere.
+- **The hero's four steps** follow the same rule. Each step stays up 5 seconds (it was 3.2, for a headline alone), because each now has its text to read. On a phone the frame sits under the headline and the button, so it starts once it is scrolled into view.
+
+### 9.3 The example plays: where each came from, and every change to its text
+
+The plays are in `src/data/site/examples.ts`. Neither the site nor the code says whose run a play came from; in code each is known by an id (`video`, `prospects`).
+
+**What was done to both, and nothing else:**
+
+- The playbook's words are the source's, in the source's order. A test compares every line with the run it came from.
+- Layout only: each numbered part's label became a heading line with its text under it, which is how the card finds the parts it folds.
+- Left out: everything about time. "Doing this by hand", "Using Grok Bot", "Time saved", "Range", "Confidence", "Over a year", and the "Heavy use for" line that is part of it. No figure about time or money is on the site.
+- Nothing had to be replaced: neither play names a person, a company, a client, a product of the member's, a handle, a link, an address, an amount tied to a person or a date. Their own placeholders are kept: [your neighbourhood], [N], [TO: contact name]. The public tools they name stay: Grok Bot, Instagram, iCloud Photos, Google Photos, Drive.
+- Neither play says "agent", so nothing became "AI agent".
+- Cora has not scored either play, so no score is shown and none is made up.
+
+**"On-demand video creation": the play "Phone camera roll to styled Reels", from the Zack run of November 15, 2026.**
+
+| Edit | Source | On the site |
+|---|---|---|
+| Title | Play 3 (Set B, my garbage, your treasure): Phone camera roll to styled Reels | Phone camera roll to styled Reels |
+| Summary | The play's opening paragraph | The same, word for word |
+| Part labels, eight times | `**1. Play:** Phone camera roll to styled Reels. A pile of…` | a heading "1. Play", then "Phone camera roll to styled Reels. A pile of…" under it. The bold marks and the colon after the label are gone |
+| Part 3's label | `**3. Setup first** (answer once):` | the heading "3. Setup first (answer once)" |
+| Install prompt, layout | Two paragraphs inside a quotation: "Written by another member. Read sections 1 to 8 before pasting this." and "Save this as a skill called "Camera roll to Reels". …" | One paragraph, the two joined by a space, without the quotation marks down the side. The words are the same |
+
+**"20 new prospects every day": the play "Daily prospect outreach drafts", from the Zack run of November 12, 2026.**
+
+| Edit | Source | On the site |
+|---|---|---|
+| Title | Set A · Daily prospect outreach drafts — about 37.4 hours a week saved (5.2 to 48.7) | Daily prospect outreach drafts |
+| Summary | The play's opening paragraph | The same, word for word |
+| Part labels, eight times | `1. **Play**: Daily prospect outreach drafts. Each weekday morning…` | a heading "1. Play", then "Daily prospect outreach drafts. Each weekday morning…" under it |
+| The eight steps under "4. Steps" | An indented numbered list | The same list, not indented |
+| Install prompt | Inside quotation marks | Without them. The words are the same |
+
+**Left as the plays wrote it, for Peter to rule on:**
+
+- **"member".** The video play says it twice ("The member shares a batch…", "Written by another member."). The prospects play says it four times ("the member's Drafts folder", "the member gets a short report", "in the member's voice", "the member sends"). The site says "user" everywhere else, and the play this section replaced had "member" changed to "user" with Peter's approval. The instruction this time was to keep the plays word for word, so they are. Changing six words to "user" is a small edit if he wants it.
+- **"a 20-minute call"** (prospects, part 3) is the length of a meeting the email asks for, not time saved. **"8:30 AM"** (parts 2 and 9) is an hour of the day. **"20"** in "20 researched, personalised first-touch emails" and in the short title is what the play drafts each morning.
+- The plays use straight quotation marks and apostrophes; the site's own words use curly ones.
+
+**Allowances added to the claims check for these plays**, each exact and inside an example only (acceptance, "Settled exceptions"): the four phrases where "save" means store ("Save this as a skill called", "Save each email as an unsent draft", "save nothing and report the error", "how many drafts were saved"); "a 20-minute call"; and the short title "20 new prospects every day". The allowance for the retired play's phrases is removed.
+
+### 9.4 The third example was written by us
+
+Peter asked for a third: the printable one-page daily paper for the kitchen table. The Zack run of November 12, 2026 that names it lists it among its runners-up in one line, with no playbook and no install prompt, and no other file in the repo has it.
+
+On November 27, 2026 Peter asked for the full play to be made up from best guesses. So the third example, short title **"A printed daily paper for the family"**, keeps the run's title and idea, and everything else (the summary, the eight parts and the install prompt) was written for the site. It is not source text from a run and no user has run it as written. Its seventh part is headed "Pitfalls to watch for" instead of "Pitfalls seen", because nobody has seen them. The word-for-word test in `src/lib/site/sample.test.ts` covers the other two examples and names this one as the single exception. The text is in `src/data/site/examples.ts` for Peter to approve.
+
+### 9.5 The play this replaces, and `/admin/sample`
+
+- **"Client email in two tones"** (section 2.2) is retired. Its file, `src/data/site/sample-play.ts`, is deleted, and it is on no page.
+- **The examples are bundled with the site.** The play chosen at `/admin/sample` no longer reaches any public page: not the homepage, not `/how-it-works`. The admin page still works and still stores the choice; it now opens with a note saying the public site does not use it.
+- **`/how-it-works`**, "The anatomy of an idea", takes apart one idea. It is now the first example, "Phone camera roll to styled Reels", under its short title.
+
+### 9.6 `/pricing` and `/agents` deleted
+
+Both pages, their components, their copy and their tests are deleted. Each address answers with a permanent redirect: `/pricing` to the homepage's price section (`/#price`), `/agents` to the homepage. Neither is in the sitemap.
+
+**Links changed.**
+
+| Link | Before | Now |
+|---|---|---|
+| Header, "Pricing" (and the phone menu's) | `/pricing` | `/#price`: on the homepage it scrolls to the price; from any other page it loads the homepage at the price, flush under the header |
+| Footer, "Pricing" | `/pricing` | `/#price` |
+| Footer, "For people who run AI agents" | `/agents` | Removed |
+
+No other link to either page existed: none in a marketing page's own sections, in sign-up, in the app, in an email or in the privacy and terms text. A browser check of every public page, the sign-up start and the sign-in page found no link to `/pricing`, `/agents` or the deleted `#how`.
+
+**What a visitor can no longer find on any marketing page:**
+
+From `/pricing`:
+
+- **"What is included"**: "Your own history of every idea you have received.", "Your Zack controls." and "A compounding view of what you have set up." The first item, what a Cora Curation is, is still on the homepage's price card.
+- **"Monthly, explained"**: "Your card is charged once a month, starting with your third Cora Curation." and "One price, charged once a month. Cancel in one click." The answer to "When is my card charged?" (homepage and `/faq`) says the first half. "Cancel in one click" is now only in the `/faq` answer "Why do you need a card for a free trial?".
+- **"How contributing works"**: "Roger works because everyone’s Zack contributes", and that the difference for a second missed week "appears on your next invoice". The higher rate itself (US$400, CA$560 in Canada) is now stated in two `/faq` answers only ("I compete with other people on Roger…" and "What if Zack misses a week?"), in the terms, and on the sign-up plan step. It is not on the homepage, by Peter's earlier cut.
+- **"No refunds"** as a section. The `/faq` answer "Can I get a refund?" says it.
+
+From `/agents`:
+
+- **The page for people who already run AI agents**: "Stop figuring out AI agents alone.", its sub-line, its three problem statements, its three steps ("Add Zack", "Cora picks your three", "Paste to install") and its closing line "Find out what other heavy users know."
+- **The supported AI agents, on show**: the strip "Works with every agent" with Claude, Duet, Grok Bot and Hark and "Any other agent adapts one with a single prompt." The names are now only in the `/faq` answer "Which AI agents does Roger work with?" and as the four Zack file links on `/how-it-works`.
+- **The link to the free Zack run.** "Run Zack on yourself first" on `/agents` was the only link to `/zack`. `/zack` is still served and still in the sitemap, and nothing on the site links to it.
+- **Five questions the homepage does not show** were on `/agents` and are now on `/faq` only: which AI agents Roger works with, what leaves my account, can I see and change what Zack does, I compete with other people on Roger, and will an idea work on my AI agent. (The other two `/agents` showed are on the homepage too.)
+- **A testimonial cleared for the audience "agents"** has no page to show on. One cleared for both still shows on the homepage.
+
+Not changed: sign-up still accepts the audience "agents" in a start link, so a link already sent with it still works. No page sets it now.
+
+### 9.7 The questions editor
+
+`/admin/questions`, "Edit Questions" in the admin's navigation. It lists all eighteen questions with the pages that show each, and lets an admin change a question's wording and its answer, save, and reset to the built-in wording. Its own words are admin text, not site copy. A saved answer is site copy, and is not listed in this file: the admin log records each save and reset with who made it and the text.
+
+### 9.8 Where the new wording and the product differ
+
+1. **"Approve The Ideas … Say yes to the ideas you like and see them in action for you."** There is nothing to approve in the product. A Cora Curation arrives; the user opens an idea, copies its prompt and playbook, and pastes them into their own AI agent, which sets it up and asks setup questions. An idea does not go into action because the user says yes. The line this replaced described that. `/how-it-works` still does (Tuesday: "Open an idea, press copy and paste it into your AI agent.").
+2. **"Payment starts in week 3."** The first charge comes with the third Cora Curation, which is the third Monday only if one has been delivered every week. It is later when a week brings none (Zack missed the cutoff, or nothing fit) and after a declined card. It also says nothing of the card: with the hero's line and the old note both gone, the homepage says a card is asked for in one place, the answer to "When is my card charged?", and never says it is asked for at sign-up. The sign-up card step does.
+3. **"Level up your use of AI Agents Now."** No claim in it is checkable or false. It is the one start button whose words are not "Get two free Cora Curations", so a visitor may not read it as the same action.

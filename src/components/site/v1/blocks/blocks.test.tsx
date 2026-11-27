@@ -7,8 +7,8 @@ import { v3Defaults } from "@/data/config";
 import { bricksPerWeek, compoundingFinal, compoundingNumbers, compoundingSteps, compoundingWeeks } from "@/data/site/compounding";
 import type { SharedCopy } from "@/data/site/copy-types";
 import { letter, letterShown } from "@/data/site/letter";
-import { samplePlay } from "@/data/site/sample-play";
-import { closingBandCopy, priceBlockCopy, questionsOn, v1, v1Agents, v1Copy, v1Zack } from "@/data/site/v1";
+import { examples } from "@/data/site/examples";
+import { closingBandCopy, priceBlockCopy, questionsOn, v1, v1Copy, v1Zack } from "@/data/site/v1";
 import { buildIdeaView, factors } from "@/lib/cora/idea-view";
 import { amountsFrom, currencies, hasBareDollar, priceLine } from "@/lib/site/amounts";
 import { compoundingCaption } from "@/lib/site/compounding";
@@ -26,6 +26,7 @@ const { ClosingBand } = await import("./closing-band");
 const { ControlBlock } = await import("./control-block");
 const { PriceBlock } = await import("./price-block");
 const { Questions } = await import("./questions");
+const { ExampleTabs, firstShown, shownAfterAddress, tabAfterKey, tabFromHash } = await import("./example-tabs");
 const { othersToClose } = await import("./one-open");
 const oneOpenSource = readFileSync(path.join(process.cwd(), "src/components/site/v1/blocks/one-open.tsx"), "utf8");
 const { SampleCard } = await import("./sample-card");
@@ -33,8 +34,10 @@ const { SectionHead } = await import("./section-head");
 const { Testimonials } = await import("./testimonials");
 
 const amounts = amountsFrom(v3Defaults);
-const { copy, agents, zack } = v1Copy(amounts);
+const { copy, zack } = v1Copy(amounts);
 const preface = v3Defaults.playbookPreface;
+// One of the bundled examples, for the tests of the card itself: the one whose eight headings are the bare part names.
+const samplePlay = examples.find((example) => example.id === "prospects")!.play;
 
 /** What a reader sees: the markup with its tags taken out. */
 const text = (markup: string) =>
@@ -42,6 +45,7 @@ const text = (markup: string) =>
     .replace(/<!--.*?-->/g, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
@@ -186,14 +190,26 @@ const unfolded = (markup: string) => {
   return text(rest);
 };
 
-describe("the sample idea card, folded (Peter's homepage review, November 26, 2026)", () => {
+describe("an example's card, folded (Peter's homepage reviews, November 26 and 27, 2026)", () => {
   const idea = publicIdeaView(samplePlay, preface);
   const markup = renderToStaticMarkup(<SampleCard idea={idea} copy={copy.sample} />);
   const rows = [...markup.matchAll(/<details\b([^>]*)>/g)].map((m) => m[1]);
   const fold = (name: string) => rows.filter((attrs) => attrs.includes(`data-fold="${name}"`));
 
-  it("is the bundled play, whose playbook has eight parts", () => {
-    expect(samplePlay.playbookMd.match(/^## /gm)).toHaveLength(8);
+  it("is a bundled example, whose playbook has eight parts", () => {
+    for (const example of examples) expect(example.play.playbookMd.match(/^## /gm), example.id).toHaveLength(8);
+  });
+
+  it("prints nothing under the copy button: no “Written on” line, whatever AI agent the play was written on", () => {
+    expect(samplePlay.writtenOn).toBe("grok-bot");
+    expect(idea.writtenOn).toBe("Grok Bot");
+    const row = /<details data-fold="copy"[^>]*>(.*?)<\/details>/.exec(markup)![1];
+    expect(row).toMatch(/<\/button><\/div>$/);
+    expect(text(markup)).not.toMatch(/Written on|may have another name/);
+    expect(copy.sample.install).toEqual({
+      help: "The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions.",
+      copy: "Copy prompt and playbook",
+    });
   });
 
   it("has two headings that do not fold, The Idea and The Playbook, in that order", () => {
@@ -333,24 +349,33 @@ describe("the price block", () => {
     expect(markup.indexOf("data-price-sub")).toBeLessThan(markup.indexOf('role="group"'));
   });
 
-  it("names the plan one heading level under its own heading: h3 under an h2, h2 under an h1, in the same classes", async () => {
+  it("names the plan one heading level under its own heading: an h3 under the section's h2", async () => {
     const headings = (markup: string) => [...markup.matchAll(/<(h[1-6])\b([^>]*)>(.*?)<\/\1>/g)].map((m) => ({ tag: m[1], classes: /class="([^"]*)"/.exec(m[2])?.[1], words: m[3] }));
-    // The homepage and /agents: the block's heading is an h2.
-    const asH2 = headings(await render("USD"));
-    expect(asH2).toEqual([
+    // The block is a section of the homepage, never a page's opening: there is no /pricing page (Peter, November 27, 2026).
+    expect(headings(await render("USD"))).toEqual([
       { tag: "h2", classes: "text-h2", words: copy.priceBlock.title },
       { tag: "h3", classes: "text-title", words: copy.priceBlock.monthly.name },
     ]);
-    // /pricing: the block's heading is the page's h1, so the plan is an h2 and no level is skipped.
-    const asH1 = headings(await pageMarkup(<PriceBlock amounts={amounts} copy={priceCopy} initialCurrency="USD" audience="re" as="h1" />));
-    expect(asH1).toEqual(asH2.map((h) => ({ ...h, tag: h.tag === "h2" ? "h1" : "h2" })));
   });
 
-  it("puts the trial line directly after the price, before the button", async () => {
+  it("is the section “Pricing” links to: id “price”, landing flush under the sticky header with its own padding above the heading", async () => {
+    const markup = await render("USD");
+    expect(markup).toMatch(/^<section id="price" aria-labelledby="price-title" class="on-night -scroll-mt-3 /);
+    expect(markup).toMatch(/<div class="wrap py-24 text-center md:py-32"><h2 id="price-title"/);
+  });
+
+  it("puts the trial line directly after the price, before the button, in Peter's words (November 27, 2026)", async () => {
     const markup = await render("USD");
     const afterPrices = markup.slice(markup.indexOf(copy.priceBlock.monthly.note) + copy.priceBlock.monthly.note.length);
+    expect(copy.trialLine).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
     expect(text(afterPrices).startsWith(copy.trialLine)).toBe(true);
     expect(text(afterPrices).slice(copy.trialLine.length).trim()).toBe(copy.buttons.start);
+  });
+
+  it("takes the week payment starts in from the settings: the number of free Cora Curations plus one", () => {
+    expect(v1.trialLine).toBe("Your first {freeLists} Cora Curations are free. Payment starts in week {firstPaidWeek}.");
+    const three = v1Copy(amountsFrom({ ...v3Defaults, freeRuns: 3 })).copy;
+    expect(three.trialLine).toBe("Your first three Cora Curations are free. Payment starts in week 4.");
   });
 
   it("shows the price in each currency with its code after it and its tax note, never a bare dollar sign", async () => {
@@ -567,13 +592,25 @@ describe("the other blocks", () => {
     expect(oneOpenSource).toContain('if ("name" in HTMLDetailsElement.prototype) return;');
   });
 
-  it("closing band: one line, the line under the price, the start button, then the trial line", async () => {
-    const band = closingBandCopy(copy, agents.closing.line);
-    expect(band).toEqual({ line: "Find out what other heavy users know.", sub: copy.priceBlock.sub, start: "Get two free Cora Curations", trialLine: copy.trialLine });
-    const seen = text(await pageMarkup(<ClosingBand copy={band} audience="agents" />));
-    expect(seen).toBe(`Find out what other heavy users know. ${copy.priceBlock.sub} Get two free Cora Curations ${copy.trialLine}`);
-    // The homepage's own line speaks of Cora Curations too.
-    expect(copy.home.closing.line).toBe("See what your first two Cora Curations bring.");
+  it("closing band on /library: one line, the line under the price, the start button, then the trial line", async () => {
+    const band = closingBandCopy(copy, copy.library.band);
+    expect(band).toEqual({ line: copy.library.band, sub: copy.priceBlock.sub, start: "Get two free Cora Curations", trialLine: copy.trialLine });
+    const markup = await pageMarkup(<ClosingBand copy={band} />);
+    expect(text(markup)).toBe(`${copy.library.band} ${copy.priceBlock.sub} Get two free Cora Curations Your first two Cora Curations are free. Payment starts in week 3.`);
+    expect(markup).toContain("data-closing-sub");
+    expect(markup).toContain("data-closing-trial");
+  });
+
+  it("closing band on the homepage: the line and the button only, with nothing under either (Peter, November 27, 2026)", async () => {
+    expect(copy.home.closing).toEqual({ line: "See what your first two Cora Curations bring.", start: "Level up your use of AI Agents Now." });
+    const markup = await pageMarkup(<ClosingBand copy={{ line: copy.home.closing.line, start: copy.home.closing.start }} audience="re" />);
+    expect(text(markup)).toBe("See what your first two Cora Curations bring. Level up your use of AI Agents Now.");
+    // No empty paragraph where the two lines were: neither element is in the markup at all.
+    expect(markup).not.toMatch(/<p\b|data-closing-sub|data-closing-trial/);
+    expect(markup).toMatch(/<a class="btn btn-l" href="\/start\?path=re">Level up your use of AI Agents Now\.<\/a>/);
+    // Only this button has its own words: the one every other start button reads is unchanged.
+    expect(copy.buttons.start).toBe("Get two free Cora Curations");
+    expect(copy.home.closing.start).not.toMatch(bareAgent);
   });
 
   it("section head: a centred heading with its sub-line", () => {
@@ -585,8 +622,8 @@ describe("the other blocks", () => {
 });
 
 describe("v1 copy", () => {
-  const all = [...strings(v1), ...strings(v1Agents, "agents"), ...strings(v1Zack, "zack")];
-  const filled = [...strings(copy), ...strings(agents, "agents"), ...strings(zack, "zack")];
+  const all = [...strings(v1), ...strings(v1Zack, "zack")];
+  const filled = [...strings(copy), ...strings(zack, "zack")];
 
   it("fills the shared strings every version must have", () => {
     const shared: SharedCopy = copy;
@@ -594,9 +631,7 @@ describe("v1 copy", () => {
     // One label for every start button: there is no shorter one for the header.
     expect(Object.keys(shared.buttons).sort()).toEqual(["openApp", "signIn", "start"]);
     expect(shared.cardLine).toBe("Card required. Charged only with your third Cora Curation.");
-    expect(shared.trialLine).toBe(
-      "Your first two Cora Curations are free. We ask for a card when you start. It is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
-    );
+    expect(shared.trialLine).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
     expect(shared.questions.map((g) => g.title)).toEqual(["Getting started", "Zack and privacy", "Cora and the ideas", "Price and billing"]);
     expect(shared.questions.flatMap((g) => g.items)).toHaveLength(18);
   });
@@ -619,9 +654,9 @@ describe("v1 copy", () => {
     // Each page that names one says once what it is, in the same words.
     const what = "three ideas picked for you by Cora, each with a full playbook";
     expect(copy.priceBlock.monthly.note).toContain(what);
-    expect(copy.pricing.included.items[0]).toContain(what);
     expect(copy.questions.flatMap((g) => g.items).find((i) => i.q === "What is a Cora Curation?")?.a).toContain(what);
-    expect(copy.home.how.steps[2].body).toContain("That is your Cora Curation.");
+    expect(copy.home.hero.graphic.steps[2].body).toContain("That is your Cora Curation.");
+    expect(copy.sample.title).toBe("Cora Curation Examples");
     expect(copy.howItWorks.week.days[1].body).toContain("They arrive as your Cora Curation");
   });
 
@@ -651,17 +686,15 @@ describe("v1 copy", () => {
       expect(s.text, s.path).not.toMatch(/US\$100|CA\$140|costs less|cheaper/);
     }
     for (const s of all) expect(s.text, s.path).not.toMatch(/\{list(?:Usd|Cad)\}/);
-    expect(copy.pricing.explained).toEqual({
-      title: "Monthly, explained",
-      body: "A Cora Curation every Monday. Your first two are free. Your card is charged once a month, starting with your third Cora Curation.",
-      under: "One price, charged once a month. Cancel in one click.",
-    });
+    // There is no /pricing page and no copy for one (Peter, November 27, 2026): the price is the homepage's block.
+    expect(Object.keys(v1)).not.toContain("pricing");
+    expect(copy.priceBlock.monthly.name).toBe("Monthly");
   });
 
   it("answers “What does it cost?” as the price block does: monthly only, both prices and Peter's line, and no higher rate (his cut of November 26, 2026)", () => {
     const items = copy.questions.flatMap((g) => g.items);
     expect(items.find((i) => i.q === "What does it cost?")?.a).toBe(`US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. ${copy.priceBlock.sub}`);
-    // His second cut: the answer starts at the first charge. The line under the buttons still says a card is asked for.
+    // His second cut: the answer starts at the first charge. The card line under a reading page's start button still says a card is asked for.
     expect(items.find((i) => i.q === "When is my card charged?")?.a).toBe(
       "The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",
     );
@@ -679,17 +712,17 @@ describe("v1 copy", () => {
 
   it("gives the Canadian higher rate every time it gives the US one", () => {
     const higher = filled.filter((s) => /US\$400|CA\$560/.test(s.text));
-    // Where the higher rate is still stated in the page copy: /pricing ("Contributing"), and two answers on /faq, "I compete
-    // with other people on Roger…" (also on /agents) and "What if Zack misses a week?". Not on the homepage. The terms state it too.
-    expect(higher.map((s) => s.path).sort()).toEqual(["pricing.contributing.body", "questions[1].items[4].a", "questions[3].items[3].a"]);
-    expect(copy.questions[1].items[4].on).toEqual(["agents"]);
+    // Where the higher rate is still stated in the page copy, now that /pricing is deleted: two answers on /faq only, "I compete
+    // with other people on Roger…" and "What if Zack misses a week?". Not on the homepage. The terms and the sign-up plan step state it too.
+    expect(higher.map((s) => s.path).sort()).toEqual(["questions[1].items[4].a", "questions[3].items[3].a"]);
+    expect(copy.questions[1].items[4].on).toEqual([]);
     expect(copy.questions[3].items[3].on).toEqual([]);
     for (const s of higher) {
       expect(s.text.match(/US\$400/g), s.path).toHaveLength(s.text.match(/US\$400 (?:a month )?\(CA\$560 in Canada\)/g)?.length ?? 0);
       expect(s.text.match(/CA\$560/g), s.path).toHaveLength(s.text.match(/US\$400/g)!.length);
     }
-    expect(copy.pricing.contributing.body).toContain("A second miss makes that month US$400 (CA$560 in Canada).");
-    expect(copy.pricing.contributing.body).toContain("the monthly price is US$400 (CA$560 in Canada).");
+    expect(copy.questions[3].items[3].a).toContain("A second miss makes that month US$400 (CA$560 in Canada).");
+    expect(copy.questions[1].items[4].a).toContain("the price becomes US$400 a month (CA$560 in Canada).");
   });
 
   it("does not say nothing arrives on Wednesday, or that an idea can start on a schedule", () => {
@@ -699,13 +732,16 @@ describe("v1 copy", () => {
     for (const s of filled) expect(s.text, s.path).not.toMatch(/\bschedule\b/i);
   });
 
-  it("never says agent without AI in front, outside /agents and /zack", () => {
+  it("never says agent without AI in front, outside /zack", () => {
     const ruled = strings(copy).filter((s) => s.path !== "zackWarning");
     expect(ruled.length).toBeGreaterThan(100);
     for (const s of ruled) expect(s.text, s.path).not.toMatch(bareAgent);
-    // The rule has teeth: the two exempt pages do use the bare word.
-    expect(strings(agents).some((s) => bareAgent.test(s.text))).toBe(true);
+    // The rule has teeth: the exempt pages do use the bare word.
+    expect(strings(zack).some((s) => bareAgent.test(s.text))).toBe(true);
     expect(bareAgent.test(copy.zackWarning)).toBe(true);
+    // "AI Agents", with a capital, passes it: the closing band's button.
+    expect(bareAgent.test("Level up your use of AI Agents Now.")).toBe(false);
+    expect(bareAgent.test("Level up your use of Agents Now.")).toBe(true);
   });
 
   it("has no exclamation mark, no emoji and no user count", () => {
@@ -716,10 +752,17 @@ describe("v1 copy", () => {
     }
   });
 
-  it("tags seven questions for the homepage and seven for /agents, “What is a Cora Curation?” among both", () => {
+  it("tags seven questions for the homepage, “What is a Cora Curation?” among them, and no page but the homepage", () => {
     expect(questionsOn(copy, "home")).toHaveLength(7);
-    expect(questionsOn(copy, "agents")).toHaveLength(7);
-    for (const page of ["home", "agents"] as const) expect(questionsOn(copy, page).map((i) => i.q)).toContain("What is a Cora Curation?");
+    expect(questionsOn(copy, "home").map((i) => i.q)).toContain("What is a Cora Curation?");
+    expect(new Set(v1.questions.flatMap((g) => g.items.flatMap((i) => i.on)))).toEqual(new Set(["home"]));
+  });
+
+  it("gives every question an id of its own, which the admin's edits are stored under", () => {
+    const ids = v1.questions.flatMap((g) => g.items.map((i) => i.id));
+    expect(ids).toHaveLength(18);
+    expect(new Set(ids).size).toBe(18);
+    for (const id of ids) expect(id).toMatch(/^[a-z][a-z-]+$/);
   });
 });
 
@@ -755,28 +798,27 @@ describe("the letter", () => {
   });
 });
 
-describe("the bundled sample play", () => {
-  const words = [samplePlay.title, samplePlay.category, samplePlay.description, samplePlay.heavyUseFor, samplePlay.playbookMd, samplePlay.pasteToInstall];
+describe.each(examples.map((example) => [example.id, example] as const))("the bundled example “%s”", (_id, example) => {
+  const play = example.play;
+  const words = [example.label, play.title, play.category, play.description, play.heavyUseFor, play.playbookMd, play.pasteToInstall];
 
   it("carries no figures and no made-up score", () => {
-    expect(samplePlay.figures).toEqual({});
-    expect(samplePlay.score).toBeNull();
-    expect(Object.values(samplePlay.scores).every((v) => v === null)).toBe(true);
+    expect(play.figures).toEqual({});
+    expect(play.score).toBeNull();
+    expect(Object.values(play.scores).every((v) => v === null)).toBe(true);
   });
 
-  it("has no time-saved or frequency figure, no amount and no income claim", () => {
+  it("has no time-saved figure, no amount and no income claim", () => {
     for (const w of words) {
       expect(w).not.toMatch(timeFigure);
-      expect(w).not.toMatch(/\b(?:a|per|each) (?:week|year|day|month)\b/i);
-      expect(w).not.toMatch(/\$|\bsaved?\b(?! (?:a skill|context|note))|\bincome\b|\brevenue\b|\bcommission\b/i);
+      expect(w).not.toMatch(/\b(?:hours?|minutes?) (?:a|per|each) (?:week|year|day|month)\b/i);
+      // "Save" only where it means store, in the words the claims check allows by name.
+      expect(w.replace(/Save this as a skill called|Save each email as an unsent draft|save nothing and report the error|how many drafts were saved/g, "")).not.toMatch(/\$|\bsav(?:e|es|ed|ing|ings)\b|\bincome\b|\brevenue\b|\bcommission\b/i);
     }
   });
 
-  it("follows the vocabulary rule and no longer says member", () => {
-    for (const w of words) {
-      expect(w).not.toMatch(bareAgent);
-      expect(w).not.toMatch(/\bmembers?\b/i);
-    }
+  it("follows the vocabulary rule: “agent” is never without “AI” in front", () => {
+    for (const w of words) expect(w).not.toMatch(bareAgent);
   });
 
   it("has no exclamation mark and no emoji", () => {
@@ -787,10 +829,11 @@ describe("the bundled sample play", () => {
     }
   });
 
-  it("keeps the eight numbered parts the install prompt refers to", () => {
-    const parts = samplePlay.playbookMd.match(/^## \d\. .+$/gm);
+  it("keeps the eight numbered parts the install prompt refers to, and shows the short title over the play's own", () => {
+    const parts = play.playbookMd.match(/^## \d\. .+$/gm)!.map((line) => line.replace(" (answer once)", "").replace("Pitfalls to watch for", "Pitfalls seen"));
     expect(parts).toEqual(["## 1. Play", "## 2. Trigger", "## 3. Setup first", "## 4. Steps", "## 5. Guardrails", "## 6. Output", "## 7. Pitfalls seen", "## 8. Done when"]);
-    expect(samplePlay.pasteToInstall).toContain("Read sections 1 to 8");
+    expect(play.pasteToInstall).toMatch(/Read sections 1 to 8|using the Play, Trigger, Setup first, Steps, Guardrails, Output, Pitfalls (?:seen|to watch for) and Done when sections above/);
+    expect(play.category).toBe(example.label);
   });
 });
 
@@ -827,5 +870,68 @@ describe("the compounding data", () => {
     // The count is said in ideas; {bricks} is only its name in the code.
     expect(v1.bricks.caption).toEqual({ week: "Week {week}", bricks: "{bricks} ideas" });
     expect(compoundingSteps.map((s) => compoundingCaption(copy.bricks.caption, s)).at(-1)).toEqual({ week: "Week 26", bricks: "78 ideas" });
+  });
+});
+
+describe("the examples' row of short titles, once it is a set of tabs", () => {
+  const ids = ["video", "prospects", "paper"];
+
+  it("moves with the arrow keys and wraps, goes to the ends with Home and End, and leaves every other key alone", () => {
+    expect(tabAfterKey("ArrowRight", 0, 3)).toBe(1);
+    expect(tabAfterKey("ArrowRight", 2, 3)).toBe(0);
+    expect(tabAfterKey("ArrowLeft", 0, 3)).toBe(2);
+    expect(tabAfterKey("ArrowLeft", 2, 3)).toBe(1);
+    // The row is a column on a phone, so Down and Up move too.
+    expect(tabAfterKey("ArrowDown", 1, 3)).toBe(2);
+    expect(tabAfterKey("ArrowUp", 1, 3)).toBe(0);
+    expect(tabAfterKey("Home", 2, 3)).toBe(0);
+    expect(tabAfterKey("End", 0, 3)).toBe(2);
+    for (const key of ["Tab", "Enter", " ", "a", "Escape", "PageDown"]) expect(tabAfterKey(key, 1, 3), key).toBeNull();
+    expect(tabAfterKey("ArrowRight", 0, 0)).toBeNull();
+    expect(tabAfterKey("ArrowRight", 0, 1)).toBe(0);
+  });
+
+  it("shows the first example until the address names one, and that one from then on", () => {
+    expect(firstShown).toEqual({ index: 0, at: "" });
+    expect(shownAfterAddress(firstShown, "", "examples", ids)).toBe(firstShown);
+    expect(tabFromHash("#examples-prospects", "examples", ids)).toBe(1);
+    // What a link with no script, and a press before the page is alive, both leave in the address.
+    expect(shownAfterAddress(firstShown, "#examples-prospects", "examples", ids)).toEqual({ index: 1, at: "#examples-prospects" });
+    expect(shownAfterAddress(firstShown, "#examples-paper", "examples", ids)).toEqual({ index: 2, at: "#examples-paper" });
+    // Only an example's whole address: not the section's, another section's, another block's, or part of one.
+    for (const hash of ["#", "#examples", "#examples-", "#price", "#examples-prospects-card", "#other-prospects", "#examples-PROSPECTS"]) {
+      expect(tabFromHash(hash, "examples", ids), hash).toBe(-1);
+      expect(shownAfterAddress(firstShown, hash, "examples", ids), hash).toEqual({ index: 0, at: hash });
+    }
+  });
+
+  it("lets whichever happened last decide, a pick on the row or an address that names an example, and never brings back an older one", () => {
+    const at = (shown: { index: number; at: string }, hash: string) => shownAfterAddress(shown, hash, "examples", ids);
+    // Arrived at prospects' address, then picked the first: the pick stands while the address stays.
+    const pickedFirst = { index: 0, at: "#examples-prospects" };
+    expect(at(pickedFirst, "#examples-prospects")).toBe(pickedFirst);
+    // Picked the third, then the address came to name prospects.
+    expect(at({ index: 2, at: "" }, "#examples-prospects").index).toBe(1);
+    // An address that names no example changes nothing: “Pricing” in the header does not put another example up.
+    expect(at({ index: 2, at: "" }, "#price").index).toBe(2);
+    // Picked the third, the address named the first, then the address went to the price: still the first, not the old pick.
+    const named = at({ index: 2, at: "#examples-prospects" }, "#examples-video");
+    expect(named).toEqual({ index: 0, at: "#examples-video" });
+    expect(at(named, "#price")).toEqual({ index: 0, at: "#price" });
+    // And going back to an address that names an example shows it again.
+    expect(at(at(named, "#price"), "#examples-prospects").index).toBe(1);
+  });
+
+  it("reads the address only once the page is alive, so the server and the first render agree on the first example", () => {
+    const code = readFileSync(path.join(process.cwd(), "src/components/site/v1/blocks/example-tabs.tsx"), "utf8").replace(/\r\n/g, "\n");
+    expect(code).toMatch(/useSyncExternalStore\(\s*watchHash,\s*\(\) => window\.location\.hash,\s*\(\) => "",\s*\)/);
+    // No element is looked up by its id: a page left by a click stays in the document, hidden, with the same ids.
+    expect(code).not.toMatch(/getElementById|querySelector/);
+    const markup = renderToStaticMarkup(<ExampleTabs id="examples" name="Examples" tabs={ids.map((id) => ({ id, label: id }))} panels={ids.map((id) => <p key={id}>{id}</p>)} />);
+    expect([...markup.matchAll(/data-example-panel="([^"]*)" data-selected="(yes|no)"/g)].map((m) => [m[1], m[2]])).toEqual([
+      ["video", "yes"],
+      ["prospects", "no"],
+      ["paper", "no"],
+    ]);
   });
 });

@@ -2,12 +2,12 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { CopyTextButton } from "@/components/app/copy-text-button";
 import { SimpleMarkdown } from "@/components/app/simple-markdown";
-import { samplePlay } from "@/data/site/sample-play";
+import { firstExample } from "@/data/site/examples";
 import { v1Copy } from "@/data/site/v1";
 import { zackAgents } from "@/data/zack";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import { playbookParts } from "@/lib/site/playbook";
-import { getPlaybookPreface, publicIdeaView, resolveSamplePlay, type IdeaView } from "@/lib/site/sample";
+import { getPlaybookPreface, publicIdeaView, type IdeaView } from "@/lib/site/sample";
 import type { BuiltVersion } from "@/lib/site/version";
 import { PageHead, ReadingSection, StartBand } from "./blocks/reading";
 import { Hairline } from "./blocks/sections";
@@ -39,8 +39,8 @@ export type ZackFile = { name: string; href: string };
 /**
  * The public Zack files, one link for each AI agent whose file exists, in
  * alphabetical order. They are the files in public/zack, served as they are,
- * so anyone can read exactly what Zack is told before signing up. /zack is not
- * linked: the free Zack run is reached from /agents only.
+ * so anyone can read exactly what Zack is told before signing up. /zack, the
+ * free Zack run, is not linked from here.
  */
 export function zackFiles(agents: readonly { name: string; file: string; available: boolean }[] = zackAgents): ZackFile[] {
   return agents
@@ -55,7 +55,7 @@ type Note = { part: string; note: string };
 
 /**
  * Each playbook part beside its note, when the playbook has exactly the parts
- * the notes name, in the notes' order. A play chosen in the admin may be
+ * the notes name, in the notes' order. A play may be
  * written another way: then there is no pairing, and the page shows the notes
  * as a list above the whole playbook, so no note sits beside the wrong part.
  */
@@ -69,8 +69,9 @@ export function annotate(md: string, notes: Note[]): { note: Note; part: string 
 
 /** Reads what the page shows, all of it cached, so the page keeps its static shell. */
 export async function V1HowItWorks({ version }: { version: BuiltVersion }) {
-  const [amounts, preface, play] = await Promise.all([getAmounts(), getPlaybookPreface(), resolveSamplePlay(samplePlay)]);
-  return <V1HowItWorksView version={version} amounts={amounts} idea={publicIdeaView(play, preface)} preface={preface} files={zackFiles()} />;
+  const [amounts, preface] = await Promise.all([getAmounts(), getPlaybookPreface()]);
+  // The idea taken apart is the first of the homepage's examples.
+  return <V1HowItWorksView version={version} amounts={amounts} idea={publicIdeaView(firstExample.play, preface)} preface={preface} files={zackFiles()} />;
 }
 
 const partBox = "rounded-[8px] border border-rule bg-surface p-5 sm:p-6";

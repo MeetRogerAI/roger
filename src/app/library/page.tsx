@@ -47,7 +47,7 @@ function SetUpBand() {
 /**
  * The one band a site version adds, above the footer (spec A.12): the library
  * sentence, the primary start button and the trial line. The button has no
- * audience, so it carries the one remembered from the homepage or /agents.
+ * audience, so it carries the one remembered from the homepage or the free Zack run.
  */
 async function TrialBand({ version }: { version: BuiltVersion }) {
   const { copy } = v1Copy(await getAmounts());

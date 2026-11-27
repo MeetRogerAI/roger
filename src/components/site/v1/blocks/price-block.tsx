@@ -26,26 +26,25 @@ export function PriceBlock({
   initialCurrency = "USD",
   audience,
   id = "price",
-  as: Heading = "h2",
 }: {
   amounts: Amounts;
   copy: PriceBlockCopy;
   initialCurrency?: Currency;
   /** The audience of the page, carried by the start button. */
   audience?: SiteAudience;
+  /** "price" on the homepage: the header's and the footer's "Pricing" link to it, and /pricing redirects to it (PRICE_SECTION_HREF in src/lib/site/chrome.ts). */
   id?: string;
-  /** "h1" on /pricing, where the block opens the page. The plan's name is one level under it: h2 there, h3 elsewhere. */
-  as?: "h1" | "h2";
 }) {
   const titleId = `${id}-title`;
-  // One level under the block's heading, so no level is skipped. The classes set the size, not the level.
-  const PlanName = Heading === "h1" ? "h2" : "h3";
   return (
-    <section id={id} aria-labelledby={titleId} className="on-night scroll-mt-14 bg-night text-night-ink">
+    // Where "Pricing" lands. The page already keeps 72px clear at the top for a link's target (scroll-padding-top in
+    // globals.css) and the sticky header is 60px tall, so the margin takes 12px back: the section starts flush under
+    // the header, with its own padding between the header and its heading.
+    <section id={id} aria-labelledby={titleId} className="on-night -scroll-mt-3 bg-night text-night-ink">
       <div className="wrap py-24 text-center md:py-32">
-        <Heading id={titleId} className="text-h2">
+        <h2 id={titleId} className="text-h2">
           {copy.title}
-        </Heading>
+        </h2>
         <p data-price-sub className="mx-auto mt-4 max-w-[44rem] text-lead text-night-ink-2">
           {copy.sub}
         </p>
@@ -55,7 +54,7 @@ export function PriceBlock({
 
         <div className="mx-auto mt-8 max-w-[36rem] text-left" aria-live="polite">
           <div data-plan="monthly" className="rounded-[8px] border border-night-ink-2 bg-night-2 p-6 sm:p-10">
-            <PlanName className="text-title">{copy.monthly.name}</PlanName>
+            <h3 className="text-title">{copy.monthly.name}</h3>
             {currencies.map((currency) => (
               <ForCurrency key={currency} currency={currency} initial={initialCurrency}>
                 <Price currency={currency} amount={amounts.monthly[currency]} per={copy.perMonth} tax={copy.tax[currency]} />

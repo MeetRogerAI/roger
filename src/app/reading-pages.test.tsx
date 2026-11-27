@@ -1,5 +1,7 @@
 /**
- * The routes /pricing, /faq, /how-it-works and /about (plan U7, KTD4): each is
+ * The routes /faq, /how-it-works and /about (plan U7, KTD4; /pricing was
+ * deleted on November 27, 2026 and redirects to the homepage's price
+ * section, see redirects.test.ts): each is
  * not found while Circles or the legacy site is served (covers AE8), serves
  * the v1 page under a site version, and takes its metadata from the page's
  * own copy.
@@ -21,7 +23,6 @@ vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 
 const routes = {
-  "/pricing": { load: () => import("./pricing/page"), copy: v1.pricing, title: "Roger: Pricing", shows: "What is included" },
   "/faq": { load: () => import("./faq/page"), copy: v1.faq, title: "Roger: Questions", shows: "Zack and privacy" },
   "/how-it-works": { load: () => import("./how-it-works/page"), copy: v1.howItWorks, title: "Roger: How it works", shows: "Zack, in detail" },
   "/about": { load: () => import("./about/page"), copy: v1.about, title: "Roger: About", shows: "Hey there," },
@@ -84,13 +85,12 @@ describe.each(Object.keys(routes) as (keyof typeof routes)[])("%s", (path) => {
   });
 });
 
-describe("the four reading pages' descriptions", () => {
+describe("the three reading pages' descriptions", () => {
   it("are lines of each page's own copy, with no amount to fill", () => {
-    expect(v1.pricing.meta.description).toBe(`${v1.pricing.included.items[0]} ${v1.pricing.explained.under}`);
     expect(v1.howItWorks.meta.description).toBe(v1.howItWorks.week.days[1].body);
     expect(v1.faq.meta.description).toBe("Getting started, Zack and privacy, Cora and the ideas, Price and billing.");
     expect(v1.about.meta.description).toBe(v1.about.leadIn);
-    for (const page of [v1.pricing, v1.howItWorks, v1.faq, v1.about]) {
+    for (const page of [v1.howItWorks, v1.faq, v1.about]) {
       expect(page.meta.headline).toBe(page.title);
       expect(page.meta.description).not.toMatch(/[{}$]/);
       expect(page.meta.description.length).toBeLessThanOrEqual(160);

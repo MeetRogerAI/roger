@@ -11,7 +11,7 @@ import { pageMarkup } from "@/test-helpers/page-markup";
 
 let signedIn = false;
 vi.mock("@/lib/auth/signed-in-hint", () => ({ useSignedInHint: () => signedIn }));
-vi.mock("next/navigation", async (orig) => ({ ...(await orig<typeof import("next/navigation")>()), usePathname: () => "/pricing" }));
+vi.mock("next/navigation", async (orig) => ({ ...(await orig<typeof import("next/navigation")>()), usePathname: () => "/faq" }));
 
 const { SiteHeader, PhoneMenu, navFor } = await import("./site-header");
 
@@ -39,7 +39,7 @@ describe("a site version's header for a signed-in visitor", () => {
 
   it("keeps Sign in and the start button in the markup, inside a wrapper that is invisible and hidden from screen readers", async () => {
     const markup = await header("in");
-    expect(hrefs(markup)).toEqual(["#main", "/", "/how-it-works", "/pricing", "/library", "/faq", "/about", "/signin", "/start", "/app"]);
+    expect(hrefs(markup)).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start", "/app"]);
     // One wrapper carries both marks, and it is the wrapper of the signed-out pair.
     expect(markup.match(/invisible/g)).toHaveLength(1);
     const wrapper = markup.match(/<span class="col-start-1 row-start-1 [^"]* invisible" aria-hidden="true">/)!;
@@ -59,7 +59,7 @@ describe("a site version's header for a signed-in visitor", () => {
     // Under 375 pixels Sign in leaves the row (the menu lists it), so the button's two lines have room: at 360 they took three beside it.
     expect(inside).toMatch(/<a class="[^"]*max-\[374px\]:hidden[^"]*" href="\/signin">Sign in<\/a>/);
     // Nothing before the wrapper is hidden with it.
-    expect(hrefs(markup.slice(0, wrapper.index))).toEqual(["#main", "/", "/how-it-works", "/pricing", "/library", "/faq", "/about"]);
+    expect(hrefs(markup.slice(0, wrapper.index))).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about"]);
   });
 
   it("changes nothing else in the header", async () => {
@@ -78,12 +78,12 @@ describe("a site version's header for a signed-in visitor", () => {
 describe("a site version's menu on a phone", () => {
   const fiveLinks = [
     ["/how-it-works", "How it works"],
-    ["/pricing", "Pricing"],
+    ["/#price", "Pricing"],
     ["/library", "Use cases"],
     ["/faq", "FAQ"],
     ["/about", "About"],
   ];
-  const menu = async (as: "out" | "in", nav = navFor("/pricing", "v1", chrome)) => {
+  const menu = async (as: "out" | "in", nav = navFor("/faq", "v1", chrome)) => {
     signedIn = as === "in";
     return pageMarkup(<PhoneMenu nav={nav} onNavigate={() => {}} />);
   };

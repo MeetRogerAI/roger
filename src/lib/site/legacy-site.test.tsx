@@ -54,7 +54,8 @@ describe("the legacy site's footer", () => {
     expect(legacy).toContain("Real agent use cases, read every morning in Toronto.");
     expect(hrefs(await pageMarkup(<SiteFooter site="circles" />))).not.toContain("/refunds");
     const v1 = hrefs(await pageMarkup(<SiteFooter site="v1" chrome={await getSiteChrome("v1")} />));
-    expect(v1).toContain("/agents");
+    expect(v1).toContain("/#price");
+    expect(v1).not.toContain("/agents");
     expect(v1).not.toContain("/refunds");
   });
 });

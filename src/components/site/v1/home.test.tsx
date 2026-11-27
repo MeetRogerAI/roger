@@ -1,17 +1,18 @@
 /**
- * The v1 homepage (plan U5): the spec's eleven sections in order, the hero's
- * four parts and the compounding loop as the server sends them, and the rules a homepage
- * must keep (card line, audience, no /zack link, no broken image, copy rules).
+ * The v1 homepage (plan U5; Peter's homepage reviews of November 26 and 27,
+ * 2026): its sections in order, the hero's four steps and the compounding
+ * loop as the server sends them, the examples, and the rules a homepage must
+ * keep (audience, no /zack link, no image, copy rules).
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { siteConfig, v3Defaults } from "@/data/config";
+import { v3Defaults } from "@/data/config";
 import { compoundingFinal, compoundingSteps } from "@/data/site/compounding";
-import { letter, letterShown } from "@/data/site/letter";
-import { samplePlay } from "@/data/site/sample-play";
-import { questionsOn, v1Copy } from "@/data/site/v1";
+import { examples } from "@/data/site/examples";
+import { letterShown } from "@/data/site/letter";
+import { questionsOn, v1Copy, type QuestionOverrides } from "@/data/site/v1";
 import { amountsFrom, hasBareDollar } from "@/lib/site/amounts";
 import { compoundingCaption } from "@/lib/site/compounding";
 import type { Testimonial } from "@/lib/site/testimonials";
@@ -26,13 +27,13 @@ vi.hoisted(() => {
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 
-const { publicIdeaView } = await import("@/lib/site/sample");
+const { exampleViews } = await import("@/lib/site/sample");
 const { V1Home, V1HomeView } = await import("./home");
 const { Compounding } = await import("./blocks/compounding");
 
 const amounts = amountsFrom(v3Defaults);
 const { copy } = v1Copy(amounts);
-const idea = publicIdeaView(samplePlay, v3Defaults.playbookPreface);
+const shown = exampleViews(examples, v3Defaults.playbookPreface);
 
 // Made up, for these tests only: no testimonial is cleared, so the real list is empty.
 const quotes: Testimonial[] = [
@@ -46,6 +47,7 @@ const text = (markup: string) =>
     .replace(/<!--.*?-->/g, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
@@ -79,8 +81,8 @@ const STREAMED = '<div hidden id="S:';
 const shell = (markup: string) => markup.split(STREAMED)[0];
 const streamed = (markup: string) => markup.slice(shell(markup).length);
 
-const full = (over: { testimonials?: Testimonial[]; photo?: string } = {}) =>
-  pageMarkup(<V1HomeView version="v1" amounts={amounts} idea={idea} testimonials={over.testimonials ?? []} photo={over.photo ?? ""} />);
+const full = (over: { testimonials?: Testimonial[]; questions?: QuestionOverrides } = {}) =>
+  pageMarkup(<V1HomeView version="v1" amounts={amounts} examples={shown} testimonials={over.testimonials ?? []} questions={over.questions} />);
 const view = async (over: Parameters<typeof full>[0] = {}) => shell(await full(over));
 const served = async (version: "v1" | "v2" | "v3" = "v1") => shell(await pageMarkup(<V1Home version={version} />));
 
@@ -92,16 +94,14 @@ const emoji = /\p{Extended_Pictographic}/u;
 beforeEach(() => resetNextFakes());
 
 describe("the v1 homepage, as the page serves it", () => {
-  it("has the spec's sections in order, with no testimonials section while none is cleared", async () => {
+  it("has its eight sections in order, with no testimonials section while none is cleared", async () => {
     const markup = await served();
     expect(sections(markup)).toEqual([
       { name: "hero", ground: "night" },
       { name: "problem", ground: "ground" },
-      { name: "how", ground: "night" },
-      { name: "sample", ground: "ground" },
+      { name: "examples", ground: "ground" },
       { name: "compounds", ground: "ground-2" },
       { name: "control", ground: "ground" },
-      { name: "who", ground: "ground" },
       { name: "price", ground: "night" },
       { name: "questions", ground: "ground" },
       { name: "closing", ground: "night" },
@@ -110,23 +110,39 @@ describe("the v1 homepage, as the page serves it", () => {
     expect(text(markup)).not.toContain(copy.testimonials.title);
     expect(markup).not.toContain('id="say"');
     expect(markup).toContain('data-site="v1"');
-    expect(markup).toContain('<section id="how"');
   });
 
-  it("prints each section's own words, in the spec's order", async () => {
+  it("has no “How it works” section and no “Who runs this” section (Peter, November 27, 2026)", async () => {
+    const markup = await served();
+    expect(markup).not.toContain('id="how"');
+    expect(markup).not.toContain('id="who"');
+    expect(markup).not.toContain('href="#how"');
+    const headings = [...markup.matchAll(/<h2\b[^>]*>(.*?)<\/h2>/g)].map((m) => text(m[1]));
+    expect(headings).not.toContain("How it works");
+    expect(headings).not.toContain("Who runs this");
+    // Peter's letter is on /about, not here: none of it is printed, there is no photograph, and nothing links to /about from the page's own sections.
+    for (const p of letterShown) expect(text(markup)).not.toContain(p.shown);
+    expect(text(markup)).not.toContain("Roger is run by Peter Kuperman.");
+    expect(markup).not.toMatch(/<img\b|<picture\b|data-photo/i);
+    expect(hrefs(markup)).not.toContain("/about");
+    // The files and the copy of both sections are gone, not only unused.
+    for (const file of ["blocks/who-runs-this.tsx", "blocks/how-it-works.tsx"]) expect(() => readFileSync(path.join(process.cwd(), "src/components/site/v1", file))).toThrow();
+    expect(Object.keys(copy.home).sort()).toEqual(["closing", "compounds", "hero", "problem"]);
+  });
+
+  it("prints each section's own words, in order", async () => {
     const seen = text(await served());
     const marks = [
       copy.home.hero.headline,
       copy.home.hero.sub,
+      copy.home.hero.graphic.steps[0].body,
+      copy.home.hero.graphic.steps[3].body,
       copy.home.problem.statements[0],
       copy.home.problem.statements[2],
-      copy.home.how.steps[0].body,
-      copy.home.how.steps[3].body,
-      copy.sample.line,
-      idea.title,
+      copy.sample.title,
+      shown[0].idea.title,
       copy.home.compounds.line,
       copy.control.title,
-      copy.home.whoRuns.leadIn,
       copy.priceBlock.title,
       copy.questionsBlock.title,
       copy.home.closing.line,
@@ -144,10 +160,10 @@ describe("the v1 homepage, as the page serves it", () => {
 });
 
 describe("the v1 homepage's sections", () => {
-  it("puts testimonials sixth when there are some, and keeps night chapters apart either way", async () => {
+  it("puts testimonials fifth when there are some, and keeps night chapters apart either way", async () => {
     const withQuotes = sections(await view({ testimonials: quotes }));
-    expect(withQuotes.map((s) => s.name)).toEqual(["hero", "problem", "how", "sample", "compounds", "say", "control", "who", "price", "questions", "closing"]);
-    expect(withQuotes[5]).toEqual({ name: "say", ground: "ground" });
+    expect(withQuotes.map((s) => s.name)).toEqual(["hero", "problem", "examples", "compounds", "say", "control", "price", "questions", "closing"]);
+    expect(withQuotes[4]).toEqual({ name: "say", ground: "ground" });
     expect(text(await view({ testimonials: quotes }))).toContain("“A made-up quote, to place the section.”");
 
     for (const list of [withQuotes, sections(await view())]) {
@@ -158,8 +174,11 @@ describe("the v1 homepage's sections", () => {
   });
 
   it("keeps two ground sections that are neighbours apart with a hairline, and adds none elsewhere", async () => {
-    // Without testimonials: before "who runs this" only. With them: before the control block too.
-    expect((await view()).match(/data-hairline/g)).toHaveLength(1);
+    // Without testimonials: between the problem and the examples only. With them: before the control block too.
+    const page = await view();
+    expect(page.match(/data-hairline/g)).toHaveLength(1);
+    expect(page.indexOf("data-hairline")).toBeGreaterThan(page.indexOf('id="problem"'));
+    expect(page.indexOf("data-hairline")).toBeLessThan(page.indexOf('id="examples"'));
     expect((await view({ testimonials: quotes })).match(/data-hairline/g)).toHaveLength(2);
   });
 
@@ -170,14 +189,20 @@ describe("the v1 homepage's sections", () => {
     for (const s of sections(markup)) expect(markup, s.name).toMatch(new RegExp(`<h[12] id="${s.name}-title"`));
   });
 
-  it("hero: the card line sits directly under the two buttons, in small type", async () => {
+  it("hero: one button, with no second link beside it and no card line under it (Peter, November 27, 2026)", async () => {
     const hero = sectionMarkup(await view(), "hero");
     const actions = /<div data-hero-actions[\s\S]*?<\/div>/.exec(hero)![0];
-    expect(text(actions)).toBe(`${copy.buttons.start} ${copy.home.hero.secondary.label}`);
-    expect(hrefs(actions)).toEqual(["/start?path=re", "#how"]);
+    expect(text(actions)).toBe(copy.buttons.start);
+    expect(hrefs(actions)).toEqual(["/start?path=re"]);
+    expect(hrefs(hero)).toEqual(["/start?path=re"]);
+    expect(text(hero)).not.toContain("See how it works");
+    // The card sentence is not in the hero, in this wording or the one before it.
+    expect(text(hero)).not.toMatch(/card/i);
+    // Nothing follows the button inside the left column: the column ends with it.
+    expect(hero.slice(hero.indexOf(actions) + actions.length)).toMatch(/^<\/div><\/div><div data-hero-steps/);
+    // The card line itself still exists, for the reading pages' start band.
     expect(copy.cardLine).toBe("Card required. Charged only with your third Cora Curation.");
-    // The very next element after the buttons is the card line.
-    expect(hero.slice(hero.indexOf(actions) + actions.length)).toMatch(/^<p class="[^"]*text-meta[^"]*">Card required\. Charged only with your third Cora Curation\.<\/p>/);
+    expect(text(await view())).not.toContain(copy.cardLine);
   });
 
   it("hero: the sub-line is Peter's, for anyone and not for one trade", async () => {
@@ -186,21 +211,25 @@ describe("the v1 homepage's sections", () => {
     expect(text(hero)).not.toMatch(/real estate/i);
   });
 
-  it("hero: the picture is the four parts of “How it works”, each under its label, all readable with no script", async () => {
-    const page = await view();
-    const hero = sectionMarkup(page, "hero");
-    // The old picture, the brick stack that dropped three bricks, is gone from this page.
-    expect(hero).not.toContain("bricks-arrive");
+  it("hero: the right side is “How it works” whole, the four steps each with its label, number, headline, text and ideas, all readable with no script", async () => {
+    const hero = sectionMarkup(await view(), "hero");
     expect(hero).toContain("data-hero-steps");
-    const parts = [...hero.matchAll(/<li data-step="\d"[^>]*>(.*?)<\/li>/g)].map((m) => text(m[1]));
-    // The headlines are the section's own, read from the copy and not typed again: Use is step 1, and so on.
-    const labels = ["Use", "Collect", "Curate", "Deploy"];
-    expect(parts).toEqual(copy.home.how.steps.map((step, i) => `${labels[i]} ${step.title}`));
-    const how = text(sectionMarkup(page, "how"));
-    for (const step of copy.home.how.steps) expect(how).toContain(step.title);
-    // Headline only: no step's body is in the hero, and no number is printed there.
-    for (const step of copy.home.how.steps) expect(text(hero)).not.toContain(step.body);
-    expect(text(hero)).not.toMatch(/\d/);
+    const parts = [...hero.matchAll(/<li data-step="\d" data-active="(?:yes|no)">(.*?)<\/li>(?=<li data-step|<\/ol>)/g)].map((m) => m[1]);
+    expect(parts).toHaveLength(4);
+    const steps = copy.home.hero.graphic.steps;
+    expect(steps.map((s) => s.label)).toEqual(["Use", "Collect", "Curate", "Deploy"]);
+    for (const [i, part] of parts.entries()) {
+      // Without the ideas' own labels, a step reads: label, number, headline, text.
+      const read = text(part.replace(/<span class="sr-only">.*?<\/span>/g, ""));
+      expect(read, steps[i].label).toBe(`${steps[i].label} ${i + 1} ${steps[i].title} ${steps[i].body}`);
+      // 3, 6, 9 and 12 ideas, each labelled.
+      expect(part, steps[i].label).toContain(`data-bricks="${(i + 1) * 3}"`);
+      expect(part.match(/<span class="sr-only">Week \d+, idea [123]: set up<\/span>/g), steps[i].label).toHaveLength((i + 1) * 3);
+    }
+    // The fourth step in Peter's words.
+    expect(text(parts[3].replace(/<span class="sr-only">.*?<\/span>/g, ""))).toBe("Deploy 4 Approve The Ideas Say yes to the ideas you like and see them in action for you.");
+    // The only digits a reader sees in the hero are the four step numbers.
+    expect(text(hero.replace(/<span class="sr-only">.*?<\/span>/g, "")).match(/\d+/g)).toEqual(["1", "2", "3", "4"]);
     expect(hero).not.toMatch(/aria-live/);
   });
 
@@ -210,88 +239,91 @@ describe("the v1 homepage's sections", () => {
     expect(text(problem)).toBe(`${copy.home.problem.title} ${copy.home.problem.statements.join(" ")}`);
   });
 
-  it("how it works: four numbered steps, and a stack one week taller at each", async () => {
-    const how = sectionMarkup(await view(), "how");
-    const steps = how.split(/<li>/).slice(1);
-    expect(steps).toHaveLength(4);
-    // Four steps keep the four-across grid; three steps (the /agents page) use another.
-    expect(how).toMatch(/<ol data-reveal="true" class="[^"]*sm:grid-cols-2 lg:grid-cols-4[^"]*"/);
-    expect(how).not.toContain("md:grid-cols-3");
-    for (const [i, step] of steps.entries()) {
-      expect(step).toContain("sm:h-[98px]");
-      expect(step).not.toContain("md:h-[72px]");
-      expect(step).toContain(`data-bricks="${(i + 1) * 3}"`);
-      expect(step).toContain(`--step:${i}`);
-      expect(step.match(/<span class="sr-only">Week \d+, idea [123]: set up<\/span>/g)).toHaveLength((i + 1) * 3);
-      // The large numeral is decoration, above the short title.
-      expect(step).toMatch(new RegExp(`<p aria-hidden="true"[^>]*>${i + 1}</p><h3[^>]*>${copy.home.how.steps[i].title}</h3>`));
-      expect(text(step)).toContain(copy.home.how.steps[i].body);
+  it("examples: the heading “Cora Curation Examples” with no line under it, then the short titles to pick by", async () => {
+    const section = sectionMarkup(await view(), "examples");
+    expect(copy.sample.title).toBe("Cora Curation Examples");
+    // The heading's block holds the heading and nothing else.
+    expect(section).toMatch(/<div class="mx-auto max-w-\[44rem\] text-center "><h2 id="examples-title" class="text-h2">Cora Curation Examples<\/h2><\/div>/);
+    const seen = text(section);
+    expect(seen.startsWith("Cora Curation Examples On-demand video creation 20 new prospects every day A printed daily paper for the family On-demand video creation Phone camera roll to styled Reels")).toBe(true);
+    expect(seen).not.toContain("This is one idea, as it arrives.");
+    expect(seen).not.toContain("What arrives on Monday");
+    expect(section).not.toMatch(/<dialog/i);
+  });
+
+  it("examples: with no script every example is in the page, each short title a link to its example, and no tab role is claimed", async () => {
+    const section = sectionMarkup(await view(), "examples");
+    const tabs = [...section.matchAll(/<a\b([^>]*)data-example-tab="([^"]*)"([^>]*)>([^<]*)<\/a>/g)];
+    expect(tabs.map((t) => [t[2], t[4]])).toEqual([
+      ["video", "On-demand video creation"],
+      ["prospects", "20 new prospects every day"],
+      ["paper", "A printed daily paper for the family"],
+    ]);
+    expect(tabs.map((t) => /href="([^"]*)"/.exec(t[0])![1])).toEqual(["#examples-video", "#examples-prospects", "#examples-paper"]);
+    const panels = [...section.matchAll(/<div id="(examples-[a-z-]+)" data-example-panel="([^"]*)" data-selected="(yes|no)"/g)];
+    expect(panels.map((p) => [p[1], p[2], p[3]])).toEqual([
+      ["examples-video", "video", "yes"],
+      ["examples-prospects", "prospects", "no"],
+      ["examples-paper", "paper", "no"],
+    ]);
+    // The roles are given only once script is running, so a reader with none is never told of tabs that do nothing.
+    expect(section).not.toMatch(/role="(?:tablist|tab|tabpanel)"|aria-selected|aria-controls/);
+    // Nothing hides a panel in the markup: the one rule that does is under html.js, in globals.css.
+    for (const panel of section.matchAll(/<div id="examples-[a-z-]+" data-example-panel[^>]*>/g)) expect(panel[0]).not.toMatch(/\bhidden\b|display/);
+    const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
+    expect(css).toContain('.js .examples [data-example-panel][data-selected="no"] {');
+    expect(css.match(/\[data-example-panel\]\[data-selected="no"\]/g)).toHaveLength(1);
+  });
+
+  it("examples: each is a full card, folded when the page loads, with all of its play's text in the page", async () => {
+    const section = sectionMarkup(await view(), "examples");
+    const cards = section.split('<article aria-labelledby="').slice(1);
+    expect(cards).toHaveLength(examples.length);
+    for (const [i, card] of cards.entries()) {
+      const { label, play } = examples[i];
+      const rows = card.match(/<details\b[^>]*>/g) ?? [];
+      // Summary, What To Copy, the one playbook row, and the eight steps inside it.
+      expect(rows, label).toHaveLength(11);
+      for (const row of rows) expect(row, label).not.toMatch(/\sopen\b/);
+      const seen = text(card);
+      // The short title over the play's own title, then the two headings and their rows.
+      expect(seen, label).toContain(`${label} ${play.title} The Idea Summary`);
+      expect(seen, label).toContain(play.description);
+      expect(seen, label).toContain(play.pasteToInstall);
+      expect(seen, label).toContain("The Playbook 8 steps 1. Play");
+      expect(seen, label).toContain("8. Done when");
     }
+    expect(text(cards[0])).toContain("Never post or schedule anything on social media. Finished files and drafts only.");
+    expect(text(cards[1])).toContain("Never send. Drafts only, and the member sends.");
   });
 
-  it("what arrives on Monday: the sample card under its one line", async () => {
-    const sample = sectionMarkup(await view(), "sample");
-    expect(text(sample).startsWith(`${copy.sample.title} This is one idea, as it arrives. ${idea.category} ${idea.title}`)).toBe(true);
-    expect(sample).not.toMatch(/<dialog/i);
+  it("examples: under What To Copy the copy button is the last thing, and no “Written on” line is anywhere", async () => {
+    const section = sectionMarkup(await view(), "examples");
+    expect(text(section)).not.toMatch(/Written on|may have another name on your AI agent/);
+    const folds = [...section.matchAll(/<details data-fold="copy"[^>]*>(.*?)<\/details>/g)].map((m) => m[1]);
+    expect(folds).toHaveLength(examples.length);
+    // The row's content ends on the button: nothing is printed beneath it.
+    for (const fold of folds) expect(fold).toMatch(/<button\b[^>]*>(?:(?!<\/button>).)*<\/button><\/div>$/);
+    expect(Object.keys(copy.sample.install).sort()).toEqual(["copy", "help"]);
   });
 
-  it("what arrives on Monday: folded when the page loads, with all of the play's text still in the page", async () => {
-    const sample = sectionMarkup(await view(), "sample");
-    const rows = sample.match(/<details\b[^>]*>/g) ?? [];
-    // Summary, What To Copy, the one playbook row, and the eight steps inside it.
-    expect(rows).toHaveLength(11);
-    for (const row of rows) expect(row).not.toMatch(/\sopen\b/);
-    const seen = text(sample);
-    expect(seen).toContain(samplePlay.description);
-    expect(seen).toContain(samplePlay.pasteToInstall);
-    expect(seen).toContain("Claude drafts only. It never sends.");
-    expect(seen).toContain("The Idea");
-    expect(seen).toContain("The Playbook");
-  });
-
-  it("who runs this: the lead-in, the first three still-true letter paragraphs as shown, and the link to /about", async () => {
-    const who = sectionMarkup(await view(), "who");
-    const three = letterShown.slice(0, 3);
-    expect(three.map((p) => p.id)).toEqual(["who", "noticed", "background"]);
-    expect(text(who)).toBe(`${copy.home.whoRuns.title} Roger is run by Peter Kuperman. ${three.map((p) => p.shown).join(" ")} ${copy.home.whoRuns.link.label}`);
-    for (const p of letter.paragraphs.filter((x) => !x.stillTrue)) expect(text(who)).not.toContain(p.shown);
-    expect(hrefs(who)).toEqual(["/about"]);
-  });
-
-  it("who runs this: no image element and no empty frame while the photograph's path is empty, and the photograph once it is set", async () => {
-    const without = await view({ photo: "" });
-    expect(without).not.toMatch(/<img\b/i);
-    expect(without).not.toMatch(/<picture\b/i);
-    expect(without).not.toContain("data-photo");
-    // The text-only layout: one narrow column, no grid with a slot for the picture.
-    expect(sectionMarkup(without, "who")).toContain("max-w-[40rem]");
-    expect(sectionMarkup(without, "who")).not.toContain("md:grid-cols-");
-
-    const withPhoto = await view({ photo: "/media/peter.jpg" });
-    const imgs = withPhoto.match(/<img\b[^>]*>/g) ?? [];
-    expect(imgs).toHaveLength(1);
-    expect(imgs[0]).toContain('alt="Peter Kuperman"');
-    expect(imgs[0]).toContain("peter.jpg");
-    expect(sectionMarkup(withPhoto, "who")).toContain("data-photo");
-    expect(sectionMarkup(withPhoto, "who")).toContain("md:grid-cols-");
-  });
-
-  it("who runs this: the page takes the photograph from the configuration, never from the disk", async () => {
-    // What the page serves follows siteConfig.founder.photo, whichever it is today.
-    const who = sectionMarkup(await served(), "who");
-    expect(who.includes("data-photo")).toBe(siteConfig.founder.photo !== "");
-    expect((who.match(/<img\b/g) ?? []).length).toBe(siteConfig.founder.photo === "" ? 0 : 1);
-    // Nothing on the homepage's path reads the file system to decide.
-    for (const file of ["src/components/site/v1/home.tsx", "src/components/site/v1/blocks/who-runs-this.tsx"]) {
-      expect(readFileSync(path.join(process.cwd(), file), "utf8"), file).not.toMatch(/node:fs|existsSync/);
-    }
+  it("examples: none says where it came from, and none carries a figure about time or money", async () => {
+    const seen = text(sectionMarkup(await view(), "examples"));
+    expect(seen).not.toMatch(/hours? (?:a|per) week|minutes saved|time saved|Doing this by hand|Confidence|Over a year|Heavy use/i);
+    expect(seen).not.toContain("$");
+    expect(seen).not.toMatch(/Client email in two tones/);
   });
 
   it("price: the price block for the visitor's country, both currencies in the markup", async () => {
     const usd = sectionMarkup(await view(), "price");
     expect(usd).toMatch(/aria-pressed="true"[^>]*>USD</);
     for (const line of ["US$200 / month USD", "CA$280 / month CAD"]) expect(text(usd)).toContain(line);
-    expect(text(usd)).toContain(copy.trialLine);
+    // The note under the price, exactly (Peter, November 27, 2026).
+    expect(text(/<p data-trial-line[^>]*>(.*?)<\/p>/.exec(usd)![1])).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
+    expect(copy.trialLine).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
+    expect(text(usd)).not.toMatch(/We ask for a card|Cancel before then/);
+    // The header's "Pricing" lands here: the section has the id, and room for the sticky header above its heading.
+    expect(usd).toMatch(/^<section id="price" aria-labelledby="price-title" class="[^"]*-scroll-mt-3\b/);
     // Monthly only, under Peter's line.
     expect(usd.match(/data-plan="/g)).toHaveLength(1);
     expect(text(usd)).not.toMatch(/one list|one at a time|\/ list\b/i);
@@ -316,10 +348,25 @@ describe("the v1 homepage's sections", () => {
     expect(hrefs(questions)).toEqual(["/faq"]);
   });
 
-  it("closing band: the line, the line under the price, the button and the trial line, all about Cora Curations", async () => {
-    expect(text(sectionMarkup(await view(), "closing"))).toBe(
-      `See what your first two Cora Curations bring. Get two Cora Curations for free and pay only after you have tried the product for two full weeks. ${copy.buttons.start} ${copy.trialLine}`,
-    );
+  it("questions: an answer edited in the admin is printed in place of the built-in one, with its amounts filled in", async () => {
+    const edited = sectionMarkup(await view({ questions: { cost: { a: "It is {monthlyUsd} a month. Your first {freeLists} Cora Curations are free." }, "each-week": { q: "What is my part each week?" } } }), "questions");
+    expect(text(edited)).toContain("What does it cost? It is US$200 a month. Your first two Cora Curations are free.");
+    expect(text(edited)).not.toContain("plus tax where it applies");
+    // A question whose wording alone was edited keeps its built-in answer.
+    expect(text(edited)).toContain("What is my part each week? Open your three ideas on Monday and set up the ones you want.");
+    expect(edited.match(/<details/g)).toHaveLength(7);
+  });
+
+  it("closing band: the heading and the button only, and the button in Peter's words (November 27, 2026)", async () => {
+    const closing = sectionMarkup(await view(), "closing");
+    expect(text(closing)).toBe("See what your first two Cora Curations bring. Level up your use of AI Agents Now.");
+    // Nothing under the heading and nothing under the button.
+    expect(closing).not.toContain("data-closing-sub");
+    expect(closing).not.toContain("data-closing-trial");
+    expect(closing.match(/<p\b/g)).toBeNull();
+    expect(closing).toMatch(/<a class="btn btn-l" href="\/start\?path=re">Level up your use of AI Agents Now\.<\/a>/);
+    // "AI Agents" with a capital A keeps the vocabulary rule: "agent" never without "AI" in front.
+    expect(text(closing)).not.toMatch(bareAgent);
   });
 });
 
@@ -329,17 +376,17 @@ describe("the v1 homepage's links", () => {
       const starts = hrefs(markup).filter((h) => h.startsWith("/start"));
       // The hero, the price block and the closing band.
       expect(starts).toEqual(["/start?path=re", "/start?path=re", "/start?path=re"]);
-      expect(markup.match(/>Get two free Cora Curations<\/a>/g)).toHaveLength(3);
-      // Every link to /start reads exactly that, and nothing else.
+      // The hero's and the price block's read the same. The closing band's alone has its own words.
       const labels = [...markup.matchAll(/<a\b[^>]*href="\/start[^"]*"[^>]*>(.*?)<\/a>/g)].map((m) => text(m[1]));
-      expect(labels).toEqual(["Get two free Cora Curations", "Get two free Cora Curations", "Get two free Cora Curations"]);
+      expect(labels).toEqual(["Get two free Cora Curations", "Get two free Cora Curations", "Level up your use of AI Agents Now."]);
     }
   });
 
-  it("has no link to /zack, and none to a Circles or legacy page", async () => {
-    const all = hrefs(await view({ testimonials: quotes, photo: "/media/peter.jpg" }));
+  it("has no link to /zack, to the deleted /pricing or /agents, to the deleted section's anchor, or to a Circles or legacy page", async () => {
+    const all = hrefs(await view({ testimonials: quotes }));
     expect(all.filter((h) => h.startsWith("/zack"))).toEqual([]);
-    expect(all.filter((h) => !h.startsWith("/_next/"))).toEqual(["/start?path=re", "#how", "/how-it-works#zack", "/about", "/start?path=re", "/faq", "/start?path=re"]);
+    expect(all.filter((h) => /^\/(?:pricing|agents)\b|#how$/.test(h))).toEqual([]);
+    expect(all.filter((h) => !h.startsWith("/_next/"))).toEqual(["/start?path=re", "#examples-video", "#examples-prospects", "#examples-paper", "/how-it-works#zack", "/start?path=re", "/faq", "/start?path=re"]);
   });
 });
 
@@ -438,34 +485,39 @@ describe("the motion rules for the bricks", () => {
     expect(block.split(media)).toHaveLength(2);
     const inside = block.slice(block.indexOf(media), block.indexOf("\n}\n", block.indexOf(media)));
     const outside = block.replace(inside, "").replace(printRules(block), "");
-    // Outside the media block there is only the keyframe, the failsafe that ends an animation, and the print rules (below).
-    expect(outside).not.toMatch(/opacity: 0(?:\.\d+)?;[\s\S]*opacity: 0/);
+    // Outside the media block there are only the examples' two rules (which hide a panel, not a brick) and the print rules (below).
+    expect(outside).not.toMatch(/opacity: 0/);
     expect(outside).not.toContain("data-out");
-    expect(outside).not.toContain("bricks-grow");
-    // Inside it, every rule starts from a class that only script adds.
+    expect(outside).not.toContain("[data-brick]");
+    // The stacks of the deleted sections have no rules left.
+    expect(css).not.toMatch(/bricks-grow|bricks-arrive|brick-drop|data-step-bricks/);
+    // Inside it, every rule starts from the class that only script adds.
     const selectors = [...inside.matchAll(/^ {2}(\.[^{]+) \{$/gm)].map((m) => m[1]);
     expect(selectors.length).toBeGreaterThan(8);
-    for (const selector of selectors) expect(selector).toMatch(/^\.js |^\.reveal-ready /);
+    for (const selector of selectors) expect(selector).toMatch(/^\.js /);
   });
 
   it("force the finished picture in print, whatever classes script has added", () => {
     const print = printRules(block);
     const rules = [...print.matchAll(/^ {2}((?:\.[^{]+?,\n {2})*\.[^{]+?) \{\n([\s\S]*?)\n {2}\}/gm)].map((m) => ({ selectors: m[1].split(/,\n\s*/), body: m[2] }));
     const shows = rules.find((r) => r.body.includes("opacity: 1 !important"))!;
-    // Every brick the rules above can hide or move: the two stacks, the loop's, and the four of the hero's picture.
-    expect(shows.selectors).toEqual([".bricks-arrive [data-brick]", ".bricks-grow [data-brick]", ".compounding-loop [data-brick]", ".hero-steps [data-step-bricks] li"]);
+    // Every brick the rules above can hide or move: the loop's, and the stacks of the hero's four steps.
+    expect(shows.selectors).toEqual([".compounding-loop [data-brick]", ".hero-steps [data-brick]"]);
     for (const line of ["animation: none !important;", "transition: none !important;", "opacity: 1 !important;", "transform: none !important;"]) expect(shows.body).toContain(line);
-    // The hero's four parts are printed as the still list: every part shown, with its label, and no control.
+    // The hero's four steps are printed as the still list: every step shown, with its label, and no control.
     const parts = rules.find((r) => r.selectors.includes(".hero-steps [data-step]"))!;
     for (const line of ["opacity: 1 !important;", "visibility: visible !important;", "grid-area: auto !important;"]) expect(parts.body).toContain(line);
     const controls = rules.find((r) => r.selectors.includes(".compounding-loop [data-loop-pause]"))!;
-    expect(controls.selectors).toEqual([".hero-steps [data-step-tabs]", ".hero-steps [data-step-pause]", ".compounding-loop [data-loop-pause]"]);
+    expect(controls.selectors).toEqual([".hero-steps [data-step-tabs]", ".hero-steps [data-step-controls]", ".compounding-loop [data-loop-pause]"]);
     expect(controls.body).toContain("display: none !important;");
+    // Every example is printed, one under another, without the row that switches between them.
+    expect(rules.find((r) => r.selectors.includes(".examples [data-example-panel]"))!.body).toContain("display: block !important;");
+    expect(rules.find((r) => r.selectors.includes(".examples [data-example-tabs]"))!.body).toContain("display: none !important;");
     // No print selector waits on a class that script adds, so none can miss.
-    for (const rule of rules) for (const selector of rule.selectors) expect(selector).not.toMatch(/data-out|is-in|\.js\b|reveal-ready|settled/);
+    for (const rule of rules) for (const selector of rule.selectors) expect(selector).not.toMatch(/data-out|is-in|\.js\b|reveal-ready|settled|data-selected/);
     // Every hidden state above is beaten: none of the rules that hide is marked important, and each of these is.
     const media = "@media (prefers-reduced-motion: no-preference) {";
-    expect(block.slice(block.indexOf(media), block.indexOf("@keyframes"))).not.toContain("!important");
+    expect(block.slice(block.indexOf(media), block.indexOf("@media print"))).not.toContain("!important");
   });
 });
 
@@ -487,7 +539,7 @@ describe("the v1 homepage's words", () => {
     expect(seen).not.toMatch(emoji);
     expect(seen).not.toMatch(/Circle/);
     // The higher rate is not on the homepage: Peter took it out of the control block and out of "What does it cost?"
-    // (November 26, 2026). It is stated on /pricing, in two answers on /faq (one of them also on /agents) and in the terms.
+    // (November 26, 2026). It is stated in two answers on /faq and in the terms.
     expect(seen).not.toMatch(/US\$400|CA\$560|the price becomes/);
     expect(seen).not.toMatch(/bricks?/i);
   });
@@ -507,26 +559,26 @@ describe("the v1 homepage's words", () => {
     expect(answer("When is my card charged?")).toBe(
       "The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",
     );
-    // The line under the buttons still says a card is asked for.
-    expect(text(sectionMarkup(await view(), "hero"))).toContain("Card required. Charged only with your third Cora Curation.");
+    // The one place the homepage still says when a card is charged is that answer: the hero and the price note no longer do.
+    expect(text(sectionMarkup(await view(), "hero"))).not.toMatch(/card/i);
   });
 
-  it("opens one row at a time: the questions share one name, the sample idea's rows another and its steps a third, with no script", async () => {
+  it("opens one row at a time within each example: the questions share one name, and every example has a name for its rows and another for its steps, with no script", async () => {
     const markup = await view();
     const names = (html: string, fold?: string) => [...html.matchAll(/<details\b([^>]*)>/g)].filter((m) => fold === undefined || m[1].includes(`data-fold="${fold}"`)).map((m) => /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "");
     const questions = names(sectionMarkup(markup, "questions"));
     expect(questions).toHaveLength(7);
     expect(new Set(questions)).toEqual(new Set(["questions-rows"]));
-    const sample = sectionMarkup(markup, "sample");
-    const rows = [...sample.matchAll(/<details\b([^>]*)>/g)].map((m) => ({ fold: /data-fold="([^"]*)"/.exec(m[1])![1], name: /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "" }));
+    const section = sectionMarkup(markup, "examples");
+    const rows = [...section.matchAll(/<details\b([^>]*)>/g)].map((m) => ({ fold: /data-fold="([^"]*)"/.exec(m[1])![1], name: /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "" }));
     const top = rows.filter((r) => r.fold !== "step");
     const steps = rows.filter((r) => r.fold === "step");
-    expect(top.map((r) => r.fold)).toEqual(expect.arrayContaining(["summary", "copy", "playbook"]));
-    expect(new Set(top.map((r) => r.name))).toEqual(new Set(["sample-rows"]));
-    expect(steps.length).toBeGreaterThan(1);
-    expect(new Set(steps.map((r) => r.name))).toEqual(new Set(["sample-steps"]));
-    // Three groups, each with its own name, so a step opening never closes the row it is in.
-    expect(new Set([...questions, ...rows.map((r) => r.name)]).size).toBe(3);
+    expect(top.map((r) => r.fold)).toEqual(examples.flatMap(() => ["summary", "copy", "playbook"]));
+    // Opening a row of one example never closes a row of another: each example's rows have their own name.
+    expect(top.map((r) => r.name)).toEqual(examples.flatMap((e) => Array(3).fill(`examples-${e.id}-card-rows`)));
+    expect(steps.map((r) => r.name)).toEqual(examples.flatMap((e) => Array(8).fill(`examples-${e.id}-card-steps`)));
+    // The questions' group, and two for each example, so a step opening never closes the row it is in.
+    expect(new Set([...questions, ...rows.map((r) => r.name)]).size).toBe(1 + 2 * examples.length);
     // Every row on the page that folds is in one of them, and none arrives open.
     for (const m of markup.matchAll(/<details\b([^>]*)>/g)) {
       expect(m[1]).toMatch(/\sname="[^"]+"/);
@@ -536,11 +588,9 @@ describe("the v1 homepage's words", () => {
 
   it("speak to anyone, of Cora Curations and of one monthly price (Peter's homepage review, November 26, 2026)", async () => {
     const page = await view({ testimonials: [] });
-    // Peter's own letter keeps his own history, word for word; nothing else on the page names a trade.
-    const outsideLetter = text(page.replace(sectionMarkup(page, "who"), ""));
-    expect(outsideLetter).not.toMatch(/real estate/i);
-    expect(text(sectionMarkup(page, "who"))).toContain("I made my first real estate investment");
+    // Nothing on the page names a trade.
     const seen = text(page);
+    expect(seen).not.toMatch(/real estate/i);
     expect(seen).not.toMatch(/Monday lists?\b|one list at a time|one at a time/i);
     expect(seen.match(/Cora Curations?/g)!.length).toBeGreaterThan(10);
   });

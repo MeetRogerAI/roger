@@ -10,7 +10,7 @@
  *
  * Amounts are never typed into copy. A string marked "names amounts" may hold
  * {monthlyUsd}, {monthlyCad}, {higherUsd}, {higherCad}, {freeLists},
- * {firstPaidList}, {lastFreeList} and {trialCloseDays}, filled by fillAmounts in
+ * {firstPaidList}, {firstPaidWeek}, {lastFreeList} and {trialCloseDays}, filled by fillAmounts in
  * src/lib/site/amounts.ts.
  */
 
@@ -53,7 +53,7 @@ export type SharedCopy = {
    */
   nav: { howItWorks: string; pricing: string; library: string; faq: string; about: string };
   /** The footer's own labels, and the place named beside the contact email. */
-  footer: { place: string; agents: string; privacy: string; terms: string };
+  footer: { place: string; privacy: string; terms: string };
   /** The not-found page: what happened, and the link home. The start button follows. */
   notFound: { title: string; line: string; home: string };
   /** The browser title and the description search and shared links show. */
@@ -74,8 +74,11 @@ export type PriceBlockCopy = PriceWords & {
   start: string;
 };
 
-/** The closing band: one line, the line under it, the primary button's label and the trial line. */
-export type ClosingBandCopy = { line: string; sub: string; start: string; trialLine: string };
+/**
+ * The closing band: one line and the button's label. The line under the heading and the trial line under the
+ * button are each printed only when given: the homepage gives neither (Peter, November 27, 2026).
+ */
+export type ClosingBandCopy = { line: string; sub?: string; start: string; trialLine?: string };
 
 /** "You decide what Zack shares": each point is a short title and the sentences under it. */
 export type ControlBlockCopy = {
@@ -90,7 +93,8 @@ export type ScoreNames = { hours: string; reach: string; ease: string; proof: st
 export type SampleCardCopy = {
   /** The card's first heading, and the labels of the two folded rows under it. */
   idea: { title: string; summary: string; copy: string };
-  install: { help: string; copy: string; writtenOn: string; writtenOnNote: string };
+  /** The line above the install prompt, and the copy button's label. Nothing is printed under the button. */
+  install: { help: string; copy: string };
   scores: {
     title: string;
     /** After a score, as in "8 of 10". */

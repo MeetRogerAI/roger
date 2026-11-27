@@ -12,7 +12,8 @@ const chrome = siteChrome("v1", amountsFrom(v3Defaults));
 const navFor = (path: string, site: ServedSite) => navForSite(path, site, site === "circles" || site === "legacy" ? null : chrome);
 const fiveLinks = [
   { href: "/how-it-works", label: "How it works" },
-  { href: "/pricing", label: "Pricing" },
+  // Not a page: the price section of the homepage (Peter, November 27, 2026).
+  { href: "/#price", label: "Pricing" },
   { href: "/library", label: "Use cases" },
   { href: "/faq", label: "FAQ" },
   { href: "/about", label: "About" },
@@ -29,7 +30,7 @@ describe("navFor", () => {
   });
 
   it("gives a site version its five links, Sign in and the start button (spec A.3)", () => {
-    for (const p of ["/", "/pricing", "/library", "/getstarted", "/privacy", "/nothing-here"]) {
+    for (const p of ["/", "/faq", "/library", "/getstarted", "/privacy", "/nothing-here"]) {
       const nav = navFor(p, "v1");
       expect(nav.links, p).toEqual(fiveLinks);
       expect(nav.cta, p).toEqual({ href: "/start", label: "Get two free Cora Curations", short: "Get two free Cora Curations" });
@@ -39,13 +40,13 @@ describe("navFor", () => {
 
   it("needs no chrome for sign-up, sign-in and the app under a version, and says so when a public page has none", () => {
     for (const p of ["/start/plan", "/signin", "/app"]) expect(navForSite(p, "v1"), p).toEqual({ links: [], cta: null });
-    expect(() => navForSite("/pricing", "v1")).toThrow(/chrome/);
+    expect(() => navForSite("/faq", "v1")).toThrow(/chrome/);
   });
 
   it("gives /zack and /zack/[agent] the public header under a version", () => {
     expect(navFor("/zack", "v1").links).toEqual(fiveLinks);
     expect(navFor("/zack", "v1")).toEqual(navFor("/", "v1"));
-    expect(navFor("/zack/claude", "v1")).toEqual(navFor("/pricing", "v1"));
+    expect(navFor("/zack/claude", "v1")).toEqual(navFor("/faq", "v1"));
   });
 
   it("treats /zack as any other page under Circles and the legacy site, where the route is not found", () => {

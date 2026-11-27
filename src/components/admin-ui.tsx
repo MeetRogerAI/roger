@@ -53,6 +53,7 @@ const tabs = [
   { href: "/admin/flags", label: "Flags" },
   { href: "/admin/cora", label: "Cora" },
   { href: "/admin/testimonials", label: "Testimonials" },
+  { href: "/admin/questions", label: "Edit Questions" },
   { href: "/admin/sample", label: "Sample idea" },
   { href: "/admin/interest", label: "Interest" },
 ];

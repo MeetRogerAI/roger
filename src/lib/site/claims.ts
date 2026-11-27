@@ -20,7 +20,7 @@
  *   data-bricks      bricks       a brick stack: each brick's own label
  *   data-claims      compounding  the "It compounds" section
  *                    testimonial  a user's own words
- *                    sample       the sample idea: the play's own text and scores
+ *                    sample       an example idea: the play's own text and scores
  *                    letter       Peter's letter
  *                    legal        the privacy and terms documents
  *                    numeral      the number of a step in an ordered list
@@ -235,8 +235,13 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "time-saved",
-    why: "The bundled sample play’s own instructions, where “save” means store: “Save a skill called …”, “a saved note”, “saved context”.",
-    words: ({ segment }) => (inZone(segment, "sample") ? /Save a skill called|\ba saved note\b|\bsaved context\b/g : null),
+    why: "The two example plays’ own instructions, where “save” means store: “Save this as a skill called …”, “Save each email as an unsent draft”, “save nothing and report the error”, “how many drafts were saved”. Those words only, inside an example.",
+    words: ({ segment }) => (inZone(segment, "sample") ? /Save this as a skill called|Save each email as an unsent draft|save nothing and report the error|how many drafts were saved/g : null),
+  },
+  {
+    rule: "time-saved",
+    why: "The prospects example’s own setup question gives “a 20-minute call” as an example of what an email asks for. It is the length of a meeting, not time saved. Those words only, inside an example.",
+    words: ({ segment }) => (inZone(segment, "sample") ? /a 20-minute call/g : null),
   },
   {
     rule: "time-saved",
@@ -271,6 +276,16 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "number",
+    why: "The line under the price (Peter’s words, November 27, 2026): “Payment starts in week 3.” The week is the number of free Cora Curations in the settings plus one, and only that phrase with that number is allowed.",
+    words: ({ context: { amounts } }) => new RegExp(`Payment starts in week ${amounts.freeLists + 1}(?!\\d)`, "g"),
+  },
+  {
+    rule: "number",
+    why: "The short title of one example, in Peter’s words (November 27, 2026): “20 new prospects every day”. It is what the play drafts each morning, not a count of users. That title only.",
+    words: () => /20 new prospects every day/g,
+  },
+  {
+    rule: "number",
     why: "Spec A.14, word for word: “A play is described as ‘run by 3 users’”.",
     words: () => /run by 3 users/g,
   },
@@ -291,7 +306,7 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "number",
-    why: "The sample idea is a real play printed as it is: its numbered parts, the sections its install prompt refers to, and Cora’s scores out of 10. Time figures in it are still caught by the time-saved rule.",
+    why: "An example is a real play printed as it is: its numbered parts, the sections its install prompt refers to, the counts and the hour of day its steps name, and Cora’s scores out of 10. Time figures in it are still caught by the time-saved rule.",
     words: ({ segment }) => (inZone(segment, "sample") ? /\d+(?:[.,:]\d+)*/g : null),
   },
   {
@@ -400,8 +415,8 @@ const words = (list: readonly string[]) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${l
 function patterns(rule: RuleId, page: PageText, context: ClaimsContext): RegExp[] {
   switch (rule) {
     case "vocabulary":
-      // "agent" or "agents" with no "AI" directly in front (spec 0.4). /agents and /zack may say it.
-      return page.path === "/agents" || onZack(page.path) ? [] : [/(?<!\bAI )\bagents?\b/gi];
+      // "agent" or "agents" with no "AI" directly in front (spec 0.4). /zack may say it. (/agents could too, until it was deleted.)
+      return onZack(page.path) ? [] : [/(?<!\bAI )\bagents?\b/gi];
     case "bare-dollar":
       // A "$" without its country (spec A.4: never a bare dollar sign).
       return [/(?<!US|CA)\$[\d.,]*/g];

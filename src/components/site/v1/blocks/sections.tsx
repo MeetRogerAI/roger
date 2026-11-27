@@ -1,13 +1,14 @@
 import { Reveal } from "@/components/site/shared/reveal";
 import type { SampleCardCopy } from "@/data/site/copy-types";
-import type { IdeaView } from "@/lib/site/sample";
+import type { ExampleView } from "@/lib/site/sample";
+import { ExampleTabs } from "./example-tabs";
 import { SampleCard } from "./sample-card";
 import { SectionHead } from "./section-head";
 
 /**
- * The sections the homepage and /agents both have, with each page's own words
- * (spec A.5, A.6): the problem, the sample idea under its one line, and the
- * hairline between two ground sections that are neighbours.
+ * Sections of the homepage (spec A.5): the problem, the examples, and the
+ * hairline between two ground sections that are neighbours, which the reading
+ * pages use too.
  */
 
 /** "The problem", on ground: three statements side by side. */
@@ -29,15 +30,28 @@ export function Problem({ copy, id = "problem" }: { copy: { title: string; state
   );
 }
 
-/** "What arrives on Monday", on ground: the sample card under its one line. */
-export function SampleSection({ idea, copy, id = "sample" }: { idea: IdeaView; copy: SampleCardCopy & { title: string; line: string }; id?: string }) {
+/**
+ * "Cora Curation Examples", on ground (Peter's third homepage review, November 27, 2026): the heading with no
+ * line under it, a row of short titles to pick an example by, and each example as a full card. One example
+ * shows at a time once script is running; with none, all are in the page (ExampleTabs). The rows inside a
+ * card close one another within that card only: each card's rows have their own name.
+ */
+export function ExamplesSection({ examples, copy, id = "examples" }: { examples: ExampleView[]; copy: SampleCardCopy & { title: string; nav: string }; id?: string }) {
   const titleId = `${id}-title`;
+  if (examples.length === 0) return null;
   return (
-    <section id={id} aria-labelledby={titleId} className="scroll-mt-14 bg-ground">
+    <section id={id} aria-labelledby={titleId} className="examples scroll-mt-14 bg-ground">
       <div className="wrap py-24 md:py-32">
-        <SectionHead id={titleId} title={copy.title} sub={copy.line} />
-        <div className="mt-14">
-          <SampleCard idea={idea} copy={copy} />
+        <SectionHead id={titleId} title={copy.title} />
+        <div className="mt-12">
+          <ExampleTabs
+            id={id}
+            name={copy.nav}
+            tabs={examples.map((example) => ({ id: example.id, label: example.label }))}
+            panels={examples.map((example) => (
+              <SampleCard key={example.id} idea={example.idea} copy={copy} id={`${id}-${example.id}-card`} />
+            ))}
+          />
         </div>
       </div>
     </section>
