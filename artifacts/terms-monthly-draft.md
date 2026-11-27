@@ -1,6 +1,6 @@
 # Draft: Roger monthly terms (no refunds, cancel any time)
 
-*Draft for Peter's approval, November 26, 2026. Not live. Once approved it becomes a section of the Terms page (`src/data/legal.ts`), and the Payment page's "Terms and refunds" link points to it. It replaces the 14-day money-back guarantee for Roger monthly only; the old setups terms stay as they are. Have it read with the rest of the terms before sign-up opens (launch list S10).*
+*Approved by Peter on November 26, 2026; added to the Terms page as `/terms#roger-monthly` in PR #59 (`rogerMonthlyTerms` in `src/data/legal.ts`). Originally: once approved it becomes a section of the Terms page (`src/data/legal.ts`), and the Payment page's "Terms and refunds" link points to it. It replaces the 14-day money-back guarantee for Roger monthly only; the old setups terms stay as they are. Have it read with the rest of the terms before sign-up opens (launch list S10).*
 
 ---
 
