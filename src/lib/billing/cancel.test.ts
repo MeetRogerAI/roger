@@ -8,7 +8,7 @@ import { mergeV3 } from "@/lib/v3-settings";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { fakePlans } from "@/test-helpers/fake-plans";
 import { testDb } from "@/test-helpers/pglite-db";
-import { cancelPlan, undoCancel, type PlanDeps } from "./cancel";
+import { CARD_SAVED_NOT_CANCELLED, cancelPlan, UNREACHABLE, undoCancel, type PlanDeps } from "./cancel";
 import { claimCharge } from "./claims";
 import { recordWeek } from "./contribution";
 import type { BillingGateway } from "./subscriptions";
@@ -48,11 +48,11 @@ const SATURDAY = new Date("2026-12-12T15:00:00Z");
 const FIRST = "2026-12-03T11:05:00Z";
 const PERIOD_END = new Date("2027-01-03T11:05:00Z");
 
-async function member(o: { status: string; plan?: string; sub?: string | null; free?: number; first?: string | null }) {
+async function member(o: { status: string; plan?: string; sub?: string | null; free?: number; first?: string | null; noCard?: boolean }) {
   const [u] = await query<{ id: string }>(
-    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor)
-     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7) returning id`,
-    [`m${Math.random().toString(36).slice(2, 8)}@example.com`, o.status, o.plan ?? "monthly", `cus_${Math.random().toString(36).slice(2, 8)}`, o.sub ?? null, o.free ?? 2, o.first ?? null],
+    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor, trial_started_at)
+     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7, $8) returning id`,
+    [`m${Math.random().toString(36).slice(2, 8)}@example.com`, o.status, o.plan ?? "monthly", `cus_${Math.random().toString(36).slice(2, 8)}`, o.sub ?? null, o.free ?? 2, o.first ?? null, o.noCard ? null : "2026-11-16T15:00:00Z"],
   );
   const [c] = await query<{ stripe_customer: string }>(`select stripe_customer from users where id = $1`, [u.id]);
   plans.cards.set(c.stripe_customer, 1);
@@ -97,6 +97,96 @@ describe("cancelling in the trial", () => {
     expect(await claimCharge(query, { userId: id, purpose: "first_charge", weekOf: "2026-12-14", attempt: 1, now: SATURDAY })).toBeNull();
     expect(await claimCharge(query, { userId: id, purpose: "order", weekOf: "2026-12-14", attempt: 1, now: SATURDAY })).toBeNull();
     expect(plans.calls.filter((c) => !c.startsWith("remove_cards"))).toEqual([]);
+  });
+
+  it("a trial with no card yet (sign-up ends without one) ends at once with 'You have not been charged' and no card to remove", async () => {
+    const id = await member({ status: "trial", free: 0, noCard: true });
+    const [{ stripe_customer }] = await query<{ stripe_customer: string }>(`select stripe_customer from users where id = $1`, [id]);
+    plans.cards.set(stripe_customer, 0);
+    expect(await cancelPlan(query, deps(SATURDAY), { userId: id })).toMatchObject({ ok: true, message: expect.stringContaining("nothing more will be charged") });
+    expect(await user(id)).toMatchObject({ status: "cancelled", access_ends_at: "2026-12-12T15:00Z", stripe_subscription: null });
+    expect(subjects()).toEqual(["Your Roger account is cancelled"]);
+    expect(sent[0].text).toContain("You have not been charged.");
+    expect(sent[0].text).not.toContain("removed your saved card");
+    // Nothing is subscribed or charged: at most the (empty) card removal touches Stripe.
+    expect(plans.calls.filter((c) => !c.startsWith("remove_cards"))).toEqual([]);
+    expect(created).toBe(0);
+  });
+
+  describe("a no-card trial with the Payment page open (review fixes Unit 9, F5)", () => {
+    const WEEK = "2026-12-07";
+    /** A no-card trial with a held list and a stored Payment session on its own customer. */
+    async function withSession(card: ReturnType<typeof fakeGateway>) {
+      const id = await member({ status: "trial", free: 0, noCard: true });
+      const [{ stripe_customer }] = await query<{ stripe_customer: string }>(`select stripe_customer from users where id = $1`, [id]);
+      plans.cards.set(stripe_customer, 0);
+      await query("update users set consent_at = '2026-11-30T15:00:00Z', first_teaser_at = '2026-12-07T12:05:00Z' where id = $1", [id]);
+      await query("insert into cora_weeks (week_of, status, phase) values ($1, 'sent', 'ready') on conflict do nothing", [WEEK]);
+      await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, $2, 'picked', 1)", [id, WEEK]);
+      await query("insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason) values ($1, $2, 1, $3, 70, 3, 'Fits.')", [id, WEEK, plays[0]]);
+      const s = await card.createEmbeddedSetupSession({ userId: id, customer: stripe_customer, currency: "USD", returnUrl: "https://roger.test/start/payment/done" });
+      await query("update users set setup_session = $2 where id = $1", [id, s.id]);
+      return { id, sid: s.id, customer: stripe_customer };
+    }
+    const row = async (id: string) =>
+      (await query<{ status: string; setup_session: string | null; card_saved: boolean }>("select status, setup_session, trial_started_at is not null as card_saved from users where id = $1", [id]))[0];
+
+    it("a session already confirmed is completed instead of cancelled: card saved, list unlocked, no cancellation", async () => {
+      const card = fakeGateway();
+      const { id, sid } = await withSession(card);
+      card.complete(sid);
+      const r = await cancelPlan(query, { ...deps(SATURDAY), card }, { userId: id, reason: "x" });
+      expect(r).toEqual({ ok: true, message: CARD_SAVED_NOT_CANCELLED });
+      expect(await row(id)).toMatchObject({ status: "trial", card_saved: true });
+      expect(await query("select 1 from picks where user_id = $1 and delivered_at is not null", [id])).toHaveLength(1);
+      expect((await user(id)).cancel_requested_at).toBeNull();
+      expect(subjects()).not.toContain("Your Roger account is cancelled");
+      expect(card.expired).toEqual([]);
+      expect(plans.calls).toEqual([]);
+    });
+
+    it("an open session is expired in Stripe and cleared after the cancel, before the card removal", async () => {
+      const card = fakeGateway();
+      const { id, sid, customer } = await withSession(card);
+      expect(await cancelPlan(query, { ...deps(SATURDAY), card }, { userId: id })).toMatchObject({ ok: true, message: expect.stringContaining("cancelled") });
+      expect(await row(id)).toMatchObject({ status: "cancelled", setup_session: null, card_saved: false });
+      expect(card.expired).toEqual([sid]);
+      expect(plans.calls).toEqual([`remove_cards:${customer}`]);
+      expect(subjects()).toEqual(["Your Roger account is cancelled"]);
+    });
+
+    it("a card confirmed as the cancel runs (before the expiry lands) is not saved, and is removed with the cancellation", async () => {
+      const card = fakeGateway();
+      const { id, customer } = await withSession(card);
+      card.expireSetupSession = async (s) => card.complete(s);
+      expect(await cancelPlan(query, { ...deps(SATURDAY), card }, { userId: id })).toMatchObject({ ok: true });
+      expect(await row(id)).toMatchObject({ status: "cancelled", card_saved: false });
+      expect(plans.calls).toEqual([`remove_cards:${customer}`]);
+      expect((await user(id)).cards_removed_at).not.toBeNull();
+    });
+
+    it("Stripe unreadable: nothing is cancelled (a card may be saved there)", async () => {
+      const card = fakeGateway();
+      const { id } = await withSession(card);
+      card.getSetupSession = async () => {
+        throw new Error("Stripe is down");
+      };
+      expect(await cancelPlan(query, { ...deps(SATURDAY), card }, { userId: id })).toMatchObject({ ok: false, busy: true, message: UNREACHABLE });
+      expect((await row(id)).status).toBe("trial");
+      expect(sent).toEqual([]);
+    });
+
+    it("a trial with a card, or with no stored session, is cancelled without asking Stripe about a session", async () => {
+      const card = fakeGateway();
+      const read = vi.spyOn(card, "getSetupSession");
+      const carded = await member({ status: "trial" });
+      await query("update users set setup_session = 'cs_old' where id = $1", [carded]);
+      expect(await cancelPlan(query, { ...deps(SATURDAY), card }, { userId: carded })).toMatchObject({ ok: true });
+      const plain = await member({ status: "trial", free: 0, noCard: true });
+      expect(await cancelPlan(query, { ...deps(SATURDAY), card }, { userId: plain })).toMatchObject({ ok: true });
+      expect(read).not.toHaveBeenCalled();
+      expect(card.expired).toEqual([]);
+    });
   });
 
   it("is refused while this week's charge is going through, and changes nothing", async () => {

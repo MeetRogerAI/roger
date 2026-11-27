@@ -23,11 +23,16 @@ import { primaryAgent } from "./quiz";
  */
 export type AccountOutcome = "new" | "existing" | "limited" | "invalid" | "send_failed";
 
+/**
+ * Where each sign-up step resumes. Sign-up ends at Step 3 (plan
+ * 2026-11-26-001, Unit 2); `card` is kept for old rows and resumes at Step 3,
+ * which is where the consent that ends sign-up is given.
+ */
 export const stepPaths: Record<string, string> = {
   quiz: "/start",
   account: "/start/account",
   plan: "/start/plan",
-  card: "/start/card",
+  card: "/start/plan",
   done: "/app",
 };
 

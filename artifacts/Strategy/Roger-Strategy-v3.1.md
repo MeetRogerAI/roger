@@ -2,7 +2,9 @@
 
 ## Supersedes "Roger Strategy v3 (final, Nov 21 2026)". Second interview completed November 21, 2026.
 
-**Revised November 21, 2026, after the design interview.** Pricing is now two free runs, then $200 a month or $200 a run, with no non-contributor plan offered. Eight further points were settled in the design spec and are carried into this document. Section 15 lists every revision. **Revised again November 25, 2026:** a single run went from $100 to $200 (CA$140 to CA$280); monthly brings a list every week for the same price, so it is much cheaper per list (section 15). The build spec is `Roger v3 - design spec.md`; where it gives more detail, it governs.
+**Revised November 21, 2026, after the design interview.** Pricing was set at two free runs, then $200 a month or $200 a run, with no non-contributor plan offered (single runs were dropped November 26, 2026: monthly is now the only plan). Eight further points were settled in the design spec and are carried into this document. Section 15 lists every revision. **Revised again November 25, 2026:** a single run went from $100 to $200 (CA$140 to CA$280); monthly brings a list every week for the same price, so it is much cheaper per list (section 15). The build spec is `Roger v3 - design spec.md`; where it gives more detail, it governs.
+
+**Revised again November 26, 2026: monthly only; card at the first list (section 15).**
 
 # About this document
 
@@ -441,7 +443,7 @@ R1–R13 are carried from v3 with the changes marked. R14–R22 are new. Each is
 - **R6d. Daily habit.** A launch page says: "Okay, you are all set up. Your responsibility is to use your agent setup every day until you have saved at least 30 minutes that day." and asks the user to agree. The goal is motivational and not measured. Onboarding succeeds when it produces Zack runs and Cora curations.
 - **R6e. Zack weekly.** Automatic, Sunday night; results flow into Roger through R2 and show in the dashboard.
 - **R6f. Cora Monday.** Automatic, early Monday, gated by trial or payment status (R14). Ideas appear in the dashboard and by email until the user turns email off. Roger offers a ready-made prompt so the user's agent can pull the ideas in.
-- **R6g. Lego bricks and levels.** Three bricks at launch and three more with every Cora run. A brick is a new bot or an upgrade to one. Users are not asked to turn ideas down: they send all three to their agent and adapt them. The dashboard shows a 26-week compounding graph with the user's current week marked. After week 26 the graph restarts with a new border colour for Level 2, up to Level 5. The colour is the whole reward.
+- **R6g. Lego bricks and Seasons.** Three bricks at launch and three more with every Cora run. A brick is a new bot or an upgrade to one. Users are not asked to turn ideas down: they send all three to their agent and adapt them. The dashboard shows a 26-week compounding graph with the user's current week marked. After week 26 the graph restarts with a new border colour for Season 2, up to Season 5. The colour is the whole reward. *(Renamed November 26, 2026: "Level" now means Roger AI Levels, ten levels from 0 to 9 placed by what a user's agent system actually does. See `Roger AI Agent Levels and Check Charts v1.1.md` and `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md` in the artifacts folder. They are app version B4, after B3.)*
 
 **R7. Network learning.** Zack's and Cora's instructions improve as data arrives. A review bot proposes changes on a schedule and Peter approves them. Removing client names and private details before a play enters the pool is a function of this codebase.
 
@@ -555,6 +557,14 @@ Other decisions from the design interview that affect this document:
 
 **Revision, November 25, 2026 (Peter, while setting up Stripe).** A single run now costs $200 (CA$280), up from $100 (CA$140). Monthly stays $200 (CA$280) and the higher monthly rate stays $400 (CA$560). The framing, in Peter's words: "Monthly brings you weekly lists so it is much cheaper than doing a one-time run." Every comparison between the two plans says so: monthly costs the same as one run and brings a list every Monday, about four a month, so per list it is roughly a quarter of the price. The referral credit for a run rises with it, to $200. Current-price references in this document were updated; decision 33 in Appendix A stays as history. Design spec version 1.3 carries the same change.
 
+**Revision, November 26, 2026 (card at the first list; monthly only).** Two changes, made before sign-up opens on production, and how the first is judged:
+
+- **Decision 38 is reversed.** The card is no longer collected when the user starts. Sign-up ends after a plain Product and Pricing step with the Zack consent, and no card. When the user's first Cora list is ready, it is held: the email and the dashboard show its titles only, and the card is asked for then, on an embedded payment page with a zero due-today line in the account's currency ("Due today: CA$0" or "Due today: US$0"). Saving the card unlocks that list as free run 1 of 2. The allowance and the gate do not change: two free delivered runs, counted from the card, and the first charge with the third. A held list with no card closes 14 days after its first teaser; a user who never connects Zack (no first teaser) closes 21 days after consent, or after the cycle first went live if that was later; not from sign-up. The view behind it: a card asked for at sign-up, before the person has seen anything, and surrounded by dense terms, costs more trials than it saves; asking when a real, personal list exists catches the moment of highest intent. Sections 5 (Trial, From trial to first charge), 8 (Website) and 10 (R12, R14) describe the old order and are superseded on this point.
+- **Single runs are dropped.** Monthly ($200, CA$280) is the only plan: one list at a time is no longer offered in sign-up, the dashboard or the site copy (this supersedes topic 1 of the table above and decision 12's "two ways of buying"). The referral script becomes "$200 a month for a list every Monday". The higher monthly rate ($400, CA$560) and the contributor rule are unchanged, stated in the FAQ and the terms, not in sign-up.
+- **How the reversal is judged.** The admin shows a funnel by week of sign-up: signed up, Zack connected, first teaser, card saved, first charge (requirement R30 of `docs/brainstorms/2026-11-26-payment-at-first-curation-requirements.md`). The share of first teasers that end with a saved card is the measure; the rate below which the card goes back to sign-up is still to be set. The earlier estimate in section 5 (a card up front lowers trials started and raises the share that pay) is the hypothesis this tests.
+
+Design spec version 1.4 carries the same change.
+
 # Appendix A. Decision log, second interview (November 21, 2026)
 
 1. Robyn and Grace pitched about 6 people to get 3 users.
@@ -568,7 +578,7 @@ Other decisions from the design interview that affect this document:
 9. The user-loop role may go full time if things go well in December; the trigger is outside this document.
 10. The 3 who declined were not open enough to AI tools.
 11. Users pick their own agent-platform plan; that cost is not part of Roger's price.
-12. One product, two ways of buying, after a free trial.
+12. One product, two ways of buying, after a free trial. (Superseded November 26, 2026: monthly only; see section 15.)
 13. Trial to payment: stated at onboarding, prompted in the second Cora email, followed up by the Roger team within two days, gated at the third Monday, no exceptions. (Refined by decision 38: the card is on file from the start and charged on the third run.)
 14. Everyone, including the Circles waitlist, moves to v3. The waitlist is a general mix and part of the pipeline.
 15. Testimonials exist (shared folder); see section 3.
@@ -594,7 +604,7 @@ Other decisions from the design interview that affect this document:
 35. No refund, because of the two free runs.
 36. Office deals start from the listed base price and are negotiated.
 37. Cora always sends the best 3 ideas available, ranked on suitability.
-38. A payment card is collected when the user starts, with a clear statement that they get two free Cora curations and the card is charged only on the third.
+38. A payment card is collected when the user starts, with a clear statement that they get two free Cora curations and the card is charged only on the third. (Reversed November 26, 2026: the card is asked for when the first list is ready; see section 15.)
 
 # Appendix B. Entry points beyond the first brokerage (from v3 market research)
 

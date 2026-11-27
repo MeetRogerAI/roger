@@ -12,6 +12,7 @@ import { when } from "@/lib/admin/format";
 const STATUS_WORDS: Record<(typeof STATUS_KEYS)[number], string> = {
   signup: "Signing up",
   trial: "Trial",
+  trial_no_card: "Trial · no card",
   monthly: "Monthly",
   per_run: "One at a time",
   switching: "Switching to one at a time",
@@ -138,7 +139,7 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
                           Add a run for this user
                         </Link>
                         <ExcuseForm userId={r.id} week={excuseWeek} />
-                        {r.status === "trial" && !r.switched && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
+                        {r.status === "trial" && !r.switched && (r.hasCard || r.sponsored) && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
                         <NudgeForm userId={r.id} templates={NUDGES} />
                         {r.stripeCustomer && (
                           <a href={stripeCustomerUrl(r.stripeCustomer, mode)} target="_blank" rel="noreferrer" className="tlink block">

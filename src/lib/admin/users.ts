@@ -1,4 +1,7 @@
 import { adjustmentOnAccountClosed, type AdjustDeps } from "@/lib/billing/adjustment";
+import { retireSessionForGood } from "@/lib/billing/card-setup";
+import type { CardGateway } from "@/lib/billing/gateway";
+import { HAS_CARD_OR_SPONSORED_SQL, WAITING_FOR_CARD } from "@/lib/billing/has-card";
 import { isLive, type BillingGateway } from "@/lib/billing/subscriptions";
 import { isRealDate, wallParts } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
@@ -49,17 +52,21 @@ export async function giveExtraFreeList(q: Query, by: string, userId: string): P
   const rows = await q<{ free_lists_used: number }>(
     `update users u set free_lists_used = u.free_lists_used - 1, quote = null
      where u.id = $1 and u.status = 'trial' and u.stripe_subscription is null and u.free_lists_used > 0 and u.switched_from_per_run_at is null
-       and not ${OPEN_CLAIM} and not ${OPEN_ORDER}
+       and ${HAS_CARD_OR_SPONSORED_SQL("u")} and not ${OPEN_CLAIM} and not ${OPEN_ORDER}
      returning u.free_lists_used`,
     [userId],
   );
   if (!rows.length) {
-    const [u] = await q<{ status: string; free_lists_used: number; open: boolean; ordered: boolean; switched: boolean }>(
-      `select status, free_lists_used, ${OPEN_CLAIM} as open, ${OPEN_ORDER} as ordered, switched_from_per_run_at is not null as switched from users u where id = $1`,
+    const [u] = await q<{ status: string; free_lists_used: number; open: boolean; ordered: boolean; switched: boolean; card: boolean }>(
+      `select status, free_lists_used, ${OPEN_CLAIM} as open, ${OPEN_ORDER} as ordered, switched_from_per_run_at is not null as switched,
+              ${HAS_CARD_OR_SPONSORED_SQL("u")} as card
+       from users u where id = $1`,
       [userId],
     );
     if (!u) return no("No such user.");
     if (u.switched) return no("They switched to monthly from paying one list at a time: they are not on the trial, so there is no free list to give.");
+    // Sign-up ends without a card: nothing is counted until the card is saved, so there is nothing to give yet.
+    if (u.status === "trial" && !u.card) return no(WAITING_FOR_CARD);
     if (u.open) return no("A charge for this user is in progress. Try again in a few minutes.");
     if (u.ordered) return no("They have a list ordered, which would be charged. Give the extra list after that Monday, or once they cancel the order.");
     if (u.status !== "trial") return no("Only a member still on the trial can get an extra free list.");
@@ -86,13 +93,15 @@ export async function sendNudge(q: Query, d: MailDeps, by: string, userId: strin
  * sends, it counts for the list it arrives in time for by the job clock:
  * up to Sunday's cutoff, the coming Monday; after it, the Monday a week
  * later. It replaces a run already stored for that week. The caller hands
- * it to intake.
+ * it to intake. A trial with no card yet is accepted, as Zack's own key
+ * accepts its runs: a run counts nothing before a card is saved, and its list
+ * is held until then.
  */
 export async function addRunForUser(q: Query, by: string, userId: string, body: string, o: { cutoff: string; now: Date }): Promise<Done & { stored?: Stored }> {
   const checked = checkReport(body, "run");
   if (!checked.ok) return no(checked.error);
   const [u] = await q<{ id: string; email: string; sharing: "share" | "match_only" | "off"; agent: string; status: string }>(
-    `select id, email, sharing, agent, status from users where id = $1`,
+    `select id, email, sharing, agent, status from users u where id = $1`,
     [userId],
   );
   if (!u) return no("No such user.");
@@ -142,7 +151,7 @@ export async function linkContributor(q: Query, by: string, contributorId: strin
  * (each is safe to repeat) and nothing more is logged, so a clean-up that
  * failed half-way can be finished.
  */
-export async function closeAccount(q: Query, d: AdjustDeps & { gw?: BillingGateway | null }, by: string, userId: string): Promise<Done> {
+export async function closeAccount(q: Query, d: CloseDeps, by: string, userId: string): Promise<Done> {
   const [u] = await q<{ email: string; status: string; stripe_customer: string | null; stripe_subscription: string | null; open: boolean }>(
     `select email, status, stripe_customer, stripe_subscription, ${OPEN_CLAIM} as open from users u where id = $1`,
     [userId],
@@ -174,11 +183,27 @@ export async function closeAccount(q: Query, d: AdjustDeps & { gw?: BillingGatew
   return ok(`Account closed. Nothing more will be charged or sent.${dropped ? ` ${dropped} pending difference${dropped === 1 ? "" : "s"} dropped.` : ""}`);
 }
 
+/**
+ * `card`: Stripe's card gateway, to settle a no-card trial's stored Payment
+ * session (whole-branch review W3). Absent or null (Stripe not set up): there
+ * is no session to settle.
+ */
+export type CloseDeps = AdjustDeps & { gw?: BillingGateway | null; card?: CardGateway | null };
+
 /** Ends what a closed account still has open. Every step is safe to run again. */
-async function cleanUpClosed(q: Query, d: AdjustDeps, userId: string): Promise<number> {
+async function cleanUpClosed(q: Query, d: CloseDeps, userId: string): Promise<number> {
   await revokeUserSessions(q, userId);
   await q(`update login_tokens set revoked_at = now() where user_id = $1 and used_at is null and revoked_at is null`, [userId]);
   await q(`update orders set status = 'cancelled', updated_at = now() where user_id = $1 and status = 'ordered'`, [userId]);
+  // Whole-branch review W3 (the closing lesson, as cancel and the no-card close do): the stored Payment session is
+  // expired and cleared, so an open tab cannot confirm a card on the closed account; a card confirmed already is
+  // never saved, and is taken off the Stripe customer. Best effort: a failure is logged, and a card confirmed later
+  // is removed by its completion (which answers "closed").
+  if (d.card) {
+    await retireSessionForGood(q, d.card, userId)
+      .then((r) => r === "removed" && console.warn("[admin] a card confirmed on a closed account was removed from the customer", userId))
+      .catch((e) => console.error("[admin] stored Payment session after a close", userId, e instanceof Error ? e.message : e));
+  }
   return adjustmentOnAccountClosed(q, d, userId);
 }
 

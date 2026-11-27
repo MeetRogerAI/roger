@@ -4,7 +4,7 @@ import type { ContributionStatus } from "@/lib/billing/contribution";
 import { holdDate } from "@/lib/billing/period";
 import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
 import { carriedMissText, notSharingText, secondMissText } from "@/lib/mail/templates/second-miss";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -39,8 +39,26 @@ export type StatusFacts = {
   endingAt?: string | null;
   /** A paying one-at-a-time member who switched to monthly and awaits the first charge (status trial, but not a trial). */
   switchedFromPerRun?: boolean;
+  /** A card is saved (billing/has-card.ts `hasCard`). A trial without one has had no list delivered yet. */
+  hasCard: boolean;
+  /** No card: when the first held list's teaser was sent (a held list is waiting for the card). */
+  firstTeaserAt?: string | null;
   now: Date;
 };
+
+/** The close of a leftover per-run account's status line: monthly is the only plan, and nothing can be ordered. */
+export const PLAN_QUESTIONS = "Monthly is now the only plan. Write to us if you have questions about yours.";
+
+/** Where a trial with no card saves it (Step 4, Payment). */
+export const PAYMENT_PATH = "/start/payment";
+
+/** A trial waiting for its card (not sponsored, not a switched one-at-a-time member). */
+const waitingForCard = (f: StatusFacts) => f.status === "trial" && !f.hasCard && !f.sponsored && !f.switchedFromPerRun;
+
+/** The link that goes with the status line, when it asks for something: a held list's Payment page. */
+export function statusLink(f: StatusFacts): { href: string; label: string } | null {
+  return waitingForCard(f) && f.firstTeaserAt ? { href: PAYMENT_PATH, label: "Add your card" } : null;
+}
 
 /** The next monthly anniversary of the first charge, on or after today (Toronto dates). */
 export function nextMonthly(firstChargeAt: string, now: Date): string {
@@ -81,15 +99,22 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
     const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
     return `Monthly starts with your next list: ${next}.`;
   }
+  // Leftover per-run states (preview only). One at a time is retired (plan 2026-11-26-001, Unit 9) and nothing can be
+  // ordered any more, so these lines promise no order (review fixes Unit 9, F2).
   if (f.plan === "monthly" && f.switchingAt) {
-    return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a list every Monday. After that you order lists one at a time.`;
+    return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a list every Monday. ${PLAN_QUESTIONS}`;
   }
   if (f.sponsored) return "Your lists are covered by your sponsor.";
+  // No card yet (sign-up ends without one): the first list is held until the card is saved.
+  if (waitingForCard(f)) {
+    if (f.firstTeaserAt) return "Your first ideas are ready — add a card to see them.";
+    return f.sharing === "off" ? "Your first list arrives on Monday." : "Your first list arrives after Zack’s first report.";
+  }
   if (f.status === "trial") {
     if (f.freeListsUsed === 0) return `Your first ${f.freeRuns} lists are free.`;
     const n = Math.min(f.freeListsUsed, f.freeRuns);
     if (n < f.freeRuns) return `Free list ${n} of ${f.freeRuns}.`;
-    if (f.plan === "per_run") return `Free list ${n} of ${f.freeRuns}. Order your next list whenever you want one: ${money(amount(s, "per_run", cur), cur)} ${tax}.`;
+    if (f.plan === "per_run") return `Free list ${n} of ${f.freeRuns}. ${PLAN_QUESTIONS}`;
     const next = f.quote
       ? `${longDate(f.quote.week)}, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax`
       : `${money(amount(s, "monthly", cur, f.sharing === "share" ? "standard" : "higher"), cur)} ${tax}`;
@@ -97,8 +122,7 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
   }
   if (f.plan === "per_run") {
     const paid = f.orderCents != null ? `${moneyCents(f.orderCents, cur)} with tax` : `${money(amount(s, "per_run", cur), cur)} ${tax}`;
-    // Spec B.9: every email to a one-at-a-time user says what monthly costs.
-    return `This list: ${paid}. Order next Monday’s whenever you want one. Monthly is ${money(amount(s, "monthly", cur), cur)} for every Monday.`;
+    return `This list: ${paid}. ${PLAN_QUESTIONS}`;
   }
   // A renewal Stripe could not collect: lists continue for now, and pause on the hold date unless it is paid.
   if (f.status === "active" && f.renewalFailedAt) return `Your payment didn’t go through; lists pause on ${longDate(holdDate(f.renewalFailedAt))} unless it’s paid.`;

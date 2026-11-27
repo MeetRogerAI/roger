@@ -1,5 +1,7 @@
 # Roger AI Agent Levels and Check Charts v1.0
 
+> **Superseded.** The current version is `Roger AI Agent Levels and Check Charts v1.1.md` in `C:\Users\pkupe\Aardvark\roger\artifacts`. Kept for history; do not build from this file.
+
 Version 1.0 · November 25, 2026 · Roger (meetroger.ai) · Draft for Peter's approval
 Folder: `AI Agent Setup Levels/` · Companion file: `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.0.md` (how Zack, Cora and the dashboard implement these levels)
 

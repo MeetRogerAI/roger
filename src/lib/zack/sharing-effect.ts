@@ -1,7 +1,7 @@
 import { addDays, weekOf } from "@/lib/clock";
 import { amount, money, type Currency, type Plan } from "@/lib/billing/prices";
 import { SHARING_OFF } from "@/lib/app/status";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 import type { Sharing } from "./settings";
 
@@ -33,9 +33,10 @@ export function sharingEffect(o: {
   if (band(o.from) === band(o.to)) return null;
   const standard = money(amount(o.settings, "monthly", cur), cur);
   const higher = money(amount(o.settings, "monthly", cur, "higher"), cur);
-  if (o.status === "trial" && (o.trialStartedAt || o.switchedFromPerRun)) {
+  if (o.status === "trial") {
     // The told Monday when there is one; a switched member's trial dates mean nothing (their free lists are long past).
-    const week = o.quoteWeek ?? (o.switchedFromPerRun || !o.trialStartedAt ? null : addDays(weekOf(new Date(o.trialStartedAt)), 14));
+    // With no card saved yet (trialStartedAt null) there is no first-charge date to give: the free lists start with the card.
+    const week = o.switchedFromPerRun ? (o.quoteWeek ?? null) : o.trialStartedAt ? (o.quoteWeek ?? addDays(weekOf(new Date(o.trialStartedAt)), 14)) : null;
     const before = week ? `the Sunday cutoff before your first charge (no earlier than ${longDate(week)})` : "the Sunday cutoff before your first monthly charge";
     return o.to === "share"
       ? `With sharing on at ${before}, your first month is ${standard}.`

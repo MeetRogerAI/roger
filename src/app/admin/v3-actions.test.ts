@@ -37,7 +37,7 @@ beforeEach(async () => {
   ({ query: current } = await testDb());
   resetNextFakes();
   admin = null;
-  [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used) values ('ana@example.com', 'Ana', 'trial', 2) returning id");
+  [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used, trial_started_at) values ('ana@example.com', 'Ana', 'trial', 2, now()) returning id");
   [{ id: playId }] = await current<{ id: string }>(
     "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('One', 'Sales', 'd', 'p', 'i', '2026-12-07', '2026-12-07') returning id",
   );
@@ -91,6 +91,14 @@ describe("for an admin", () => {
     admin = "admin@example.com";
     expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: uid }))).toMatchObject({ status: "ok" });
     expect(await current("select admin_email, action from admin_actions")).toEqual([{ admin_email: "admin@example.com", action: "extra_free_list" }]);
+  });
+
+  it("refuses an extra free list for a no-card trial posted anyway (the button is hidden), changing nothing (review fixes Unit 9, F7)", async () => {
+    admin = "admin@example.com";
+    const [nc] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used) values ('nc@example.com', 'Nc', 'trial', 1) returning id");
+    expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: nc.id }))).toMatchObject({ status: "error", message: "Waiting for the member’s card." });
+    expect(await current<{ free_lists_used: number }>("select free_lists_used from users where id = $1", [nc.id])).toEqual([{ free_lists_used: 1 }]);
+    expect(await current("select 1 from admin_actions")).toEqual([]);
   });
 
   it("refuses a sample play without the tick, and a malformed id", async () => {

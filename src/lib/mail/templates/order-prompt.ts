@@ -1,5 +1,5 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * Spec B.13 email 23, "Want a list this Monday?": Fridays, to one-at-a-time

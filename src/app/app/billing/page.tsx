@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { CancelForm, SwitchForm, UndoForm, UpdateCardButton } from "@/components/app/billing-panel";
-import { OrderBox } from "@/components/app/week-ideas";
+import { CancelForm, UndoForm, UpdateCardButton } from "@/components/app/billing-panel";
 import { loadBilling } from "@/lib/app/billing";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
@@ -14,7 +14,7 @@ import { afterCardChange } from "@/lib/billing/renewals";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { torontoDate } from "@/lib/clock";
 import { query } from "@/lib/db-query";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export const metadata: Metadata = { title: "Billing" };
@@ -30,7 +30,10 @@ const CARD_WORDS: Record<CardUpdateOutcome | "error", string> = {
   error: "Something went wrong on our side. Your card may be saved already; refresh this page in a minute.",
 };
 
-/** Spec B.10: plan, price, next charge with tax, the status strip, invoices, update card, switch plan, order, cancel. */
+/**
+ * Spec B.10: plan, price, next charge with tax, the status strip, invoices, update card, cancel. Monthly is the only
+ * plan (plan 2026-11-26-001, Unit 9): no switch and no order box; that code is dormant (Scope Boundaries).
+ */
 async function BillingPage({ searchParams }: { searchParams: PageProps<"/app/billing">["searchParams"] }) {
   await connection();
   const session = await requireUser("/app/billing");
@@ -80,7 +83,17 @@ async function BillingPage({ searchParams }: { searchParams: PageProps<"/app/bil
           Your plan
         </h2>
         <p className="mt-3">{view.planLine}</p>
-        <p className="mt-2 text-small text-ink-2">{view.nextCharge}</p>
+        <p className="mt-2 text-small text-ink-2">
+          {view.nextCharge}
+          {view.cardLink && (
+            <>
+              {" "}
+              <Link href={view.cardLink.href} className="tlink">
+                {view.cardLink.label}
+              </Link>
+            </>
+          )}
+        </p>
         <p className="mt-4 rounded-[8px] border border-rule bg-surface p-4 text-small">{home.missBanner ?? home.statusLine}</p>
         {view.canUpdateCard && (
           <div className="mt-4">
@@ -88,28 +101,6 @@ async function BillingPage({ searchParams }: { searchParams: PageProps<"/app/bil
           </div>
         )}
       </section>
-
-      {home.order && (
-        <section aria-labelledby="order-h">
-          <h2 id="order-h" className="text-h3">
-            Get next Monday’s list
-          </h2>
-          <div className="mt-4">
-            <OrderBox week={home.order.week} weekLabel={longDate(home.order.week)} ordered={home.order.ordered} price={home.order.price} />
-          </div>
-        </section>
-      )}
-
-      {view.offer && (
-        <section aria-labelledby="switch-h" id="switch">
-          <h2 id="switch-h" className="text-h3">
-            Switch plan
-          </h2>
-          <div className="mt-4 max-w-[36rem]">
-            <SwitchForm key={`${view.offer.to}:${view.offer.effect}`} to={view.offer.to} effect={view.offer.effect} allowed={view.offer.allowed} why={view.offer.why} />
-          </div>
-        </section>
-      )}
 
       <section aria-labelledby="invoices-h">
         <h2 id="invoices-h" className="text-h3">
@@ -143,7 +134,7 @@ async function BillingPage({ searchParams }: { searchParams: PageProps<"/app/bil
           <h2 id="cancel-h" className="text-h3">
             {view.undo ? "Cancelled" : "Cancel"}
           </h2>
-          <div className="mt-4 max-w-[36rem]">{view.undo ? <UndoForm until={view.undo.until} /> : <CancelForm label={view.cancel!.label} switchLink={view.cancel!.switchLink} />}</div>
+          <div className="mt-4 max-w-[36rem]">{view.undo ? <UndoForm until={view.undo.until} /> : <CancelForm label={view.cancel!.label} />}</div>
         </section>
       )}
     </div>

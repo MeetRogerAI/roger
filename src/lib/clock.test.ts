@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  addWallDays,
   asOfAllowed,
   AsOfRefused,
   currentMonday,
@@ -15,6 +16,17 @@ import {
 } from "./clock";
 
 const at = (iso: string) => new Date(iso);
+
+describe("addWallDays", () => {
+  it("keeps the Toronto wall time across the clock changes (23- and 25-hour days)", () => {
+    // Monday 2027-03-01 7:05 AM EST + 14 days = Monday 2027-03-15 7:05 AM EDT.
+    expect(addWallDays(at("2027-03-01T12:05:00Z"), 14).toISOString()).toBe("2027-03-15T11:05:00.000Z");
+    // Monday 2027-10-25 7:05 AM EDT + 14 days = Monday 2027-11-08 7:05 AM EST.
+    expect(addWallDays(at("2027-10-25T11:05:00Z"), 14).toISOString()).toBe("2027-11-08T12:05:00.000Z");
+    // Seconds and milliseconds are kept; no change in between is plain 24-hour days.
+    expect(addWallDays(at("2026-12-01T15:00:07.250Z"), 21).toISOString()).toBe("2026-12-22T15:00:07.250Z");
+  });
+});
 
 describe("weekOf", () => {
   it("counts Sunday 11:58 PM Toronto toward the next day", () => {

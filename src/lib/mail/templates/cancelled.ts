@@ -1,5 +1,5 @@
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * Spec B.13 email 17, cancellation confirmed (spec B.9). During the trial the
@@ -7,14 +7,16 @@ import { longDate } from "./welcome";
  * charged." After that, access continues to the end of the paid month, with
  * no refund.
  */
-export function cancelledEmail(o: { when: "now"; charged: boolean } | { when: "period_end"; accessEnds: string }): Rendered {
+export function cancelledEmail(o: { when: "now"; charged: boolean; card?: boolean } | { when: "period_end"; accessEnds: string }): Rendered {
   if (o.when === "now") {
+    // A trial that ended before a card was saved (sign-up ends without one) has no card to remove.
+    const notCharged = o.card === false ? "You have not been charged." : "You have not been charged, and we removed your saved card.";
     return renderEmail({
       subject: "Your Roger account is cancelled",
       preview: o.charged ? "Nothing more will be charged." : "You have not been charged.",
       heading: "Your account is cancelled.",
       paragraphs: [
-        o.charged ? "Nothing more will be charged." : "You have not been charged, and we removed your saved card.",
+        o.charged ? "Nothing more will be charged." : notCharged,
         "Your reports and the ideas you were sent stay readable when you sign in.",
         COME_BACK_LINE,
       ],

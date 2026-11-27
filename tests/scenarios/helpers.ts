@@ -31,11 +31,14 @@ import type Stripe from "stripe";
 import { vi } from "vitest";
 import { addDays, currentMonday, isAtOrPast, wallParts, wallToInstant } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
-import { startCardSetup } from "@/lib/billing/card-setup";
+import { finishCardSave, openEmbeddedSetup } from "@/lib/billing/card-setup";
+import type { CardSaveResult } from "@/lib/billing/card-saved";
+import { choosePromoCode } from "@/lib/billing/promo";
+import { finishSignup, sendSignupWelcome } from "@/lib/signup/finish";
 import { placeOrder } from "@/lib/billing/orders";
 import { runChargeJob, type ChargeJobResult } from "@/lib/billing/charge-job";
 import type { ChargeDeps } from "@/lib/billing/first-charge";
-import type { CardGateway, SetupSession } from "@/lib/billing/gateway";
+import { isCouponGone, type CardGateway, type SetupSession } from "@/lib/billing/gateway";
 import { anniversary } from "@/lib/billing/period";
 import type {
   AdjustmentGateway,
@@ -55,6 +58,7 @@ import { runHourly } from "@/lib/housekeeping/job";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3, type V3Settings } from "@/lib/v3-settings";
 import { storeReport } from "@/lib/zack/receive";
+import { fakePaymentStripe } from "@/test-helpers/fake-card-gateway";
 import { testDb } from "@/test-helpers/pglite-db";
 
 // A scenario walks weeks of jobs; with every test file running at once it needs more than the unit-test limit.
@@ -107,6 +111,8 @@ export type FakeInvoice = {
   currency: string;
   lines: Line[];
   totalCents: number;
+  /** The locked-in promo's discount (`discounts: [{coupon}]`), taken off before tax. */
+  discountCents?: number;
   created: number;
   periodStart: number | null;
 };
@@ -126,6 +132,8 @@ export type FakeStripe = CardGateway &
     invoiceList: FakeInvoice[];
     items: Map<string, FakeItem>;
     sessions: Map<string, SetupSession>;
+    /** Promotion codes and the Payment page's tax preview (shared with the unit-test fake). */
+    payment: ReturnType<typeof fakePaymentStripe>;
     /** The next payments for a customer (first charge, order or renewal), in order; a success when none is queued. */
     script(customer: string, ...results: ("ok" | "soft" | "hard")[]): void;
     /** Stripe's hosted Checkout finished: the card and billing address are saved. */
@@ -146,8 +154,15 @@ export function fakeStripe(now: () => Date): FakeStripe {
   const sessions = new Map<string, SetupSession>();
   const scripts = new Map<string, ("ok" | "soft" | "hard")[]>();
   const replays = new Map<string, ChargeResult>();
+  /** The parameters each subscription-create idempotency key was first used with. */
+  const keyParams = new Map<string, string>();
   const itemKeys = new Map<string, string>();
   const calls: Call[] = [];
+  const payment = fakePaymentStripe({
+    monthlyCents: { USD: PRICES.price_monthly_usd.cents, CAD: PRICES.price_monthly_cad.cents },
+    tax: { CA: { rate: TAX_RATE.CA, name: "HST" }, US: { rate: TAX_RATE.US, name: "Sales Tax" } },
+    now,
+  });
   let n = 0;
   const id = (p: string) => `${p}_${++n}`;
   const call = (method: string, args: Record<string, unknown>) => calls.push({ method, args: structuredClone(args) });
@@ -158,13 +173,16 @@ export function fakeStripe(now: () => Date): FakeStripe {
     return x;
   };
   const country = (customer: string) => customers.get(customer)?.country ?? "US";
-  /** Lines plus tax as its own row where tax is collected. */
-  const priced = (customer: string, lines: Line[]) => {
-    const subtotal = lines.reduce((s, l) => s + l.amountCents, 0);
+  /** Lines plus tax as its own row where tax is collected; a coupon's discount comes off before tax, as in Stripe. */
+  const priced = (customer: string, lines: Line[], discountCents = 0) => {
+    const subtotal = lines.reduce((s, l) => s + l.amountCents, 0) - discountCents;
     const tax = Math.round(subtotal * (TAX_RATE[country(customer)] ?? 0));
     const all = tax > 0 ? [...lines, { kind: "tax" as const, description: "HST (13%)", amountCents: tax, invoiceItem: null, price: null }] : lines;
-    return { lines: all, totalCents: subtotal + tax };
+    return { lines: all, totalCents: subtotal + tax, ...(discountCents ? { discountCents } : {}) };
   };
+  /** The coupon's amount off a first invoice's lines (throws Stripe's error for a deleted or expired coupon). */
+  const couponOff = (coupon: string | null | undefined, p: string, lines: Line[]) =>
+    coupon ? payment.couponOff(coupon, lines.reduce((s, l) => s + l.amountCents, 0), price(p).currency) : 0;
   const planLines = (p: string, extra?: FirstExtra): Line[] => [
     { kind: "plan", description: `1 × ${price(p).product}`, amountCents: price(p).cents, invoiceItem: null, price: p },
     // add_invoice_items takes no description: Stripe names the line after the plan's product (plan Unit 14 deviation).
@@ -177,7 +195,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
     return null;
   };
   const invoice = (o: Omit<FakeInvoice, "id" | "created" | "lines" | "totalCents">, lines: Line[]): FakeInvoice => {
-    const inv: FakeInvoice = { ...o, id: id("in"), created: sec(now()) + n, ...priced(o.customer, lines) };
+    const inv: FakeInvoice = { ...o, id: id("in"), created: sec(now()) + n, ...priced(o.customer, lines, o.discountCents ?? 0) };
     invoiceList.unshift(inv);
     return inv;
   };
@@ -200,6 +218,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
     invoiceList,
     items,
     sessions,
+    payment,
     callsTo: (m) => calls.filter((c) => c.method === m),
     invoicesFor: (c) => invoiceList.filter((i) => i.customer === c),
     script(customer, ...results) {
@@ -221,13 +240,40 @@ export function fakeStripe(now: () => Date): FakeStripe {
       sessions.set(sid, { id: sid, status: "open", customer, paymentMethod: null, userId, currency, country: null, purpose: purpose ?? null });
       return { id: sid, url: `https://checkout.stripe.test/${sid}` };
     },
+    async createEmbeddedSetupSession({ userId, customer, currency, returnUrl }) {
+      call("checkout.sessions.create", { userId, customer, currency, mode: "setup", ui_mode: "elements", returnUrl });
+      const sid = id("cs");
+      const clientSecret = `${sid}_secret_test`;
+      sessions.set(sid, { id: sid, status: "open", customer, paymentMethod: null, userId, currency, country: null, purpose: null, clientSecret });
+      return { id: sid, clientSecret };
+    },
+    async expireSetupSession(sid) {
+      call("checkout.sessions.expire", { id: sid });
+      const s = sessions.get(sid);
+      if (s?.status === "open") sessions.set(sid, { ...s, status: "expired" });
+    },
     async getSetupSession(sid) {
       const s = sessions.get(sid);
-      if (!s) throw new Error("No such session");
+      if (!s) throw Object.assign(new Error(`No such checkout.session: ${sid}`), { code: "resource_missing" });
       return { ...s };
+    },
+    // --- the Payment page's price box (Unit 4): the same fake tax as invoices (HST 13% in CA, none in the US)
+    async previewMonthly(args) {
+      call("invoices.createPreview.monthly", { ...args });
+      return payment.previewMonthly(args);
+    },
+    async findPromotion(code, currency, opts) {
+      call("promotionCodes.list", { code, currency });
+      return payment.findPromotion(code, currency, opts);
     },
     async setDefaultCard(customer, pm) {
       call("customers.update.default_payment_method", { customer, pm });
+    },
+    async detachPaymentMethod(pm) {
+      call("payment_methods.detach", { pm });
+      const s = [...sessions.values()].find((x) => x.paymentMethod === pm);
+      const c = s?.customer ? customers.get(s.customer) : undefined;
+      if (c && c.cards > 0) c.cards -= 1;
     },
     async checkTaxLocation(customer) {
       return (TAX_RATE[country(customer)] ?? 0) > 0 ? "ok" : "not_collecting";
@@ -244,19 +290,35 @@ export function fakeStripe(now: () => Date): FakeStripe {
     async unitAmount(p) {
       return price(p).cents;
     },
-    async preview({ customer, price: p, extra }) {
-      call("invoices.createPreview", { customer, price: p, extra: extra ?? null, automatic_tax: true });
-      const inv = priced(customer, planLines(p, extra));
-      return { totalCents: inv.totalCents, currency: price(p).currency };
+    async preview({ customer, price: p, extra, coupon }) {
+      call("invoices.createPreview", { customer, price: p, extra: extra ?? null, coupon: coupon ?? null, automatic_tax: true });
+      const lines = planLines(p, extra);
+      const discountCents = couponOff(coupon, p, lines);
+      const inv = priced(customer, lines, discountCents);
+      return { totalCents: inv.totalCents, currency: price(p).currency, discountCents };
     },
     async subscriptions(customer) {
       return [...subs.values()].filter((s) => s.customer === customer).map((s) => ({ id: s.id, status: s.status, claimId: s.claimId, anchor: s.anchor }));
     },
-    async createSubscription({ customer, price: p, extra, claimId, userId, idempotencyKey }) {
-      call("subscriptions.create", { customer, price: p, extra: extra ?? null, claimId, userId, idempotencyKey, payment_behavior: "error_if_incomplete", off_session: true, automatic_tax: true });
-      // Stripe replays the stored answer for a reused key, declines included.
+    async createSubscription({ customer, price: p, extra, coupon, claimId, userId, idempotencyKey }) {
+      call("subscriptions.create", { customer, price: p, extra: extra ?? null, coupon: coupon ?? null, claimId, userId, idempotencyKey, payment_behavior: "error_if_incomplete", off_session: true, automatic_tax: true });
+      // Stripe refuses a key reused with other parameters (StripeIdempotencyError), and replays the stored answer
+      // for a reused key with the same ones, declines included.
+      const sent = JSON.stringify([customer, p, extra ?? null, coupon ?? null, claimId, userId]);
+      if ((keyParams.get(idempotencyKey) ?? sent) !== sent) {
+        throw Object.assign(new Error("Keys for idempotent requests can only be used with the same parameters they were first used with."), { type: "StripeIdempotencyError" });
+      }
+      keyParams.set(idempotencyKey, sent);
       const replay = replays.get(idempotencyKey);
       if (replay) return replay;
+      let discountCents = 0;
+      try {
+        discountCents = couponOff(coupon, p, planLines(p, extra));
+      } catch (e) {
+        // A deleted or expired coupon: Stripe refuses the create (nothing made), as the real gateway maps it.
+        if (coupon && isCouponGone(e)) return { kind: "coupon_gone", error: (e as Error).message };
+        throw e;
+      }
       const declined = nextPayment(customer);
       if (declined) {
         replays.set(idempotencyKey, declined);
@@ -265,7 +327,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
       const at = now();
       const s: FakeSub = { id: id("sub"), customer, price: p as PriceId, claimId, userId, status: "active", anchor: sec(at), periodEnd: sec(anniversary(at, 1)), cancelAt: null, endedAt: null };
       subs.set(s.id, s);
-      const inv = invoice({ customer, subscription: s.id, claimId, billingReason: "subscription_create", status: "paid", currency: price(p).currency, periodStart: s.anchor }, planLines(p, extra));
+      const inv = invoice({ customer, subscription: s.id, claimId, billingReason: "subscription_create", status: "paid", currency: price(p).currency, periodStart: s.anchor, ...(discountCents ? { discountCents } : {}) }, planLines(p, extra));
       const r: ChargeResult = { kind: "succeeded", object: s.id, amountCents: inv.totalCents, currency: inv.currency, anchor: s.anchor };
       replays.set(idempotencyKey, r);
       return r;
@@ -610,7 +672,8 @@ export async function vercelCron(w: World, until: Date): Promise<CronCall[]> {
 }
 
 export async function hourly(w: World): Promise<Record<string, unknown>> {
-  return runHourly(w.query, w.charge());
+  // The route's tasks, unmodified: the no-card close is handed this world's fake Stripe as the pass's card gateway.
+  return runHourly(w.query, { ...w.charge(), card: w.stripe });
 }
 
 /** A Monday as the jobs see it: Cora from 1:00 AM, the charge at 6:00, the send at 7:00, with hourly passes between. */
@@ -651,32 +714,132 @@ export async function passHours(w: World, until: Date, stepHours = 1): Promise<v
 // ---------------------------------------------------------------------------
 // People and runs.
 
-export type Member = { id: string; email: string; customer: string };
+/**
+ * A member. `customer` is their Stripe customer: empty until the Payment page
+ * first opens for them (it creates the customer), filled in by `saveCard`.
+ */
+export type Member = { id: string; email: string; customer: string; country: "CA" | "US" };
+
+const PAYMENT_RETURN = "https://roger.test/start/payment/done?session_id={CHECKOUT_SESSION_ID}";
+/** The address the Payment page's requests come from (the rate limits count by it). */
+const MEMBER_IP = "203.0.113.7";
 
 /**
- * Sign-up screens 3 to 5 as the app runs them: the plan and consent are saved,
- * Stripe's hosted card page opens on a new customer, the person finishes it,
- * and Stripe's `checkout.session.completed` reaches the webhook, which starts
- * the trial and sends the welcome email.
+ * Sign-up as it is now (plan 2026-11-26-001, Units 2 and 10): Steps 1 and 2
+ * (the quiz and a verified account) leave the account at Step 3; Step 3,
+ * Product and Pricing, records the consent and ends sign-up with exactly the
+ * two calls `savePlan` makes (`finishSignup`, then `sendSignupWelcome` with
+ * the action's clock). The account is a monthly trial with no card
+ * (`trial_started_at` null) and no Stripe customer: the card is asked for when
+ * the first list is ready (`saveCard`). `sponsored` sets `sponsor_id` (R29:
+ * lists from the first Monday, never asked for a card).
  */
 export async function signUp(
   w: World,
-  o: { email: string; currency: "USD" | "CAD"; country: "CA" | "US"; plan?: "monthly" | "per_run"; sharing?: "share" | "match_only" | "off" },
+  o: { email: string; currency: "USD" | "CAD"; country: "CA" | "US"; sharing?: "share" | "match_only" | "off"; sponsored?: boolean },
 ): Promise<Member> {
   const [{ id }] = await w.query<{ id: string }>(
-    `insert into users (email, name, status, plan, sharing, currency, consent_at, signup_step, email_verified_at)
-     values ($1, 'Test', 'signup', $2, $3, $4, $5, 'card', $5) returning id`,
-    [o.email, o.plan ?? "monthly", o.sharing ?? "share", o.currency, w.now.toISOString()],
+    `insert into users (email, name, status, plan, sharing, currency, signup_step, email_verified_at, sponsor_id)
+     values ($1, 'Test', 'signup', 'monthly', $2, $3, 'plan', $4, $5) returning id`,
+    [o.email, o.sharing ?? "share", o.currency, w.now.toISOString(), o.sponsored ? crypto.randomUUID() : null],
   );
-  const started = await startCardSetup(w.query, w.stripe, { userId: id, currency: o.currency, successUrl: "https://roger.test/start/done", cancelUrl: "https://roger.test/start/card" });
-  if (!started.ok) throw new Error(`The card step did not open: ${started.reason}`);
-  const session = started.url.split("/").pop()!;
-  w.stripe.completeSession(session, o.country);
-  const outcome = await w.webhook(event("checkout.session.completed", { id: session, object: "checkout.session", mode: "setup", metadata: {} }));
-  if (outcome !== "handled") throw new Error(`The card step webhook was ${outcome}`);
-  const [u] = await w.query<{ status: string; stripe_customer: string }>(`select status, stripe_customer from users where id = $1`, [id]);
-  if (u.status !== "trial") throw new Error(`Sign-up ended in ${u.status}, not trial`);
-  return { id, email: o.email, customer: u.stripe_customer };
+  const c = w.charge();
+  if (!(await finishSignup(w.query, id, c.now))) throw new Error("Step 3 did not end sign-up");
+  await sendSignupWelcome(w.query, id, { settings: c.settings, now: c.now, query: c.query, transport: c.transport, sleep: c.sleep });
+  const [u] = await w.query<{ status: string; signup_step: string; trial_started_at: string | null; stripe_customer: string | null }>(
+    `select status, signup_step, trial_started_at, stripe_customer from users where id = $1`,
+    [id],
+  );
+  if (u.status !== "trial" || u.signup_step !== "done" || u.trial_started_at !== null || u.stripe_customer !== null) {
+    throw new Error(`Sign-up ended in ${JSON.stringify(u)}, not a trial with no card`);
+  }
+  return { id, email: o.email, customer: "", country: o.country };
+}
+
+/**
+ * The Payment page (Step 4), driven as its server code is: the embedded setup
+ * session is opened (or the open one reused) by `openEmbeddedSetup`, the
+ * member confirms the card in Stripe's Payment Element (the fake completes the
+ * session with the billing country), then the return page runs
+ * `finishCardSave` and Stripe's `checkout.session.completed` reaches the
+ * webhook (both are the same idempotent completion). `via: "webhook"` is a
+ * member who closed the tab before the return page loaded. Fills in
+ * `m.customer`.
+ */
+export async function saveCard(w: World, m: Member, o: { via?: "return_page" | "webhook"; country?: "CA" | "US" } = {}): Promise<CardSaveResult> {
+  const sid = await openPayment(w, m);
+  w.stripe.completeSession(sid, o.country ?? m.country);
+  const c = w.charge();
+  let result: CardSaveResult = { outcome: "pending" };
+  if ((o.via ?? "return_page") === "return_page") {
+    result = await finishCardSave(w.query, w.stripe, sid, { expectUserId: m.id, getSettings: async () => w.settings, now: c.now, query: c.query, transport: c.transport, sleep: c.sleep });
+  }
+  const outcome = await w.webhook(event("checkout.session.completed", { id: sid, object: "checkout.session", mode: "setup", metadata: { user_id: m.id } }));
+  if (outcome !== "handled") throw new Error(`The card-save webhook was ${outcome}`);
+  const [u] = await w.query<{ stripe_customer: string; trial_started_at: string | null }>(`select stripe_customer, trial_started_at from users where id = $1`, [m.id]);
+  if (u.trial_started_at == null) throw new Error("The card was not saved");
+  m.customer = u.stripe_customer;
+  return result;
+}
+
+/** The Payment page opened (the member has not confirmed a card): the stored session's id. Fills in `m.customer`. */
+export async function openPayment(w: World, m: Member): Promise<string> {
+  const opened = await openEmbeddedSetup(w.query, w.stripe, { userId: m.id, ip: MEMBER_IP, returnUrl: PAYMENT_RETURN, now: w.now });
+  if (!opened.ok) throw new Error(`Payment did not open: ${opened.reason}`);
+  const [u] = await w.query<{ stripe_customer: string }>(`select stripe_customer from users where id = $1`, [m.id]);
+  m.customer = u.stripe_customer;
+  return opened.sessionId;
+}
+
+/** "Have a promo code?" → Apply on the Payment page (`applyPromo` → `choosePromoCode`), before the card is saved. */
+export async function applyPromo(w: World, m: Member, code: string) {
+  const [u] = await w.query<{ currency: "USD" | "CAD" }>(`select currency from users where id = $1`, [m.id]);
+  return choosePromoCode(w.query, w.stripe, { userId: m.id, ip: MEMBER_IP, code, currency: u.currency }, { now: w.now });
+}
+
+/**
+ * The new order's first list: Zack's run on the Sunday afternoon, the Monday
+ * (the list is held: a titles-only teaser, nothing delivered, no free list
+ * used), then the card saved on Payment at `cardAt` (default the Wednesday
+ * after, at noon), which delivers that held list as free list 1.
+ */
+export async function firstList(w: World, members: Member[], week: string, o: { cardAt?: Date } = {}) {
+  await w.at(wallToInstant(addDays(week, -1), "15:00"));
+  for (const m of members) await sendRun(w, m);
+  const r = await monday(w, week);
+  for (const m of members) {
+    if ((await delivered(w, m.id, week)).length) throw new Error(`${m.email}: the first list was delivered before a card was saved`);
+  }
+  await w.at(o.cardAt ?? toronto(addDays(week, 2), "12:00"));
+  for (const m of members) {
+    await saveCard(w, m);
+    if (!(await delivered(w, m.id, week)).length) throw new Error(`${m.email}: the held list was not unlocked by the card`);
+  }
+  return r;
+}
+
+/**
+ * Baseline shortcut for scenarios about a later state: a member who signed up
+ * and saved a card before any list was held (Payment opened from a link). The
+ * completion has nothing to unlock, and the next Monday delivers as usual.
+ */
+export async function withCard(w: World, o: Parameters<typeof signUp>[1]): Promise<Member> {
+  const m = await signUp(w, o);
+  await saveCard(w, m);
+  return m;
+}
+
+/**
+ * A leftover one-at-a-time account (preview data from before monthly became
+ * the only plan): no sign-up path makes one now, so the account is moved to
+ * `per_run` by hand after sign-up and its card saved. Only the dormant per-run
+ * code (orders, switches) is exercised through it (plan Scope Boundaries).
+ */
+export async function leftoverPerRun(w: World, o: Parameters<typeof signUp>[1]): Promise<Member> {
+  const m = await signUp(w, o);
+  await w.query(`update users set plan = 'per_run' where id = $1`, [m.id]);
+  await saveCard(w, m);
+  return m;
 }
 
 /**

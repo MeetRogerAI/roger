@@ -9,7 +9,7 @@ import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { ZACK_CATEGORIES } from "@/lib/intake/validate";
 import { appUrl } from "@/lib/mail/layout";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import { readV3Settings } from "@/lib/v3-settings";
 import { zackFileFor } from "@/lib/zack/agents";
 import { coreText, instructionsForUser } from "@/lib/zack/instructions";

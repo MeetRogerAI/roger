@@ -1,16 +1,18 @@
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /** Spec B.13: the first charge succeeded and the subscription started. */
 export function subscribedEmail(o: { amountCents: number | null; currency: Currency; /** A one-at-a-time member's first monthly charge: not a third list. */ switched?: boolean }): Rendered {
   const paid = o.amountCents != null ? `${moneyCents(o.amountCents, o.currency)}, tax included` : "your first month";
   const list = o.switched ? "This week’s list" : "Your third list";
+  // A promo that covers the whole first invoice (Unit 8 review F7): Stripe starts the subscription and charges nothing.
+  const charged = o.amountCents === 0 ? "Your first month is covered by your promo code, so nothing was charged." : `We charged ${paid}.`;
   return renderEmail({
     subject: "You’re subscribed",
     preview: `${list} is ready.`,
     heading: "You’re subscribed.",
-    paragraphs: [`We charged ${paid}. ${list} is ready now, and a new one arrives every Monday.`, "You can cancel any time on the billing page, in one click."],
+    paragraphs: [`${charged} ${list} is ready now, and a new one arrives every Monday.`, "You can cancel any time on the billing page, in one click."],
     button: { label: "Open this week’s list", url: appUrl("/app") },
   });
 }
@@ -58,12 +60,13 @@ export function chargeDateMovedEmail(o: { nextMonday: string; reason?: "no_plays
 }
 
 /** The amount changed after the reminder: the list waits a day so the user sees the new amount first. */
-export function amountChangedEmail(o: { amountCents: number; currency: Currency }): Rendered {
+export function amountChangedEmail(o: { amountCents: number; currency: Currency; /** The label of a locked-in discount Stripe no longer applies. */ discountEnded?: string | null }): Rendered {
   return renderEmail({
     subject: "Your first charge amount changed",
     preview: `It is now ${moneyCents(o.amountCents, o.currency)}.`,
     heading: "Your first charge amount changed.",
     paragraphs: [
+      ...(o.discountEnded ? [`Your promo code’s discount (${o.discountEnded}) has ended and can no longer be applied, so your first charge is at the full price.`] : []),
       `Your first charge will be ${moneyCents(o.amountCents, o.currency)}, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.`,
       "We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.",
     ],

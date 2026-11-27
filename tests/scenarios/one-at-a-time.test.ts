@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { placeOrder } from "@/lib/billing/orders";
-import { delivered, monday, newWorld, outcome, passHours, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
+import { delivered, leftoverPerRun, monday, newWorld, outcome, passHours, seedPool, sendRun, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -9,6 +9,13 @@ vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
  * an order with a run is invoiced on its own invoice (one item, tax as its own
  * row), paid and sent with a receipt; an order with no run charges nothing and
  * says why; a week with no order is never charged; ordering needs sharing on.
+ *
+ * Legacy coverage only (plan 2026-11-26-001, Scope Boundaries and Unit 10):
+ * monthly is the only plan and nothing offers one at a time any more, but the
+ * per-run code stays, dormant, until the cleanup after launch, and leftover
+ * per-run accounts on preview still reach it. The member here is such a
+ * leftover account (`leftoverPerRun`: moved to per-run by hand, card saved);
+ * the order is placed through `placeOrder` directly, as no page calls it.
  */
 let w: World;
 let m: Member;
@@ -17,7 +24,7 @@ beforeEach(async () => {
   w = await newWorld({ start: "2026-11-30T15:00:00Z" });
   await seedPool(w, { contributors: 8, playsEach: 3, ranOn: "2026-11-26" });
   await w.at("2026-12-02T16:00:00Z");
-  m = await signUp(w, { email: "omar@example.ca", currency: "CAD", country: "CA", plan: "per_run" });
+  m = await leftoverPerRun(w, { email: "omar@example.ca", currency: "CAD", country: "CA" });
   await weeksWithRuns(w, [m], ["2026-12-07", "2026-12-14"]);
 });
 
@@ -26,7 +33,8 @@ const orderStatus = async (week: string) => (await w.query<{ status: string }>(`
 
 describe("one list at a time", () => {
   it("charges an order with a run once, on its own invoice, and sends the list with its receipt; an order with no run charges nothing", async () => {
-    expect(w.subjects(m.email)).toContain("Your free lists are done");
+    // Whole-branch review W2: ordering is gone from the app, so no "order your next list" email after the free lists.
+    expect(w.subjects(m.email)).not.toContain("Your free lists are done");
     expect(await userRow(w, m.id)).toMatchObject({ status: "trial", plan: "per_run", free_lists_used: 2 });
 
     // Saturday: order for Monday; Sunday: Zack's run; Monday: invoiced, paid, sent.

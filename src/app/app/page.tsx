@@ -3,18 +3,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { CardSavedNotice } from "@/components/app/card-saved-notice";
+import { HeldIdeas } from "@/components/app/held-ideas";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
-import { OrderBox, WeekIdeas } from "@/components/app/week-ideas";
+import { WeekIdeas } from "@/components/app/week-ideas";
+import { heldHeading } from "@/lib/app/held";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export const metadata: Metadata = { title: "This week" };
 
 /** The Monday view (spec B.8 item 4): this week's ideas, the status line, and what comes next. */
-async function Home() {
+async function Home({ searchParams }: { searchParams: PageProps<"/app">["searchParams"] }) {
+  const { card } = await searchParams;
   await connection();
   const session = await requireUser("/app");
   const settings = await readV3Settings();
@@ -23,9 +27,23 @@ async function Home() {
 
   return (
     <div className="space-y-10">
+      {/* After a card save with no list to show yet (Unit 5), or a promo code that could not be applied. */}
+      {(card !== "saved" || home.ideas.length > 0) && <CardSavedNotice card={card} />}
       <header>
-        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : "Your first list is on its way"}</h1>
-        {home.statusLine !== home.missBanner && <p className="mt-3 text-small text-ink-2">{home.statusLine}</p>}
+        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : home.held ? heldHeading(home.held.count) : "Your first list is on its way"}</h1>
+        {home.statusLine !== home.missBanner && (
+          <p className="mt-3 text-small text-ink-2">
+            {home.statusLine}
+            {home.statusLink && (
+              <>
+                {" "}
+                <Link href={home.statusLink.href} className="tlink">
+                  {home.statusLink.label}
+                </Link>
+              </>
+            )}
+          </p>
+        )}
       </header>
 
       {home.missBanner && (
@@ -35,12 +53,7 @@ async function Home() {
             To fix it, check that Zack still runs each week and can reach Roger.{" "}
             <Link href="/app/zack" className="tlink">
               Check Zack
-            </Link>{" "}
-            or{" "}
-            <Link href="/app/billing" className="tlink">
-              switch to one list at a time
             </Link>
-            .
           </p>
         </div>
       )}
@@ -55,6 +68,8 @@ async function Home() {
           )}
           <WeekIdeas week={home.week!} ideas={home.ideas} />
         </>
+      ) : home.held ? (
+        <HeldIdeas titles={home.held.titles} />
       ) : (
         <div className="rounded-[8px] border border-rule bg-surface p-6">
           <p className="text-title">Your ideas arrive on Monday morning.</p>
@@ -64,8 +79,6 @@ async function Home() {
           </Link>
         </div>
       )}
-
-      {home.order && <OrderBox week={home.order.week} weekLabel={longDate(home.order.week)} ordered={home.order.ordered} price={home.order.price} />}
 
       <p className="text-small text-ink-2">
         Ideas you’ve set up: {home.bricks.marked}
@@ -78,10 +91,10 @@ async function Home() {
   );
 }
 
-export default function Page() {
+export default function Page({ searchParams }: PageProps<"/app">) {
   return (
     <Suspense fallback={<p className="text-lead text-ink-2">Loading…</p>}>
-      <Home />
+      <Home searchParams={searchParams} />
     </Suspense>
   );
 }

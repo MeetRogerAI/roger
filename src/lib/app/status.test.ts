@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mergeV3 } from "@/lib/v3-settings";
-import { nextMonthly, statusLine, type StatusFacts } from "./status";
+import { nextMonthly, PLAN_QUESTIONS, statusLine, statusLink, type StatusFacts } from "./status";
 
 const s = mergeV3([]);
 const now = new Date("2026-12-14T12:05:00Z");
@@ -15,6 +15,7 @@ const f = (o: Partial<StatusFacts>): StatusFacts => ({
   quote: null,
   firstChargeAt: null,
   orderCents: null,
+  hasCard: true,
   now,
   ...o,
 });
@@ -30,8 +31,10 @@ describe("statusLine (spec B.8 item 3)", () => {
     );
   });
 
-  it("trial, one at a time, second list: how to order", () => {
-    expect(statusLine(f({ plan: "per_run", freeListsUsed: 2 }), s)).toMatch(/^Free list 2 of 2\. Order your next list whenever you want one: US\$\d+ plus tax where it applies\.$/);
+  it("trial, leftover one at a time, second list: no ordering promised (review fixes Unit 9, F2)", () => {
+    const line = statusLine(f({ plan: "per_run", freeListsUsed: 2 }), s);
+    expect(line).toBe(`Free list 2 of 2. ${PLAN_QUESTIONS}`);
+    expect(line).not.toMatch(/order/i);
   });
 
   it("monthly: contributing, the month's forgiven misses, and the next charge (spec B.9 notice 2)", () => {
@@ -85,10 +88,10 @@ describe("statusLine (spec B.8 item 3)", () => {
   });
 
 
-  it("one at a time: what this list cost", () => {
-    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toMatch(
-      /^This list: US\$56\.50 with tax\. Order next Monday’s whenever you want one\. Monthly is US\$\d+ for every Monday\.$/,
-    );
+  it("leftover one at a time: what this list cost, and no ordering promised (review fixes Unit 9, F2)", () => {
+    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toBe(`This list: US$56.50 with tax. ${PLAN_QUESTIONS}`);
+    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: null }), s)).toMatch(/^This list: US\$\d+ plus tax where it applies\. Monthly is now the only plan\./);
+    expect(PLAN_QUESTIONS).not.toMatch(/order|one (list )?at a time/i);
   });
 
   it("held, closed, cancelled and before the first list each say what is true", () => {
@@ -113,12 +116,42 @@ describe("statusLine (spec B.8 item 3)", () => {
     expect(statusLine(f({ status: "held", holdReason: "renewal_unpaid" }), s)).toMatch(/^Your monthly payment didn’t go through, so your lists are paused\./);
     expect(statusLine(f({ status: "cancelled", accessEndsAt: "2026-12-12T15:00:00Z" }), s)).toBe("Your plan is cancelled, and nothing more will be charged.");
     expect(statusLine(f({ status: "active", firstChargeAt: "2026-12-03T11:05:00Z", switchingAt: "2027-01-03T11:05:00Z" }), s)).toBe(
-      "Monthly continues until Sunday, January 3, with a list every Monday. After that you order lists one at a time.",
+      `Monthly continues until Sunday, January 3, with a list every Monday. ${PLAN_QUESTIONS}`,
     );
   });
 
   it("finds the next monthly date, including short months", () => {
     expect(nextMonthly("2026-01-31T15:00:00Z", new Date("2026-02-10T15:00:00Z"))).toBe("2026-02-28");
     expect(nextMonthly("2026-11-30T15:00:00Z", now)).toBe("2026-12-30");
+  });
+});
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  const noCard = (o: Partial<StatusFacts> = {}) => f({ hasCard: false, freeListsUsed: 0, ...o });
+
+  it("before any teaser: the first list follows Zack's first report, or Monday with sharing off; no link", () => {
+    expect(statusLine(noCard(), s)).toBe("Your first list arrives after Zack’s first report.");
+    expect(statusLine(noCard({ sharing: "match_only" }), s)).toBe("Your first list arrives after Zack’s first report.");
+    expect(statusLine(noCard({ sharing: "off" }), s)).toBe("Your first list arrives on Monday.");
+    expect(statusLink(noCard())).toBeNull();
+  });
+
+  it("with a held list (a teaser sent): the ideas are ready, with a link to Payment", () => {
+    const facts = noCard({ firstTeaserAt: "2026-12-14T12:00:00Z" });
+    expect(statusLine(facts, s)).toBe("Your first ideas are ready — add a card to see them.");
+    expect(statusLink(facts)).toEqual({ href: "/start/payment", label: "Add your card" });
+  });
+
+  it("never names a price, a free-list count or a charge date", () => {
+    for (const facts of [noCard(), noCard({ firstTeaserAt: "2026-12-14T12:00:00Z" }), noCard({ sharing: "off" })]) {
+      expect(statusLine(facts, s)).not.toMatch(/US\$|free list|charge|earliest/i);
+    }
+  });
+
+  it("a sponsored trial needs no card; a trial with a card reads as before", () => {
+    expect(statusLine(noCard({ sponsored: true, firstTeaserAt: "2026-12-14T12:00:00Z" }), s)).toBe("Your lists are covered by your sponsor.");
+    expect(statusLink(noCard({ sponsored: true, firstTeaserAt: "2026-12-14T12:00:00Z" }))).toBeNull();
+    expect(statusLine(f({ freeListsUsed: 0 }), s)).toBe("Your first 2 lists are free.");
+    expect(statusLink(f({ firstTeaserAt: "2026-12-14T12:00:00Z" }))).toBeNull();
   });
 });

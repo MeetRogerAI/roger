@@ -66,7 +66,7 @@ beforeEach(async () => {
   vi.stubEnv("ADMIN_EMAILS", "peter@example.com");
   vi.stubEnv("ADMIN_SECRET", "s".repeat(32));
   vi.stubEnv("ADMIN_PASSWORD", "");
-  [{ id: member }] = await current<{ id: string }>("insert into users (email, email_verified_at, status, free_lists_used) values ('ana@example.com', now(), 'trial', 2) returning id");
+  [{ id: member }] = await current<{ id: string }>("insert into users (email, email_verified_at, status, free_lists_used, trial_started_at) values ('ana@example.com', now(), 'trial', 2, now()) returning id");
   [{ id: adminUser }] = await current<{ id: string }>("insert into users (email, email_verified_at) values ('peter@example.com', now()) returning id");
 });
 

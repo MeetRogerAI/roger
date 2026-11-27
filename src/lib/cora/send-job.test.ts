@@ -33,8 +33,8 @@ let plays: string[];
 async function member(email: string, o: Record<string, unknown> = {}) {
   const v = { status: "trial", plan: "monthly", sharing: "share", free_lists_used: 0, stripe_customer: `cus_${email}`, email_prefs: {}, ...o };
   const [u] = await query<{ id: string }>(
-    "insert into users (email, status, plan, sharing, free_lists_used, stripe_customer, email_prefs, currency) values ($1, $2, $3, $4, $5, $6, $7, 'USD') returning id",
-    [email, v.status, v.plan, v.sharing, v.free_lists_used, v.stripe_customer, JSON.stringify(v.email_prefs)],
+    "insert into users (email, status, plan, sharing, free_lists_used, stripe_customer, email_prefs, currency, trial_started_at) values ($1, $2, $3, $4, $5, $6, $7, 'USD', $8) returning id",
+    [email, v.status, v.plan, v.sharing, v.free_lists_used, v.stripe_customer, JSON.stringify(v.email_prefs), "trial_started_at" in o ? o.trial_started_at : "2026-11-16T15:00:00Z"],
   );
   return u.id;
 }
@@ -141,6 +141,17 @@ describe("the Monday send", () => {
     await runSendJob(query, deps(), { week: WEEK });
     expect(to("a@example.com")[0].text).toContain("there are 2 ideas that fit you, not three");
     expect(await user(a)).toEqual({ free_lists_used: 1 });
+  });
+
+  it("a leftover per-run trial's second free list sends no 'order your next list' email (whole-branch review W2)", async () => {
+    const a = await member("a@example.com", { plan: "per_run", free_lists_used: 1 });
+    await picked(a);
+    await runSendJob(query, deps(), { week: WEEK });
+    expect(await user(a)).toEqual({ free_lists_used: 2 });
+    expect(to("a@example.com").map((m) => m.subject)).not.toContain("Your free lists are done");
+    expect(await query("select 1 from notifications where kind = 'order_next'")).toEqual([]);
+    // The list itself still goes.
+    expect(await delivered(a)).toBe(3);
   });
 
   it("sends a charged order one 'Your list, and your receipt' email", async () => {

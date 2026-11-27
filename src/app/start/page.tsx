@@ -48,12 +48,12 @@ async function Start({ searchParams }: { searchParams: PageProps<"/start">["sear
     );
   }
 
-  // The currency showing when they clicked, else a guess from their country (changeable at the card step).
+  // The currency showing when they clicked, else a guess from their country (changeable at Payment).
   const country = (await headers()).get("x-vercel-ip-country")?.toUpperCase();
   const withCur = { ...params, cur: params.cur ?? (country === "CA" ? "CAD" : "USD") };
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 1 of 5</p>
+      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 1 of 4</p>
       <h1 className="mt-3 text-h2">A few questions first.</h1>
       <p className="mt-6 max-w-[40rem] text-lead text-ink-2">
         Your answers tell Cora what kind of work you do, so the ideas she picks fit you. Nobody is turned away.

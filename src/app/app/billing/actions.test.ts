@@ -111,19 +111,47 @@ describe("the billing actions act only on the signed-in account", () => {
     expect(plans.calls).toEqual([]);
   });
 
-  it("switches only the caller, and refuses a plan that isn't one of the two", async () => {
-    // A Saturday, outside the window from Sunday's cutoff to the end of Monday.
+  it("refuses a switch to one list at a time: monthly is the only plan (plan 2026-11-26-001, Unit 9)", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-12-12T15:00:00Z"));
     try {
       expect(await outcome(() => switchAction({ status: "idle" }, form({ to: "gold" })))).toMatchObject({ value: { status: "error" } });
-      expect(await outcome(() => switchAction({ status: "idle" }, form({ to: "per_run", user: theirs })))).toMatchObject({ value: { status: "done" } });
+      expect(await outcome(() => switchAction({ status: "idle" }, form({ to: "per_run", user: theirs })))).toMatchObject({
+        value: { status: "error", message: "Monthly is the only plan." },
+      });
     } finally {
       vi.useRealTimers();
     }
-    expect(plans.calls).toEqual(["cancel_at_end:sub_a"]);
-    expect(await status(theirs)).toMatchObject({ status: "active", plan: "monthly" });
-    expect(mailed).toEqual(["plan_changed"]);
+    expect(plans.calls).toEqual([]);
+    expect(hits).toEqual([]);
+    expect(await status(mine)).toMatchObject({ status: "active", plan: "monthly", cancelling: false });
+    expect(await status(theirs)).toMatchObject({ status: "active", plan: "monthly", cancelling: false });
+    expect(mailed).toEqual([]);
+  });
+
+  it("a leftover one-at-a-time account can still be switched to monthly, only the caller's own", async () => {
+    await current("update users set plan = 'per_run', stripe_subscription = null, first_charge_at = null, billing_anchor = null where id = $1", [mine]);
+    await current("update users set plan = 'per_run', stripe_subscription = null where id = $1", [theirs]);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-12T15:00:00Z"));
+    try {
+      expect(await outcome(() => switchAction({ status: "idle" }, form({ to: "monthly", user: theirs })))).toMatchObject({ value: { status: "done" } });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await status(mine)).toMatchObject({ plan: "monthly" });
+    expect(await status(theirs)).toMatchObject({ plan: "per_run" });
+  });
+
+  it("cancel settles a no-card trial's open Payment session with the card gateway (review fixes Unit 9, F5)", async () => {
+    const [x] = await current<{ id: string }>("insert into users (email, status, plan, currency, stripe_customer) values ('nc@example.com', 'trial', 'monthly', 'USD', 'cus_nc') returning id");
+    const s = await card.createEmbeddedSetupSession({ userId: x.id, customer: "cus_nc", currency: "USD", returnUrl: "https://roger.test/r" });
+    await current("update users set setup_session = $2 where id = $1", [x.id, s.id]);
+    signedIn = x.id;
+    expect(await outcome(() => cancelAction({ status: "idle" }, form({})))).toMatchObject({ value: { status: "done" } });
+    expect(await status(x.id)).toMatchObject({ status: "cancelled" });
+    expect(card.expired).toEqual([s.id]);
+    expect((await current<{ setup_session: string | null }>("select setup_session from users where id = $1", [x.id]))[0].setup_session).toBeNull();
   });
 
   it("opens Stripe's card page for the caller's own customer, marked as a card update", async () => {
@@ -138,7 +166,7 @@ describe("rate limits", () => {
     limitAfter = 1;
     expect(await outcome(() => cancelAction({ status: "idle" }, form({})))).toMatchObject({ value: { status: "done" } });
     expect(await outcome(() => undoCancelAction())).toMatchObject({ value: { status: "error", message: expect.stringContaining("Too many") } });
-    expect(await outcome(() => switchAction({ status: "idle" }, form({ to: "per_run" })))).toMatchObject({ value: { status: "error", message: expect.stringContaining("Too many") } });
+    expect(await outcome(() => switchAction({ status: "idle" }, form({ to: "monthly" })))).toMatchObject({ value: { status: "error", message: expect.stringContaining("Too many") } });
     expect(new Set(hits)).toEqual(new Set([`billing:mutate:${mine}`]));
     expect(plans.calls).toEqual(["cancel_at_end:sub_a"]);
   });

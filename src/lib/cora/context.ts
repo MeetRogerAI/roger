@@ -1,3 +1,4 @@
+import { HAS_CARD_OR_SPONSORED_SQL } from "@/lib/billing/has-card";
 import { addDays } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { COVERS_WEEK } from "./deliver";
@@ -135,6 +136,7 @@ type UserRow = {
   access_ended: boolean;
   run_arrived: boolean;
   ordered: boolean;
+  has_card: boolean;
   quiz: Record<string, unknown>;
   profile: Record<string, unknown> | null;
 };
@@ -154,6 +156,7 @@ export async function loadUsers(q: Query, week: string, o: { onlyIds?: string[];
             (u.access_ends_at is not null and (not ${COVERS_WEEK("$1::date")} or u.access_ends_at < $3::timestamptz)) as access_ended,
             exists (select 1 from runs r where r.user_id = u.id and r.week_of = $1 and not r.is_test and r.status in ('received', 'accepted', 'flagged')) as run_arrived,
             exists (select 1 from orders o where o.user_id = u.id and o.week_of = $1 and o.status in ('ordered', 'charged')) as ordered,
+            ${HAS_CARD_OR_SPONSORED_SQL("u")} as has_card,
             u.profile as quiz,
             (select zp.parsed from zack_profiles zp where zp.user_id = u.id and zp.status = 'accepted' and not zp.is_test order by zp.week_of desc limit 1) as profile
      from users u
@@ -206,6 +209,7 @@ export async function loadUsers(q: Query, week: string, o: { onlyIds?: string[];
         ordered: r.ordered,
         charged: false,
         accessEnded: r.access_ended,
+        hasCard: r.has_card,
       },
       categories: new Set([...mine.filter((x) => x.recent).map((x) => x.category), ...profileCats, ...quizHelp]),
       role: [str(work.role), ...(Array.isArray(work.kinds_of_work) ? (work.kinds_of_work as unknown[]).map(str) : []), str(r.quiz?.role)].filter(Boolean).join("; "),
