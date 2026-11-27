@@ -17,6 +17,8 @@
     After every merge, REMOVE the items that are done and merged (and delete their "checks" docs), so the
     list only shrinks (Peter, 2026-11-26). Done rows in the Reference tab are removed too.
     Never rename an item's data-id (its tick would be lost); add new items with new ids.
+    Before removing a row, grep artifacts/, content/ and docs/ for its id (e.g. "S20") and update live
+    references to say where the item went; dated history can stay (review of 2026-11-27).
   - "Reference" keeps the detail rows. Rules for those rows:
   1. Read this file before starting work on any version (A1, A2, B1, B2, B3, B4).
   2. Every row is a <tr> with a stable data-id and a data-status.
