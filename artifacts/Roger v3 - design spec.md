@@ -820,7 +820,7 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 
 | Moment | What happens | What the user is told |
 |---|---|---|
-| Sign-up | ~~Card saved.~~ *(1.4)* Consent at Step 3; status `trial` with no card. | ~~The terms above the card form.~~ *(1.4)* Step 3's Pricing paragraph. A welcome email: "Your first two Cora lists are free. When your first list is ready we'll ask for your card." |
+| Sign-up | ~~Card saved.~~ *(1.4)* Consent at Step 3; status `trial` with no card. | ~~The terms above the card form.~~ *(1.4)* Step 3's Pricing paragraph. A welcome email: "Your first two Cora lists are free. ~~When your first list is ready we'll ask for your card.~~ *(removed at the wording sign-off, 2026-11-26)*" |
 | *(1.4)* First list picked, no card | The list is held (B.7). Nothing counts. `first_teaser_at` is stamped. | "Your first 3 ideas are ready": the titles and a link to Payment, by email and on `/app` |
 | *(1.4)* 2 and 7 days after the first teaser, still no card | Nothing changes | "Your ideas are waiting": the newest held titles, the close date, and the link to Payment |
 | *(1.4)* Another Monday's list while one is held | The newer list replaces the held one when its week is ready; the clock does not restart | A new teaser with the new titles |
@@ -982,7 +982,7 @@ Plain and short, sent through the existing `sendEmail`. Automatic emails come fr
 | # | Email | Trigger | Version |
 |---|---|---|---|
 | 1 | Sign-in link | Requested | B1 |
-| 2 | Welcome, with the terms restated and the next step for the user's path. *(1.4)* "Your first two Cora lists are free. When your first list is ready we'll ask for your card." then the monthly price and "Your first charge comes with your third list"; no higher-rate rule | ~~Card saved~~ *(1.4)* Step 3 completed (retried hourly if the send failed) | B1 |
+| 2 | Welcome, with the terms restated and the next step for the user's path. *(1.4)* "Your first two Cora lists are free. ~~When your first list is ready we'll ask for your card.~~ *(removed at the wording sign-off, 2026-11-26)*" then the monthly price and "Your first charge comes with your third list"; no higher-rate rule | ~~Card saved~~ *(1.4)* Step 3 completed (retried hourly if the send failed) | B1 |
 | 3 | Zack is connected | First run or test received | B1 |
 | 4 | Zack hasn't sent a report yet | Trial days 3, 10, 17 with no run | B1 |
 | 5 | Your three ideas | Monday send | B1 |
