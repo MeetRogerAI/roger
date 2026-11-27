@@ -606,7 +606,7 @@ sequenceDiagram
 
 **Verification:** A test run with `asOf` on preview sends to the test members.
 
-- [ ] **Unit 9: Group session card and guests**
+- [x] **Unit 9: Group session card and guests**
 
 **Goal:** R13.
 
@@ -709,6 +709,7 @@ sequenceDiagram
   - the sandbox Stripe spike result;
   - `UNSUB_SECRET` and `REF_SECRET`;
   - **apply `db/schema.sql` (setup.mjs) to roger-db before merging B2**, because nothing applies it on deploy, and the hourly referral tasks read new columns;
+  - **a separate B2 item for the Stripe webhook events B2 needs**: `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed` and `invoice.finalized`, on both endpoints, before B2 merges. It's kept separate from S16, which the launch close-out plan (`docs/plans/2026-11-27-002-feat-v3-launch-close-out-plan.md`) closes with B1's seven events. That session also edits `launch-list.html`, so add the B2 items as their own block and rebase before pushing;
   - one launch caution: **referral credit paid from earned credit chains**. Peter chose invoice value, so one cash payment can fund several months down a chain of referrals. Add `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed` on both endpoints to S16.
 
 **Test expectation:** none, because these are documentation only.

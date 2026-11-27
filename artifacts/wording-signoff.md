@@ -2,7 +2,7 @@
 
 *Generated on November 26, 2026 from the code on PR #58 (the real templates and screens, with sample names and ideas). Each section names the file the words live in. Mark changes in a comment on the launch list or tell Claude Code; nothing here is live until sign-up opens.*
 
-Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails) · [9. Referral credit wording (Unit 5)](#9-referral-credit-wording-unit-5--pending-peters-sign-off) · [10. Leaderboard wording (Unit 7)](#10-leaderboard-wording-unit-7--pending-peters-sign-off)
+Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails) · [9. Referral credit wording (Unit 5)](#9-referral-credit-wording-unit-5--pending-peters-sign-off) · [10. Leaderboard wording (Unit 7)](#10-leaderboard-wording-unit-7--pending-peters-sign-off) · [12. Group session wording (Unit 9)](#12-group-session-wording-unit-9--pending-peters-sign-off)
 
 ## 1. Step 3, Product and Pricing
 
@@ -471,3 +471,105 @@ Failed sends are in the notifications table (kind stats).
 - **"Season" and "bricks"** are Roger's own words. A member who hasn't opened `/app/history` may not know them. Should the first line explain them, or link to the graph?
 - **The invitation link shows twice:** as the button, and again as a line with the full address, so it can be copied. Keep both, or only the button?
 - **"Contribution points" and the leaderboard:** the email says "contribution points" and "You rank 3rd among Roger members". The leaderboard page (section 10) says "Points" and "Rank" for the same figures, worked out by the same rule (every member with points, whether or not they joined the board). The email doesn't say "on the leaderboard", because most members won't have joined it. Should the two use the same words?
+
+## 12. Group session wording (Unit 9) — pending Peter's sign-off
+
+*Added on November 27, 2026 from the B2 branch (plan `docs/plans/2026-11-27-001-feat-roger-v3-b2-growth-plan.md`, Unit 9), updated after review. Sample: session on Tuesday, December 1 at 12:00 PM Toronto time; inviter Ken R.; guest Ana Silva. Nothing here shows until sign-up is open, the cycle is live and all three session settings (launch list S11) are filled. Every string is in `src/lib/growth/session-words.ts` unless another file is named.*
+
+**Navigation** (`src/components/app/app-nav.tsx`): `Sessions`.
+
+**The member page, `/app/sessions`** (`SESSION_WORDS`). Tab title `Group session`.
+
+```text
+Group session
+Loading…
+Group sessions are coming soon. We’ll let you know when the first one is set.   (while a setting is empty)
+
+This week’s group session
+Tuesday, December 1 at 12:00 PM Toronto time
+An hour on Google Meet with the Roger team and other members. Bring your questions about setting up your ideas.
+[Join on Google Meet]  [Add to calendar]
+Opens when you subscribe   (trial, held and cancelled members: the card greyed out, no buttons, no link)
+Not available on your plan.   (screen readers only, on the greyed-out card)
+
+Bring a guest
+You can invite one guest to each session. We email them an invitation with the day and time, and the link once they say they’re coming. They see your display name from your settings, or “A Roger member” if you haven’t set one.
+Your guest’s name   /   Their email   /   [Send the invitation]   (Sending…)
+You’ve invited Ana Silva to this session.
+You’ve invited Ana Silva. Their invitation is on its way.
+You’ve invited Ana Silva, but the invitation email didn’t go.   [Send it again]
+You’ve invited Ana Silva, but the invitation email hasn’t gone yet.   [Send it again]
+You can invite someone else to next week’s session.
+```
+
+**Invitation messages** (`INVITE_WORDS`; also the `error` of `POST /api/sessions/guest`). A message about the name or the address shows under that field:
+
+```text
+We’ve sent Ana Silva an invitation.
+We’ve sent Ana Silva the invitation again.
+Your invitation is saved, but the email didn’t go. Try sending it again in a minute.
+We couldn’t send this invitation after several tries. Check the address with your guest, or write to us.
+Your invitation is on its way. If it hasn’t gone in a few minutes, you can send it again.
+Inviting a guest opens when you subscribe.
+There’s no session to invite a guest to just now.
+Enter your guest’s name, in letters only.
+Enter your guest’s email address.
+That’s your own address. Invite someone else.
+You’ve already invited a guest to this session.
+That person was already invited to a session this week. Try again next week.
+We’ve sent all the invitations we can today. Try again tomorrow.
+Too many tries. Try again in an hour.
+We can’t send email to that address. Ask your guest for another one.
+The invitation has already been sent.
+You haven’t invited a guest to this session.
+```
+
+**Email 22, to the guest** (`src/lib/mail/templates/guest-invite.ts`). Subject, preview, heading, body, button, closing line:
+
+```text
+You’re invited to a Roger session
+Ken R. invited you to Roger’s group session, Tuesday, December 1 at 12:00 PM Toronto time.
+Ana Silva, you’re invited to a Roger session.
+Ken R. invited you to Roger’s weekly group session, Tuesday, December 1 at 12:00 PM Toronto time. It’s an hour on Google Meet with the Roger team and members, about getting more out of your AI agent.
+Open your invitation to say you’re coming and get the link to join.
+[Open your invitation]
+This invitation is for you only and works until the session ends. If you weren’t expecting it, you can ignore this email.
+```
+
+**The guest page, `/g/{token}`** (`GUEST_WORDS`). Tab title `Your invitation`.
+
+```text
+Ken R. invited you to Roger’s group session.   (or: A Roger member invited you …)
+Tuesday, December 1 at 12:00 PM Toronto time
+An hour on Google Meet with the Roger team and members, about getting more out of your AI agent.
+[I’m coming]
+You’re on the list. Here’s the link to join.
+[Join on Google Meet]  [Add to calendar]
+Learn about Roger
+That didn’t work. Try again.
+Opening your invitation…
+
+This invitation link isn’t valid.
+It may have been mistyped, or replaced by a newer invitation. Ask the person who invited you to send it again.
+
+This session has passed.
+Thanks for your interest in Roger. Ask the person who invited you about the next one.
+
+We can’t open invitations just now.
+Try again in a minute.
+```
+
+**Calendar file** (`src/lib/growth/sessions.ts`, `sessionIcs`; served by `/app/sessions/calendar.ics` and `/g/{token}/calendar.ics`): title `Roger group session`, description `Join on Google Meet: <link>`, one hour long, file name `roger-session-2026-12-01.ics`.
+
+**Agent answers** (`src/app/api/sessions/*`, and the calendar routes): `Not signed in.`, `Finish signing up first.`, `We couldn’t check your sign-in just now. Try again in a minute.`, `Cross-site request refused.`, `Send JSON: {"name": "...", "email": "..."}.`, `Not found`, `Try again in a minute.`
+
+**Admin, `/admin/sessions`** (`ADMIN_SESSION_WORDS`, `src/app/admin/sessions/page.tsx`, `src/lib/growth/session-attendance.ts`), admins only: tab `Sessions`; `Group sessions`; `Next session: Tuesday, December 1, at 12:00 Toronto time.` or `The session day, time or Meet link isn’t set (v3.sessionDay, v3.sessionTime, v3.sessionLink), so members don’t see the session card.`; date chips in a list named `Session dates`, the next one with the suffix ` (next)`; `Guests on …`; `No guests were invited to this session.`; `Members`; `Paying and sponsored members, and anyone already ticked.`; `No members yet.`; `guest of Ken`; `Guest (details removed)`; `ticked by …`; the toggle `Mark attended` / `Attended` / `Saving…`, read aloud with the person, e.g. `Mark attended for Ana Silva` (pressed or not); `Marked as attended.`; `Attendance removed.`; `That isn’t a session date.`; `That guest wasn’t invited to this session.`; `No such member.`; `No such person.`
+
+**Flags from review, for Peter:**
+
+- **The session's length** isn't a setting: the calendar entry is one hour, and a guest's page closes an hour after the start. Is an hour right?
+- **The card's description** ("Bring your questions about setting up your ideas") and the guest email's ("about getting more out of your AI agent") are drafts: what is the session about, in your words?
+- **Who can invite:** paying (active) and sponsored members. A member whose renewal failed (held) or who cancelled sees the card greyed out. Right?
+- **The guest's name rule:** letters, spaces and . ' - only, so nobody can put a link or a message in someone else's inbox through the name.
+- **No unsubscribe link in the guest email.** The guest isn't a member, and the email goes to a third party, at most once a week per person whoever invites. It has no unsubscribe link of its own; an address that unsubscribed from Roger's watch alerts gets none. Is that acceptable, or should the invitation carry a "don't invite me again" link?
+- **"That person was already invited to a session this week"** tells a member that someone else invited the same person. Acceptable, or should it read like the daily-cap message?

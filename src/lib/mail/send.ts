@@ -130,18 +130,38 @@ async function deliver(t: Transport, msg: Parameters<Transport>[0], sleep: (ms: 
   return last;
 }
 
-/** One automatic email to one user, at most once for (user, kind, ref). `message.headers`: extra mail headers (see Transport). */
+/**
+ * One automatic email to one user, at most once for (user, kind, ref). `message.headers`: extra mail headers (see
+ * Transport). `message.idempotencyTag`: added to the provider's idempotency key when the content differs per attempt.
+ */
 export async function sendToUser(
   user: Recipient,
   kind: string,
   ref: string,
-  message: Rendered & { headers?: Record<string, string> },
+  message: Rendered & { headers?: Record<string, string>; idempotencyTag?: string },
   deps: MailDeps = {},
 ): Promise<SendResult> {
   const q = deps.query ?? defaultQuery;
   const attempt = await claim(q, user.id, kind, ref);
   if (attempt === null) return "already";
+  return sendClaimed(user, kind, ref, attempt, message, deps);
+}
 
+/**
+ * The rest of `sendToUser`, for a caller that made the claim itself, in the
+ * same statement as a write that must agree with what is sent (the guest
+ * invitation's re-send rotates its token and claims together, B2 Unit 9).
+ * `attempt` is the claimed row's attempt number.
+ */
+export async function sendClaimed(
+  user: Recipient,
+  kind: string,
+  ref: string,
+  attempt: number,
+  message: Rendered & { headers?: Record<string, string>; idempotencyTag?: string },
+  deps: MailDeps = {},
+): Promise<SendResult> {
+  const q = deps.query ?? defaultQuery;
   const pref = optionalKinds[kind];
   if (pref && user.emailPrefs && user.emailPrefs[pref] === false) {
     await record(q, user.id, kind, ref, "skipped");
@@ -155,7 +175,9 @@ export async function sendToUser(
       subject: message.subject,
       html: message.html,
       text: message.text,
-      idempotencyKey: `${kind}/${user.id}/${ref}`.slice(0, 256),
+      // A message whose content changes between attempts (a re-sent invitation with a new link) adds a tag, so the
+      // provider's 24-hour idempotency cache can't hand back the earlier send.
+      idempotencyKey: `${kind}/${user.id}/${ref}${message.idempotencyTag ? `/${message.idempotencyTag}` : ""}`.slice(0, 256),
       ...(message.headers ? { headers: message.headers } : {}),
     },
     deps.sleep ?? realSleep,

@@ -4,8 +4,8 @@ import nextConfig from "../../next.config";
 
 afterEach(() => vi.unstubAllEnvs());
 
-/** The header rules other than the Payment page's CSP (tested in src/lib/payment-csp.test.ts) and the unsubscribe links' (below). */
-const UNSUB_SOURCES = ["/u/:token", "/api/unsubscribe/:token"];
+/** The header rules other than the Payment page's CSP (tested in src/lib/payment-csp.test.ts) and the token links' (below). */
+const UNSUB_SOURCES = ["/u/:token", "/api/unsubscribe/:token", "/g/:token", "/g/:token/calendar.ics"];
 const robotsHeaders = async () => (await nextConfig.headers!()).filter((r) => !r.source.startsWith("/start/payment") && !UNSUB_SOURCES.includes(r.source));
 
 describe("indexing", () => {
@@ -24,7 +24,7 @@ describe("indexing", () => {
   });
 });
 
-describe("unsubscribe links (B2 Unit 8)", () => {
+describe("unsubscribe links (B2 Unit 8) and guest invitations (B2 Unit 9)", () => {
   it("are never indexed and never sent on in a Referer, on every deployment", async () => {
     for (const env of ["production", "preview"]) {
       vi.stubEnv("VERCEL_ENV", env);

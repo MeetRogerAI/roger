@@ -1013,3 +1013,10 @@ drop index if exists users_leaderboard_name;
 create or replace function users_leave_board_on_close() returns trigger language plpgsql as $$ begin if new.status in ('closed', 'cancelled') then new.leaderboard_opt_in_at := null; end if; return new; end $$;
 create or replace trigger users_leave_board_on_close before insert or update of status on users for each row execute function users_leave_board_on_close();
 update users set leaderboard_opt_in_at = null where leaderboard_opt_in_at is not null and status in ('closed', 'cancelled');
+-- 2026-11-27, B2 Unit 9 review. session_guests.email_key: the guest's address
+-- normalised (src/lib/referrals/attribution.ts referralEmailKey: lower-cased,
+-- plus-tag dropped, Gmail dots dropped), so one person gets at most one
+-- invitation a week whoever invites them, however the address is written.
+-- Cleared with name and email by the 90-day retention.
+alter table session_guests add column if not exists email_key text;
+create index if not exists session_guests_email_key on session_guests (email_key, created_at) where email_key is not null;

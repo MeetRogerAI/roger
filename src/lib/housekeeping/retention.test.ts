@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
-import { applyIdleRetention, applyRetention, cleanUpExpired, IDLE_CLOCK_FROM, KEEP_NOTIFICATION_KINDS, purgeOldRecords } from "./retention";
+import { applyIdleRetention, applyRetention, cleanUpExpired, IDLE_CLOCK_FROM, KEEP_NOTIFICATION_KINDS, purgeOldRecords, purgeSessionGuests } from "./retention";
 import { sendUnsentWelcomes } from "@/lib/signup/finish";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
@@ -274,5 +274,57 @@ describe("old records (privacy P6, 2026-11-27)", () => {
     for (let i = 0; i < 3; i++) await query("insert into notifications (recipient, kind, ref, claimed_at) values ('u', 'monday_list', $1, $2)", [`w${i}`, monthsAgo(14)]);
     expect(await purgeOldRecords(query, { now: NOW, limit: 2 })).toMatchObject({ notifications: 2 });
     expect(await purgeOldRecords(query, { now: NOW, limit: 2 })).toMatchObject({ notifications: 1 });
+  });
+});
+
+describe("session guest retention (B2 plan Unit 9)", () => {
+  async function guestOn(date: string, email: string, linkedTo: string | null) {
+    const [{ id: inviter }] = await query<{ id: string }>(`insert into users (email, status) values ($1, 'active') returning id`, [`inviter-${email}`]);
+    const [{ id: ref }] = await query<{ id: string }>(
+      `insert into referrals (referrer_id, referred_user_id, referred_email, source, stage) values ($1, $2, $3, 'guest', $4) returning id`,
+      [inviter, linkedTo, linkedTo ? null : email, linkedTo ? "trial" : "invited"],
+    );
+    await query(`insert into session_guests (token_hash, inviter_id, referral_id, session_date, name, email) values ($1, $2, $3, $4::date, 'Guest', $5)`, [`h-${email}`, inviter, ref, date, email]);
+  }
+
+  it("removes an unconverted guest's name and email 90 days after the session, and keeps the rest", async () => {
+    // NOW is 2027-03-01 (Toronto); 90 days before is 2026-12-01.
+    await guestOn("2026-12-01", "old@example.com", null);
+    await guestOn("2026-12-02", "recent@example.com", null);
+    const [{ id: member }] = await query<{ id: string }>(`insert into users (email, status) values ('joined@example.com', 'trial') returning id`);
+    await guestOn("2026-11-01", "joined@example.com", member);
+
+    expect(await purgeSessionGuests(query, { now: NOW })).toEqual({ guests: 1, referrals: 1 });
+    const rows = await query<{ name: string | null; email: string | null; session_date: string }>(`select name, email, session_date::text from session_guests order by session_date`);
+    expect(rows).toEqual([
+      { name: "Guest", email: "joined@example.com", session_date: "2026-11-01" },
+      { name: null, email: null, session_date: "2026-12-01" },
+      { name: "Guest", email: "recent@example.com", session_date: "2026-12-02" },
+    ]);
+    expect((await query<{ referred_email: string | null }>(`select referred_email from referrals where referred_email is not null`)).map((r) => r.referred_email)).toEqual(["recent@example.com"]);
+    expect(await purgeSessionGuests(query, { now: NOW })).toEqual({ guests: 0, referrals: 0 });
+  });
+
+  it("keeps a shared referral's address while a later invitation still holds it, then clears it with the last one", async () => {
+    const [{ id: ken }] = await query<{ id: string }>(`insert into users (email, status) values ('ken@example.com', 'active') returning id`);
+    const [{ id: ref }] = await query<{ id: string }>(`insert into referrals (referrer_id, referred_email, source, stage) values ($1, 'ana@example.com', 'guest', 'invited') returning id`, [ken]);
+    const add = (date: string, hash: string) =>
+      query(`insert into session_guests (token_hash, inviter_id, referral_id, session_date, name, email, email_key) values ($1, $2, $3, $4::date, 'Ana', 'ana@example.com', 'ana@example.com')`, [hash, ken, ref, date]);
+    await add("2026-11-24", "h1");
+    await add("2026-12-15", "h2");
+    expect(await purgeSessionGuests(query, { now: NOW })).toEqual({ guests: 1, referrals: 0 });
+    expect(await query(`select referred_email from referrals`)).toEqual([{ referred_email: "ana@example.com" }]);
+    expect(await query(`select email_key from session_guests where token_hash = 'h1'`)).toEqual([{ email_key: null }]);
+    // 90 days after the second session, both are gone.
+    expect(await purgeSessionGuests(query, { now: new Date("2027-03-20T12:00:00Z") })).toEqual({ guests: 1, referrals: 1 });
+    expect(await query(`select referred_email from referrals`)).toEqual([{ referred_email: null }]);
+  });
+
+  it("never clears a referral that isn't a guest row", async () => {
+    const [{ id: ken }] = await query<{ id: string }>(`insert into users (email, status) values ('ken@example.com', 'active') returning id`);
+    const [{ id: ref }] = await query<{ id: string }>(`insert into referrals (referrer_id, referred_email, source, stage) values ($1, 'ana@example.com', 'link', 'invited') returning id`, [ken]);
+    await query(`insert into session_guests (token_hash, inviter_id, referral_id, session_date, name, email) values ('h1', $1, $2, '2026-11-24', 'Ana', 'ana@example.com')`, [ken, ref]);
+    expect(await purgeSessionGuests(query, { now: NOW })).toEqual({ guests: 1, referrals: 0 });
+    expect(await query(`select referred_email from referrals`)).toEqual([{ referred_email: "ana@example.com" }]);
   });
 });

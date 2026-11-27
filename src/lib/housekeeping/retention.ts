@@ -162,7 +162,9 @@ export const REFERRAL_EMAIL_DAYS = 90;
 /**
  * Referral rows and personal data (B2 plan Unit 3):
  * - an `invited` row that never linked to an account loses its address 90
- *   days after it was made (the row stays, for the referrer's list);
+ *   days after it was made (the row stays, for the referrer's list), unless
+ *   a session invitation still holds the address (then 90 days after that
+ *   session, `purgeSessionGuests`);
  * - a referral whose referred account was deleted is voided, catching up on
  *   any `deleteAccount` did not see (`voidDeletedReferrals`).
  * A linked row never holds an address: attribution clears it when it links.
@@ -172,9 +174,49 @@ export async function purgeReferralData(q: Query, o: { now: Date }): Promise<{ e
     `update referrals set referred_email = null
      where referred_email is not null and referred_user_id is null and stage = 'invited'
        and created_at <= $1::timestamptz - make_interval(days => $2)
+       -- A session guest's row is kept while an invitation still holds the address (purgeSessionGuests clears it).
+       and not exists (select 1 from session_guests g where g.referral_id = referrals.id and g.email is not null)
      returning id`,
     [o.now.toISOString(), REFERRAL_EMAIL_DAYS],
   );
   const voided = await voidDeletedReferrals(q, o.now);
   return { emails: emails.length, voided };
+}
+
+/** How long a group-session guest's name and address are kept after their session if they never signed up (B2 plan Unit 9). */
+export const SESSION_GUEST_DAYS = 90;
+
+/**
+ * Group-session guests (B2 plan Unit 9): 90 days after the session
+ * (`session_date`, a Toronto date), a guest who never became a member loses
+ * their name and addresses. Their `invited` referral row loses its address
+ * too, but only when it is a guest row (`source = 'guest'`) and no other
+ * invitation still holding an address (a later session) shares it. A guest
+ * whose referral linked to an account is converted and is left as is. The
+ * guest row itself stays, nameless, for attendance; its /g link stops
+ * working (a purged row has no address). Bounded per pass.
+ */
+export async function purgeSessionGuests(q: Query, o: { now: Date; limit?: number }): Promise<{ guests: number; referrals: number }> {
+  const [r] = await q<{ guests: number; referrals: number }>(
+    `with g as (
+       select g.id, g.referral_id from session_guests g
+       left join referrals r on r.id = g.referral_id
+       where g.email is not null
+         and g.session_date <= ($1::timestamptz at time zone 'America/Toronto')::date - $2::int
+         and (r.id is null or r.referred_user_id is null)
+       order by g.session_date
+       limit $3
+     ),
+     u as (update session_guests s set name = null, email = null, email_key = null from g where s.id = g.id returning s.id),
+     r as (
+       update referrals x set referred_email = null
+       where x.id in (select referral_id from g)
+         and x.source = 'guest' and x.referred_user_id is null and x.referred_email is not null
+         and not exists (select 1 from session_guests o where o.referral_id = x.id and o.email is not null and o.id not in (select id from g))
+       returning x.id
+     )
+     select (select count(*) from u)::int as guests, (select count(*) from r)::int as referrals`,
+    [o.now.toISOString(), SESSION_GUEST_DAYS, o.limit ?? 500],
+  );
+  return r;
 }

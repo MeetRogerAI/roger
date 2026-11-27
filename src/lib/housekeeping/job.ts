@@ -25,7 +25,7 @@ import { postPendingCredits } from "@/lib/referrals/credit-post";
 import { lapseClosedCredits } from "@/lib/referrals/credit-reversal";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, voidLeftoverInvoices } from "@/lib/billing/orders";
-import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords, purgeReferralData } from "./retention";
+import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords, purgeReferralData, purgeSessionGuests } from "./retention";
 import { retryPendingReferrals } from "@/lib/referrals/attribution";
 import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
 import { noCardClocks, type NoCardClock } from "./clocks";
@@ -107,6 +107,8 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "old_records", run: (q, d) => purgeOldRecords(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
   // Guests' addresses on invitations never taken up (90 days), and referrals whose account was deleted. Never ahead of the real clock.
   { name: "referral_retention", run: (q, d) => purgeReferralData(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
+  // B2 Unit 9. Group-session guests who never signed up lose their name and address 90 days after the session. Never ahead of the real clock.
+  { name: "session_guest_retention", run: (q, d) => purgeSessionGuests(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
   // Referrals whose attribution failed at sign-up (users.pending_referrer_id). Guarded writes: safe to overlap.
   // A referral recorded late may follow its member's first paid invoice: the grant is attempted then too (B2 Unit 4);
   // one that fails is left to referral_late_grants.

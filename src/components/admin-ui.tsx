@@ -55,6 +55,7 @@ const tabs = [
   { href: "/admin/testimonials", label: "Testimonials" },
   { href: "/admin/sample", label: "Sample idea" },
   { href: "/admin/interest", label: "Interest" },
+  { href: "/admin/sessions", label: "Sessions" },
 ];
 
 export function AdminTabs() {

@@ -53,6 +53,54 @@ export function referralEmailKey(email: string): string {
   return `${local}@${domain}`;
 }
 
+/**
+ * SQL: the referral row `alias` is an open guest invitation for the address
+ * whose `referralEmailKey` is in parameter `keyParam`: still `invited`, not
+ * linked to an account. The one predicate attribution and the session
+ * invitations (`recordInvitedReferral`) share.
+ */
+export const INVITED_FOR_ADDRESS_SQL = (alias: string, keyParam: string) =>
+  `${alias}.stage = 'invited' and ${alias}.referred_user_id is null and lower(${alias}.referred_email) = ${keyParam}`;
+
+/** The domains an address key may be stored under (gmail.com and googlemail.com are one mailbox). */
+export function keyDomains(key: string): string[] {
+  const domain = key.slice(key.lastIndexOf("@") + 1);
+  return domain === "gmail.com" ? ["gmail.com", "googlemail.com"] : [domain];
+}
+
+/** Whether an account exists for this address, compared by `referralEmailKey` (dots and plus-tags don't make a new person). */
+export async function accountForAddress(q: Query, email: string): Promise<boolean> {
+  const key = referralEmailKey(email);
+  const rows = await q<{ email: string }>(`select email from users where lower(split_part(email, '@', 2)) = any($1::text[])`, [keyDomains(key)]);
+  return rows.some((r) => referralEmailKey(r.email) === key);
+}
+
+/**
+ * The `invited` referral row for a guest a member invited (B2 Unit 9),
+ * made once per (member, address) and reused after that; null when the
+ * address already has an account (attribution only ever runs for new
+ * accounts, so such a row could never link). Idempotent: safe to call again
+ * after a failure, from the invitation and from its re-send.
+ */
+export async function recordInvitedReferral(q: Query, o: { referrerId: string; email: string; at: Date }): Promise<string | null> {
+  if (await accountForAddress(q, o.email)) return null;
+  const key = referralEmailKey(o.email);
+  const [r] = await q<{ id: string }>(
+    `with r as (
+       insert into referrals (referrer_id, referred_email, source, stage, created_at)
+       values ($1, $2, 'guest', 'invited', $3::timestamptz)
+       on conflict do nothing
+       returning id
+     )
+     select id from r
+     union all
+     (select id from referrals x where x.referrer_id = $1 and ${INVITED_FOR_ADDRESS_SQL("x", "$2")} order by x.created_at, x.id limit 1)
+     limit 1`,
+    [o.referrerId, key, o.at.toISOString()],
+  );
+  return r?.id ?? null;
+}
+
 export type ReferralOutcome = "attributed" | "self" | "none";
 
 /**
@@ -86,7 +134,7 @@ async function attribute(q: Query, o: { userId: string; email: string; referrer:
   const candidates: { id: string; email: string; via: RefPurpose }[] = (
     await q<{ id: string; email: string }>(
       `select u.id, u.email from referrals r join users u on u.id = r.referrer_id
-       where r.stage = 'invited' and r.referred_user_id is null and lower(r.referred_email) = $1
+       where ${INVITED_FOR_ADDRESS_SQL("r", "$1")}
        order by r.created_at, r.id limit 5`,
       [key],
     )
@@ -112,7 +160,7 @@ async function attribute(q: Query, o: { userId: string; email: string; referrer:
        update referrals set referred_user_id = $1, referred_email = null, stage = 'trial', trial_at = $4
        where id = (
            select id from referrals
-           where referrer_id = $2 and stage = 'invited' and referred_user_id is null and lower(referred_email) = $3
+           where referrer_id = $2 and ${INVITED_FOR_ADDRESS_SQL("referrals", "$3")}
            order by created_at, id limit 1)
          and exists (select 1 from u)
        returning id

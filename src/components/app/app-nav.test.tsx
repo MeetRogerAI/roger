@@ -4,9 +4,9 @@ import { mergeV3 } from "@/lib/v3-settings";
 
 /** B2 plan Unit 3: the Referrals link shows only while referrals are on (the one switch rule). */
 
-const s = { on: false, board: false };
+const s = { on: false, board: false, link: "" };
 vi.mock("@/lib/v3-settings-display", () => ({
-  getV3SettingsForDisplay: async () => ({ ...mergeV3([]), signupOpen: true, cycleLive: true, referralsOn: s.on, leaderboardOn: s.board }),
+  getV3SettingsForDisplay: async () => ({ ...mergeV3([]), signupOpen: true, cycleLive: true, referralsOn: s.on, leaderboardOn: s.board, sessionDay: "Tuesday", sessionTime: "12:00", sessionLink: s.link }),
 }));
 
 const { AppNav } = await import("./app-nav");
@@ -34,5 +34,13 @@ describe("AppNav", () => {
     expect(await render()).not.toContain("/app/leaderboard");
     s.board = true;
     expect(await render()).toContain('href="/app/leaderboard"');
+  });
+
+  it("shows Sessions only while the session's day, time and link are all set (B2 Unit 9)", async () => {
+    s.link = "";
+    expect(await render()).not.toContain("/app/sessions");
+    s.link = "https://meet.google.com/abc-defg-hij";
+    expect(await render()).toContain('href="/app/sessions"');
+    s.link = "";
   });
 });

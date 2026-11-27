@@ -32,6 +32,8 @@ export const limits = {
   zackSendsPerKey: { limit: 6, windowSeconds: 24 * 60 * 60 },
   zackBadKeyPerIp: { limit: 10, windowSeconds: 60 },
   leadPerIp: { limit: 5, windowSeconds: 60 * 60 },
+  // Group-session guest invitations (B2 Unit 9): one per session is the real limit; this stops a script retrying.
+  sessionInvitePerUser: { limit: 10, windowSeconds: 60 * 60 },
 } satisfies Record<string, Limit>;
 
 /** The start of the window that `now` falls in, in whole seconds. */

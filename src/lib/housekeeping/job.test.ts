@@ -42,6 +42,21 @@ describe("the hourly pass", () => {
     expect(await runHourly(query, d, tasks, { deadline: Date.now() - 1 })).toEqual({ a: "out of time: next pass", b: "out of time: next pass" });
   });
 
+  it("runs the session guest retention (B2 Unit 9), and a future job clock never purges early", async () => {
+    const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+    const [{ id: ken }] = await query<{ id: string }>("insert into users (email, status) values ('ken@example.com', 'active') returning id");
+    await query("insert into session_guests (token_hash, inviter_id, session_date, name, email) values ('old', $1, $2::date, 'Ana', 'ana@example.com')", [ken, day(-100)]);
+    await query("insert into session_guests (token_hash, inviter_id, session_date, name, email) values ('new', $1, $2::date, 'Bo', 'bo@example.com')", [ken, day(-30)]);
+    const task = HOURLY_TASKS.find((t) => t.name === "session_guest_retention")!;
+    const future = new Date(Date.now() + 365 * 86_400_000);
+    const d = { gw: {} as BillingGateway, settings, now: future, query, transport };
+    expect(await task.run(query, d, { deadline: Date.now() + 60_000, shared: new Map() } as never)).toEqual({ guests: 1, referrals: 0 });
+    expect(await query("select token_hash, email from session_guests order by token_hash")).toEqual([
+      { token_hash: "new", email: "bo@example.com" },
+      { token_hash: "old", email: null },
+    ]);
+  });
+
   it("reads accounts back even when listing Stripe's events fails, and keeps the events step for the next hour", async () => {
     const plans = fakePlans();
     await query("insert into users (email, status, plan, currency, stripe_customer, stripe_subscription) values ('ana@example.com', 'active', 'monthly', 'USD', 'cus_1', 'sub_1')");
