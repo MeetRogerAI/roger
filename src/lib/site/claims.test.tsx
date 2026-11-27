@@ -19,17 +19,16 @@ import { pageMarkup } from "@/test-helpers/page-markup";
 import { at, renderSitePages, sitePagePaths, WATCH_TOKEN, type RenderedPage } from "@/test-helpers/site-pages";
 import { amountsFrom } from "./amounts";
 import { allowed, checkClaims, checkRule, describeViolations, hypeWords, readPage, readSegments, ruleIds, textPage, type ClaimsContext, type PageText, type RuleId, type Zone } from "./claims";
-import type { SamplePlay } from "./sample";
 import type { Testimonial } from "./testimonials";
 
 const VERSION = "v1";
 
-// What the optional sections read, set per test: no cleared quote and no admin-chosen play, unless a test says so.
+// What the optional sections read, set per test: no cleared quote, unless a test says so.
 const data = vi.hoisted(() => {
   process.env.SITE_VERSION = "v1";
   delete process.env.VERCEL_ENV;
   delete process.env.DATABASE_URL;
-  return { testimonials: [] as unknown[], play: null as unknown, watch: null as string | null, watchTokens: [] as string[] };
+  return { testimonials: [] as unknown[], watch: null as string | null, watchTokens: [] as string[] };
 });
 
 vi.mock("next/navigation", async (orig) => ({
@@ -41,12 +40,11 @@ vi.mock("next/navigation", async (orig) => ({
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 vi.mock("next/font/google", () => ({ Mona_Sans: () => ({ variable: "font-mona-test" }) }));
-// The two readers behind the optional sections. Everything else about them is real.
+// The reader behind the optional section. Everything else about it is real.
 vi.mock("@/lib/site/testimonials", async (orig) => {
   const real = await orig<typeof import("./testimonials")>();
   return { ...real, getTestimonials: async (audience: "re" | "agents") => real.forAudience(data.testimonials as Testimonial[], audience) };
 });
-vi.mock("@/lib/cora/sample", async (orig) => ({ ...(await orig<typeof import("@/lib/cora/sample")>()), getPublicSamplePlay: async () => data.play as SamplePlay | null }));
 // The watch a watch page's token finds: its words, or null for a link that no longer works. No database is read.
 vi.mock("@/lib/watches", () => {
   const watchFor = async (token: string) => {
@@ -69,7 +67,6 @@ const broken = (rule: RuleId, page: PageText) => checkRule(rule, page, context).
 beforeEach(() => {
   resetNextFakes();
   data.testimonials = [];
-  data.play = null;
   data.watch = null;
   at.path = "/";
 });
@@ -476,17 +473,6 @@ const quotes: Testimonial[] = [
   { id: "c", person: "Sample R.", attribution: "Made-up attribution", quote: "Two of the three ideas were running by Tuesday.", saidOn: null, audience: "both", position: 2, cleared: true },
 ];
 
-// A play as the admin's choice at /admin/sample would arrive: a title of its own, with Cora's scores and every time figure the app's card can show.
-// No public page reads that choice any more (November 27, 2026), which the tests below hold it to.
-const scoredPlay: SamplePlay = {
-  ...examples[0].play,
-  id: "chosen-in-admin",
-  title: "A play chosen in the admin",
-  figures: { ...fixture.figures, math: "Worked out from 25 minutes saved, 8 runs a week." },
-  scores: { hours: fixture.f_hours, reach: fixture.f_reach, ease: fixture.f_ease, proof: fixture.f_proof, surprise: fixture.f_surprise },
-  score: fixture.score,
-};
-
 /** What a visitor typed into the library's watch sentence: the words the two watch pages print back. */
 const WATCH = "book a table";
 
@@ -503,13 +489,11 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
   beforeAll(async () => {
     resetNextFakes();
     data.testimonials = [];
-    data.play = null;
     // A watch link that no longer works the first time, and one that finds its watch the second.
     data.watch = null;
     data.watchTokens = [];
     bare = await renderSitePages(VERSION);
     data.testimonials = quotes;
-    data.play = scoredPlay;
     data.watch = WATCH;
     full = await renderSitePages(VERSION);
   }, 120_000);
@@ -537,21 +521,20 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     expect(describeViolations(failures(bare))).toBe("");
   });
 
-  it("has no violation with testimonials, and with a play chosen in the admin: the site as production may show it", () => {
+  it("has no violation with testimonials: the site as production may show it", () => {
     expect(describeViolations(failures(full))).toBe("");
   });
 
-  it("really did render the optional section the second time, and shows the bundled examples whatever play the admin chose", () => {
+  it("really did render the optional section the second time, and shows the bundled examples with no score and no time figure", () => {
     const home = (pages: RenderedPage[]) => pages.find((page) => page.path === "/")!.markup;
     expect(home(bare)).not.toContain("What people say");
     // The homepage shows the quote for its audience and the one for both, and not the one for the audience of the deleted /agents page.
     expect(home(full)).toContain("It saves me about 3 hours a week!");
     expect(home(full)).toContain("Two of the three ideas were running by Tuesday.");
     expect(home(full)).not.toContain("I stopped working this out alone.");
-    // The play chosen at /admin/sample reaches no page: not its title, not its scores, not its time figures.
+    // No page shows Cora's scores or a time figure for a play. The admin screen that once chose a pool play for the site is gone.
     for (const pages of [bare, full]) {
       for (const page of pages) {
-        expect(page.markup, page.path).not.toContain("A play chosen in the admin");
         expect(page.markup, page.path).not.toContain("data-score=");
         expect(page.markup, page.path).not.toContain("hours a week,");
         expect(page.markup, page.path).not.toContain("25 minutes");

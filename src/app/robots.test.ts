@@ -63,6 +63,6 @@ describe("indexing", () => {
     const allowed = (at: string) => longest(rules.allow, at) >= longest(rules.disallow, at);
 
     for (const at of ["/", "/pricing", "/apple-icon", "/apple-icon.png", "/approach", "/api/zack/instructions", "/api/zack/instructions?agent=claude"]) expect(allowed(at), at).toBe(true);
-    for (const at of ["/app", "/app/", "/app/zack", "/admin", "/admin/sample", "/start", "/start/plan", "/api", "/api/zack/runs", "/api/zack", "/api/checkout", "/apply", "/packs/solopreneur"]) expect(allowed(at), at).toBe(false);
+    for (const at of ["/app", "/app/", "/app/zack", "/admin", "/admin/users", "/start", "/start/plan", "/api", "/api/zack/runs", "/api/zack", "/api/checkout", "/apply", "/packs/solopreneur"]) expect(allowed(at), at).toBe(false);
   });
 });

@@ -98,6 +98,10 @@ Peter's way of working is fixed: build and edit on preview.meetroger.ai until it
 - R21. After a release, an edit made on production stays in force on top of the newly released wording (R12). Pages lists every field, section and list where the site's published content differs from the release, with one action that resets all of them to the release.
 - R22. An edit made on production is not carried back to preview. The owner repeats it on preview if it should survive the next release.
 
+**Launch list**
+
+- R25. The Pages screen shows a note at its top, on every site: each page must be read and its checks ticked on the launch list before a release, with a link to https://claude.ai/artifact/3A2CqfXuFDnr7PDYq776Wj that opens in a new tab. Each covered page's own editing screen repeats the link. The address is one setting in code, so it can be changed in one place. (Peter, November 27, 2026.)
+
 **Header**
 
 - R23. For a signed-out visitor, "Sign in" in the site header is an outlined button of the same height as the start button, placed left of it, at every width where the header shows both. The start button stays the filled one.
@@ -468,6 +472,8 @@ docs/site/content-release.md
   - `/admin/questions` answers with a redirect to the FAQ editor.
 - **Verification:** In a browser, change the hero headline, see Home marked, publish, see it on the homepage within a few seconds, undo, and see the old headline with the draft still in the editor.
 
+- **Added November 27, 2026 (R25):** a note at the top of the Pages screen, and a one-line link on each page's editing screen, pointing at the launch list. Plain text and one external link (`target="_blank"`, `rel="noopener noreferrer"`); the address lives in one constant. Test: the note and link render on the Pages screen and on a page's editing screen; the link has the address and both attributes.
+
 ### U6. Sections on, off and order
 
 - **Goal:** An admin switches a section of a covered page off or on and moves it up or down, and the page follows.
@@ -639,6 +645,29 @@ getSiteContent():
   5. Search for names deleted in U2 and U4 and for unused exports left by earlier units.
 - **Test expectation:** none -- documentation and deletion only; the full suite and the build are the proof.
 - **Verification:** Every command in the Verification Contract passes, and a search finds no reference to `/admin/sample`, `getQuestionOverrides` or `QUESTIONS_TAG`.
+
+- **Carried from the U2 review (November 27, 2026), to settle in this unit:** (1) the not-found page's header hydrates with the browser's path against one shared shell, so a mistyped address can change every 404 page's header for five minutes (`docs/solutions/runtime-errors/not-found-shell-hydrates-with-the-browsers-path-2026-11-27.md` has the suggested fix); (2) a play still flagged `is_public_sample` is skipped by the Cora job and no screen can clear the flag any more: clear the flag or drop the guard; (3) `docs/site/v1-acceptance.md` still describes the Edit Questions tab and `/admin/sample`.
+
+### U12. Launch: version 1 of the marketing site, the admin and the Pages editor go live
+
+Added November 27, 2026 at Peter's request. The v1 launch list (https://claude.ai/artifact/3A2CqfXuFDnr7PDYq776Wj) has every review check ticked and was confirmed on November 27, 2026 at 16:27 UTC. This unit is the release, not new code.
+
+- **Goal:** meetroger.ai serves everything on `feat/admin-cms` (which contains `feat/site-v1`): the v1 marketing site, the admin sidebar, the outlined "Sign in" and the Pages editor, with preview's published content carried in the release (R19). (session-settled: user-directed — chosen over launching the v1 site alone now, or alone at the end: one launch, and production has the editor from the first day.)
+- **Who merges:** Claude prepares and checks everything, reports that it is ready, and merges to `main` only after Peter replies "go" in that conversation. (session-settled: user-directed — chosen over merging without asking again, and over Peter pressing merge on GitHub.) No earlier message counts as that "go".
+- **Not included:** the version 2 hero sketches (`feat/site-v2`) and anything else that exists only on the `preview` branch.
+- **Depends on:** U1 to U11 committed and pushed, and the whole-branch review done with its findings fixed.
+- **Steps, in order:**
+  1. Whole-branch review of `main...feat/admin-cms` (the seams between units), findings fixed, all gates green.
+  2. Release snapshot (U10): read preview's published content into `src/data/site/released.json`, commit.
+  3. Production prerequisites, listed for Peter with what each is for: any database change the branch needs applied to the production database (compare `db/schema.sql` on `main` and on the branch, and how this repo applies schema changes); the environment variables the branch reads that production may not have (`ADMIN_EMAILS` and any site-version variable); the six prices in the production admin. Claude cannot see Vercel or the production database: Peter confirms each.
+  4. Merge `main` into the branch first, fix conflicts there, rerun lint, typecheck, tests, scenarios and build.
+  5. Report readiness to Peter: what will go live, what changes for a visitor and for a signed-in user, what was last checked on the launch list and what has changed on preview since it was confirmed, and how to go back (revert the merge commit on `main`).
+  6. On "go": merge to `main` with a merge commit, push. Do not delete branches.
+  7. After-launch checks on the real site, from the launch list's last section: the homepage is v1, `/pricing` lands on the price section, a start button reaches sign-up, an existing account can sign in and see its dashboard, `/hampton`, `/rlp` and `/founders` land on `/zack`, `robots.txt` allows search engines, the admin opens with the sidebar, Pages opens and shows no edits that differ from the release.
+  8. Update the launch list artifact: remove each line whose check is done and merged, per the standing rule, and tick or report the after-launch lines.
+- **Test scenarios:** none new; this unit runs the existing gates on the merged tree and the after-launch checks above against production.
+- **Verification:** the merge commit is on `origin/main`; each after-launch check is reported with what was observed; anything that fails is reported at once with the revert option.
+- **Stop conditions:** any gate red on the merged tree; a production prerequisite Peter has not confirmed; no "go".
 
 ---
 

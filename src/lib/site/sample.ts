@@ -2,8 +2,8 @@
  * The plays the public pages show (plan R11): the cleaned examples bundled
  * with the site (src/data/site/examples.ts), so the section is never absent
  * and needs no database. Until November 27, 2026 a play chosen in the admin
- * (/admin/sample) replaced the bundled one. It no longer does: the public
- * pages read the bundled examples only.
+ * replaced the bundled one. That admin screen is removed: the public pages
+ * read the bundled examples only.
  */
 import { cacheLife, cacheTag } from "next/cache";
 import { buildIdeaView, type IdeaView, type PlaySource } from "@/lib/cora/idea-view";

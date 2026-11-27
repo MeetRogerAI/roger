@@ -79,7 +79,7 @@ describe("navFor", () => {
   });
 
   it("is the same under Circles and under a version for the app, the admin and the unlisted pages (R4, R9)", () => {
-    for (const p of ["/admin", "/admin/sample", "/start", "/signin", "/app/zack", "/rlpsignature", "/for/x"]) {
+    for (const p of ["/admin", "/admin/users", "/start", "/signin", "/app/zack", "/rlpsignature", "/for/x"]) {
       expect(navFor(p, "v1"), p).toEqual(navFor(p, "circles"));
     }
     expect(navFor("/admin", "v1").links.map((l) => l.href)).toEqual(["/#how", "/zack", "/library", "/#questions", "/#letter"]);
