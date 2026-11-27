@@ -1240,7 +1240,7 @@ create table if not exists setup_files (
 | **Bricks and Seasons** *(1.5: renamed from "Bricks and levels")* | On `/app/history`: a 26-week compounding graph, the line in the Season colour, a larger marker on the user's current week. Each idea set up is a brick. After week 26 the graph starts again in the next Season's colour, up to Season 5. The colour is the whole reward. "Level" is not used here: it means Roger AI Levels (B4). |
 | **Leaderboard** | One network-wide board on `/app/leaderboard`. A user earns 1 point when Cora picks one of their plays for another user and 1 more when that user's set-up is confirmed. Users appear under a display name they choose. Counts are shown ("2 users adopted your idea"), never names. |
 | **Group session** | A card on `/app/sessions`: the next session's day, time, and Google Meet link, with "Add to calendar". Paying and sponsored users only; trial users see it greyed out with "Opens when you subscribe". A subscriber invites one guest per session by name and email; the guest receives a one-time invitation at `/g/{token}` and is recorded as that subscriber's referral. Admins set the day, time, and link, and tick who attended. |
-| **Sponsors** | In `/admin/sponsors` an admin creates a sponsor: name, currency, negotiated standard and higher monthly prices, number of seats, and a code. A person who signs up at `/start?sponsor={code}` ~~skips the card step~~ *(1.4: is never asked for a card: no held list, no Payment)*. Each month the admin page shows the seats in use at each price and prepares a Stripe invoice to the sponsor for an admin to send. The sponsor has no login and sees nothing about any user. The contributor rule applies to sponsored users at the sponsor's two prices. |
+| **Sponsors** | In `/admin/sponsors` an admin creates a sponsor: name, currency, negotiated standard and higher monthly prices, number of seats, and a code. A person who signs up at `/start?sponsor={code}` ~~skips the card step~~ *(1.4: is never asked for a card: no held list, no Payment)*. Each month the admin page shows the seats in use at each price and prepares a Stripe invoice to the sponsor for an admin to send. The sponsor has no login and sees nothing about any user. The contributor rule applies to sponsored users at the sponsor's two prices. A sponsor is invoiced from each sponsored user's third list, so sponsored users also get two free lists (launch list D6: a default, to be confirmed when B2 is built). |
 
 New tables: `referrals` (referrer, referred user or email, source, generation, stage, credit, dates), `credits`, `points`, `sessions_attendance`, `session_guests`, `sponsors`.
 
@@ -1252,6 +1252,10 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 | **Pipeline** | `/admin/pipeline`: every person from first touch (lead, guest, referral, waitlist, sign-up) through trial to paying, with the date of each stage and where they came from. Replaces counting by hand. |
 | **Review bot** | `/admin/review`: on a schedule, a model reads the week's runs, flags, rejections, picks, and set-up rates and proposes specific wording changes to the Zack and Cora instruction files. An admin reads each proposal and approves or rejects it. Nothing changes without approval, and approved changes go into the repo as a normal commit. |
 | **Feedback** | Users' replies and notes are stored against their record and are part of what the review bot reads. |
+| **Cora upgrades** | Cora 2.0 change 11: a list may offer an upgrade to a play the user already runs; at most one of three picks (recommendation). Moved from launch list S20, 2026-11-27. |
+| **Cora adoption counts** | Cora 2.0 change 15: an idea counts as adopted when the user's next profile shows it "used this week"; "installed" and "used" reported separately, feeding the adoption measure above. Moved from launch list S20, 2026-11-27. |
+| **Admin read log** | Each time an admin opens a member's runs or picks, the admin action log records it. The privacy page then says so. Moved from launch list S22, 2026-11-27 (not logged at launch). |
+| **Scenario tests against the sandbox** | `SCENARIO_TARGET=sandbox` in `tests/scenarios/helpers.ts`: the scenario files run against the Stripe sandbox on test clocks and the scenario-test Neon branch (`SCENARIO_DATABASE_URL`). Replaced at launch by one test-clock journey walked on preview (launch list, 2026-11-27). |
 
 ## B.16a Version B4: levels *(1.5)*
 
@@ -1414,6 +1418,8 @@ The live checklist for these items and for the defaults below is `artifacts/laun
 # Defaults to confirm
 
 These were chosen to fill gaps. Each is easy to change before it is built.
+
+Peter confirmed 1 to 4, 7, 8, 11 and 12 as written on November 27, 2026. 5 and 6 are B2 defaults, confirmed when B2 is built.
 
 1. A flagged run still counts as contributed for pricing.
 2. A trial user with Zack on gets a list only in weeks their run arrives; a trial user with Zack off gets one every Monday.
