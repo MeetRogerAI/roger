@@ -98,6 +98,33 @@ describe("GET /api/zack/instructions", () => {
     expect(await (await fetchInstructions()).text()).toContain("(for Grok Bot)");
   });
 
+  it("records the fetch, real and test apart, and a run sent after it is stamped with that version (B3 Unit 2)", async () => {
+    const { fileVersion } = await import("@/lib/instructions/version");
+    await fetchInstructions();
+    await fetchInstructions("?agent=hark&test=1");
+    const rows = await current<{ test: boolean; agent: string; version: string }>("select test, agent, version from zack_instruction_fetches order by test");
+    expect(rows).toEqual([
+      { test: false, agent: "duet", version: fileVersion("content/zack/duet.md") },
+      { test: true, agent: "hark", version: fileVersion("content/zack/hark.md") },
+    ]);
+    expect((await send(RUN)).status).toBe(200);
+    expect(await current("select instructions_version as v, instructions_version_source as s from runs")).toEqual([{ v: fileVersion("content/zack/duet.md"), s: "fetch" }]);
+  });
+
+  it("still serves the instructions with a 200 when the fetch cannot be recorded", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const real = current;
+    current = async (t, p) => {
+      if (/zack_instruction_fetches/.test(t)) throw new Error("write failed");
+      return real(t, p);
+    };
+    const res = await fetchInstructions();
+    current = real;
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("(for Duet)");
+    expect(log).toHaveBeenCalledWith("[zack] instructions fetch not recorded", "write failed");
+  });
+
   it("with Zack off, tells the agent to send nothing (spec check 8)", async () => {
     await current("update users set sharing = 'off'");
     const text = await (await fetchInstructions()).text();

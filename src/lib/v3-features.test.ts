@@ -13,6 +13,14 @@ describe("featureOn", () => {
     expect(featureOn({ ...live, cycleLive: false }, "referralsOn")).toBe(false);
   });
 
+  it("gates the B3 member note (feedbackOn) like the B2 surfaces", () => {
+    const on = { ...live, feedbackOn: true };
+    expect(featureOn(on, "feedbackOn")).toBe(true);
+    expect(featureOn({ ...on, feedbackOn: false }, "feedbackOn")).toBe(false);
+    expect(featureOn({ ...on, signupOpen: false }, "feedbackOn")).toBe(false);
+    expect(featureOn({ ...on, cycleLive: false }, "feedbackOn")).toBe(false);
+  });
+
   it("reads each feature's own switch", () => {
     expect(featureOn(live, "leaderboardOn")).toBe(false);
     expect(featureOn({ ...live, leaderboardOn: true }, "leaderboardOn")).toBe(true);
@@ -20,5 +28,6 @@ describe("featureOn", () => {
 
   it("is off with the defaults", () => {
     expect(featureOn(mergeV3([]), "referralsOn")).toBe(false);
+    expect(featureOn(mergeV3([]), "feedbackOn")).toBe(false);
   });
 });

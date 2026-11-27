@@ -63,6 +63,11 @@ export const v3Schema = z
     leaderboardOn: z.boolean(),
     statsOn: z.boolean(),
     sponsorsOn: z.boolean(),
+    // B3 switches (B3 plan Unit 1). Each has a default in v3Defaults, so a saved set from before B3
+    // still reads. feedbackOn is member-facing (featureOn); reviewBotOn and coraUpgradesOn are read raw.
+    reviewBotOn: z.boolean(),
+    feedbackOn: z.boolean(),
+    coraUpgradesOn: z.boolean(),
     sessionDay: z.string().max(40),
     sessionTime: z.string().max(40),
     sessionLink: z.union([z.literal(""), z.url()]),

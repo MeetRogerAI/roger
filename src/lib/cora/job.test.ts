@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import type { IntakeModel } from "@/lib/intake/model";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileVersion, forgetFileVersions } from "@/lib/instructions/version";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
@@ -302,7 +305,7 @@ describe("review follow-ups (11c)", () => {
     // A run whose picks are made, stopped before the ready step (the week fails later, say).
     await query("insert into cora_weeks (week_of, holder, lease_until, phase) values ($1, 'h', now() + interval '5 minutes', 'scored')", [WEEK]);
     const { RECORD_PICKS_SQL } = await import("./job");
-    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 3, 0, "", false, "[]", "h"]);
+    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 3, 0, "", false, "[]", "h", null, null]);
     expect(await query("select 1 from cora_user_weeks where user_id = $1 and week_of = $2", [a, WEEK])).toHaveLength(1);
     expect(await query("select superseded_at from cora_user_weeks where user_id = $1 and week_of = '2026-11-23'", [a])).toEqual([{ superseded_at: null }]);
   });
@@ -327,7 +330,7 @@ describe("review follow-ups (11c)", () => {
     await query("update users set status = 'trial' where id = $1", [a]);
     await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-11-23', 'picked', 3)", [a]);
     await query("insert into cora_weeks (week_of, holder, lease_until, phase) values ($1, 'current-holder', now() + interval '5 minutes', 'picked')", [WEEK]);
-    const args = (holder: string) => [a, WEEK, "picked", 3, 0, "", false, "[]", holder];
+    const args = (holder: string) => [a, WEEK, "picked", 3, 0, "", false, "[]", holder, null, null];
     await query(RECORD_PICKS_SQL, args("old-holder"));
     expect(await query("select 1 from cora_user_weeks where user_id = $1 and week_of = $2", [a, WEEK])).toHaveLength(0);
     await query(RECORD_PICKS_SQL, args("current-holder"));
@@ -353,5 +356,46 @@ describe("review follow-ups (11c)", () => {
     const [ua] = await loadUsers(query, WEEK, { onlyIds: [a] });
     const [{ id }] = await query<{ id: string }>("select id from pool_plays where title = 'Listing post'");
     expect(ua.ctx.ownContributions.has(id)).toBe(true);
+  });
+});
+
+describe("the Cora version on every list (B3 plan Unit 2)", () => {
+  afterEach(() => {
+    forgetFileVersions();
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+  const stamps = async () =>
+    query<{ outcome: string; method_version: string | null; code_commit: string | null }>("select outcome, method_version, code_commit from cora_user_weeks order by outcome");
+
+  it("stamps every row the job writes, not_eligible included, with cora.md's version and the deploy's commit", async () => {
+    vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "c0ffee");
+    await member("t@example.com", { status: "trial" });
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    const rows = await stamps();
+    expect(rows.map((r) => r.outcome)).toContain("not_eligible");
+    expect(rows.map((r) => r.outcome)).toContain("picked");
+    for (const r of rows) expect(r).toMatchObject({ method_version: fileVersion("content/cora/cora.md"), code_commit: "c0ffee" });
+    expect(rows[0].method_version).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it("stamps a null commit when VERCEL_GIT_COMMIT_SHA isn't set", async () => {
+    vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "");
+    await runCoraJob(query, deps(), { now: ONE_AM, settings: live });
+    const rows = await stamps();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.code_commit).toBeNull();
+  });
+
+  it("still writes every list with cora.md missing, with a null version", async () => {
+    forgetFileVersions();
+    vi.spyOn(process, "cwd").mockReturnValue(path.join(tmpdir(), "roger-no-such-dir"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await member("t@example.com", { status: "trial" });
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    const rows = await stamps();
+    expect(rows).toHaveLength(4);
+    for (const r of rows) expect(r.method_version).toBeNull();
+    expect(await picksOf(a)).toHaveLength(3);
   });
 });

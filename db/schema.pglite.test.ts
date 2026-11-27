@@ -268,6 +268,108 @@ describe("schema.sql on Postgres", () => {
     });
   });
 
+  describe("B3 (plan 2026-11-27-003, Unit 1)", () => {
+    const user = async (email: string) => (await db.query<{ id: string }>("insert into users (email) values ($1) returning id", [email])).rows[0].id;
+    const note = (u: string, week: string | null, source = "member_note", by: string | null = null, body = "Useful week") =>
+      db.query("insert into member_feedback (user_id, week_of, source, body, entered_by) values ($1, $2, $3, $4, $5)", [u, week, source, body, by]);
+
+    it("has the B3 tables and columns", async () => {
+      const tables = (
+        await db.query<{ t: string }>("select table_name as t from information_schema.tables where table_schema = 'public'")
+      ).rows.map((r) => r.t);
+      for (const t of ["zack_instruction_fetches", "member_feedback", "review_runs", "measure_snapshots", "review_proposals"]) expect(tables).toContain(t);
+      const cols = await columns();
+      for (const c of [
+        "runs.instructions_version", "runs.instructions_version_source", "cora_user_weeks.method_version", "cora_user_weeks.code_commit",
+        "leads.first_seen_at", "picks.installed_at", "picks.used_at", "picks.adoption_seen_at", "picks.kind", "picks.whats_better",
+        "review_runs.discarded", "review_proposals.result_versions", "review_proposals.edited_before_merge", "review_proposals.close_pending",
+      ]) expect(cols).toContain(c);
+    });
+
+    it("keeps one member note per member and list week, but any number of admin replies", async () => {
+      const u = await user("fb1@example.com");
+      await note(u, "2026-11-30");
+      await expect(note(u, "2026-11-30")).rejects.toThrow();
+      await expect(note(u, "2026-12-07")).resolves.toBeTruthy();
+      await note(u, "2026-11-30", "admin_reply", "peter@example.com");
+      await expect(note(u, "2026-11-30", "admin_reply", "peter@example.com")).resolves.toBeTruthy();
+      // A note always has its week (NULLs are distinct in a unique index), and a reply always says who entered it.
+      await expect(note(u, null)).rejects.toThrow();
+      await expect(note(u, null, "admin_reply", null)).rejects.toThrow();
+      await expect(note(u, "2026-12-14", "member_note", "peter@example.com")).rejects.toThrow();
+      await expect(note(u, null, "email")).rejects.toThrow();
+    });
+
+    it("refuses a feedback body over 4,000 characters, or empty", async () => {
+      const u = await user("fb2@example.com");
+      await expect(note(u, "2026-11-30", "member_note", null, "x".repeat(4001))).rejects.toThrow();
+      await expect(note(u, "2026-11-30", "member_note", null, "")).rejects.toThrow();
+      await expect(note(u, "2026-11-30", "member_note", null, "x".repeat(4000))).resolves.toBeTruthy();
+    });
+
+    it("removes a member's feedback and instruction fetches with the account", async () => {
+      const u = await user("fb3@example.com");
+      await note(u, "2026-11-30");
+      await db.query("insert into zack_instruction_fetches (user_id, test, agent, version) values ($1, false, 'claude', 'abc'), ($1, true, 'claude', 'abc')", [u]);
+      await expect(db.query("insert into zack_instruction_fetches (user_id, test, agent, version) values ($1, false, 'duet', 'def')", [u])).rejects.toThrow();
+      await db.query("delete from users where id = $1", [u]);
+      expect((await db.query("select 1 from member_feedback where user_id = $1", [u])).rows).toHaveLength(0);
+      expect((await db.query("select 1 from zack_instruction_fetches where user_id = $1", [u])).rows).toHaveLength(0);
+    });
+
+    it("writes a measure snapshot once, and keeps it when an account is deleted", async () => {
+      const u = await user("snap@example.com");
+      const write = (value: number | null, n: number) =>
+        db.query("insert into measure_snapshots (key, value, detail) values ('checkpoint-2026-12-14', $1, $2::jsonb) on conflict do nothing returning key", [value, JSON.stringify({ numerators: [n] })]);
+      expect((await write(0.3, 3)).rows).toHaveLength(1);
+      expect((await write(0.1, 1)).rows).toHaveLength(0);
+      await db.query("delete from users where id = $1", [u]);
+      const rows = (await db.query<{ value: string; detail: { numerators: number[] } }>("select value, detail from measure_snapshots where key = 'checkpoint-2026-12-14'")).rows;
+      expect(rows).toEqual([{ value: "0.3", detail: { numerators: [3] } }]);
+      await expect(db.query("insert into measure_snapshots (key, value) values ('no-data', null)")).resolves.toBeTruthy();
+    });
+
+    it("backfills leads.first_seen_at from created_at, once, and a re-apply leaves it", async () => {
+      await db.query("alter table leads drop column first_seen_at");
+      await db.query("insert into leads (email, kind, persona, created_at) values ('lead@example.com', 'pack', 'p', '2026-10-01T12:00:00Z')");
+      await apply();
+      const read = async () => (await db.query<{ same: boolean }>("select first_seen_at = created_at as same from leads where email = 'lead@example.com'")).rows[0].same;
+      expect(await read()).toBe(true);
+      // A re-save moves created_at (Unit 4 keeps first_seen_at); a second apply must not pull first_seen_at forward.
+      await db.query("update leads set created_at = '2026-11-01T12:00:00Z' where email = 'lead@example.com'");
+      await apply();
+      const [r] = (await db.query<{ first: Date }>("select first_seen_at as first from leads where email = 'lead@example.com'")).rows;
+      expect(new Date(r.first).toISOString()).toBe("2026-10-01T12:00:00.000Z");
+    });
+
+    it("checks the run version source, the pick kind and the proposal states", async () => {
+      const u = await user("b3c@example.com");
+      await expect(
+        db.query("insert into runs (user_id, week_of, route, sharing, raw_text, instructions_version_source) values ($1, '2026-11-30', 'upload', 'share', 'x', 'guess')", [u]),
+      ).rejects.toThrow();
+      await expect(
+        db.query("insert into runs (user_id, week_of, route, sharing, raw_text, instructions_version, instructions_version_source) values ($1, '2026-11-30', 'upload', 'share', 'x', 'abc', 'fetch')", [u]),
+      ).resolves.toBeTruthy();
+      const proposal = (publicId: string, status: string, o: { blocked?: string; pr?: number; paths?: string } = {}) =>
+        db.query("insert into review_proposals (public_id, review_week, paths, status, blocked_reason, pr_number) values ($1, '2026-12-04', $2::text[], $3, $4, $5)", [
+          publicId, o.paths ?? "{content/zack/claude.md}", status, o.blocked ?? null, o.pr ?? null,
+        ]);
+      await expect(proposal("abcdefghij", "pending")).resolves.toBeTruthy();
+      await expect(proposal("abcdefghij", "pending")).rejects.toThrow();
+      await expect(proposal("short", "pending")).rejects.toThrow();
+      await expect(proposal("bcdefghijk", "shipped")).rejects.toThrow();
+      await expect(proposal("bcdefghijk", "pending", { paths: "{}" })).rejects.toThrow();
+      await expect(proposal("cdefghijkl", "blocked")).rejects.toThrow();
+      await expect(proposal("cdefghijkl", "blocked", { blocked: "harm" })).resolves.toBeTruthy();
+      await expect(proposal("defghijklm", "pr_open")).rejects.toThrow();
+      await expect(proposal("defghijklm", "pr_open", { pr: 12 })).resolves.toBeTruthy();
+      // One proposal per pull request.
+      await expect(proposal("efghijklmn", "merged", { pr: 12 })).rejects.toThrow();
+      const [r] = (await db.query<{ discarded: unknown }>("insert into review_runs (week_of) values ('2026-12-04') returning discarded")).rows;
+      expect(r.discarded).toEqual({});
+    });
+  });
+
   it("increments a rate counter in one statement", async () => {
     const hit = () =>
       db.query<{ count: number }>(

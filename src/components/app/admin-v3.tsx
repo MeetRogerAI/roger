@@ -18,6 +18,7 @@ import {
   pilotLinkAction,
   rebuildPointsAction,
   runJobAction,
+  saveB3SwitchesAction,
   saveNoteAction,
   saveTestimonialAction,
   seedImportAction,
@@ -605,6 +606,37 @@ export function SeedImportForm() {
       <div className="flex items-center gap-3 sm:col-span-3">
         <button type="submit" disabled={pending} className={small}>
           {pending ? "Importing…" : "Import"}
+        </button>
+        <Msg s={s} />
+      </div>
+    </form>
+  );
+}
+
+const B3_SWITCH_ROWS = [
+  { name: "feedbackOn", label: "Weekly notes from members", hint: "The note box on /app/week. Also needs sign-up open and the cycle live." },
+  { name: "reviewBotOn", label: "Review bot", hint: "The Friday run. Pull requests open only on production with the GitHub token; otherwise every approval is a dry run." },
+  { name: "coraUpgradesOn", label: "Cora upgrades", hint: "Cora may offer one upgrade to something a member already runs. Cora runs only while the cycle is live." },
+] as const;
+
+/** The B3 switches (B3 plan Unit 1), all off by default. */
+export function B3SwitchesForm({ values }: { values: Record<(typeof B3_SWITCH_ROWS)[number]["name"], boolean> }) {
+  const [s, act, pending] = useActionState(saveB3SwitchesAction, idle);
+  return (
+    <form action={act} className="space-y-4 rounded-[var(--radius-object)] border border-rule bg-surface p-6 sm:p-8">
+      <h2 className="text-title">B3 switches</h2>
+      {B3_SWITCH_ROWS.map((r) => (
+        <label key={r.name} className="flex items-start gap-3 text-small">
+          <input type="checkbox" name={r.name} defaultChecked={values[r.name]} className="mt-0.5 size-4 accent-[var(--color-accent)]" />
+          <span>
+            <span className="font-[600]">{r.label}</span>
+            <span className="block text-ink-2">{r.hint}</span>
+          </span>
+        </label>
+      ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" disabled={pending} className={small}>
+          {pending ? "Saving…" : "Save switches"}
         </button>
         <Msg s={s} />
       </div>

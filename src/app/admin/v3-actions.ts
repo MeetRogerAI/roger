@@ -32,7 +32,7 @@ import { rebuildPoints } from "@/lib/growth/points";
 import { isNudge } from "@/lib/mail/templates/admin-user";
 import { hit } from "@/lib/rate-limit";
 import { createPilotLink } from "@/lib/signup/pilot";
-import { readV3Settings } from "@/lib/v3-settings";
+import { readV3Settings, saveV3Settings } from "@/lib/v3-settings";
 
 /**
  * The v3 admin's server actions (spec B.12, plan Unit 17). Server actions are
@@ -396,4 +396,24 @@ export async function seedImportAction(_p: V3State, fd: FormData): Promise<V3Sta
     if (e instanceof Error && /seed run needs|must be YYYY/.test(e.message)) return bad(e.message);
     throw e;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+
+/** The B3 switches that take effect from /admin/settings (B3 plan Unit 1), all off by default. */
+const B3_SWITCHES = ["reviewBotOn", "feedbackOn", "coraUpgradesOn"] as const;
+
+/** Saves the three B3 switches together (one statement), and logs the values saved. */
+export async function saveB3SwitchesAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const patch = Object.fromEntries(B3_SWITCHES.map((k) => [k, fd.get(k) === "on"])) as Record<(typeof B3_SWITCHES)[number], boolean>;
+  try {
+    await saveV3Settings(patch);
+  } catch (e) {
+    return bad(`Not saved: ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`);
+  }
+  await logAdminAction(query, { by, action: "v3_switches_saved", detail: patch });
+  updateTag("settings");
+  return { status: "ok", message: "Saved.", at: Date.now() };
 }

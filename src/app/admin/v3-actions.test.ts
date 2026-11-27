@@ -20,7 +20,16 @@ vi.mock("@/lib/admin-auth", () => ({
   },
   isAdmin: async () => Boolean(admin),
 }));
-vi.mock("@/lib/v3-settings", async (orig) => ({ ...(await orig<typeof import("@/lib/v3-settings")>()), readV3Settings: async () => mergeV3([]) }));
+let savedV3: Record<string, unknown>[] = [];
+let saveV3Fails = false;
+vi.mock("@/lib/v3-settings", async (orig) => ({
+  ...(await orig<typeof import("@/lib/v3-settings")>()),
+  readV3Settings: async () => mergeV3([]),
+  saveV3Settings: async (patch: Record<string, unknown>) => {
+    if (saveV3Fails) throw new Error("Could not read settings");
+    savedV3.push(patch);
+  },
+}));
 vi.mock("@/lib/rate-limit", async (orig) => ({ ...(await orig<typeof import("@/lib/rate-limit")>()), hit: async () => true }));
 vi.mock("@/lib/mail/send", async (orig) => ({ ...(await orig<typeof import("@/lib/mail/send")>()), sendToUser: async () => "sent" }));
 
@@ -37,6 +46,8 @@ beforeEach(async () => {
   ({ query: current } = await testDb());
   resetNextFakes();
   admin = null;
+  savedV3 = [];
+  saveV3Fails = false;
   [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used, trial_started_at) values ('ana@example.com', 'Ana', 'trial', 2, now()) returning id");
   [{ id: playId }] = await current<{ id: string }>(
     "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('One', 'Sales', 'd', 'p', 'i', '2026-12-07', '2026-12-07') returning id",
@@ -67,6 +78,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["closeFailedOrders", () => actions.closeFailedOrdersAction()],
     ["rebuildPoints", () => actions.rebuildPointsAction()],
     ["seedImport", () => actions.seedImportAction(idle, form({ label: "Rob", agent: "hark", ranOn: "2026-11-12", text: "x" }))],
+    ["saveB3Switches", () => actions.saveB3SwitchesAction(idle, form({ reviewBotOn: "on" }))],
   ];
 
   it("covers every exported action", () => {
@@ -89,6 +101,19 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
 });
 
 describe("for an admin", () => {
+  it("saves the three B3 switches together and logs the values (B3 plan Unit 1)", async () => {
+    admin = "admin@example.com";
+    expect(await actions.saveB3SwitchesAction({ status: "idle" }, form({ feedbackOn: "on" }))).toMatchObject({ status: "ok" });
+    expect(savedV3).toEqual([{ reviewBotOn: false, feedbackOn: true, coraUpgradesOn: false }]);
+    expect(await current("select admin_email, action, detail from admin_actions")).toEqual([
+      { admin_email: "admin@example.com", action: "v3_switches_saved", detail: { reviewBotOn: false, feedbackOn: true, coraUpgradesOn: false } },
+    ]);
+    // A failed save says so and logs nothing.
+    saveV3Fails = true;
+    expect(await actions.saveB3SwitchesAction({ status: "idle" }, form({ reviewBotOn: "on" }))).toMatchObject({ status: "error" });
+    expect(await current("select 1 from admin_actions")).toHaveLength(1);
+  });
+
   it("clears a display name, which takes the member off the leaderboard, and logs it (B2 Unit 7)", async () => {
     await current("update users set display_name = 'Ana B.', leaderboard_opt_in_at = now() where id = $1", [uid]);
     expect(await actions.clearDisplayNameAction({ status: "idle" }, form({ userId: uid })).catch((e) => e.message)).toBe("Not signed in");

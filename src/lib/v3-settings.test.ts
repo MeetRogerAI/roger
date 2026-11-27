@@ -45,6 +45,25 @@ describe("mergeV3", () => {
     }
   });
 
+  it("has the B3 switches, off by default, takes a saved true, and fails closed on an invalid value", () => {
+    const s = mergeV3([]);
+    for (const k of ["reviewBotOn", "feedbackOn", "coraUpgradesOn"] as const) {
+      expect(s[k]).toBe(false);
+      expect(mergeV3([{ key: `v3.${k}`, value: true }])[k]).toBe(true);
+      expect(() => mergeV3([{ key: `v3.${k}`, value: "on" }])).toThrow();
+    }
+  });
+
+  it("still reads a saved set from before B3, with the B3 switches off", () => {
+    // Every key B2 knew, saved: none of the B3 switches is among them.
+    const b2Rows = Object.entries(mergeV3([]))
+      .filter(([k]) => !["reviewBotOn", "feedbackOn", "coraUpgradesOn"].includes(k))
+      .map(([k, value]) => ({ key: `v3.${k}`, value: k === "cycleLive" ? true : value }));
+    const s = mergeV3(b2Rows);
+    expect(s.cycleLive).toBe(true);
+    expect([s.reviewBotOn, s.feedbackOn, s.coraUpgradesOn]).toEqual([false, false, false]);
+  });
+
   it("loads a stored stats time outside 08:00 to 12:00 as the default instead of failing", () => {
     expect(mergeV3([]).statsAt).toBe("09:00");
     expect(mergeV3([{ key: "v3.statsAt", value: "13:00" }]).statsAt).toBe("09:00");

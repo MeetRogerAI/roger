@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Query } from "@/lib/db-query";
+import { fileVersion, zackInstructionFile } from "@/lib/instructions/version";
 import { isZackAgent, zackFileFor, type ZackAgent } from "./agents";
 import { loadZackSettings, memberRulesMarkdown, type ZackSettings } from "./rules";
 
@@ -84,7 +85,28 @@ export async function instructionsForUser(
   user: { id: string; agent: string; sharing: "share" | "match_only" | "off" },
   o: { base: Base; askedAgent?: string | null; test?: boolean },
 ): Promise<string> {
-  const agent = o.askedAgent && isZackAgent(o.askedAgent) ? o.askedAgent : zackFileFor(user.agent);
+  const agent = instructionAgent(user, o.askedAgent);
   const [core, rules] = await Promise.all([coreText(agent), loadZackSettings(q, user.id)]);
   return buildInstructions(core, rules, user.sharing, zackUrls(o.base, agent, o.test), o.test);
+}
+
+/** Which Zack file a fetch is served: the agent asked for, if it has a file, otherwise the person's own. */
+export function instructionAgent(user: { agent: string }, askedAgent?: string | null): ZackAgent {
+  return askedAgent && isZackAgent(askedAgent) ? askedAgent : zackFileFor(user.agent);
+}
+
+/**
+ * Records an instructions fetch (B3 plan Unit 2): the member's latest fetch, one row for real
+ * fetches and one for tests, with the version of the core file served (the member's rules
+ * don't change it). A run received within 48 hours is stamped with it (storeReport). A file
+ * that can't be hashed records nothing, so the run falls back to the deployed version.
+ */
+export async function recordInstructionFetch(q: Query, o: { userId: string; test: boolean; agent: ZackAgent; now?: Date }): Promise<void> {
+  const version = fileVersion(zackInstructionFile(o.agent));
+  if (!version) return;
+  await q(
+    `insert into zack_instruction_fetches (user_id, test, agent, version, fetched_at) values ($1, $2, $3, $4, $5)
+     on conflict (user_id, test) do update set agent = excluded.agent, version = excluded.version, fetched_at = excluded.fetched_at`,
+    [o.userId, o.test, o.agent, version, (o.now ?? new Date()).toISOString()],
+  );
 }

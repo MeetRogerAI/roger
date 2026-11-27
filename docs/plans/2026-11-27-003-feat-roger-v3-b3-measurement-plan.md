@@ -373,7 +373,7 @@ flowchart LR
 
 **Build order.** Units 1–11 in dependency order, then Unit 12 as the last code unit: it changes live Cora picking (behind `v3.coraUpgradesOn`, off), nothing depends on it, and it can be left out of the PR without touching anything else. Unit 13 depends on nothing in B3 and touches only `tests/`, so it can be built at any point or split into its own PR off `main`. Unit 14 writes back whatever was built.
 
-- [ ] **Unit 1: B3 schema and settings switches**
+- [x] **Unit 1: B3 schema and settings switches**
 
 **Goal:** Add every B3 table and column, the three switches, and the bundling of the instruction files.
 
@@ -426,7 +426,7 @@ flowchart LR
 
 **Verification:** The schema and settings tests pass, and `db/schema.test.ts` lists the B3 tables.
 
-- [ ] **Unit 2: Instruction-file versions on every run and list**
+- [x] **Unit 2: Instruction-file versions on every run and list**
 
 **Goal:** R20's recording half: every Zack run and Cora list carries the instruction version it used.
 

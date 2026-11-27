@@ -324,7 +324,7 @@ describe("superseding at ready (review fixes F1, F2)", () => {
        on conflict (week_of) do update set status = 'running', phase = 'picked', holder = $2, lease_until = now() + interval '5 minutes'`,
       [w, H],
     );
-    await query(RECORD_PICKS_SQL, [userId, w, "picked", 6, 3, "", false, picksJson(offset), H]);
+    await query(RECORD_PICKS_SQL, [userId, w, "picked", 6, 3, "", false, picksJson(offset), H, null, null]);
   }
   const ready = (w: string, now: Date) => query(SUPERSEDE_AT_READY_SQL, [w, H, now.toISOString()]);
   const supersededAt = async (id: string, w: string) =>
@@ -394,7 +394,7 @@ describe("superseding at ready (review fixes F1, F2)", () => {
     await picked(a, PREV);
     await query("delete from cora_weeks where week_of = $1", [WEEK]);
     await query("insert into cora_weeks (week_of, status, phase, holder, dry_run) values ($1, 'running', 'picked', $2, true)", [WEEK, H]);
-    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 6, 3, "", true, picksJson(3), H]);
+    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 6, 3, "", true, picksJson(3), H, null, null]);
     expect(await ready(WEEK, SEVEN_AM)).toHaveLength(1);
     expect(await supersededAt(a, PREV)).toBeNull();
   });

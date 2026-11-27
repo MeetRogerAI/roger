@@ -148,6 +148,11 @@ export const v3Defaults = {
   leaderboardOn: false,
   statsOn: false,
   sponsorsOn: false,
+  // B3 switches (plan 2026-11-27-003, Unit 1). feedbackOn goes through featureOn; reviewBotOn and
+  // coraUpgradesOn are read raw (see src/lib/v3-features.ts).
+  reviewBotOn: false,
+  feedbackOn: false,
+  coraUpgradesOn: false,
   sessionDay: "",
   sessionTime: "",
   sessionLink: "",
@@ -155,3 +160,15 @@ export const v3Defaults = {
 } as const;
 
 export type V3Defaults = typeof v3Defaults;
+
+/**
+ * The December 14 checkpoint (strategy v3.1 section 6, B3 plan "Measure Definitions"): k pooled over
+ * these three Toronto weeks, read against the floor. From `frozenFrom` (00:00 Toronto) the first
+ * reading is stored once in measure_snapshots under `key`, and the page reads that from then on.
+ */
+export const decemberCheckpoint = {
+  key: "checkpoint-2026-12-14",
+  weeks: ["2026-11-23", "2026-11-30", "2026-12-07"],
+  floor: 0.25,
+  frozenFrom: "2026-12-14",
+} as const;

@@ -56,6 +56,15 @@ describe("schema.sql", () => {
     expect(tables.filter((t) => t === "sessions")).toHaveLength(1);
   });
 
+  it("creates every B3 table", () => {
+    const tables = statements.map((s) => /^create table if not exists (\w+)/i.exec(s)?.[1]).filter(Boolean);
+    for (const t of ["zack_instruction_fetches", "member_feedback", "review_runs", "measure_snapshots", "review_proposals"]) expect(tables).toContain(t);
+  });
+
+  it("never writes referrals.generation (B3 derives generation instead)", () => {
+    expect(statements.some((s) => /^update referrals\b[^;]*\bgeneration\b/i.test(s))).toBe(false);
+  });
+
   it("never creates the superseded lower(display_name) board index (only drops it), and adds the sponsor key NOT VALID", () => {
     expect(statements.some((s) => /^create unique index if not exists users_leaderboard_name(?!_key)/i.test(s))).toBe(false);
     expect(statements).toContain("drop index if exists users_leaderboard_name");
