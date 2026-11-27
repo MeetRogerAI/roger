@@ -73,7 +73,7 @@ Records, not a file: each pool play's factor scores and score, and three picks p
 A passing error is retried by the next run. If the model has no credits, errors repeat three times, or the week is not ready by noon Toronto, nothing is sent, the week is marked failed, and both admins are alerted. A failed week never becomes ready later.
 
 ## Decisions Peter confirmed (2026-11-27)
-The readings the build made, confirmed as built (launch list S20):
+The readings the build made, confirmed as built (formerly launch list S20):
 - A play the user cannot install ranks below every play they can, even a Fit 1 play (change 9, read literally).
 - An idea that could not be installed may be sent again once the setup has what it needs (change 12).
 - The "Running for" Proof bonus (change 6) and leaving adopted plays out of Surprise (change 7) are built in, with no switch.

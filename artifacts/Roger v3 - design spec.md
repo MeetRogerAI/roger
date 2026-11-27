@@ -969,7 +969,7 @@ Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run,
 | Robyn M. | Real estate, Toronto | "I'm discovering something new with this every day and it's exciting to see what's possible for the office." | Nov 11, 2026 |
 | Ken F. | Real estate, Toronto | "Everything is looking good with Grok. I am saving well over 30 minutes a day with the bots. I have created new bots to organize my database." | Nov 12, 2026 |
 
-There is no solo quote from Grace in the document; one is needed (see "Needed from Peter").
+There is no solo quote from Grace in the document. Peter confirmed the four quotes as seeded and dropped a Grace quote (November 27, 2026).
 
 **Sample idea.** Choose which pool play is shown on the public site. Choosing one requires ticking "I have read this play and it contains nothing private."
 
@@ -1240,7 +1240,7 @@ create table if not exists setup_files (
 | **Bricks and Seasons** *(1.5: renamed from "Bricks and levels")* | On `/app/history`: a 26-week compounding graph, the line in the Season colour, a larger marker on the user's current week. Each idea set up is a brick. After week 26 the graph starts again in the next Season's colour, up to Season 5. The colour is the whole reward. "Level" is not used here: it means Roger AI Levels (B4). |
 | **Leaderboard** | One network-wide board on `/app/leaderboard`. A user earns 1 point when Cora picks one of their plays for another user and 1 more when that user's set-up is confirmed. Users appear under a display name they choose. Counts are shown ("2 users adopted your idea"), never names. |
 | **Group session** | A card on `/app/sessions`: the next session's day, time, and Google Meet link, with "Add to calendar". Paying and sponsored users only; trial users see it greyed out with "Opens when you subscribe". A subscriber invites one guest per session by name and email; the guest receives a one-time invitation at `/g/{token}` and is recorded as that subscriber's referral. Admins set the day, time, and link, and tick who attended. |
-| **Sponsors** | In `/admin/sponsors` an admin creates a sponsor: name, currency, negotiated standard and higher monthly prices, number of seats, and a code. A person who signs up at `/start?sponsor={code}` ~~skips the card step~~ *(1.4: is never asked for a card: no held list, no Payment)*. Each month the admin page shows the seats in use at each price and prepares a Stripe invoice to the sponsor for an admin to send. The sponsor has no login and sees nothing about any user. The contributor rule applies to sponsored users at the sponsor's two prices. A sponsor is invoiced from each sponsored user's third list, so sponsored users also get two free lists (launch list D6: a default, to be confirmed when B2 is built). |
+| **Sponsors** | In `/admin/sponsors` an admin creates a sponsor: name, currency, negotiated standard and higher monthly prices, number of seats, and a code. A person who signs up at `/start?sponsor={code}` ~~skips the card step~~ *(1.4: is never asked for a card: no held list, no Payment)*. Each month the admin page shows the seats in use at each price and prepares a Stripe invoice to the sponsor for an admin to send. The sponsor has no login and sees nothing about any user. The contributor rule applies to sponsored users at the sponsor's two prices. A sponsor is invoiced from each sponsored user's third list, so sponsored users also get two free lists (default 6 under "Defaults to confirm", not yet confirmed). |
 
 New tables: `referrals` (referrer, referred user or email, source, generation, stage, credit, dates), `credits`, `points`, `sessions_attendance`, `session_guests`, `sponsors`.
 
@@ -1252,10 +1252,10 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 | **Pipeline** | `/admin/pipeline`: every person from first touch (lead, guest, referral, waitlist, sign-up) through trial to paying, with the date of each stage and where they came from. Replaces counting by hand. |
 | **Review bot** | `/admin/review`: on a schedule, a model reads the week's runs, flags, rejections, picks, and set-up rates and proposes specific wording changes to the Zack and Cora instruction files. An admin reads each proposal and approves or rejects it. Nothing changes without approval, and approved changes go into the repo as a normal commit. |
 | **Feedback** | Users' replies and notes are stored against their record and are part of what the review bot reads. |
-| **Cora upgrades** | Cora 2.0 change 11: a list may offer an upgrade to a play the user already runs; at most one of three picks (recommendation). Moved from launch list S20, 2026-11-27. |
-| **Cora adoption counts** | Cora 2.0 change 15: an idea counts as adopted when the user's next profile shows it "used this week"; "installed" and "used" reported separately, feeding the adoption measure above. Moved from launch list S20, 2026-11-27. |
+| **Cora upgrades** | Cora 2.0 change 11: a list may offer an upgrade to a play the user already runs; at most one of three picks (recommendation). Not needed for launch (Peter, 2026-11-27). |
+| **Cora adoption counts** | Cora 2.0 change 15: an idea counts as adopted when the user's next profile shows it "used this week"; "installed" and "used" reported separately, feeding the adoption measure above. Not needed for launch (Peter, 2026-11-27). |
 | **Admin read log** | Each time an admin opens a member's runs or picks, the admin action log records it. The privacy page then says so. Moved from launch list S22, 2026-11-27 (not logged at launch). |
-| **Scenario tests against the sandbox** | `SCENARIO_TARGET=sandbox` in `tests/scenarios/helpers.ts`: the scenario files run against the Stripe sandbox on test clocks and the scenario-test Neon branch (`SCENARIO_DATABASE_URL`). Replaced at launch by one test-clock journey walked on preview (launch list, 2026-11-27). |
+| **Scenario tests against the sandbox** | `SCENARIO_TARGET=sandbox` in `tests/scenarios/helpers.ts`: the scenario files run against the Stripe sandbox on test clocks and the scenario-test Neon branch (`SCENARIO_DATABASE_URL`). Includes creating that Neon branch with its non-production marker row. Replaced at launch by one test-clock journey walked on preview (Peter, 2026-11-27). |
 
 ## B.16a Version B4: levels *(1.5)*
 
@@ -1269,7 +1269,7 @@ Built after B3. The full specification is `Roger Levels Build Spec - Zack 2.1, C
 | **Stats email and operations view** | The Level line in the Wednesday email; each user's Level and core gaps in the admin operations view. |
 | **Cora uses levels** | Eligibility (no play above the user's Level + 1) and three slots: fix a gap, reach the next level, best fit. |
 
-Before B4 starts: Zack 2.1 is approved and live, and Cora 2.0 change 8 (matching on "Also runs" and the profile's Setup) is built (launch list S20, S23, S24).
+Before B4 starts: Zack 2.1 is approved and live, and Cora 2.0 change 8 (matching on "Also runs" and the profile's Setup) is built as the first B4 unit (Peter, 2026-11-27).
 
 New tables: `level_items` (user, item, live state, last evidence date), `user_levels` (user, level earned, earned at, peak).
 
@@ -1404,11 +1404,11 @@ Every version is built in full *(1.5)*.
 | 5 | Google sign-in credentials for the project | "Sign in with Google" |
 | 6 | The letter, edited for v3 (the approved text mentions Circles and applications) | `/about` and the homepage block |
 | 7 | Headshot at `public/media/peter.jpg` and signature at `public/media/peter-signature.svg` | Nothing; both have fallbacks |
-| 8 | Each testimonial's attribution confirmed (role and city), and a quote from Grace | The testimonials section |
+| 8 | Each testimonial's attribution confirmed (role and city), and a quote from Grace. *Done November 27, 2026: the four quotes confirmed, no Grace quote.* | The testimonials section |
 | 9 | The starter setup file, version 1, read through after the two edits in B.11 | The startup page |
 | 10 | A read of the privacy and terms text, and the model provider's position on training | Launch |
-| 11 | The session day, time, and Meet link | The session card (B2) |
-| 12 | The demo video and the data for the "one real week" example | A2 |
+| 11 | The session day, time, and Meet link (with B2, not launch) | The session card (B2) |
+| 12 | The demo video and the data for the "one real week" example (with A2, not launch) | A2 |
 | 13 | Keys and settings in Vercel: Stripe secret key and webhook secret, the Stripe prices created (monthly at both rates, and one list, in both currencies), `ADMIN_EMAILS` (the Roger team), and the sending address for "Roger support" | Billing, the admin, and every automatic email |
 
 Items 1 and 2 are documents, not code. They can be drafted from this spec and the existing 1.9 and 1.1 files.

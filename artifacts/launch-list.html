@@ -21,7 +21,6 @@
   1. Read this file before starting work on any version (A1, A2, B1, B2, B3, B4).
   2. Every row is a <tr> with a stable data-id and a data-status.
        Supply items (S1 to S22):  data-status is "open" or "done".
-       Defaults (D1 to D12):      data-status is "unconfirmed", "confirmed" or "changed".
   3. If a row with data-blocks naming the version you are about to build is still "open",
      stop and ask Peter for it. Do not invent the content. The only exceptions are rows
      whose "Until then" cell names a fallback; build with that fallback.
@@ -29,7 +28,8 @@
      the row (and its matching checklist item), recording where the content now lives in the
      commit message. Never treat an item as done without evidence in the repo, in the database
      settings, or from Peter in the conversation (a tick on the checklist counts).
-  5. Build every default as written while it is "unconfirmed". When Peter confirms one, remove
+  5. (Defaults D1 to D12 were settled or moved to B2 on 2026-11-27; the table is gone. Spec "Defaults to confirm" keeps 5 and 6.)
+     Old rule: build every default as written while it is "unconfirmed". When Peter confirms one, remove
      the row. When Peter changes one, update the matching section of the spec and the setting
      or rule in code in the same change, then remove the row.
   6. The whole page only shrinks: with every merge into main, remove what is done (Peter,
@@ -177,7 +177,7 @@
         <li class="item" data-id="g-live-settings"><div class="what">Set the live dashboard settings</div><div class="detail"><p>Failed renewals end unpaid (not cancelled); Stripe's own customer emails off; Radar on; Link off (S16).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-hst-invoice"><div class="what">See HST as its own line on a Canadian test invoice</div><div class="detail"><p>Needs a test charge on preview (a member's third list).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
         <li class="item" data-id="g-hst-registration"><div class="what">Turn on the HST registration in Stripe Tax (live)</div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="g-accountant"><div class="what">Get the accountant's word on charging US customers</div><div class="detail"><p>And on the product tax category (S4).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-accountant"><div class="what">Get the accountant's word on charging US customers</div><div class="detail"><p>And on the product tax category (spec, "Needed from Peter" 4).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-old-webhooks"><div class="what">Delete leftover webhooks from old projects</div><div class="detail"><p>An active "the120" endpoint is still in the sandbox.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
         <li class="item" data-id="g-old-key"><div class="what">Find where the old preview key came from</div><div class="detail"><p>Preview held a live key (<code>sk_live_51H8a…</code>) that isn't Roger's live key. Roll it in that account if it was pasted somewhere it shouldn't be.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
       </ul>
@@ -196,8 +196,7 @@
       <h2>Checks on preview</h2>
       <ul class="list">
         <li class="item" data-id="g-ai-gateway"><div class="what">The AI Gateway reads a run on preview</div><div class="detail"><p>Plus the Monday cron jobs show in Vercel and a Cora dry run completes (S15).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
-        <li class="item" data-id="g-live-checks"><div class="what">Walk the checks that need a live environment on preview</div><div class="detail"><p>From the B1 first-pass record, plus one run of the scenario tests against the sandbox.</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
-        <li class="item" data-id="g-scenario-db"><div class="what">Create a scenario-test database branch</div><div class="detail"><p>A third Neon branch with the non-production marker, URL in <code>SCENARIO_DATABASE_URL</code> (S17). The tests run in-process meanwhile.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag optional">Optional</span></div></li>
+        <li class="item" data-id="g-live-checks"><div class="what">Walk the checks that need a live environment on preview</div><div class="detail"><p>From the B1 first-pass record, plus one member journey on a Stripe test clock (the sandbox scenario run moved to B3).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
       </ul>
     </div>
 
@@ -205,7 +204,7 @@
     <div class="group">
       <h2>Public site and go-live</h2>
       <ul class="list">
-        <li class="item" data-id="g-public-site"><div class="what">Build the public v3 site</div><div class="detail"><p>meetroger.ai is still the Circles preview. The v3 pages, the "Start free" header and the switch that hides Circles (spec Part A) are the largest build left. Needs your letter (S6), headshot and signature (S7), testimonial attributions and a quote from Grace (S8), and the demo video and "one real week" figures (S12).</p></div><div class="tags"><span class="tag who-claude">Claude Code builds</span><span class="tag who-you">You supply content</span></div></li>
+        <li class="item" data-id="g-public-site"><div class="what">Build the public v3 site</div><div class="detail"><p>meetroger.ai is still the Circles preview. The v3 pages, the "Start free" header and the switch that hides Circles (spec Part A) are the largest build left. Being built on <code>feat/site-v1</code> (marketing-site plan); ticked when it merges. Needs your letter (S6) and headshot and signature (S7). The demo video and "one real week" figures come with A2.</p></div><div class="tags"><span class="tag who-claude">Claude Code builds</span><span class="tag who-you">You supply content</span></div></li>
         <li class="item" data-id="g-pilot-runs"><div class="what">Import the 13 pilot runs on production</div><div class="detail"><p>Read by the model first, then imported, pilots linked, and a Cora dry run read by an admin (S14).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
         <li class="item" data-id="g-higher-price"><div class="what">Check no subscription is on the higher price by mistake</div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
         <li class="item" data-id="g-open"><div class="what">Turn on the weekly cycle, then sign-up</div><div class="detail"><p>An admin turns on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
@@ -310,16 +309,6 @@
             <td class="statuscell"><span class="st open">Open</span></td>
             <td class="notes">Added 2026-11-23 from the B1 build (plan Units 12 to 15). The preview webhook needs an address that is not behind Vercel's deployment protection.<br>By 2026-11-26, test mode: the webhook to preview.meetroger.ai exists on <code>2026-11-18.endive</code> and was checked end to end (an event arrived and was recorded in <code>stripe_events</code>). On 2026-11-26 <code>checkout.session.completed</code> was added to it; it had been left out, which would have stopped the card step from finishing. Vercel's protection is now off, so the address needs no bypass. Still to do: the live endpoint and its secret; in live mode, failed renewals end unpaid, Stripe's customer emails off, Radar on; the HST line on a Canadian test invoice.<br>2026-11-26, spec 1.4: the embedded Payment page spike passed, so the event list above is unchanged: no <code>setup_intent.succeeded</code> is needed, and <code>checkout.session.completed</code> (already on the preview endpoint) finishes the card save; the live endpoint needs it too. In the dashboard's payment methods, turn Link off in test and live mode (the page also turns it off).</td>
           </tr>
-          <tr data-id="S17" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S17</td>
-            <th scope="row">Neon: the scenario-test branch and the plan</th>
-            <td>Neon project <code>roger-db</code>: a third branch for scenario tests, with the non-production marker row written</td>
-            <td>The branch exists and holds the marker; its URL is set for <code>SCENARIO_DATABASE_URL</code>; Peter has decided whether the free plan is enough before real cards (short backups, shared compute).</td>
-            <td><span class="ver">B1</span></td>
-            <td>Scenario tests run against an in-process Postgres with fakes (<code>tests/scenarios/</code>).</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build. The switch to the sandbox and this branch is documented at the top of <code>tests/scenarios/helpers.ts</code> and still to be wired.<br>By 2026-11-26, Peter: the project is on Neon's Launch plan (this settles the plan question), and a schema-only <code>preview</code> branch serves preview.meetroger.ai. Still open: the scenario-test branch and <code>SCENARIO_DATABASE_URL</code>.</td>
-          </tr>
           <tr data-id="S18" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S18</td>
             <th scope="row">Wording sign-offs</th>
@@ -348,7 +337,7 @@
             <td><span class="ver">B1</span></td>
             <td>Build the defaults in the plan's "Needs a Decision From Peter".</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build. A deleted member's email stays in the admin log row that records the deletion (and email-change rows); admins reading runs and picks is not logged; retention erases runs 90 days after access ends but not for long-idle one-at-a-time or held members; pooled plays stay after a run is deleted; whether a contributor can have pooled plays withdrawn; how long sign-up interest, notification and Stripe event records are kept.</td>
+            <td class="notes">Added 2026-11-23 from the B1 build. A deleted member's email stays in the admin log row that records the deletion (and email-change rows); admins reading runs and picks is not logged; retention erases runs 90 days after access ends but not for long-idle one-at-a-time or held members; pooled plays stay after a run is deleted; whether a contributor can have pooled plays withdrawn; how long sign-up interest, notification and Stripe event records are kept.<br>2026-11-27, Peter decided each point (<code>docs/brainstorms/2026-11-27-v3-launch-close-out-requirements.md</code>, R7): the deletion record keeps the email, stated on the page; admin reads not logged at launch (logging in B3, spec B.16); runs of one-at-a-time or held members erased after 12 months idle; pooled plays stay, anonymised; withdrawal of pooled plays on request through support; sign-up interest and notifications kept 12 months, Stripe events 18 months. Still to do: build the two retention rules and state all six on the privacy page.</td>
           </tr>
         </tbody>
       </table>
@@ -523,7 +512,5 @@
     var set = function (id, n) { var el = document.getElementById(id); if (el) el.textContent = n; };
     set('n-open', count('supply', 'open'));
     set('n-done', count('supply', 'done'));
-    set('n-unconf', count('defaults', 'unconfirmed'));
-    set('n-conf', count('defaults', 'confirmed') + count('defaults', 'changed'));
   })();
 </script>
