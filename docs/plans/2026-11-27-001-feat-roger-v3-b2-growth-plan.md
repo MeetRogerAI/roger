@@ -370,7 +370,7 @@ sequenceDiagram
 - **Cookie:** signed, httpOnly, SameSite=Lax, 60 days. The first referrer wins: a newer `/r` visit doesn't overwrite an existing valid cookie.
 - **Account creation:** set `referred_by` if it's empty and the referrer isn't the same user or the same normalised email.
   - If an `invited` row from the same referrer exists for this normalised email (a guest), promote it to `trial`. Otherwise insert one at `trial`.
-  - A guest invited by referrer A who arrives through B's link keeps whichever referrer was resolved first: the cookie, unless it's absent, then the invitation.
+  - As built (Unit 3 review): an explicit guest invitation for this exact address beats an older link cookie. So a guest invited by A who arrives through B's link is credited to A.
 - **Card save:** if the fingerprint matches the referrer's, set the stage to `void`.
 - **Stages:** these advance on lifecycle hooks: account created → `trial`, first paid invoice → `paying` (Unit 4). Guest invitations create `invited` rows (Unit 9).
 - **The page:** link with Copy, the referral script (spec copy), and a list of referred people with stage and credit.
@@ -697,7 +697,7 @@ sequenceDiagram
 
 **Verification:** The admin flow works in test mode, and #48 passes.
 
-- [ ] **Unit 11: Docs write-back and launch list**
+- [x] **Unit 11: Docs write-back and launch list**
 
 **Goal:** Keep the spec and the launch list true.
 
