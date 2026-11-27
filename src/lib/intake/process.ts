@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { runNeedsALookEmail } from "@/lib/mail/templates/run-needs-a-look";
 import { ModelCutOff, slicePlaybook, type IntakeModel, type ReviewFinding } from "./model";
-import { parseProfileBlock, parseRunBlock } from "./parse-block";
+import { parseProfileBlock, parseRunBlock, withoutPrivateBlocks } from "./parse-block";
 import { harmFlags, phrasePattern, replaceNeverWords, replacePatterns } from "./privacy-patterns";
 import { validateRun, type ParsedRun, type Play } from "./validate";
 
@@ -71,13 +71,15 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
   let parsed: ParsedRun;
   let parsedBy: "block" | "model";
   const block = parseRunBlock(run.raw_text);
+  // What the model reads, and where stated figures are looked for: never a private block (build spec T3).
+  const readable = withoutPrivateBlocks(run.raw_text);
   if (block !== null) {
     const v = validateRun(block);
     if (!v.ok) return reject(q, run, v.reason, deps);
     parsed = v.run;
     parsedBy = "block";
   } else {
-    const read = await readWithModel(run.raw_text, deps.model);
+    const read = await readWithModel(readable, deps.model);
     if (read.kind === "cut_off") return flagWhole(q, run, REASON.tooLong);
     const v = validateRun(read.run);
     // Our reader's mistake, not Zack's: try again, then an admin. The member is not told to rerun Zack.
@@ -94,7 +96,7 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
   const kept = parsed.plays.filter((p) => !skip.has(p.category.toLowerCase()));
 
   // 3. Privacy and harm, on every string in the play: patterns, the never-include list, then the model review.
-  const plays = kept.map((p, i) => cleanPlay(p, `p${i + 1}`, run.never_words ?? [], parsedBy, run.raw_text));
+  const plays = kept.map((p, i) => cleanPlay(p, `p${i + 1}`, run.never_words ?? [], parsedBy, readable));
   const alsoRuns = parsed.also_runs.map((a) => cleanStrings(a, run.never_words ?? []).value);
   let findings: ReviewFinding[];
   try {
