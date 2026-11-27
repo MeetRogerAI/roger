@@ -1,4 +1,4 @@
-import { isRealDate } from "@/lib/clock";
+import { currentMonday, daysBetween, isRealDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { buildIdeaView, type FactorKey, type IdeaView } from "@/lib/cora/idea-view";
 
@@ -87,14 +87,101 @@ export async function markSetUp(q: Query, userId: string, week: string, position
   return rows.length > 0;
 }
 
+/**
+ * The picks that count for bricks: the user's own (`$1`), delivered, never a
+ * dry run. `bricks()` and `brickSeries()` both use it, so the count on `/app`
+ * and the graph on `/app/history` always agree.
+ */
+const BRICK_PICKS = "from picks where user_id = $1 and not dry_run and delivered_at is not null";
+
 /** Bricks: ideas the user marked as set up, and how many Zack confirmed (spec B.8 item 5). */
 export async function bricks(q: Query, userId: string): Promise<{ marked: number; confirmed: number }> {
   const [r] = await q<{ marked: number | string; confirmed: number | string }>(
     `select count(*) filter (where setup_marked_at is not null) as marked, count(*) filter (where setup_confirmed_at is not null) as confirmed
-     from picks where user_id = $1 and not dry_run and delivered_at is not null`,
+     ${BRICK_PICKS}`,
     [userId],
   );
   return { marked: Number(r?.marked ?? 0), confirmed: Number(r?.confirmed ?? 0) };
+}
+
+/** Weeks in a Season (spec B.15), and the last Season with its own colour. */
+export const SEASON_WEEKS = 26;
+export const MAX_SEASON = 5;
+
+/**
+ * The brick graph on `/app/history` (spec B.15, plan B2 Unit 2).
+ *
+ * Week 1 is the Toronto week (Monday) of the member's first delivered list.
+ * A brick is an idea marked set up, counted in the Toronto week its
+ * `setup_marked_at` falls in. Every 26 weeks a new Season starts and the
+ * count restarts at 0. `points` holds the running count for each week of the
+ * current Season up to and including the current week.
+ *
+ * After Season 5: spec B.15 says the graph starts again "up to Season 5". We
+ * read that as the Season number and colour stopping at 5 while the graph
+ * still restarts every 26 weeks (week 131 is Season 5, week 1 of 26 again),
+ * so the chart never grows past 26 weeks.
+ */
+export type BrickSeries = {
+  /** 1-based week since the first delivered list. */
+  weekIndex: number;
+  season: number;
+  /** 1–26: the current week within its Season. */
+  weekOfSeason: number;
+  points: number[];
+  /** Bricks set up in the current week. */
+  thisWeek: number;
+  seasonBricks: number;
+  /** Every brick ever: the same number as `bricks().marked`. */
+  lifetime: number;
+  /** Bricks Zack confirmed: the same number as `bricks().confirmed`. */
+  confirmed: number;
+};
+
+/** The pure part of `brickSeries`: the first delivered week, each brick's set-up moment, now, and the confirmed count. */
+export function buildBrickSeries(firstWeek: string, setUpAt: Date[], now: Date, confirmed = 0): BrickSeries {
+  const weekIndexOf = (moment: Date) => Math.floor(daysBetween(firstWeek, currentMonday(moment)) / 7) + 1;
+  const weekIndex = Math.max(1, weekIndexOf(now));
+  const block = Math.floor((weekIndex - 1) / SEASON_WEEKS);
+  const season = Math.min(block + 1, MAX_SEASON);
+  const weekOfSeason = weekIndex - block * SEASON_WEEKS;
+  const perWeek = new Array<number>(weekOfSeason).fill(0);
+  let lifetime = 0;
+  for (const at of setUpAt) {
+    // A set-up can't come before week 1 or after now; clamp rather than drop.
+    const w = Math.min(Math.max(1, weekIndexOf(at)), weekIndex);
+    lifetime += 1;
+    const inSeason = w - block * SEASON_WEEKS;
+    if (inSeason >= 1) perWeek[inSeason - 1] += 1;
+  }
+  let running = 0;
+  const points = perWeek.map((n) => (running += n));
+  return { weekIndex, season, weekOfSeason, points, thisWeek: perWeek[weekOfSeason - 1], seasonBricks: running, lifetime, confirmed };
+}
+
+/** The member's brick graph as of `now`, or null before their first delivered list. */
+export async function brickSeries(q: Query, userId: string, now: Date): Promise<BrickSeries | null> {
+  const rows = await q<{ first_week: string | null; set_up_ms: number | string | null; confirmed: boolean }>(
+    `select to_char(min(week_of) over (), 'YYYY-MM-DD') as first_week,
+            case when setup_marked_at is null then null else extract(epoch from setup_marked_at) * 1000 end as set_up_ms,
+            setup_confirmed_at is not null as confirmed
+     ${BRICK_PICKS}`,
+    [userId],
+  );
+  const firstWeek = rows[0]?.first_week;
+  if (!firstWeek) return null;
+  const setUpAt = rows.filter((r) => r.set_up_ms !== null).map((r) => new Date(Number(r.set_up_ms)));
+  return buildBrickSeries(firstWeek, setUpAt, now, rows.filter((r) => r.confirmed).length);
+}
+
+/**
+ * The graph's numbers in words, shown under it on `/app/history` and reused
+ * by the Wednesday stats email: "Season 1 · week 7 of 26 · 5 bricks this
+ * Season · 12 in all". Says "Season", never "Level" (spec B.15).
+ */
+export function brickSummary(s: BrickSeries): string {
+  const bricks = `${s.seasonBricks} ${s.seasonBricks === 1 ? "brick" : "bricks"} this Season`;
+  return `Season ${s.season} · week ${s.weekOfSeason} of ${SEASON_WEEKS} · ${bricks} · ${s.lifetime} in all`;
 }
 
 /** Every delivered idea, newest first (`/app/history`). */

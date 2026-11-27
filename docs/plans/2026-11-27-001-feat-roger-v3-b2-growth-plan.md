@@ -318,7 +318,7 @@ sequenceDiagram
 
 **Verification:** #52. The quiz works on a mobile viewport.
 
-- [ ] **Unit 2: Season rename and the 26-week brick graph**
+- [x] **Unit 2: Season rename and the 26-week brick graph**
 
 **Goal:** Acceptance #51, plus the compounding graph on `/app/history`.
 

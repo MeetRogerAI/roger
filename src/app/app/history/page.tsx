@@ -2,18 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { bricks, history } from "@/lib/app/week";
+import { BrickGraph } from "@/components/app/brick-graph";
+import { brickSeries, history } from "@/lib/app/week";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { longDate } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Every idea" };
 
-/** Every idea the user has had, newest first, with its state and the brick count. */
+/** Every idea the user has had, newest first, with its state, the brick count and the Season graph (spec B.15). */
 async function History() {
   await connection();
   const session = await requireUser("/app/history");
-  const [rows, b] = await Promise.all([history(query, session.userId), bricks(query, session.userId)]);
+  const [rows, series] = await Promise.all([history(query, session.userId), brickSeries(query, session.userId, new Date())]);
+  // The graph's query also gives the header count, so the two can't disagree.
+  const b = { marked: series?.lifetime ?? 0, confirmed: series?.confirmed ?? 0 };
   return (
     <div className="space-y-8">
       <header>
@@ -22,6 +25,7 @@ async function History() {
           {b.marked} set up{b.confirmed ? `, ${b.confirmed} confirmed by Zack` : ""}.
         </p>
       </header>
+      <BrickGraph series={series} />
       {rows.length ? (
         <ul className="divide-y divide-rule border-y border-rule">
           {rows.map((r) => (
