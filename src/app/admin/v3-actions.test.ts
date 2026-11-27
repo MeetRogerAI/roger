@@ -58,6 +58,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["deleteAccount", () => actions.deleteAccountAction(idle, form({ userId: "x" }))],
     ["changeEmail", () => actions.changeEmailAction(idle, form({ userId: "x", email: "z@example.com" }))],
     ["flag", () => actions.flagAction(idle, form({ playId: "x", decision: "approve" }))],
+    ["launchSwitch", () => actions.launchSwitchAction(idle, form({ name: "cycleLive", on: "true", confirm: "yes" }))],
     ["saveTestimonial", () => actions.saveTestimonialAction(idle, form({ person: "X", quote: "Q" }))],
     ["testimonialSwitch", () => actions.testimonialSwitchAction(form({ id: "x", cleared: "off" }))],
     ["chooseSample", () => actions.chooseSampleAction(idle, form({ playId: "x", readIt: "on" }))],
@@ -83,6 +84,26 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     expect(await current("select 1 from admin_actions")).toEqual([]);
     expect(await current<{ free_lists_used: number }>("select free_lists_used from users")).toEqual([{ free_lists_used: 2 }]);
     expect(await current("select 1 from users where email = 'p@example.com'")).toEqual([]);
+  });
+});
+
+describe("the go-live switches (launch list g-open)", () => {
+  it("turn the cycle on only with the box ticked, then sign-up, and log each", async () => {
+    admin = "admin@example.com";
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "cycleLive", on: "true" }))).toMatchObject({ status: "error", message: "Tick the box to confirm." });
+    expect(await current("select 1 from settings where key = 'v3.cycleLive'")).toEqual([]);
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "cycleLive", on: "true", confirm: "yes" }))).toMatchObject({ status: "ok", message: "The weekly cycle is now on." });
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "signupOpen", on: "true", confirm: "yes" }))).toMatchObject({ status: "ok", message: "Sign-up is now on." });
+    expect(await current("select action, detail from admin_actions order by id")).toMatchObject([
+      { action: "launch_switch", detail: expect.objectContaining({ name: "cycleLive", on: true }) },
+      { action: "launch_switch", detail: expect.objectContaining({ name: "signupOpen", on: true }) },
+    ]);
+  });
+
+  it("says why when the order is wrong, and refuses an unknown switch", async () => {
+    admin = "admin@example.com";
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "signupOpen", on: "true", confirm: "yes" }))).toMatchObject({ status: "error", message: expect.stringContaining("weekly cycle first") });
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "retentionDays", on: "true", confirm: "yes" }))).toMatchObject({ status: "error", message: "Unknown switch." });
   });
 });
 

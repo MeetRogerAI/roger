@@ -11,6 +11,7 @@ import { chooseSample, clearSample, moveTestimonial, saveTestimonial, setTestimo
 import { chargeAndSendNow } from "@/lib/admin/cora";
 import { approvePlay, EDITABLE_FIELDS, editPlay, rejectPlay } from "@/lib/admin/flags";
 import { audited, logAdminAction } from "@/lib/admin/log";
+import { setSwitch, type LaunchSwitch } from "@/lib/admin/launch-switches";
 import { opsWeek } from "@/lib/admin/ops";
 import { addRunForUser, changeUserEmail, closeAccount, deleteAccount, giveExtraFreeList, isMonday, linkContributor, saveNote, sendNudge, type Done } from "@/lib/admin/users";
 import { excuseWeek, undoExcuseForEveryone } from "@/lib/billing/contribution";
@@ -318,6 +319,24 @@ export async function runJobAction(_p: V3State, fd: FormData): Promise<V3State> 
   });
   refresh();
   return { status: "ok", message: `${job} for the week of ${week}: ${summary(result)}`, at: Date.now() };
+}
+
+/**
+ * The go-live switches (launch list g-open): `v3.cycleLive`, then
+ * `v3.signupOpen`. Turning either on needs the confirm box; the order rules
+ * live in setSwitch. Logged with who did it.
+ */
+export async function launchSwitchAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const name = field(fd, "name", 20);
+  if (name !== "cycleLive" && name !== "signupOpen") return bad("Unknown switch.");
+  const on = field(fd, "on", 5) === "true";
+  if (on && field(fd, "confirm", 5) !== "yes") return bad("Tick the box to confirm.");
+  const r = await audited(query, { by, action: "launch_switch", detail: { name, on } }, () => setSwitch(query, name as LaunchSwitch, on));
+  if (!r.ok) return bad(r.reason);
+  refresh();
+  const what = name === "cycleLive" ? "The weekly cycle" : "Sign-up";
+  return { status: "ok", message: `${what} is now ${on ? "on" : "off"}.`, at: Date.now() };
 }
 
 /** The recovery button: charge first, then send, for a week Cora finished. */
