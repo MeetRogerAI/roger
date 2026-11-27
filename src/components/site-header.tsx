@@ -68,6 +68,18 @@ export function isUnlisted(path: string) {
   return path.startsWith("/for/") || path === "/rlpsignature";
 }
 
+/**
+ * A v2 hero sketch (plan U11), a preview-only page. Each sketch draws its own header, because the header is part
+ * of the look being chosen, so the site's header and footer are left off these pages and no others.
+ *
+ * `served` is whether this build serves the sketches at all (isKnownNonProduction, read by the root layout: the
+ * browser cannot read VERCEL_ENV). Where it does not, these addresses are the not-found page, which keeps the
+ * site's header and footer like any other. One path segment after /hero/ only, so nothing deeper matches.
+ */
+export function isHeroSketch(path: string, served: boolean) {
+  return served && /^\/site-preview\/hero\/[^/]+$/.test(path);
+}
+
 /** `chrome` is a site version's own header content; Circles, the legacy site and the pages that keep their header need none. */
 export function navFor(path: string, site: ServedSite, chrome?: SiteChrome | null): NavSet {
   if (accountPages.some((p) => path === p || path.startsWith(`${p}/`))) return { links: [], cta: null };
@@ -148,7 +160,7 @@ export function PhoneMenu({ nav, onNavigate }: { nav: NavSet; onNavigate: () => 
   );
 }
 
-export function SiteHeader({ site, chrome }: { site: ServedSite; chrome?: SiteChrome | null }) {
+export function SiteHeader({ site, chrome, sketches = false }: { site: ServedSite; chrome?: SiteChrome | null; /** Whether this build serves the v2 hero sketches. */ sketches?: boolean }) {
   const path = usePathname() || "/";
   const nav = navFor(path, site, chrome);
   // The menu belongs to the page it was opened on, so navigating closes it.
@@ -170,6 +182,9 @@ export function SiteHeader({ site, chrome }: { site: ServedSite; chrome?: SiteCh
     menuRef.current?.querySelector<HTMLAnchorElement>("a")?.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // A hero sketch brings its own header.
+  if (isHeroSketch(path, sketches)) return null;
 
   return (
     <header className="sticky top-0 z-40 bg-ground">

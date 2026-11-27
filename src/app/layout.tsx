@@ -10,10 +10,12 @@ import { Reveals } from "@/components/reveals";
 import { SettingsProvider } from "@/components/settings-provider";
 import { getSettings } from "@/lib/settings";
 import { getSiteChrome, siteMeta } from "@/lib/site/chrome";
-import { bySite, getServedSite, isBuiltVersion } from "@/lib/site/version";
+import { bySite, getServedSite, isBuiltVersion, isKnownNonProduction } from "@/lib/site/version";
 import "./globals.css";
 
 const site = getServedSite();
+// The v2 hero sketches (plan U11) draw their own header. They are served only where this is true; elsewhere their addresses are not found, with the site's header and footer.
+const sketches = isKnownNonProduction();
 // A site version's title and description are its homepage headline and sub-line.
 const meta = isBuiltVersion(site) ? siteMeta(site) : null;
 
@@ -94,12 +96,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SettingsProvider value={{ setupCall: s.setupCall, setupCheckout: s.setupCheckout, planCheckout: s.planCheckout, companyCall: s.companyCall }}>
           <ClientBoot />
           <Reveals />
-          <SiteHeader site={site} chrome={chrome} />
+          <SiteHeader site={site} chrome={chrome} sketches={sketches} />
           {site === "legacy" && <CodeBanner />}
           <main id="main" className="flex-1">
             {children}
           </main>
-          <FooterSwitch full={<SiteFooter site={site} chrome={chrome} />} minimal={<MinimalFooter site={site} />} />
+          <FooterSwitch sketches={sketches} full={<SiteFooter site={site} chrome={chrome} />} minimal={<MinimalFooter site={site} />} />
         </SettingsProvider>
       </body>
     </html>
