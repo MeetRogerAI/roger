@@ -16,7 +16,7 @@ describe("PriceBox", () => {
     expect(t).toContain("Roger monthly CA$280");
     expect(t).toContain("Tax Calculated from your billing address");
     expect(t).toContain("Total per month CA$280 + tax");
-    expect(t).toContain("Due today: CA$0. Your first charge comes with your third list.");
+    expect(t).toContain("Due today: $0. Your first charge comes with your third list.");
   });
 
   it("with an Ontario address: HST with its rate, and the total", () => {
@@ -30,7 +30,7 @@ describe("PriceBox", () => {
     const t = text(renderToStaticMarkup(<PriceBox price={us} promo={null} />));
     expect(t).toContain("No sales tax US$0");
     expect(t).toContain("Total per month US$200");
-    expect(t).toContain("Due today: US$0.");
+    expect(t).toContain("Due today: $0.");
   });
 
   // Unit 8 review F5: how long the discount lasts, and the regular monthly amount after one that ends.

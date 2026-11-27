@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { SignupSteps } from "@/components/app/signup-steps";
 import { Suspense } from "react";
 import { PlanForm } from "@/components/app/plan-form";
 import { amount, money } from "@/lib/billing/prices";
@@ -18,8 +19,8 @@ async function Plan() {
 export default function PlanPage() {
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 3 of 4</p>
-      <h1 className="mt-3 text-h2">Product and Pricing</h1>
+      <SignupSteps current={3} />
+      <h1 className="text-h2">Product and Pricing</h1>
       <Suspense fallback={<p className="mt-10 text-ink-2">Loading…</p>}>
         <Plan />
       </Suspense>

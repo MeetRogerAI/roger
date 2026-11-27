@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SignupSteps } from "@/components/app/signup-steps";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -81,8 +82,8 @@ function Confirming({ next, problem }: { next: string | null; problem: boolean }
 export default function PaymentDonePage({ searchParams }: PageProps<"/start/payment/done">) {
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 4 of 4</p>
-      <h1 className="mt-3 text-h2">Payment</h1>
+      <SignupSteps current={4} />
+      <h1 className="text-h2">Payment</h1>
       <div className="mt-8">
         <Suspense fallback={<p className="text-lead">Confirming your card…</p>}>
           <Done searchParams={searchParams} />

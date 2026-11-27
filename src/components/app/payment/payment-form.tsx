@@ -2,7 +2,6 @@
 
 import { CheckoutElementsProvider, PaymentElement, useCheckoutElements, type StripeUseCheckoutElementsResult } from "@stripe/react-stripe-js/checkout";
 import { loadStripe, type Appearance, type Stripe } from "@stripe/stripe-js";
-import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { applyPromo, openSession, quoteTax, removePromo, setPaymentCurrency, type BillingLocationInput, type Priced } from "@/app/start/payment/actions";
 import type { MonthlyPreview } from "@/lib/billing/gateway";
@@ -305,11 +304,6 @@ export function PaymentForm({
           supportEmail={supportEmail}
         />
         <Trust supportEmail={supportEmail} />
-        <p className="mt-8">
-          <Link href="/app" className="tlink-quiet inline-flex min-h-11 items-center text-small">
-            Not now
-          </Link>
-        </p>
       </div>
     </div>
   );

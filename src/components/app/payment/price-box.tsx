@@ -34,7 +34,7 @@ export function PriceBox({
   const currency = price.currency;
   const tax = taxLine(price);
   const total = totalText(price);
-  const due = dueToday(currency);
+  const due = dueToday();
   const duration = discountDuration(promo, price);
   // A discount that ends: the total shown is the first month's, and the regular monthly amount follows it.
   const then = thenLine(promo, price);

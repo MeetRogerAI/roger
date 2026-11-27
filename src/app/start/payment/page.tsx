@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SignupSteps } from "@/components/app/signup-steps";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -76,11 +76,6 @@ function Problem({ message }: { message: string }) {
         </a>
         .
       </p>
-      <p className="mt-8">
-        <Link href="/app" className="tlink-quiet text-small">
-          Not now
-        </Link>
-      </p>
     </div>
   );
 }
@@ -88,8 +83,8 @@ function Problem({ message }: { message: string }) {
 export default function PaymentPage({ searchParams }: PageProps<"/start/payment">) {
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 4 of 4</p>
-      <h1 className="mt-3 text-h2">Payment</h1>
+      <SignupSteps current={4} back={{ href: "/app", label: "Back to your first list" }} />
+      <h1 className="text-h2">Payment</h1>
       <Suspense fallback={<p className="mt-8 text-ink-2">Loading…</p>}>
         <Payment searchParams={searchParams} />
       </Suspense>

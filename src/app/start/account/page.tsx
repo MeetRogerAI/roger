@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { SignupSteps } from "@/components/app/signup-steps";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AccountForm } from "@/components/app/account-form";
@@ -16,8 +17,8 @@ async function Account() {
 export default function AccountPage() {
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 2 of 4</p>
-      <h1 className="mt-3 text-h2">Your account</h1>
+      <SignupSteps current={2} back={{ href: "/start", label: "Back to the questions" }} links={{ 1: "/start" }} />
+      <h1 className="text-h2">Your account</h1>
       <p className="mt-6 max-w-[40rem] text-lead text-ink-2">No password. We’ll email you a link to confirm your address, then you read how Roger works and what it costs.</p>
       <Suspense fallback={null}>
         <Account />

@@ -121,7 +121,10 @@ export async function openEmbeddedSetup(
       const s = await readSession(gw, u.setup_session);
       const ours = s != null && s.customer === customer && s.purpose !== "card_update" && (!s.userId || s.userId === u.id);
       if (s && ours && s.status === "complete") return { ok: false, reason: "complete", sessionId: s.id };
-      if (s && ours && s.status === "open" && s.clientSecret && s.currency === currency) {
+      // Any open session is handed back, whatever currency it was opened in: saving a card does not
+      // depend on the currency, and the first charge uses the member's currency at the time (claimCardSave).
+      // So switching USD/CAD neither reloads the card form nor counts against the card-session limits.
+      if (s && ours && s.status === "open" && s.clientSecret) {
         return { ok: true, sessionId: s.id, clientSecret: s.clientSecret, currency, reused: true };
       }
       if (s?.status === "open") replacing = s;
