@@ -75,11 +75,8 @@ export function PriceBox({
         </button>
         {/* Desktop: the monthly price, always shown. */}
         <p className="hidden min-w-0 md:block">
-          <span className="block text-meta text-ink-2">Roger monthly</span>
-          <span className="whitespace-nowrap">
-            <span className="text-title font-semibold tabular-nums">{moneyCents(price.subtotalCents, currency)}</span>
-            <span className="text-small text-ink-2"> / month</span>
-          </span>
+          <span className="block text-meta text-ink-2">Roger, per month</span>
+          <span className="whitespace-nowrap text-title font-semibold tabular-nums">{moneyCents(price.subtotalCents, currency)}</span>
         </p>
         {toggle}
       </div>

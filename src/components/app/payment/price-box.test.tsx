@@ -70,7 +70,7 @@ describe("PriceBox", () => {
     const top = html.slice(0, panel);
     // The top row holds the phone total, the desktop monthly price and the toggle, before the details panel starts.
     expect(top).toContain("CA$316.40 / month");
-    expect(top).toMatch(/Roger monthly<\/span><span class="whitespace-nowrap"><span[^>]*>CA\$280<\/span>/);
+    expect(top).toMatch(/Roger, per month<\/span><span[^>]*>CA\$280<\/span>/);
     expect(top).toContain('role="group" aria-label="Currency"');
     expect(html.slice(panel)).not.toContain('aria-label="Currency"');
   });
