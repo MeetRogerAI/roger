@@ -140,11 +140,12 @@ describe.each(AGENTS)("public/zack/zack-the-collector-$slug.md", ({ slug, name }
     const own = text.split("\n");
     const added = own.filter((line) => !connected.includes(line));
     const removed = connected.filter((line) => !own.includes(line));
-    // The version line (no draft note), the public-copy line, and the free-run section's heading and seven lines,
-    // which stand where the connected instructions have the heading and seven lines on a run sent to Roger.
-    expect(added).toHaveLength(10);
-    expect(removed).toHaveLength(9);
-    expect(removed.filter((line) => !line.startsWith("Version 2.0 · "))).toEqual(section(connected.join("\n"), SENT_HEADING).split("\n"));
+    // The public-copy line, and the free-run section's heading and seven lines, which stand where the
+    // connected instructions have the heading and seven lines on a run sent to Roger. The version lines match.
+    expect(added).toHaveLength(9);
+    expect(removed).toHaveLength(8);
+    expect(removed).toEqual(section(connected.join("\n"), SENT_HEADING).split("\n"));
+    expect(connected.join("\n")).not.toMatch(/Draft for Peter/i);
   });
 
   it("still asks for the report shape the title reader and the sign-up claim read", () => {

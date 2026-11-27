@@ -46,7 +46,8 @@ Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What
     - **The "has not been run" notice is gone from every copy.** "Version 2.0 and all future versions are being run on all accounts of all agents." The section "Not confirmed about <agent>" was removed from the Claude, Duet and Hark files in all three sets. The Grok Bot files never had it.
     - **The scroll story ends at 78 bricks.** The data held a fifth step (week 27, 81 bricks) that the page never showed. It is removed, so the data ends at week 26 with 78, as the page does.
     - **The brokerage's name is not used and not recorded.** "Do not use the brokerage name." The claims check keeps its rule and its empty list, by decision. See check 6 below.
-    - **Still open from these five:** the version line of the 2.0 source and the connected instructions still ends "· Draft for Peter's approval" (the public files do not carry it). It was left as it is: it says nothing about a version not having been run. Peter says when it comes off.
+    - **Resolved: the draft note is off the version line.** Peter approved the Zack 2.0 files on November 26, 2026, so "· Draft for Peter's approval" was removed from the version line of the four connected instructions and the four 2.0 source documents. The public files never carried it. Cora's instructions (`content/cora/cora.md`) still carry their own draft note; that file was not part of this approval.
+    - **The upload fallback was kept.** "If Zack cannot send the files, the member uploads the run file in their Roger dashboard" stands in the delivery section of all twelve files.
 
 ## A.16, check by check
 

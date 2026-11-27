@@ -607,9 +607,8 @@ The four connector texts in `content/zack/connect` and the 1.9 files in `artifac
 
 The Claude, Duet and Hark files each ended with a section "Not confirmed about <agent>": the notice "Version 2.0 has not been run on a <agent> account. It was ported from the Grok Bot version. The first test run should answer these before the file is shared:", and then the questions that first run was to answer (four in the Claude file, six in the Duet file, three in the Hark file). The whole section was removed from all nine files: the heading and the questions existed only for the notice. The Grok Bot files never had the section. Each file now ends with "Setting it up".
 
-Two sentences inside those questions gave an instruction and went with them. "If it cannot, the member uploads the run file in their Roger dashboard" (for an AI agent that cannot run on a schedule) is now nowhere in the files. "What it cannot see is written "not visible to this run"" is still in the body of each file, under "What Zack reads". If Peter wants the upload fallback kept, it is one sentence to add under "How the run is delivered".
-
-Left as it is: the version line of the source and the connected instructions ends "· Draft for Peter's approval". It says nothing about a run or a test, so it was not removed. The public files do not carry it. No other wording about a version being untested was found in any of the twelve files.
+Two sentences inside those questions gave an instruction and went with them. "If it cannot, the member uploads the run file in their Roger dashboard" (for an AI agent that cannot run on a schedule) went with its question and was then put back, as "If Zack cannot send the files, the member uploads the run file in their Roger dashboard", in the "Connected" line under "How the run is delivered" in all twelve files. "What it cannot see is written "not visible to this run"" is still in the body of each file, under "What Zack reads".
+The version line of the source and the connected instructions ended "· Draft for Peter's approval". Peter approved the files later on November 26, 2026, and the note was removed from all eight. The public files never carried it. No other wording about a version being untested was found in any of the twelve files.
 
 **(4) "The scroll story should end at 78 bricks."**
 
