@@ -15,7 +15,7 @@ export const maxDuration = 300;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Cora (spec B.12): the week, the buttons over the existing jobs, the seed import, and any user's picks (read-only). */
+/** This week’s run, once "Cora" (spec B.12): the week, the buttons over the existing jobs, the seed import, and any user's picks (read-only). */
 export default async function CoraPage({ searchParams }: PageProps<"/admin/cora">) {
   await connection();
   if (!(await isAdmin())) return null;
@@ -37,7 +37,7 @@ export default async function CoraPage({ searchParams }: PageProps<"/admin/cora"
   return (
     <section className="max-w-[60rem] space-y-10">
       <header>
-        <h1 className="text-h3">Cora</h1>
+        <h1 className="text-h3">This week’s run</h1>
         <p className="mt-2 text-small text-ink-2">
           Week of {week}. The cycle is {settings.cycleLive ? "live" : "not live (v3.cycleLive is off): real runs, charges and sends do nothing; a dry run still works"}.
         </p>
@@ -113,7 +113,8 @@ export default async function CoraPage({ searchParams }: PageProps<"/admin/cora"
           <label htmlFor="picks-user" className="sr-only">
             User
           </label>
-          <select id="picks-user" name="user" defaultValue={userId ?? ""} className="h-11 flex-1 rounded-[var(--radius-control)] border border-rule-strong bg-surface px-3 text-small">
+          {/* min-w-0: a select is as wide as its longest address, and without it one long email widens the page on a phone. */}
+          <select id="picks-user" name="user" defaultValue={userId ?? ""} className="h-11 min-w-0 flex-1 rounded-[var(--radius-control)] border border-rule-strong bg-surface px-3 text-small">
             <option value="">Choose a user…</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>

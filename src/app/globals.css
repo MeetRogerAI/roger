@@ -118,6 +118,13 @@
   html {
     scroll-padding-top: 72px;
   }
+  /* Below lg the admin pins its Menu button under the header (admin-ui.tsx): 60px of header and 64px of button.
+     Without the extra room a link to a part of a page (/admin/users/…#add-run) lands with its heading under the button. */
+  @media (max-width: 1023.98px) {
+    html:has([data-admin-nav]) {
+      scroll-padding-top: 136px;
+    }
+  }
   body {
     background: var(--color-ground);
     color: var(--color-ink);

@@ -6,7 +6,7 @@ import { after } from "next/server";
 import { closeFailedWeekOrders } from "@/lib/billing/orders";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { requireAdmin } from "@/lib/admin-auth";
-import { chooseSample, clearSample, moveTestimonial, saveTestimonial, setTestimonialCleared, TESTIMONIALS_TAG } from "@/lib/admin/content";
+import { moveTestimonial, saveTestimonial, setTestimonialCleared, TESTIMONIALS_TAG } from "@/lib/admin/content";
 import { chargeAndSendNow } from "@/lib/admin/cora";
 import { approvePlay, EDITABLE_FIELDS, editPlay, rejectPlay } from "@/lib/admin/flags";
 import { audited, logAdminAction } from "@/lib/admin/log";
@@ -18,7 +18,6 @@ import { asOfAllowed, AsOfRefused, currentMonday, jobNow, moneyAsOfAllowed } fro
 import { gatewayFitModel } from "@/lib/cora/fit";
 import { runCoraJob } from "@/lib/cora/job";
 import { gatewayMergeModel } from "@/lib/cora/merge";
-import { SAMPLE_PLAY_TAG } from "@/lib/cora/sample";
 import { importSeedRun, SeedRunExists } from "@/lib/cora/seed-import";
 import { runSendJob } from "@/lib/cora/send-job";
 import { databaseMarkedNonProduction } from "@/lib/db-environment";
@@ -213,7 +212,7 @@ export async function flagAction(_p: V3State, fd: FormData): Promise<V3State> {
 }
 
 // ---------------------------------------------------------------------------
-// Testimonials and the sample idea (both read by the public site)
+// Testimonials (read by the public site)
 
 export async function saveTestimonialAction(_p: V3State, fd: FormData): Promise<V3State> {
   const by = await requireAdmin();
@@ -244,22 +243,6 @@ export async function testimonialSwitchAction(fd: FormData) {
   else await setTestimonialCleared(query, by, id, field(fd, "cleared", 5) === "on");
   updateTag(TESTIMONIALS_TAG);
   refresh();
-}
-
-export async function chooseSampleAction(_p: V3State, fd: FormData): Promise<V3State> {
-  const by = await requireAdmin();
-  if (field(fd, "clear", 5) === "yes") {
-    const r = await clearSample(query, by);
-    updateTag(SAMPLE_PLAY_TAG);
-    refresh();
-    return state(r);
-  }
-  const playId = idOf(fd, "playId");
-  if (!playId) return bad("Pick a play.");
-  const r = await chooseSample(query, by, playId, fd.get("readIt") === "on");
-  if (r.ok) updateTag(SAMPLE_PLAY_TAG);
-  refresh();
-  return state(r);
 }
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,8 @@ import type { Done } from "./users";
 
 /**
  * What the public site reads that an admin edits (spec 0.6, B.12):
- * testimonials (the site shows only cleared rows) and the one sample idea.
+ * testimonials (the site shows only cleared rows). The one sample idea was
+ * chosen here until November 27, 2026; its columns on pool_plays are kept.
  */
 
 export const TESTIMONIALS_TAG = "testimonials";
@@ -69,39 +70,4 @@ export async function moveTestimonial(q: Query, by: string, id: string, dir: "up
   await q(`update testimonials t set position = x.n from unnest($1::uuid[]) with ordinality as x(id, n) where t.id = x.id`, [all.map((t) => t.id)]);
   await logAdminAction(q, { by, action: "testimonial_moved", detail: { id, dir } });
   return { ok: true, message: "Moved." };
-}
-
-export type SampleCandidate = { id: string; title: string; category: string; description: string; playbookMd: string; isSample: boolean; checkedBy: string | null };
-
-/** Active pool plays, the current sample first. */
-export async function sampleCandidates(q: Query, limit = 60): Promise<SampleCandidate[]> {
-  return q<SampleCandidate>(
-    `select id, title, category, description, playbook_md as "playbookMd", is_public_sample as "isSample", sample_checked_by as "checkedBy"
-     from pool_plays where active order by is_public_sample desc, score desc nulls last, title limit $1`,
-    [limit],
-  );
-}
-
-/**
- * Chooses the pool play the public site shows (spec B.12). The admin must
- * tick "I have read this play and it contains nothing private"; who ticked
- * it is stored on the play. A unique index allows one sample, so the old one
- * is switched off first (the public section is briefly empty, never doubled).
- */
-export async function chooseSample(q: Query, by: string, playId: string, readIt: boolean): Promise<Done> {
-  if (!readIt) return { ok: false, message: "Tick “I have read this play and it contains nothing private” first." };
-  const [play] = await q(`select 1 from pool_plays where id = $1 and active`, [playId]);
-  if (!play) return { ok: false, message: "That play isn’t in the active pool." };
-  await q(`update pool_plays set is_public_sample = false where is_public_sample and id <> $1`, [playId]);
-  const rows = await q<{ id: string }>(`update pool_plays set is_public_sample = true, sample_checked_by = $2 where id = $1 and active returning id`, [playId, by]);
-  if (!rows.length) return { ok: false, message: "That play isn’t in the active pool." };
-  await logAdminAction(q, { by, action: "sample_chosen", detail: { playId } });
-  return { ok: true, message: "The public site shows this play now." };
-}
-
-/** No sample: the public section disappears. */
-export async function clearSample(q: Query, by: string): Promise<Done> {
-  await q(`update pool_plays set is_public_sample = false where is_public_sample`);
-  await logAdminAction(q, { by, action: "sample_cleared" });
-  return { ok: true, message: "No sample is shown now." };
 }
