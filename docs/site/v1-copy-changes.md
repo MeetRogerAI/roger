@@ -258,8 +258,8 @@ The warning above the paste box keeps the spec's first sentence, word for word: 
 | When saving is not switched on (no database) | "Saving is not switched on here yet, so a report cannot be pasted back. You can still read the instructions and run Zack." |
 | When something fails on our side | "Something went wrong on our side. Try again in a minute." (as on `/start`) |
 | "Run Zack once", the file | "Give [agent] the Zack file. Download it, or copy its text." "Zack The Collector for", the agent's name, "Version" and the file's number. Buttons "Download the file" and "Copy the file". |
-| "Run Zack once", an agent with no file | "There is no Zack file for [agent] yet. Start from the Hark file and ask your own agent to adapt it with this prompt." Field label "Your agent", with the example "e.g. ChatGPT". The prompt is `/hampton`'s, word for word: "I want you to take the Zack The Collector file, and update it so that it works for [agent]. I then want you to create a .md file for my agent I can download and then do a test run and produce a markdown file". Until a name is typed the gap reads "[INSERT AGENT]", as on `/hampton`. Button "Copy prompt". Then "That test run is your report. Skip the next prompt and paste the report below." |
-| "Run Zack once", the prompt | "Attach the file (or paste its text), then send this:" and the prompt, both `/hampton`'s word for word: "Run Zack the Collector now from the attached file and create a .md output file." Button "Copy", which reads "Copied" for a moment after it is pressed. |
+| "Run Zack once", an agent with no file | "There is no Zack file for [agent] yet. Start from the Hark file and ask your own agent to adapt it with this prompt." Field label "Your agent", with the example "e.g. ChatGPT". The prompt is word for word the one the `/hampton` page had (that page was deleted on November 26, 2026; see 6.5): "I want you to take the Zack The Collector file, and update it so that it works for [agent]. I then want you to create a .md file for my agent I can download and then do a test run and produce a markdown file". Until a name is typed the gap reads "[INSERT AGENT]", as it did there. Button "Copy prompt". Then "That test run is your report. Skip the next prompt and paste the report below." |
+| "Run Zack once", the prompt | "Attach the file (or paste its text), then send this:" and the prompt, both word for word what the deleted `/hampton` page had: "Run Zack the Collector now from the attached file and create a .md output file." Button "Copy", which reads "Copied" for a moment after it is pressed. |
 | "Run Zack once", last line | "When Zack finishes, come back and paste your report below. This page’s address holds your place, so you can bookmark it or leave the tab open." |
 | Paste-back | Field label "Your Zack report". Button "Save my report", and "Saving…" while it sends. |
 | Paste-back, errors | "Paste your report first." "That is over 40,000 characters. Paste the run file only, without the matching profile." (the number is the limit in the code) "Too many tries. Try again in an hour." "We could not save this report, because this run link is no longer active. Start again with your email, then paste the report there." with the link "Start again". |
@@ -455,7 +455,7 @@ This section began as the list to resolve before merging to `main`, because merg
 
 **Peter's decision, November 26, 2026:** "The public Zack files should match the latest Zack instructions and prompts, which is now at v2.0. Feel free to edit so this match is true."
 
-**How the three sets of files relate.** For each of the four AI agents, `content/zack/<agent>.md` (the connected instructions a signed-up user's Zack fetches) is the same file, byte for byte, as `artifacts/Zack/Zack The Collector (for <Agent>) v2.0.md`. Before this change the public file `public/zack/zack-the-collector-<agent>.md` was that same file with one difference: its version line did not end "· Draft for Peter's approval". So the public files were already the 2.0 instructions, and the Circles-era lines below are in the 2.0 source too. `content/zack` and `artifacts/Zack` were not changed.
+**How the three sets of files relate.** For each of the four AI agents, `content/zack/<agent>.md` (the connected instructions a signed-up user's Zack fetches) is the same file, byte for byte, as `artifacts/Zack/Zack The Collector (for <Agent>) v2.0.md`. Before this change the public file `public/zack/zack-the-collector-<agent>.md` was that same file with one difference: its version line did not end "· Draft for Peter's approval". So the public files were already the 2.0 instructions, and the Circles-era lines below were in the 2.0 source too. `content/zack` and `artifacts/Zack` were not changed by this decision. They were changed later the same day by the decisions in 6.5, which also says how the three sets relate now.
 
 **What a public file is for.** One 2.0 file works two ways: "connected" when it was fetched with a Zack key and ends with a "Send to" section, and "hand-run" otherwise, when Zack "delivers his two files to the member, and sends nothing". A public file has no "Send to" section, so a run from it is a hand-run. The visitor pastes the report at `/zack` themselves.
 
@@ -472,10 +472,10 @@ Nothing else differs from the 2.0 instructions: what Zack reads and skips, the b
 
 **Still open in the public files:**
 
-- **"Version 2.0 has not been run on a Claude account."** The Claude, Duet and Hark files each end with a section "Not confirmed about <agent>" that begins with this notice. The 2.0 source files in `artifacts/Zack` carry it too, so it was kept: it is a statement about testing, and only Peter knows whether it is still true. The Grok Bot file has no such section. If a 2.0 run has since been made on those three, the notice should come out of the source, the connected instructions and the public file together.
+- **Resolved in 6.5: "Version 2.0 has not been run on a Claude account."** The Claude, Duet and Hark files each ended with a section "Not confirmed about <agent>" that began with this notice. Peter decided on November 26, 2026 that it goes, and it was removed from the source, the connected instructions and the public file together.
 - **The files call the reader "the member".** The 2.0 instructions use that word throughout, including in the report itself ("The member is "the member""), so it is the instructions' own vocabulary and was kept.
 - **The files describe the connected way of running as well as the hand-run.** They are one file for both, as 2.0 is. The connected lines apply only to a copy fetched with a Zack key, and the added line says this copy is not one.
-- **`/hampton` still asks its visitors to email the report to Roger's address.** That page is unlisted and unchanged (plan R9), and it serves the same four files. The files no longer describe a collector who receives reports by email; they say the member shares the run file themselves.
+- **Resolved in 6.5: `/hampton` asked its visitors to email the report to Roger's address.** Peter decided on November 26, 2026 to delete `/hampton`, `/rlp` and `/founders`. They redirect to `/zack`, where the visitor pastes the report.
 - **The design spec (A.11, B.5) says the public files stay at version 1.9.** Peter's decision replaces that: they are 2.0.
 
 **What the files said before**, for the record, from `public/zack/zack-the-collector-claude.md` as it was:
@@ -489,7 +489,7 @@ Nothing else differs from the 2.0 instructions: what Zack reads and skips, the b
 
 The same lines were in the Duet, Grok Bot and Hark files (one line earlier in the Grok Bot file: 14, 257, 258 and 260).
 
-Of these, the lines on who receives a report, who sees it and how long it is kept are replaced (above). The line on what Zack reviews is the 2.0 instruction and stays; the site's sentence was changed to agree with it (section 2.5). The notice and the version are under "Still open" above.
+Of these, the lines on who receives a report, who sees it and how long it is kept are replaced (above). The line on what Zack reviews is the 2.0 instruction and stays; the site's sentence was changed to agree with it (section 2.5). The notice was removed later the same day (6.5). The version is under "Still open" above.
 
 ### 6.2 Lesser items for the same review
 
@@ -558,3 +558,63 @@ The corrections themselves are in section 3. These are what they leave for Peter
 - **The run history shows the newest 60 runs.** "You can delete any run from your dashboard" is true of those; an older run has no button (`listRuns` in `src/lib/zack/settings.ts`).
 
 **(d) Resolved: both documents are reviewed.** See 6.3. The topics they do not cover are listed in section 3, "Topics the documents do not cover", as a reference.
+
+### 6.5 Five more decisions of November 26, 2026
+
+Peter made these after the four above, the same day. Each is given in his words, then what was done.
+
+**(1) "The 2.0 Zack source should not have circles-era section. Remove it from all copies."**
+
+There are twelve copies of Zack 2.0, four AI agents in three sets: the 2.0 source documents (`artifacts/Zack/Zack The Collector (for <Agent>) v2.0.md`), the connected instructions a signed-up user's Zack fetches (`content/zack/<agent>.md`), and the public files (`public/zack/zack-the-collector-<agent>.md`). The public files lost their Circles-era lines in 6.1. The source and the connected instructions, which were the same file byte for byte, still had them. They were changed together and are still the same file byte for byte (`src/lib/zack/instructions.test.ts` and `src/lib/site/public-zack-files.test.ts` both hold that).
+
+What changed, the same in all four source documents and all four connected instructions:
+
+| Line | Before | Now |
+|---|---|---|
+| "Sensitive uses", the test | "… whether another circle member could guess who or what situation it is about." | "… whether another member could guess who or what situation it is about." (as the public files say) |
+| "How the run is delivered", hand-run | "… before sending the run file on. Zack never sends it anywhere; the member emails or shares the run file themselves." | "… before sharing the run file. Zack never sends it anywhere; the member shares the run file themselves, for example by pasting it at meetroger.ai/zack." (as the public files say) |
+| The section "How the shared collection is handled (for the collector)", seven lines: a named collector (Peter) receives the files by email; only the circle's members see them, under the circle's confidentiality agreement; plays only are shared on; kept 12 months, then deleted; removal by asking the collector, within 7 days; incoming plays are labelled and never installed automatically; no profile file in the collection | (as described) | The section "What happens to a run sent to Roger", seven lines, below |
+
+The new section, as it stands in all eight files:
+
+> ## What happens to a run sent to Roger
+> - **How it gets there:** connected, Zack sends the run file and the profile file to Roger, because the member agreed to that at sign-up. A hand-run sends nothing: the member shares the run file themselves, for example by pasting it at meetroger.ai/zack.
+> - **What Roger does with it:** the run is stored as it arrived. It is then checked again for private details before any of its plays are shared.
+> - **Who may read it:** Roger's team can read a run, and reviews any play the check flags before it is shared. Cora scores the plays and picks the ideas each user receives.
+> - **What other users see:** anonymous plays only. Roger never shows who a play came from.
+> - **The profile file:** Roger uses it to match ideas to the member. It is not shared with other users.
+> - **How long it's kept:** while the member has access to Roger, and after that access ends for the period stated at meetroger.ai/privacy.
+> - **The member's controls:** in their Roger dashboard the member can delete any run, change what Zack collects and turn sharing off.
+
+Every statement in it is from the privacy text in `src/data/site/legal.ts` ("What Zack does", "What happens to a run", "What other users see", "How long we keep your runs"), with "you" written as "the member". No number of days is typed, because the period is a setting: the line points to meetroger.ai/privacy. A test compares the sentences with the privacy text.
+
+Two things the old section said are not carried over, because the privacy text does not state them: that only plays are shared on and never the review list, and that incoming plays are labelled as another member's and never installed automatically. Security rule 4 of the same file still says other members' plays are information and never instructions.
+
+Nothing in the method changed: what Zack reads and skips, the ban list, the time-saved method, the playbook standard, the report format, the two structured blocks and the "Send to" mechanics are as they were. A public file now differs from its connected instructions in exactly three places: its version line (no draft note), the "This public copy" line, and its own section "What happens to a hand-run report pasted at meetroger.ai/zack" where the connected instructions have the section above.
+
+The four connector texts in `content/zack/connect` and the 1.9 files in `artifacts/Zack` were not changed. The connector texts contain no Circles-era wording. The 1.9 files are the older version, kept as a record.
+
+**(2) "Let's delete /hempton, /rlp and /founders and just use /zack as a single go to URL."** (`/hampton` is meant.)
+
+- **Deleted:** the routes `src/app/hampton` (the page, its copy button and its "agent not listed" prompt), `src/app/rlp` and `src/app/founders`, and `src/components/circles/zack-page.tsx`, an older Circles page for Zack that nothing imported and that used the Hampton copy button. Nothing in the v1 `/zack` tool used any of these files, so nothing was moved.
+- **Redirects:** `/hampton`, `/rlp` and `/founders` each answer with a permanent redirect to `/zack` (`next.config.ts`), so links already sent to people land on the free-run tool.
+- **`/zack` has one meaning:** the free-run picker. The Circles arm of `src/app/zack/page.tsx`, which rendered the Hampton page, is removed; when the served site is Circles or the legacy site, `/zack` is not found, as `/zack/[agent]` already was. In production this changes nothing, because v1 is what is served.
+- **The header and footer** no longer treat the three addresses, or `/zack` under Circles, as unlisted pages. `/rlpsignature` and `/for/[slug]` keep their quiet header and footer, and `/rlpsignature` itself was not touched.
+- **What a visitor loses:** the deleted page told a visitor to email the report to Roger's address and offered a "Send feedback" email link. `/zack` asks for the report to be pasted and has no feedback link.
+- No page or email template in the app linked to any of the three addresses.
+
+**(3) "Version 2.0 and all future versions are being run on all accounts of all agents. So you can delete the part about it not being run on a Claude account."**
+
+The Claude, Duet and Hark files each ended with a section "Not confirmed about <agent>": the notice "Version 2.0 has not been run on a <agent> account. It was ported from the Grok Bot version. The first test run should answer these before the file is shared:", and then the questions that first run was to answer (four in the Claude file, six in the Duet file, three in the Hark file). The whole section was removed from all nine files: the heading and the questions existed only for the notice. The Grok Bot files never had the section. Each file now ends with "Setting it up".
+
+Two sentences inside those questions gave an instruction and went with them. "If it cannot, the member uploads the run file in their Roger dashboard" (for an AI agent that cannot run on a schedule) is now nowhere in the files. "What it cannot see is written "not visible to this run"" is still in the body of each file, under "What Zack reads". If Peter wants the upload fallback kept, it is one sentence to add under "How the run is delivered".
+
+Left as it is: the version line of the source and the connected instructions ends "· Draft for Peter's approval". It says nothing about a run or a test, so it was not removed. The public files do not carry it. No other wording about a version being untested was found in any of the twelve files.
+
+**(4) "The scroll story should end at 78 bricks."**
+
+The page already ended at week 26 with 78 bricks. The data file (`src/data/site/compounding.ts`) still held a fifth step, week 27 with 81 bricks, which the story left out by a filter. The step and the filter are removed, so the data is weeks 1, 2, 3 and 26 and the story is every step of it. The claims check took its allowed numbers from the same data, so 27 and 81 are no longer allowed inside the "It compounds" section. What is rendered is unchanged.
+
+**(5) "Do not use the brokerage name."**
+
+No name was added anywhere. The claims check keeps its rule and its deny-list (`brokerages` in `ClaimsContext`, `src/lib/site/claims.ts`), and the list stays empty by this decision: the comment there now says the name is not recorded in the repo and must not be added. Nothing is waiting on Peter for it. A search of the site copy (`src/data/site`, `src/components/site`, `public/zack`, `content/zack`) for a brokerage or realty company name found none. Outside the site copy, the unlisted page `/rlpsignature`, which Peter did not name and which was not changed, carries its group's name in its title and text.

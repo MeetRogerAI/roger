@@ -18,7 +18,7 @@ Results are one of: **pass**, **fail**, **not applicable**, **not exercised** (w
 
 ## Resolve before merging, because merging goes live
 
-Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What was decided and what was done is recorded once, in `docs/site/v1-copy-changes.md`, and each item below links to its section there. Items 5 to 10 are still Peter's to settle before the pull request is merged, and item 11 lists the smaller notes that remain from items 1 to 4.
+Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What was decided and what was done is recorded once, in `docs/site/v1-copy-changes.md`, and each item below links to its section there. Items 5 to 10 are still Peter's to settle before the pull request is merged, and item 11 lists the smaller notes that remain from items 1 to 4. Later on November 26, 2026 Peter made five more decisions, which closed five of those notes: they are item 12, and are recorded in [copy changes 6.5](v1-copy-changes.md#65-five-more-decisions-of-november-26-2026).
 
 1. **Resolved: the public Zack files match Zack 2.0.** See [copy changes 6.1](v1-copy-changes.md#61-resolved-the-public-zack-files-match-zack-20).
 2. **Resolved: the site's wording follows the Zack 2.0 instructions.** See [copy changes 2.5](v1-copy-changes.md#25-what-zack-reads-skips-removes-and-sends), and [6.4](v1-copy-changes.md#64-what-the-accuracy-audit-of-the-privacy-and-terms-drafts-left-open) (a) and (b).
@@ -31,11 +31,8 @@ Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What
 9. **The photograph and signature.** Neither file exists. The pages lay out without them (see "Sections absent for lack of data").
 10. **The production Node version, for British Columbia clocks.** Raised with the Vancouver clock tests merged from `main`: the runtime's time zone data decides Vancouver times, so the Node version production runs on should be confirmed. Nothing in this unit touches it.
 11. **What remains from items 1 to 4.** None of these blocks the checks. Each is in copy changes section 6.
-    - **The "has not been run" notice** (6.1). The Claude, Duet and Hark public files still say "Version 2.0 has not been run on a <agent> account." The 2.0 source files say it too, so it was kept. Only Peter knows whether it is still true.
     - **Three one-line summaries still say details are "removed"** (2.5): the homepage's second step, Sunday on `/how-it-works`, and the first step on `/agents`. The detailed answers beside them say "is instructed to". They are three strings if Peter wants them changed.
     - **Resolved: the warning above the paste box on `/zack`** now agrees with the privacy page. It keeps the spec's first sentence and then says "It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form." Changed in code review on November 26, 2026; Peter has not read the line itself. See [copy changes 2.5](v1-copy-changes.md#25-what-zack-reads-skips-removes-and-sends).
-    - **The partner pages still ask for the report by email.** `/hampton`, `/rlp` and `/founders` tell visitors to email the report to Roger, while the files they serve no longer describe a collector who receives reports and point to pasting at meetroger.ai/zack (6.1). The pages are unlisted and unchanged (plan R9).
-    - **The Zack 2.0 source and the connected instructions still contain the Circles-era collector section.** `artifacts/Zack` and `content/zack` were not changed: the section "How the shared collection is handled (for the collector)" (a named collector, the circle's members, 12 months) was replaced in the four public copies only (6.1). A signed-up user's Zack fetches the `content/zack` files.
     - **The model provider's position on training is still to be stated** (6.3). The privacy page says it is being confirmed, and Peter confirmed the page with that sentence in it.
     - **The topics privacy and terms do not cover** (copy changes section 3) are kept as a reference list.
     - **A seed contributor's rows stay** when the account it was linked to is deleted (6.4 c). They name the hidden seed record, not the account, and the admin log's link rows for the deleted account no longer name that record.
@@ -43,6 +40,13 @@ Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What
     - **The `retention` task still waits for the paid cycle and Stripe.** The hourly task that erases a departed user's runs (`retention` in `src/lib/housekeeping/job.ts`) runs only when `v3.cycleLive` is on and Stripe is set up, while `/privacy`, now shown without the draft note, states the period with no such condition. Three tasks run always (`expired_cleanup`, `free_run_purge`, `unknown_authors`); this one does not.
     - **Text published from the database is not read by the claims check.** Testimonials an admin clears, the library's rows and an admin-chosen sample play reach production pages without passing through `src/lib/site/claims.test.tsx`, which reads rendered fixtures only (see "Open defects", items 5 to 7, and item 7 above).
     - **The other app-side notes in 6.4 c that were not changed:** nothing clears the cached settings when a setting changes; shortening the retention setting applies to people who already left; "the first miss each billing month" is typed while the number is a setting; a free-list setting of 0 garbles the copy; a run's row is never fully removed while the account exists; the run history shows the newest 60 runs. And the three in 6.3 on the free Zack run: signing up with a different email attaches nothing and says nothing, a person who already has an account gets nothing attached, and run tokens would go to an analytics provider if analytics were ever switched on.
+12. **Resolved: five more decisions, November 26, 2026.** What was decided and what was done is in [copy changes 6.5](v1-copy-changes.md#65-five-more-decisions-of-november-26-2026). Each closed a note that stood in item 11 or in the checks below.
+    - **No Zack 2.0 copy has a Circles-era section.** "The 2.0 Zack source should not have circles-era section. Remove it from all copies." The collector section is gone from the four 2.0 source documents (`artifacts/Zack`) and the four connected instructions (`content/zack`), as it already was from the four public files. In its place the connected instructions say what happens to a run sent to Roger, in the privacy page's words.
+    - **`/hampton`, `/rlp` and `/founders` are deleted, and `/zack` is the single address.** Each old address answers with a permanent redirect to `/zack`. No page tells a visitor to email a report any more. See check 3 below.
+    - **The "has not been run" notice is gone from every copy.** "Version 2.0 and all future versions are being run on all accounts of all agents." The section "Not confirmed about <agent>" was removed from the Claude, Duet and Hark files in all three sets. The Grok Bot files never had it.
+    - **The scroll story ends at 78 bricks.** The data held a fifth step (week 27, 81 bricks) that the page never showed. It is removed, so the data ends at week 26 with 78, as the page does.
+    - **The brokerage's name is not used and not recorded.** "Do not use the brokerage name." The claims check keeps its rule and its empty list, by decision. See check 6 below.
+    - **Still open from these five:** the version line of the 2.0 source and the connected instructions still ends "· Draft for Peter's approval" (the public files do not carry it). It was left as it is: it says nothing about a version not having been run. Peter says when it comes off.
 
 ## A.16, check by check
 
@@ -50,10 +54,10 @@ Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What
 |---|---|---|
 | 1 | No header, footer, homepage or sitemap link to a Circles page or old offer; those URLs still load with noindex; `/apply` redirects | pass |
 | 2 | With the version switched back, the Circles preview returns | not applicable now: see below |
-| 3 | The unlisted pages render as before | pass |
+| 3 | The unlisted pages render as before | pass for `/rlpsignature`; `/hampton`, `/rlp` and `/founders` were deleted afterwards by Peter's decision and redirect to `/zack`: see below |
 | 4 | Every start button reaches `/start` with the right `path` and `cur` | pass |
 | 5 | Price block: currency by country, choice kept in the tab, no bare "$", trial line under the price | pass |
-| 6 | No user count, hard-coded number, brokerage name or income claim | pass, with the settled exceptions; the brokerage rule ships with an empty list |
+| 6 | No user count, hard-coded number, brokerage name or income claim | pass, with the settled exceptions; the brokerage rule ships with an empty list, by Peter's decision of November 26, 2026 |
 | 7 | Testimonials absent with none switched on, present with one, word for word | pass |
 | 8 | Sample idea section absent until a play is chosen | settled exception: a bundled play shows |
 | 9 | Monthly is the marked choice; no non-contributor plan | pass |
@@ -76,6 +80,7 @@ Not applicable as written. On November 26 the owner decided that merging v1 repl
 - **Did:** loaded `/hampton`, `/rlpsignature`, `/rlp` and `/founders` at 375 and 1440.
 - **Saw:** each renders its own page (titles "Zack The Collector Page" and "Roger for RLP Signature"), with `noindex, nofollow, nocache`, no header links, no start button, no horizontal scroll and a clean console. `navFor` returning the same for these paths under Circles and v1 is a unit test (`site-header.test.ts`).
 - **Not exercised:** `/for/[slug]`, which needs a slug from the database. A byte-for-byte comparison with the pages before this branch was not made.
+- **Changed afterwards, November 26, 2026.** Peter decided: "Let's delete /hampton, /rlp and /founders and just use /zack as a single go to URL." The three routes are deleted. `/hampton`, `/rlp` and `/founders` each answer with a permanent redirect (308) to `/zack` (`next.config.ts`), so links already sent to people land on the free-run tool. They are no longer unlisted pages: `isUnlisted` in `src/components/site-header.tsx` now names only `/rlpsignature` and `/for/[slug]`, which keep the quiet header and footer. `/zack` has one meaning, the free-run picker; when the served site is Circles or the legacy site it is not found, as `/zack/[agent]` already was. Tests: `src/app/redirects.test.ts`, `site-header.test.ts`, and "under circles, /zack and /zack/claude are not found" in `zack.test.tsx`. What was seen on the served build is under check 12.
 
 ### 4. Start links
 
@@ -106,7 +111,7 @@ With no script, the served HTML of `/agents` has `/start` in the header and `/st
 
 - **Did:** the claims test, on every page, with and without testimonials and with a scored sample play; and a sweep of the visible text in the browser with the design guide's suggested pattern.
 - **Saw:** zero violations in the test. In the browser the pattern's only hits on v1 pages are "Save a skill called …" in the sample play, which is on the allow-list. No "!" on any page.
-- **The brokerage.** The name is not in the code, so the rule is "no word from a deny-list" and the list ships empty (`brokerages` in `ClaimsContext`). **Until Peter supplies the name, this rule checks nothing.**
+- **The brokerage.** Decided by Peter on November 26, 2026: "Do not use the brokerage name." The name is not used on the site and is not recorded in the repo. The rule is "no word from a deny-list" and the list stays empty by that decision (`brokerages` in `ClaimsContext`), so this rule checks nothing, and nothing is waiting on Peter. A search of the site copy (`src/data/site`, `src/components/site`, `public/zack`, `content/zack`) for a brokerage or realty company name found none.
 - Every digit on a page is explained by an allow-list entry. The entries and their reasons are in `src/lib/site/claims.ts`.
 
 ### 7. Testimonials
@@ -168,6 +173,17 @@ Run again on November 26, 2026 after the work on Peter's four decisions and the 
 
 Run a third time on November 26, 2026 after the last round of code-review fixes ("Defects fixed", items 6 and 7, and the deletion work in copy changes 6.4 c): lint 0 errors and 6 warnings, `npx tsc --noEmit` clean, `npm test` 1,607 passed and 13 skipped (15 new tests), `npm run test:scenarios` 23 passed, `npm run build` passes.
 
+Run a fourth time on November 26, 2026 after the work on Peter's five further decisions (item 12 of "Resolve before merging"): lint 0 errors and 6 warnings, `npx tsc --noEmit` clean, `npm test` 1,634 passed and 13 skipped, `npm run test:scenarios` 23 passed, `npm run build` passes; its route list has no `/hampton`, `/rlp` or `/founders`. That build was then served with `npm run start` on port 3295, with no database, and fetched with curl (no browser):
+
+| Address | Seen |
+|---|---|
+| `/hampton`, `/rlp`, `/founders` | each answers 308 Permanent Redirect with `location: /zack`; followed, `/zack` answers 200. A query string is carried over (`/hampton?utm_source=x` goes to `/zack?utm_source=x`) |
+| `/zack` | 200, the picker: "Run Zack on yourself first", "Pick your agent" |
+| `/zack/claude` | 200, "Run Zack on Claude", "Version 2.0", and the link to `/zack/zack-the-collector-claude.md` |
+| `/zack/zack-the-collector-claude.md` | 200, byte for byte the file in `public/zack`: no "has not been run" notice, no "Not confirmed" section, no collector section; it ends with "Setting it up" |
+| `/rlpsignature` | 200, title "Roger for RLP Signature", with its video |
+| `/start/zack/claude` (the app's page, which shows `content/zack` to a person signing up) | 200, with the section "What happens to a run sent to Roger" and none of the old collector section or the notice |
+
 ### The pass after Peter's four decisions
 
 November 26, 2026. Headless Chrome against `npm run dev` on port 3290, with no database, at 1440 wide. Each page was loaded once.
@@ -202,7 +218,7 @@ Items that restate an A.16 check point to it.
 | No income claims, counts, numbers, brokerage; monthly marked; wording rule | pass | checks 6, 9, 10 |
 | No link to a Circles page; `/apply` redirects | pass | check 1 |
 | Sitemap lists the eleven paths; robots disallows the hidden paths, `/app`, `/admin`, `/start`, `/api` | pass, with a settled exception | check 1. Robots, production rules: allows `/` and `/api/zack/instructions`; disallows `/thanks/`, `/for/`, `/apply`, `/setup`, `/companies`, `/packs/`, `/workshops`, `/refunds`, `/app/`, `/app$`, `/admin`, `/start`, `/api`. Local development shows these production rules, because only a Vercel preview disallows everything |
-| Unlisted partner pages unchanged | pass | check 3 |
+| Unlisted partner pages unchanged | pass for `/rlpsignature`; three deleted by decision | check 3. `/hampton`, `/rlp` and `/founders` now redirect to `/zack` |
 | `/about` lays out without the photograph and signature | pass | No image element, no empty frame; the name is typed. No broken image on any page |
 | Testimonials and sample card absent, not empty boxes | pass / settled exception | checks 7 and 8 |
 | `/zack` paste-back: limits, cap, warning line | pass, with a settled exception | Cap is 40,000, exercised at 40,001. Warning line above the box. The rate limits are unit tests (`actions.test.ts`); they were not driven to their limit in the browser |
@@ -265,7 +281,7 @@ None blocks the checks above. Each is outside the marketing files, or is a decis
 
 | Exception | Decision |
 |---|---|
-| "It compounds" prints week numbers and brick counts (Week 1, 2, 3 and 26; 3, 6, 9 and 78 bricks), against "no hard-coded numbers" | Plan Key Decision "The compounding section is animated in all three, with week labels and brick counts"; R10. The claims check allows these numbers inside that section only |
+| "It compounds" prints week numbers and brick counts (Week 1, 2, 3 and 26; 3, 6, 9 and 78 bricks), against "no hard-coded numbers" | Plan Key Decision "The compounding section is animated in all three, with week labels and brick counts"; R10. The claims check allows these numbers inside that section only. The story ends at 78 bricks (Peter, November 26, 2026): the data no longer holds a week 27 or an 81, and the claims check no longer allows them |
 | The section is a scroll story, where the spec says a static picture | The same Key Decision; KTD11. Under reduced motion it is the finished picture |
 | The free Zack run accepts 40,000 characters, not 20,000 | Copy changes 6.2: ten of thirteen real reports are longer than 20,000. One constant, `FREE_RUN_REPORT_CHARS` |
 | `robots.txt` allows `/api/zack/instructions` while disallowing `/api` | Copy changes section 4: a user's own AI agent fetches that address during Zack setup, and many fetch tools obey robots |
@@ -298,9 +314,10 @@ None of this is needed for the merge. It is what the code review of November 26,
 
 **Delete**
 
-- **The Circles pages and components:** `src/components/circles` (`home.tsx`, `agents.tsx`, `price.tsx`, `proof.tsx`, `zack-page.tsx`), `src/data/circles-legal.ts`, and the Circles arms of the routes that branch on the served site: `/`, `/zack`, `/library`, `/privacy`, `/terms`, `/apply`, the root layout, the header, the footer, `robots.ts` and `sitemap.ts`. Decide with it what becomes of the hidden legacy pages (`/setup`, `/companies`, `/packs/[id]`, `/workshops`, `/refunds`, `/thanks`), which still answer 200 with noindex.
+- **Already removed on November 26, 2026, with Peter's decision to delete `/hampton`, `/rlp` and `/founders`:** the three routes (`src/app/hampton`, `src/app/rlp`, `src/app/founders`); the Circles arm of `/zack`, which rendered the Hampton page; `src/components/circles/zack-page.tsx`, which nothing imported; the `site` argument of `isUnlisted` and `footerFor`, and the `site` prop of `FooterSwitch`. `/zack` is now gated like the other new routes, so it is in the `requireBuiltVersion` list below.
+- **The Circles pages and components:** `src/components/circles` (`home.tsx`, `agents.tsx`, `price.tsx`, `proof.tsx`), `src/data/circles-legal.ts`, the "Run Zack" link in the Circles header (`circles` in `src/components/site-header.tsx`), which leads to a not-found page when Circles is served locally, and the Circles arms of the routes that branch on the served site: `/`, `/library`, `/privacy`, `/terms`, `/apply`, the root layout, the header, the footer, `robots.ts` and `sitemap.ts`. Decide with it what becomes of the hidden legacy pages (`/setup`, `/companies`, `/packs/[id]`, `/workshops`, `/refunds`, `/thanks`), which still answer 200 with noindex.
 - **The `circlesMode` flag and the "legacy" site variant.** `flags.circlesMode` in `src/data/config.ts` is always true, so no environment reaches "legacy": only a source edit does. Remove the flag, `"legacy"` from `ServedSite`, the `legacy` key of `bySite` and its callers, the legacy arms in the footer, header, layout, library and robots, and the whole of `src/lib/site/legacy-site.test.tsx`. `hiddenLegacyRobots` then always returns noindex and can be a constant.
-- **The `requireBuiltVersion` gates and the literal `export const instant = false`** on `/pricing`, `/faq`, `/how-it-works`, `/about`, `/agents` and `/zack/[agent]`, with the not-built branch of `builtPageMetadata` in `src/lib/site/chrome.ts` and of `generateMetadata` on `/zack/[agent]`. The gate fires only under Circles or the legacy site. Keep `instant = false` wherever a route needs it for another reason (`/apply` has one of its own). **Confirm with `npm run build`:** the review could not tell whether the build accepts these routes without the export.
+- **The `requireBuiltVersion` gates and the literal `export const instant = false`** on `/pricing`, `/faq`, `/how-it-works`, `/about`, `/agents`, `/zack` and `/zack/[agent]`, with the not-built branch of `builtPageMetadata` in `src/lib/site/chrome.ts` and of `generateMetadata` on `/zack/[agent]`. The gate fires only under Circles or the legacy site. Keep `instant = false` wherever a route needs it for another reason (`/apply` has one of its own). **Confirm with `npm run build`:** the review could not tell whether the build accepts these routes without the export.
 
 **Tests that pin output only Circles serves.** Delete each with the code it covers.
 
@@ -309,9 +326,9 @@ None of this is needed for the merge. It is what the code review of November 26,
 - `src/components/site/v1/home.test.tsx`: "is unchanged under Circles".
 - `src/app/not-found.test.tsx`: "is unchanged under Circles and on the legacy site".
 - `src/app/agents/page.test.tsx` and `src/app/reading-pages.test.tsx`: "is not found when the version is Circles (covers AE8)".
-- `src/components/site-header.test.ts`: "leaves other Circles pages alone, including /apply", and the Circles halves of "gives /zack and /zack/[agent] the public header under a version, and none under Circles" and "is the same under Circles and under a version for the app, the admin and the unlisted pages".
+- `src/components/site-header.test.ts`: "leaves other Circles pages alone, including /apply", "treats /zack as any other page under Circles and the legacy site, where the route is not found", and the Circles half of "is the same under Circles and under a version for the app, the admin and the unlisted pages".
 - `src/components/site-header.signed-in.test.tsx`: "has no account row under Circles, signed in or not".
-- `src/components/site/v1/zack.test.tsx`: the two tests "under circles …" and "under legacy, /zack is the Hampton page and /zack/claude is not found".
+- `src/components/site/v1/zack.test.tsx`: the two tests "under circles …" and "under legacy, /zack and /zack/claude are not found".
 - `src/lib/site/version.test.ts`: "serves the legacy site when Circles resolves with circlesMode off", "tells a built version from Circles and the legacy site" and "is not found while Circles or the legacy site is served".
 - `src/lib/site/legacy-site.test.tsx`: the whole file.
 

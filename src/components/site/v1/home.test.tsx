@@ -311,8 +311,8 @@ describe("the compounding scroll story, with no script", () => {
   const seen = text(markup);
 
   it("tells weeks 1, 2 and 3, then the finished stack, from the data", () => {
-    expect(storySteps).toEqual(compoundingSteps.filter((s) => s.week <= compoundingFinal.week));
-    expect(storySteps).toHaveLength(4);
+    expect(storySteps).toEqual(compoundingSteps);
+    expect(storySteps.map((s) => s.week)).toEqual([1, 2, 3, 26]);
     expect(storySteps.at(-1)).toEqual(compoundingFinal);
     expect(storySteps.map((s) => s.bricks)).toEqual(storySteps.map((s) => s.week * 3));
   });

@@ -61,9 +61,12 @@ export type ClaimsContext = {
   /** The week numbers and brick counts of "It compounds" (src/data/site/compounding.ts). */
   compounding: readonly number[];
   /**
-   * Names that must never appear: the brokerage (spec 0.4). The name is not in
-   * the code, so the list ships empty and the rule finds nothing until Peter
-   * supplies it. Matched as whole words, whatever the case.
+   * Names that must never appear: the brokerage (spec 0.4). Peter decided on
+   * November 26, 2026 that the brokerage's name is not recorded in the repo,
+   * so this list stays empty by decision and the rule finds nothing. Do not
+   * add the name here or anywhere else. The mechanism stays for a test, or a
+   * caller outside the repo, that supplies names of its own. Matched as whole
+   * words, whatever the case.
    */
   brokerages?: readonly string[];
 };

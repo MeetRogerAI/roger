@@ -458,6 +458,7 @@ describe("the routes", () => {
     expect(text(markup)).toContain("Pick your agent");
     expect(markup).not.toContain("Zack The Collector Page");
     expect(markup).not.toContain("not built yet");
+    expect(page.instant).toBe(false);
     expect(page.metadata).toEqual({
       title: { absolute: "Roger: Run Zack on yourself first" },
       description: zack.intro,
@@ -499,7 +500,8 @@ describe("the routes", () => {
   });
 
   for (const site of ["circles", "legacy"]) {
-    it(`under ${site}, /zack is the Hampton page and /zack/claude is not found (covers AE8, AE9)`, async () => {
+    // Until November 26, 2026 /zack was the /hampton page under Circles (AE9). That page is deleted: /zack is the free run or nothing.
+    it(`under ${site}, /zack and /zack/claude are not found (covers AE8)`, async () => {
       // "legacy" is not a version the override accepts: it is Circles with circlesMode off.
       vi.resetModules();
       if (site === "legacy") {
@@ -511,11 +513,8 @@ describe("the routes", () => {
       process.env.SITE_VERSION = "circles";
       const zackPage = await import("@/app/zack/page");
       const agentPage = await import("@/app/zack/[agent]/page");
-      const hampton = await import("@/app/hampton/page");
-      const markup = await pageMarkup(await zackPage.default());
-      expect(markup).toContain("Zack The Collector Page");
-      expect(markup).toBe(await pageMarkup(await hampton.default()));
-      expect(markup).not.toContain("Pick your agent");
+      await expect(zackPage.default()).rejects.toEqual(notFound);
+      expect(zackPage.metadata).toEqual({ robots: { index: false, follow: false } });
       for (const agent of ["claude", "other"]) await expect(agentPage.default(props(agent)), agent).rejects.toEqual(notFound);
       expect(await agentPage.generateMetadata(props("claude", { run: TOKEN }))).toEqual({ robots: { index: false, follow: false } });
       vi.doUnmock("@/data/config");

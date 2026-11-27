@@ -55,7 +55,7 @@ describe("a site version before its pages are built", () => {
     expect(homeMetadata.alternates).toEqual({ canonical: "/" });
   });
 
-  it("serves the free Zack run at /zack, open to search, not the Hampton page (U8)", async () => {
+  it("serves the free Zack run at /zack, open to search, not the deleted group page (U8)", async () => {
     const markup = await pageMarkup(<Zack />);
     expect(markup).not.toContain("not built yet");
     expect(markup).toContain("Run Zack on yourself first");
@@ -191,7 +191,7 @@ describe("a site version before its pages are built", () => {
       expect(hrefs(markup.match(/<header[\s\S]*?<\/header>/)![0]), at).toContain("/pricing");
       expect(hrefs(markup.match(/<footer[\s\S]*?<\/footer>/)![0]), at).toContain("/agents");
     }
-    path = "/hampton";
+    path = "/rlpsignature";
     const markup = await pageMarkup(<RootLayout params={Promise.resolve({})}>{null}</RootLayout>);
     expect(hrefs(markup.match(/<header[\s\S]*?<\/header>/)![0])).toEqual(["#main", "/"]);
     expect(hrefs(markup.match(/<footer[\s\S]*?<\/footer>/)![0])).toEqual(["mailto:hello@meetroger.ai", "/privacy", "/terms"]);

@@ -252,7 +252,7 @@ The run file ends with one fenced block labelled `roger-run`. The profile file e
 
 ## How the run is delivered
 - **Always:** both files are saved in the member's account as downloadable .md files.
-- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off.
+- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off. If Zack cannot send the files, the member uploads the run file in their Roger dashboard.
 - **Hand-run:** in chat, one short line with the total hours a week and a reminder to check the review list before sharing the run file. Zack never sends it anywhere; the member shares the run file themselves, for example by pasting it at meetroger.ai/zack. The profile file is not for sharing: the member's own agent reads it when the member asks for their top 3.
 
 ## What happens to a hand-run report pasted at meetroger.ai/zack
@@ -270,10 +270,3 @@ Connected: Roger adds the member's rules below this heading. Hand-run: the membe
 ## Setting it up
 - **Connected:** the member pastes the connector text from their Roger dashboard once. Nothing else is needed.
 - **Hand-run:** the member attaches this file to a new Claude chat (not incognito, and outside any project) and sends: "Save Zack The Collector (for Claude) v2.0 as a skill. Run it only when I ask. Deliver the files to me only and never send or share them." If the member's Claude cannot save skills, the member attaches this file each time and says "Run Zack the Collector now."
-
-## Not confirmed about Claude
-Version 2.0 has not been run on a Claude account. It was ported from the Grok Bot version. The first test run should answer these before the file is shared:
-- Whether Claude can run this file on a schedule with no one present, fetch its instructions from Roger and send the two files back. If it cannot, the member uploads the run file in their Roger dashboard.
-- Whether a run can see the account's list of skills, scheduled tasks and connected services. What it cannot see is written "not visible to this run".
-- Where Claude keeps a file such as "Roger Upgrade Notes" between sessions, and whether a later run can read it.
-- Whether one run can reach chats in every project and outside projects, or only part of the account. Parts it cannot reach are written "not visible to this run".

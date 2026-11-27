@@ -4,7 +4,7 @@
  * on disk for each agent's file.
  *
  * An agent with no file of its own, and "other" for an agent we do not list,
- * start from the Hark file and adapt it, as on /hampton.
+ * start from the Hark file and adapt it.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";

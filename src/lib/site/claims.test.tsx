@@ -282,9 +282,11 @@ describe("rule (f): every number is explained", () => {
   });
 
   it("passes the compounding section’s “Week 26” and “78” (plan U10), and fails them anywhere else", () => {
-    const story = "Week 1: 3 bricks. Week 2: 6 bricks. Week 3: 9 bricks. Week 26: 78 bricks. Then 81.";
+    const story = "Week 1: 3 bricks. Week 2: 6 bricks. Week 3: 9 bricks. Week 26: 78 bricks.";
     expect(check(readPage("/", `<section data-claims="compounding"><p>${story}</p></section>`))).toEqual([]);
-    expect(broken("number", line(story))).toEqual(["1", "3", "2", "6", "3", "9", "26", "78", "81"]);
+    expect(broken("number", line(story))).toEqual(["1", "3", "2", "6", "3", "9", "26", "78"]);
+    // The story ends at 78 (Peter's decision of November 26, 2026): a week 27 or an 81 is no longer one of its numbers.
+    expect(broken("number", readPage("/", '<section data-claims="compounding"><p>Week 27: 81 bricks.</p></section>'))).toEqual(["27", "81"]);
     expect(broken("number", readPage("/", '<section data-claims="compounding"><p>Week 26</p></section><p>By week 26 you have 78.</p>'))).toEqual(["26", "78"]);
   });
 

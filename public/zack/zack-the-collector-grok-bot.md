@@ -251,7 +251,7 @@ The run file ends with one fenced block labelled `roger-run`. The profile file e
 
 ## How the run is delivered
 - **Always:** both files are saved in the member's account as downloadable .md files.
-- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off.
+- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off. If Zack cannot send the files, the member uploads the run file in their Roger dashboard.
 - **Hand-run:** in chat, one short line with the total hours a week and a reminder to check the review list before sharing the run file. Zack never sends it anywhere; the member shares the run file themselves, for example by pasting it at meetroger.ai/zack. The profile file is not for sharing: the member's own agent reads it when the member asks for their top 3.
 
 ## What happens to a hand-run report pasted at meetroger.ai/zack

@@ -571,21 +571,21 @@ describe("the bundled sample play", () => {
 });
 
 describe("the compounding data", () => {
-  it("is weeks 1, 2, 3, then 26 and 27, at three bricks a week", () => {
+  it("is weeks 1, 2 and 3, then 26, at three bricks a week, and ends at 78 bricks", () => {
     expect(compoundingSteps.map((s) => [s.week, s.bricks])).toEqual([
       [1, 3],
       [2, 6],
       [3, 9],
       [26, 78],
-      [27, 81],
     ]);
     expect(compoundingFinal).toEqual({ week: 26, bricks: 78 });
+    // Peter's decision of November 26, 2026: the story ends at 78. No step follows the finished stack.
+    expect(compoundingSteps.at(-1)).toEqual(compoundingFinal);
   });
 
   it("holds numbers only: the words of a caption come from the copy", () => {
     for (const s of compoundingSteps) expect(Object.values(s).every((v) => typeof v === "number")).toBe(true);
     expect(v1.bricks.caption).toEqual({ week: "Week {week}", bricks: "{bricks} bricks" });
-    expect(compoundingSteps.map((s) => compoundingCaption(copy.bricks.caption, s))[3]).toEqual({ week: "Week 26", bricks: "78 bricks" });
-    expect(compoundingCaption(copy.bricks.caption, compoundingSteps[4])).toEqual({ week: "Week 27", bricks: "81 bricks" });
+    expect(compoundingSteps.map((s) => compoundingCaption(copy.bricks.caption, s)).at(-1)).toEqual({ week: "Week 26", bricks: "78 bricks" });
   });
 });

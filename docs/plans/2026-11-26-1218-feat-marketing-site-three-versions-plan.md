@@ -58,6 +58,7 @@ Reading about these does not settle which is best; seeing the same content in ea
 - **Peter generates the real assets with AI image tools.** (session-settled: user-directed — chosen over a designer brief.) Governs R18a.
 - **The logo is decided through v2's asset list.** (session-settled: user-directed — chosen over keeping the placeholder throughout.) Governs R18a.
 - **The app keeps its current look.** (session-settled: user-approved — chosen over restyling the app header and colours: it avoids touching files the app work uses.) Governs R4.
+- **`/zack` is the single address for running Zack; `/hampton`, `/rlp` and `/founders` are deleted.** Note added November 26, 2026, after this plan was written: Peter decided to delete the three group pages and "just use /zack as a single go to URL". Each old address now answers with a permanent redirect to `/zack` (`next.config.ts`), so links already sent to people land on the free-run tool. This replaces what R9, AE9, KTD4, the route table and units U1, U4 and U8 say about the Hampton page and about unlisted partner pages rendering as before: those passages are left as written, as the record of the plan at the time. `/rlpsignature` and `/for/[slug]` are still unlisted pages and are unchanged. With no Hampton page to show, `/zack` is not found when the served site is Circles or the legacy site. (session-settled: user-directed.) Governs R9, AE9.
 
 ### Requirements
 
@@ -75,7 +76,7 @@ Reading about these does not settle which is best; seeing the same content in ea
 
 **Content shared by all versions**
 
-- R10. "It compounds" is a scroll story that shows week 1, 2 and 3 and then week 26, labelled with week numbers and brick counts (3, 6, 9, then 78, 81), with no number about time or money. Under reduced motion it shows the finished stack and nothing moves.
+- R10. "It compounds" is a scroll story that shows week 1, 2 and 3 and then week 26, labelled with week numbers and brick counts (3, 6, 9, then 78, where it ends), with no number about time or money. Under reduced motion it shows the finished stack and nothing moves.
 - R11. The sample idea card shows one real play taken from the Zack runs or Cora report in `artifacts/`, with names, client details and every time-saved figure removed, including the card's time line and time tiles.
 - R12. Peter approves the cleaned sample play text before any version goes live. A play later chosen in the admin replaces it.
 - R13. Where Peter's inputs are missing, the spec's fallbacks apply: `/about` and "Who runs this" show only the letter paragraphs that are still true and lay out without the photograph and signature; testimonials are absent; privacy and terms are marked as unreviewed drafts.

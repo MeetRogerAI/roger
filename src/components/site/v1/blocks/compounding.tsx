@@ -19,8 +19,8 @@ import { SectionHead } from "./section-head";
  * copy's brick caption. None is about time or money.
  */
 
-/** The story's steps: every step of the data up to the finished stack. */
-export const storySteps = compoundingSteps.filter((step) => step.week <= compoundingFinal.week);
+/** The story's steps: every step of the data. The last one is the finished stack. */
+export const storySteps = compoundingSteps;
 
 /** The steps as one line of text, for a screen reader: "Week 1: 3 bricks. Week 2: 6 bricks. …" */
 export function storyText(words: BrickWords): string {

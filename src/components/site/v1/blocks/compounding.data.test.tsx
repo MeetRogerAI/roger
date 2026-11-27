@@ -16,8 +16,6 @@ vi.mock("@/data/site/compounding", () => ({
     { week: 2, bricks: 7 },
     { week: 5, bricks: 16 },
     { week: 11, bricks: 40 },
-    // Past the finished stack: not part of the story.
-    { week: 12, bricks: 43 },
   ],
   compoundingFinal: { week: 11, bricks: 40 },
 }));
@@ -35,7 +33,7 @@ const text = (html: string) =>
     .trim();
 
 describe("the compounding story on other data", () => {
-  it("takes its steps from the data, up to the finished stack", () => {
+  it("takes its steps from the data, ending on the finished stack", () => {
     expect(storySteps).toEqual([
       { week: 2, bricks: 7 },
       { week: 5, bricks: 16 },

@@ -4,7 +4,7 @@ import { amountsFrom } from "@/lib/site/amounts";
 import { siteChrome } from "@/lib/site/chrome";
 import type { ServedSite } from "@/lib/site/version";
 import { footerFor } from "./footer-switch";
-import { navFor as navForSite } from "./site-header";
+import { isUnlisted, navFor as navForSite } from "./site-header";
 
 const sites: ServedSite[] = ["circles", "v1", "v2", "v3", "legacy"];
 // What the root layout hands the header under a site version.
@@ -42,11 +42,26 @@ describe("navFor", () => {
     expect(() => navForSite("/pricing", "v1")).toThrow(/chrome/);
   });
 
-  it("gives /zack and /zack/[agent] the public header under a version, and none under Circles", () => {
+  it("gives /zack and /zack/[agent] the public header under a version", () => {
     expect(navFor("/zack", "v1").links).toEqual(fiveLinks);
+    expect(navFor("/zack", "v1")).toEqual(navFor("/", "v1"));
     expect(navFor("/zack/claude", "v1")).toEqual(navFor("/pricing", "v1"));
-    expect(navFor("/zack", "circles")).toEqual({ links: [], cta: null });
+  });
+
+  it("treats /zack as any other page under Circles and the legacy site, where the route is not found", () => {
+    expect(navFor("/zack", "circles")).toEqual(navFor("/library", "circles"));
+    expect(navFor("/zack", "legacy")).toEqual(navFor("/library", "legacy"));
     expect(navFor("/zack", "circles").account).toBeUndefined();
+  });
+
+  it("no longer knows /hampton, /rlp or /founders, which redirect to /zack (Peter's decision of November 26, 2026)", () => {
+    for (const p of ["/hampton", "/rlp", "/founders"]) {
+      expect(isUnlisted(p), p).toBe(false);
+      expect(navFor(p, "v1"), p).toEqual(navFor("/nothing-here", "v1"));
+    }
+    expect(isUnlisted("/rlpsignature")).toBe(true);
+    expect(isUnlisted("/for/x")).toBe(true);
+    expect(isUnlisted("/zack")).toBe(false);
   });
 
   it("offers Sign in and Open Roger only under a version", () => {
@@ -62,14 +77,8 @@ describe("navFor", () => {
     expect(navFor("/apply", "circles").cta).toBeNull();
   });
 
-  it("gives /zack no links while it is the Hampton page (covers AE9), and the site header under a version", () => {
-    expect(navFor("/zack", "circles")).toEqual({ links: [], cta: null });
-    expect(navFor("/zack", "legacy")).toEqual({ links: [], cta: null });
-    expect(navFor("/zack", "v1")).toEqual(navFor("/", "v1"));
-  });
-
   it("is the same under Circles and under a version for the app, the admin and the unlisted pages (R4, R9)", () => {
-    for (const p of ["/admin", "/admin/sample", "/start", "/signin", "/app/zack", "/hampton", "/rlpsignature", "/rlp", "/founders", "/for/x"]) {
+    for (const p of ["/admin", "/admin/sample", "/start", "/signin", "/app/zack", "/rlpsignature", "/for/x"]) {
       expect(navFor(p, "v1"), p).toEqual(navFor(p, "circles"));
     }
     expect(navFor("/admin", "v1").links.map((l) => l.href)).toEqual(["/#how", "/zack", "/library", "/#questions", "/#letter"]);
@@ -97,15 +106,8 @@ describe("navFor", () => {
 
 describe("footerFor", () => {
   it("gives unlisted pages the quiet footer under every site", () => {
-    for (const site of sites) {
-      for (const p of ["/for/x", "/rlpsignature", "/hampton", "/founders", "/rlp"]) expect(footerFor(p, site), `${site} ${p}`).toBe("minimal");
-      expect(footerFor("/", site), site).toBe("full");
-    }
-  });
-
-  it("treats /zack as unlisted only while it is the Hampton page", () => {
-    expect(footerFor("/zack", "circles")).toBe("minimal");
-    expect(footerFor("/zack", "legacy")).toBe("minimal");
-    expect(footerFor("/zack", "v1")).toBe("full");
+    // The footer no longer depends on which site is served: /zack is never an unlisted page.
+    for (const p of ["/for/x", "/rlpsignature"]) expect(footerFor(p), p).toBe("minimal");
+    for (const p of ["/", "/zack", "/zack/claude", "/hampton", "/founders", "/rlp"]) expect(footerFor(p), p).toBe("full");
   });
 });

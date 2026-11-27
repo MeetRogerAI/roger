@@ -99,7 +99,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <main id="main" className="flex-1">
             {children}
           </main>
-          <FooterSwitch site={site} full={<SiteFooter site={site} chrome={chrome} />} minimal={<MinimalFooter site={site} />} />
+          <FooterSwitch full={<SiteFooter site={site} chrome={chrome} />} minimal={<MinimalFooter site={site} />} />
         </SettingsProvider>
       </body>
     </html>

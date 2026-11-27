@@ -39,6 +39,11 @@ const nextConfig: NextConfig = {
       { source: "/home", destination: "/setup", permanent: false },
       { source: "/families", destination: "/setup", permanent: false },
       { source: "/business", destination: "/setup", permanent: false },
+      // /zack is the single address for running Zack (Peter's decision of November 26, 2026).
+      // The three group pages were deleted; links already sent to people land on the tool.
+      { source: "/hampton", destination: "/zack", permanent: true },
+      { source: "/rlp", destination: "/zack", permanent: true },
+      { source: "/founders", destination: "/zack", permanent: true },
     ];
   },
 };
