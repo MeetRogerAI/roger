@@ -10,6 +10,7 @@ import { revokeUserSessions } from "@/lib/auth/session";
 import { normaliseEmail } from "@/lib/auth/tokens";
 import { isEmail } from "@/lib/form";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
+import { voidDeletedReferrals } from "@/lib/referrals/stage";
 import { addressChangedBySupportEmail, addressMovedAwayEmail, nudgeEmail, type Nudge } from "@/lib/mail/templates/admin-user";
 import { checkReport, storeReport, type Stored } from "@/lib/zack/receive";
 import { logAdminAction } from "./log";
@@ -235,6 +236,9 @@ export async function deleteAccount(q: Query, by: string, userId: string, confir
     [userId, adminEmails()],
   );
   if (!gone.length) return no("The account changed meanwhile. Reload and try again.");
+  // Their referral row lost its user through the foreign key: it can never pay now, so it is void (B2 Unit 3).
+  // The hourly referral_retention pass catches up if this fails.
+  await voidDeletedReferrals(q, new Date()).catch((e) => console.error("[admin] referral not voided after delete", (e as Error)?.message));
   await logAdminAction(q, { by, userId, action: "delete_account", detail: { email: gone[0].email } });
   return ok("Account deleted.");
 }

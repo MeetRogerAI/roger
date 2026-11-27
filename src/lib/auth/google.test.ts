@@ -230,6 +230,22 @@ describe("the callback", () => {
     expect(u).toEqual({ email: "ana@gmail.com", name: "Ana Google", path: "running", agent: "hark", currency: "CAD", signup_step: "plan", google_sub: "g-111", google_email: "ana@gmail.com", verified: true });
   });
 
+  it("applies the referral carried from the sign-up on a new account only (B2 Unit 3)", async () => {
+    const [ref] = await query<{ id: string }>("insert into users (email, status) values ('rae@example.com', 'trial') returning id");
+    const out = await (await roundTrip({ newAccount: { ...signupDetails, referrer: { id: ref.id, via: "link" } } })).run();
+    expect(out).toMatchObject({ kind: "signed_in", created: true });
+    const [u] = await query<{ id: string; referred_by: string | null }>("select id, referred_by from users where email = 'ana@gmail.com'");
+    expect(u.referred_by).toBe(ref.id);
+    expect(await query("select referrer_id, referred_user_id, stage, source from referrals")).toEqual([{ referrer_id: ref.id, referred_user_id: u.id, stage: "trial", source: "link" }]);
+
+    // Signing in again with another referrer on the sign-up: the account exists, so nothing changes.
+    const [other] = await query<{ id: string }>("insert into users (email, status) values ('sol@example.com', 'trial') returning id");
+    const again = await (await roundTrip({ newAccount: { ...signupDetails, referrer: { id: other.id, via: "link" } } })).run();
+    expect(again).toMatchObject({ kind: "signed_in", created: false });
+    expect((await query<{ referred_by: string }>("select referred_by from users where email = 'ana@gmail.com'"))[0].referred_by).toBe(ref.id);
+    expect(await query("select 1 from referrals")).toHaveLength(1);
+  });
+
   it("never links or signs in an admin address with Google, and a Google session is never admin", async () => {
     await query("insert into users (email, signup_step) values ('ana@gmail.com', 'done')");
     expect(await (await roundTrip({ admins: ["ana@gmail.com"] })).run()).toEqual({ kind: "refused", reason: "admin" });

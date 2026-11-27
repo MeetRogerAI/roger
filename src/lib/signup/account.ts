@@ -5,6 +5,7 @@ import { isEmail } from "@/lib/form";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { signInLinkEmail, startConfirmEmail } from "@/lib/mail/templates/sign-in";
 import { hit, limits, type Counter } from "@/lib/rate-limit";
+import type { Referrer } from "@/lib/referrals/attribution";
 import { accountPath, type SignupDraft } from "./draft";
 import { primaryAgent } from "./quiz";
 
@@ -36,8 +37,12 @@ export const stepPaths: Record<string, string> = {
   done: "/app",
 };
 
-/** A new account's details from the sign-up draft: carried on the email link, or on a Google sign-in (plan Unit 18). */
-export function newAccountFrom(d: SignupDraft, name: string): NewAccount {
+/**
+ * A new account's details from the sign-up draft: carried on the email link,
+ * or on a Google sign-in (plan Unit 18). The referrer is the one this browser's
+ * referral cookie named when the link was asked for (B2 Unit 3).
+ */
+export function newAccountFrom(d: SignupDraft, name: string, referrer: Referrer | null = null): NewAccount {
   const { path, notReady } = accountPath(d);
   return {
     name: name.trim().slice(0, 80),
@@ -49,12 +54,13 @@ export function newAccountFrom(d: SignupDraft, name: string): NewAccount {
     ref: d.ref ?? "",
     utm: d.utm,
     zack: d.zack,
+    referrer,
   };
 }
 
 export async function startAccount(
   q: Query,
-  input: { name: string; email: string; draft: SignupDraft; ip: string },
+  input: { name: string; email: string; draft: SignupDraft; ip: string; referrer?: Referrer | null },
   deps: MailDeps & { counter?: Counter; now?: Date } = {},
 ): Promise<AccountOutcome> {
   const email = normaliseEmail(input.email);
@@ -74,7 +80,7 @@ export async function startAccount(
     return r === "failed" ? "send_failed" : "existing";
   }
 
-  return (await sendSignupLink(q, email, newAccountFrom(input.draft, name), { ...deps, now })) === "failed" ? "send_failed" : "new";
+  return (await sendSignupLink(q, email, newAccountFrom(input.draft, name, input.referrer ?? null), { ...deps, now })) === "failed" ? "send_failed" : "new";
 }
 
 /**

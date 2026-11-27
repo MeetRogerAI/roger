@@ -39,6 +39,7 @@ Set these in the Vercel project (Settings → Environment Variables), for Produc
 | `ADMIN_PASSWORD` | Signing in to `/admin` |
 | `ADMIN_SECRET` | Signs the admin session and encrypts keys saved in admin. Any long random string; keep it stable. |
 | `CRON_SECRET` | Lets Vercel Cron run the daily jobs. Any long random string. |
+| `REF_SECRET` | Signs the `roger-ref` referral cookie set by `/r/{code}` (B2). Optional: without it a key derived from `ADMIN_SECRET` (or `CRON_SECRET`) is used. Changing it forgets referral links visitors opened before. |
 | `RESEND_API_KEY` | Watch emails. Optional here: can be pasted in Admin → Connections instead, or set by the Resend integration. |
 | `X_BEARER_TOKEN`, `XAI_API_KEY` | Optional X sources for the daily intake. Can also be pasted in Admin → Connections. |
 | `SITE_URL` | Optional. Links in emails, e.g. `https://meetroger.ai` |

@@ -4,6 +4,7 @@ import { appUrl } from "@/lib/mail/layout";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { googleLinkedEmail } from "@/lib/mail/templates/sign-in";
 import { counterFor, hit, limits } from "@/lib/rate-limit";
+import { applyReferralSafely } from "@/lib/referrals/attribution";
 import { sendSignupLink, stepPaths } from "@/lib/signup/account";
 import { adminEmails } from "./admin-emails";
 import type { NewAccount } from "./login-link";
@@ -292,13 +293,17 @@ export async function completeGoogle(
     return r === "failed" ? refused("token") : { kind: "email_sent" };
   }
   const [created] = await q<Found>(
-    `insert into users (email, name, path, not_ready, profile, agent, currency, ref, utm, pending_zack_token, signup_step, email_verified_at, google_sub, google_email)
-     values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, 'plan', $11, $12, $1)
+    `insert into users (email, name, path, not_ready, profile, agent, currency, ref, utm, pending_zack_token, signup_step, email_verified_at, google_sub, google_email, pending_referrer_id)
+     values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, 'plan', $11, $12, $1, (select x.id from users x where x.id = $13::uuid))
      on conflict do nothing
      returning id, email, signup_step`,
-    [claims.email, account.name, account.path, account.notReady, JSON.stringify(account.profile), account.agent, account.currency, account.ref, account.utm, account.zack, at, claims.sub],
+    [claims.email, account.name, account.path, account.notReady, JSON.stringify(account.profile), account.agent, account.currency, account.ref, account.utm, account.zack, at, claims.sub, account.referrer?.id ?? null],
   );
-  if (created) return signIn(created, false, true);
+  if (created) {
+    // Only this insert's own row (on conflict do nothing returns none otherwise) gets a referral.
+    await applyReferralSafely(q, { userId: created.id, email: created.email, referrer: account.referrer, now });
+    return signIn(created, false, true);
+  }
   // Made by someone else at the same moment: the same rules as an existing account.
   return (await linkExisting()) ?? refused("token");
 }

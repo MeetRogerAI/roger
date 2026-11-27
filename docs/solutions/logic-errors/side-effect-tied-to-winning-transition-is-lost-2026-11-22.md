@@ -11,7 +11,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: high
-last_updated: 2026-11-23
+last_updated: 2026-11-27
 tags: [idempotency, claim-first, notifications, webhooks, stripe, at-most-once, side-effects]
 ---
 
@@ -58,6 +58,14 @@ The prediction above came true, twice, despite this note:
 - **The trigger was a value only the winning pass sees.** `deliverWeek` returns the new `free_lists_used` only from the call that counted the free list, and the "your next list is your first paid one" email was sent only when that value was present. One Stripe preview timeout, and no later pass could ever send it. Fix: decide from stored state on every pass (`trial`, `free_lists_used >= freeRuns`, and no `sent` notification of that kind for this week or later).
 - **The retry pass selected only the before-state.** The hourly late pass picked users with *undelivered* picks. A user delivered mid-week whose email failed was no longer selected. Fix: the pass also selects delivered weeks with no `sent` Monday notification.
 - **Order the side effects so they agree.** The Monday email's status line quotes the stored amount, and the first-paid-next email is what stores it. Sending the Monday email first produced two emails a few seconds apart with different amounts. Send the email that writes the shared fact first, then re-read.
+
+## Seen again: referral attribution (B2 Unit 3, 2026-11-27)
+Attribution ran only on the call that **created** the account (`returning (xmax = 0) as created`), and a wrapper logged and swallowed any error so sign-up never failed. The fix has three parts:
+- **Persist the intent in the same insert.** One transient DB error left a signed-in member with no referral. Every later sign-in saw an existing row, so the referrer's month of credit was gone for good, with no alert. Now the resolved referrer is written to `users.pending_referrer_id` in the very insert that creates the user. The intent can't be lost even when the follow-up step fails.
+- **Clear it on every definite outcome:** attributed, refused as self, or nobody to credit.
+- **Retry from stored state:** an hourly task re-runs the idempotent step for rows still pending. Guarded writes (`referred_by` set only while null, a unique index on the referral) make overlap with an inline attempt safe.
+
+The general rule: when a side effect hangs on a value only the creating pass sees (here `created = true`), store that value durably in the same write and let a sweep finish the job.
 
 A related rule from the same review: the eligibility check for the transition belongs inside the statement that makes it (`with u as (select ... where <deliverable> for update)`), not in a JavaScript check on a row read earlier. A cancel, a hold, or a second delivery in another pass can land in between.
 

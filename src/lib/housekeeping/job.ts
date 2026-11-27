@@ -21,7 +21,8 @@ import { stripe } from "@/lib/billing/stripe";
 import { stripeGateway, type CardGateway } from "@/lib/billing/gateway";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, voidLeftoverInvoices } from "@/lib/billing/orders";
-import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords } from "./retention";
+import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords, purgeReferralData } from "./retention";
+import { retryPendingReferrals } from "@/lib/referrals/attribution";
 import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
 import { noCardClocks, type NoCardClock } from "./clocks";
 import { sendUnsentWelcomes } from "@/lib/signup/finish";
@@ -89,6 +90,10 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "idle_retention", run: (q, d) => applyIdleRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
   // Old sign-up interest, notification and Stripe event records (privacy P6). Never ahead of the real clock.
   { name: "old_records", run: (q, d) => purgeOldRecords(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
+  // Guests' addresses on invitations never taken up (90 days), and referrals whose account was deleted. Never ahead of the real clock.
+  { name: "referral_retention", run: (q, d) => purgeReferralData(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
+  // Referrals whose attribution failed at sign-up (users.pending_referrer_id). Guarded writes: safe to overlap.
+  { name: "referral_pending", run: (q, d) => retryPendingReferrals(q, new Date(Math.min(d.now.getTime(), Date.now()))) },
   // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
   { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.

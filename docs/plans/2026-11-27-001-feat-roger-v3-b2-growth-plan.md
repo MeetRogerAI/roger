@@ -351,7 +351,7 @@ sequenceDiagram
 
 **Verification:** #51. The graph is readable at 375px wide and in both themes.
 
-- [ ] **Unit 3: Referral links, attribution, self-referral and `/app/referrals`**
+- [x] **Unit 3: Referral links, attribution, self-referral and `/app/referrals`**
 
 **Goal:** R6, with stages tracked.
 
@@ -440,6 +440,13 @@ sequenceDiagram
   - A lapse row's `source_object_id` is the close event's key.
   - Once a referral or user is deleted, their key column is null and the unique indexes no longer dedupe. Webhook handlers therefore look up an existing clawback or lapse by `source_object_id` alone before inserting.
   - A referral is required on every kind except `lapse`. The database no longer enforces this after the change to set-null deletes, so the code does.
+- **From the Unit 3 review:**
+  - The move to `paying` and the grant happen in one statement, guarded on `stage = 'trial'`.
+  - That statement re-runs the same-card check (referrer's fingerprint against the referred member's) and refuses the grant on a match. Older members with no stored fingerprint can't be checked; that gap is accepted.
+  - The grant skips a referral whose `referrer_id` is null (referrer deleted) and a referrer whose account is closed.
+  - **Late attribution:** the hourly retry can record a referral after the referred member's first invoice was paid. So the grant is also attempted whenever a referral is recorded (the same idempotent grant path), not only on `invoice.paid`. Test: a referral recorded after payment still grants once.
+  - Give the pending-referral retry an attempt cap, so permanently failing rows can't starve newer ones.
+  - The void sweeps only touch `invited` and `trial`. A `paying` row that later shares a card with its referrer alerts the admins rather than being voided. Whether to claw that credit back is the admin's call.
 
 **Execution note:** Write the ledger and webhook tests first, against fakes that reject a reused idempotency key sent with different parameters.
 

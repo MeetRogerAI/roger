@@ -3,6 +3,7 @@ import { adminAlert, alertAdmins, type MailDeps } from "@/lib/mail/send";
 import { counterFor, hit, limits, type Counter } from "@/lib/rate-limit";
 import type { V3Settings } from "@/lib/v3-settings";
 import { deliverUnlock, newestDeliveredWeek, UnlockEmailNotSent } from "@/lib/cora/unlock";
+import { voidSameCardReferrals } from "@/lib/referrals/stage";
 import type { CardSaveResult } from "./card-saved";
 import { refusePromotion, type CardGateway, type Promotion, type SetupSession } from "./gateway";
 import { hasCard, isNoCardTrial } from "./has-card";
@@ -388,6 +389,9 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
     }
   }
 
+  // The card is saved (by this call or an earlier one): a referral on the same card as the referrer's is void (B2 Unit 3).
+  // Idempotent; a failure throws, so the webhook's retry runs it again.
+  if (s.cardFingerprint) await voidSameCardReferrals(q, u.id, now, o);
   const settings = await o.getSettings();
   await deliverUnlock(q, { settings, now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
   return "done";
@@ -640,7 +644,7 @@ export async function completeCardUpdate(
   q: Query,
   gw: CardGateway,
   sessionId: string,
-  o: { expectUserId?: string; after: (userId: string) => Promise<unknown> },
+  o: { expectUserId?: string; after: (userId: string) => Promise<unknown>; mail?: MailDeps },
 ): Promise<CardUpdateOutcome> {
   const s = await gw.getSetupSession(sessionId);
   if (s.status !== "complete" || !s.customer || !s.paymentMethod) return "pending";
@@ -666,7 +670,11 @@ export async function completeCardUpdate(
     if ((await gw.checkTaxLocation(s.customer)) === "invalid") outcome = "address_invalid";
     else {
       // The member's card now (whole-branch review W7: first-time-only promo codes refuse a card another member saved).
-      if (s.cardFingerprint) await q(`update users set card_fingerprint = $2 where id = $1`, [u.id, s.cardFingerprint]);
+      if (s.cardFingerprint) {
+        await q(`update users set card_fingerprint = $2 where id = $1`, [u.id, s.cardFingerprint]);
+        // A new card that is the other side's card voids that referral (B2 Unit 3).
+        await voidSameCardReferrals(q, u.id, new Date(), o.mail);
+      }
       await o.after(u.id);
     }
   } catch (e) {

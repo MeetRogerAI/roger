@@ -117,7 +117,7 @@ describe("schema.sql on Postgres", () => {
       for (const t of ["referrals", "credits", "points", "session_guests", "session_attendance", "sponsors", "sponsor_invoices"]) expect(tables).toContain(t);
       const cols = await columns();
       for (const c of [
-        "users.leaderboard_opt_in_at", "users.credit_balance_cents", "users.credit_balance_at", "pool_play_contributors.contributed_at",
+        "users.leaderboard_opt_in_at", "users.credit_balance_cents", "users.credit_balance_at", "users.pending_referrer_id", "pool_play_contributors.contributed_at",
         "credits.uncollected_cents", "credits.offset_cents", "credits.reason", "credits.source_payment_intent", "referrals.referred_user_id",
         "session_guests.inviter_id", "points.total", "sponsors.alerted_80_at",
       ]) expect(cols).toContain(c);

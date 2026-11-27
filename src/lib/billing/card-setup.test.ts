@@ -4,7 +4,7 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { TEST_SPONSOR, testDb, testSponsor } from "@/test-helpers/pglite-db";
 import type { Counter } from "@/lib/rate-limit";
-import { CHECKOUT_LIMITED, completeCardSetup, discardSetupSession, openEmbeddedSetup, startCardUpdate } from "./card-setup";
+import { CHECKOUT_LIMITED, completeCardSetup, completeCardUpdate, discardSetupSession, openEmbeddedSetup, startCardUpdate } from "./card-setup";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { claimEvent, handleStripeEvent } from "./webhook";
 
@@ -65,6 +65,27 @@ describe("completeCardSetup", () => {
     const [u] = await query<{ status: string }>("select status from users");
     expect(u.status).toBe("trial");
     expect(sent).toHaveLength(0);
+  });
+
+  it("voids the member's referral when their card is the referrer's card, and leaves a different card's alone (B2 Unit 3)", async () => {
+    const [ref] = await query<{ id: string }>("insert into users (email, status, card_fingerprint) values ('rae@example.com', 'trial', 'fp_same') returning id");
+    await query("update users set referred_by = $1 where id = $2", [ref.id, userId]);
+    await query("insert into referrals (referrer_id, referred_user_id, source, stage, trial_at) values ($1, $2, 'link', 'trial', now())", [ref.id, userId]);
+    const gw = fakeGateway();
+    const id = await opened(gw);
+    gw.complete(id, "CA", "fp_same");
+    expect(await completeCardSetup(query, gw, id, { expectUserId: userId, getSettings, query, transport })).toBe("done");
+    expect(await query("select stage, void_reason, voided_at is not null as voided from referrals")).toEqual([{ stage: "void", void_reason: "same_card", voided: true }]);
+  });
+
+  it("keeps the referral at trial when the cards differ", async () => {
+    const [ref] = await query<{ id: string }>("insert into users (email, status, card_fingerprint) values ('rae@example.com', 'trial', 'fp_other') returning id");
+    await query("insert into referrals (referrer_id, referred_user_id, source, stage, trial_at) values ($1, $2, 'link', 'trial', now())", [ref.id, userId]);
+    const gw = fakeGateway();
+    const id = await opened(gw);
+    gw.complete(id, "CA", "fp_mine");
+    expect(await completeCardSetup(query, gw, id, { expectUserId: userId, getSettings, query, transport })).toBe("done");
+    expect(await query("select stage, void_reason from referrals")).toEqual([{ stage: "trial", void_reason: null }]);
   });
 
   it("waits while the card page is not finished", async () => {
@@ -444,6 +465,20 @@ describe("discardSetupSession: a currency change on the Payment page (Unit 4 hel
     expect(expire).not.toHaveBeenCalled();
     const [u] = await query<{ setup_session: string | null }>("select setup_session from users where id = $1", [userId]);
     expect(u.setup_session).toBeNull();
+  });
+});
+
+describe("completeCardUpdate and referrals (B2 Unit 3)", () => {
+  it("voids a trial referral when the updated card is the referrer's card", async () => {
+    const [ref] = await query<{ id: string }>("insert into users (email, status, card_fingerprint) values ('rae@example.com', 'trial', 'fp_shared') returning id");
+    await query("update users set stripe_customer = 'cus_ana', trial_started_at = now(), card_fingerprint = 'fp_mine' where id = $1", [userId]);
+    await query("insert into referrals (referrer_id, referred_user_id, source, stage, trial_at) values ($1, $2, 'link', 'trial', now())", [ref.id, userId]);
+    const gw = fakeGateway();
+    expect(await startCardUpdate(query, gw, { userId, successUrl: "https://x/done", cancelUrl: "https://x/billing" })).toMatchObject({ ok: true });
+    const id = [...gw.sessions.keys()].at(-1)!;
+    gw.complete(id, "CA", "fp_shared");
+    expect(await completeCardUpdate(query, gw, id, { expectUserId: userId, after: async () => {} })).toBe("done");
+    expect(await query("select stage, void_reason from referrals")).toEqual([{ stage: "void", void_reason: "same_card" }]);
   });
 });
 

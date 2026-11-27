@@ -61,7 +61,7 @@ export async function handleStripeEvent(
       // "Update card" on /app/billing: the new default card, then a held charge retried at once.
       const id = event.data.object.id;
       const d = await rdeps();
-      const result = await completeCardUpdate(q, gw, id, { after: (userId) => afterCardChange(q, d, userId, id) });
+      const result = await completeCardUpdate(q, gw, id, { after: (userId) => afterCardChange(q, d, userId, id), mail: o });
       if (result === "pending") throw new NotReadyYet("Checkout reported complete but the session is not complete yet");
       outcome = "handled";
       if (result !== "done") note = result;

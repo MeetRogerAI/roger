@@ -1,4 +1,5 @@
 import type { Query } from "@/lib/db-query";
+import { voidDeletedReferrals } from "@/lib/referrals/stage";
 
 /** The erase applyRetention does, for the users chosen by `chosen` (a select of user ids, bounded). */
 const ERASE_SQL = (chosen: string) => `with u as (${chosen}),
@@ -153,4 +154,27 @@ export async function cleanUpExpired(q: Query): Promise<{ tokens: number; sessio
      select (select count(*) from t)::int as tokens, (select count(*) from s)::int as sessions, (select count(*) from o)::int as states, (select count(*) from c)::int as counters`,
   );
   return r;
+}
+
+/** How long a guest's address is kept on an invitation they never took up (B2 plan Unit 3 retention). */
+export const REFERRAL_EMAIL_DAYS = 90;
+
+/**
+ * Referral rows and personal data (B2 plan Unit 3):
+ * - an `invited` row that never linked to an account loses its address 90
+ *   days after it was made (the row stays, for the referrer's list);
+ * - a referral whose referred account was deleted is voided, catching up on
+ *   any `deleteAccount` did not see (`voidDeletedReferrals`).
+ * A linked row never holds an address: attribution clears it when it links.
+ */
+export async function purgeReferralData(q: Query, o: { now: Date }): Promise<{ emails: number; voided: number }> {
+  const emails = await q(
+    `update referrals set referred_email = null
+     where referred_email is not null and referred_user_id is null and stage = 'invited'
+       and created_at <= $1::timestamptz - make_interval(days => $2)
+     returning id`,
+    [o.now.toISOString(), REFERRAL_EMAIL_DAYS],
+  );
+  const voided = await voidDeletedReferrals(q, o.now);
+  return { emails: emails.length, voided };
 }

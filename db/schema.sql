@@ -961,3 +961,13 @@ create unique index if not exists users_leaderboard_name on users (lower(display
 -- counts toward a contributor's points only if they contributed before it
 -- was delivered. Rows from before B2 stay null, earlier than everything.
 alter table pool_play_contributors add column if not exists contributed_at timestamptz;
+
+-- users.pending_referrer_id (B2 Unit 3): the referrer resolved at sign-up,
+-- written by the same insert that creates the account, and cleared once
+-- attribution has run (or definitely refused). A row still holding one is
+-- retried by the hourly referral_pending task, so a failed attempt is never
+-- lost. A deleted referrer clears it.
+alter table users add column if not exists pending_referrer_id uuid;
+create index if not exists users_pending_referrer on users (pending_referrer_id) where pending_referrer_id is not null;
+-- One line, so setup.mjs keeps it whole.
+do $$ begin if not exists (select 1 from pg_constraint where conname = 'users_pending_referrer_id_fkey') then alter table users add constraint users_pending_referrer_id_fkey foreign key (pending_referrer_id) references users (id) on delete set null; end if; end $$;
