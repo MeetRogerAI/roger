@@ -854,7 +854,7 @@ The plan was built end to end: a choice at `/start/plan`, stored in `users.plan`
 
 While `plans.oneAtATimeOffered` is false:
 
-- Sign-up stores monthly. A posted `per_run` is refused. A sign-up left half done on `per_run` is sent back to the plan step.
+- Sign-up stores monthly. A posted `per_run` is refused. A sign-up left half done on `per_run` is sent back to the plan step. One that was already on Stripe's card page finishes there with no trial started (`completeCardSetup` answers `plan_not_offered`, from the browser's return and from the webhook): nothing is written or charged, and `/start/done` sends the person to confirm monthly and add the card again. The plan is not changed to monthly for them, because they agreed to "charged only when you order".
 - A monthly member is offered no switch and is shown no mention of one at a time or its price, on any page or in any email. A switch posted anyway is refused before Stripe is called.
 - No new order can be placed, by anyone. The order box is not shown. The Friday order email is not sent.
 - The marketing pages and the terms describe monthly only whatever the switch says. Turning it on would need the option written back into them.
