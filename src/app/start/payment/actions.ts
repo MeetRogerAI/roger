@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/access";
-import { CHECKOUT_LIMITED, discardSetupSession, finishCardSave, openEmbeddedSetup, type EmbeddedSetup } from "@/lib/billing/card-setup";
+import { CHECKOUT_LIMITED, finishCardSave, openEmbeddedSetup, type EmbeddedSetup } from "@/lib/billing/card-setup";
 import { stripeGateway, type CardGateway, type MonthlyPreview } from "@/lib/billing/gateway";
 import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import {
@@ -122,17 +122,16 @@ async function currentState(g: Guarded, loc: BillingLocationInput): Promise<Curr
 
 /**
  * The USD / CAD toggle (origin R15). Allowed until the card is saved (the
- * guard). The open card session is in the old currency, so it is closed
- * (`discardSetupSession`), the account currency saved and a new session
- * opened in it; a session that completed in the meantime is finished
- * instead. `openEmbeddedSetup` opens in the stored currency, so the currency
- * is written before the open. From the page's view the change is all or
- * nothing: on success it gets the new session with the new currency and
- * price; on any failure (refused, rate-limited, Stripe down, a throw) it gets
- * the account's currency and price as stored now (`current`), which it
- * applies, and its Retry opens a session in that currency. The pending promo
- * code is looked up again in the new currency; one that does not apply there
- * is dropped, with `PROMO_GONE`.
+ * guard). Only the account's currency and the price change: the open card
+ * session is kept (`openEmbeddedSetup` hands it back whatever currency it was
+ * opened in, since saving a card does not depend on it and the first charge
+ * uses the account's currency), so the card form does not reload and the
+ * card-session limits are not touched. A session that completed in the
+ * meantime is finished instead, in the currency it was saved in. When no
+ * session can be opened the currency still changes, and the page gets the
+ * account's currency and price as stored now (`current`) with a Retry. The
+ * pending promo code is looked up again in the new currency; one that does
+ * not apply there is dropped, with `PROMO_GONE`.
  */
 export async function setPaymentCurrency(wanted: unknown, loc: BillingLocationInput = {}): Promise<SessionOpened | SessionRefused> {
   if (wanted !== "USD" && wanted !== "CAD") return { ok: false, message: "Choose US or Canadian dollars." };
@@ -142,17 +141,15 @@ export async function setPaymentCurrency(wanted: unknown, loc: BillingLocationIn
   let completed: string | null = null;
   let opened: EmbeddedSetup | null = null;
   try {
-    if (currency !== g.account.currency) {
-      const d = await discardSetupSession(query, g.gw, g.account.userId);
-      if (d === "complete") {
-        const [u] = await query<{ setup_session: string | null }>(`select setup_session from users where id = $1`, [g.account.userId]);
-        completed = u?.setup_session ?? null;
-      }
-      if (!completed) await query(`update users u set currency = $2 where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")}`, [g.account.userId, currency]);
-    }
-    if (!completed) {
-      opened = await openSetup(g);
-      if (!opened.ok && opened.reason === "complete") completed = opened.sessionId;
+    // The session is checked first: a card saved meanwhile (another tab) keeps the currency it was saved in.
+    opened = await openSetup(g).catch((e) => {
+      console.error("[payment] currency change: card session failed", { message: (e as Error)?.message });
+      return null;
+    });
+    if (opened && !opened.ok && opened.reason === "complete") completed = opened.sessionId;
+    else if (currency !== g.account.currency) {
+      const changed = await query(`update users u set currency = $2 where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")} returning id`, [g.account.userId, currency]);
+      if (changed.length && opened?.ok) opened = { ...opened, currency };
     }
   } catch (e) {
     console.error("[payment] currency change failed", { message: (e as Error)?.message });

@@ -238,29 +238,33 @@ describe("openEmbeddedSetup: the Payment page's card session (plan 2026-11-26-00
     expect(await open(gw)).toMatchObject({ ok: true, reused: false });
   });
 
-  it("makes a new session in the new currency after a currency change", async () => {
+  it("hands back the open session after a currency change: no new session, nothing counted (switching USD/CAD never reloads the card form)", async () => {
     const gw = fakeGateway();
     const a = await open(gw);
     await query("update users set currency = 'USD' where id = $1", [userId]);
-    const b = await open(gw);
-    expect(b).toMatchObject({ ok: true, reused: false, currency: "USD" });
+    const create = vi.spyOn(gw, "createEmbeddedSetupSession");
+    const counted = vi.fn(counter);
+    const b = await openEmbeddedSetup(query, gw, { userId, ip: "1.2.3.4", returnUrl, now: NOW, counter: counted });
     if (!a.ok || !b.ok) throw new Error("unreachable");
-    expect(gw.sessions.get(b.sessionId)?.currency).toBe("USD");
-    // The old-currency session is closed, so an old tab cannot save a card on it.
-    expect(gw.sessions.get(a.sessionId)?.status).toBe("expired");
+    expect(b).toMatchObject({ ok: true, reused: true, currency: "USD", sessionId: a.sessionId, clientSecret: a.clientSecret });
+    expect(create).not.toHaveBeenCalled();
+    expect(counted).not.toHaveBeenCalled();
+    expect(gw.sessions.get(a.sessionId)?.status).toBe("open");
   });
 
   it("still opens the new session when expiring the replaced one fails", async () => {
     const gw = fakeGateway();
     const a = await open(gw);
-    await query("update users set currency = 'USD' where id = $1", [userId]);
+    if (!a.ok) throw new Error("unreachable");
+    // A stored session that cannot be handed back (no client secret) is replaced.
+    gw.sessions.set(a.sessionId, { ...gw.sessions.get(a.sessionId)!, clientSecret: null });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(gw, "expireSetupSession").mockRejectedValue(new Error("api down"));
     const b = await open(gw);
     expect(warn).toHaveBeenCalledWith("[card] expire setup session failed", expect.objectContaining({ message: "api down" }));
     warn.mockRestore();
-    expect(b).toMatchObject({ ok: true, reused: false, currency: "USD" });
-    if (!a.ok || !b.ok) throw new Error("unreachable");
+    expect(b).toMatchObject({ ok: true, reused: false });
+    if (!b.ok) throw new Error("unreachable");
     expect((await stored()).setup_session).toBe(b.sessionId);
   });
 
@@ -268,7 +272,7 @@ describe("openEmbeddedSetup: the Payment page's card session (plan 2026-11-26-00
     const gw = fakeGateway();
     const a = await open(gw);
     if (!a.ok) throw new Error("unreachable");
-    await query("update users set currency = 'USD' where id = $1", [userId]);
+    gw.sessions.set(a.sessionId, { ...gw.sessions.get(a.sessionId)!, clientSecret: null });
     // The old tab's confirm lands just before the expiry: Stripe completes it, and the expire is a no-op.
     const expire = gw.expireSetupSession.bind(gw);
     vi.spyOn(gw, "expireSetupSession").mockImplementation(async (id) => {

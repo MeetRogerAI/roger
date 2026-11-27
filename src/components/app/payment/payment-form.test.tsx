@@ -122,7 +122,7 @@ describe("PaymentForm", () => {
     expect(button(html)).not.toContain("disabled");
     // The country defaults from the account currency.
     expect(html).toMatch(/<option value="CA" selected/);
-    expect(text(html)).toContain("Not now");
+    expect(text(html)).not.toContain("Not now");
   });
 
   it("without a publishable key the card form cannot load: the failure message, and the button disabled", () => {

@@ -1,4 +1,6 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { SignupSteps } from "@/components/app/signup-steps";
+import { decodeDraft, DRAFT_COOKIE } from "@/lib/signup/draft";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { categories } from "@/data/categories";
@@ -48,17 +50,22 @@ async function Start({ searchParams }: { searchParams: PageProps<"/start">["sear
     );
   }
 
+  // Back from Step 2: the answers already given are filled in, and the draft keeps what the first visit's link carried.
+  const draft = session ? null : decodeDraft((await cookies()).get(DRAFT_COOKIE)?.value);
+  const kept = draft
+    ? { path: params.path ?? draft.source, cur: params.cur ?? draft.cur, ref: params.ref ?? draft.ref, zack: params.zack ?? draft.zack, utm: params.utm || draft.utm }
+    : params;
   // The currency showing when they clicked, else a guess from their country (changeable at Payment).
   const country = (await headers()).get("x-vercel-ip-country")?.toUpperCase();
-  const withCur = { ...params, cur: params.cur ?? (country === "CA" ? "CAD" : "USD") };
+  const withCur = { ...kept, cur: kept.cur ?? (country === "CA" ? "CAD" : "USD") };
   return (
     <>
-      <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">Step 1 of 4</p>
-      <h1 className="mt-3 text-h2">A few questions first.</h1>
+      <SignupSteps current={1} />
+      <h1 className="text-h2">A few questions first.</h1>
       <p className="mt-6 max-w-[40rem] text-lead text-ink-2">
         Your answers tell Cora what kind of work you do, so the ideas she picks fit you. Nobody is turned away.
       </p>
-      <QuizForm params={withCur} agents={zackAgents.map((a) => ({ value: a.slug, label: a.name }))} categories={categories} />
+      <QuizForm params={withCur} initial={draft?.answers} agents={zackAgents.map((a) => ({ value: a.slug, label: a.name }))} categories={categories} />
     </>
   );
 }

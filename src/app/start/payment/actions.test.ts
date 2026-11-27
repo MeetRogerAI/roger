@@ -154,18 +154,28 @@ describe("quoteTax", () => {
 });
 
 describe("setPaymentCurrency", () => {
-  it("switches CAD to USD: the open session is closed, a new one in USD opened, the account currency saved and every line in USD", async () => {
+  it("switches CAD to USD: the same card session is kept (the card form does not reload), the account currency saved and every line in USD", async () => {
     const first = await openEmbeddedSetup(db.query!, db.gw!, { userId: db.userId!, ip: "203.0.113.9", returnUrl: RETURN });
     if (!first.ok) throw new Error(first.reason);
+    const create = vi.spyOn(db.gw!, "createEmbeddedSetupSession");
     const r = await actions.setPaymentCurrency("USD", { country: "US", postal: "10001" });
     if (!r.ok) throw new Error(r.message);
     expect(r.currency).toBe("USD");
-    expect(r.sessionId).not.toBe(first.sessionId);
-    expect(db.gw!.sessions.get(first.sessionId)!.status).toBe("expired");
-    expect(db.gw!.sessions.get(r.sessionId)).toMatchObject({ status: "open", currency: "USD" });
+    expect(r).toMatchObject({ sessionId: first.sessionId, clientSecret: first.clientSecret });
+    expect(create).not.toHaveBeenCalled();
+    expect(db.gw!.sessions.get(first.sessionId)!.status).toBe("open");
     expect(r.price).toMatchObject({ currency: "USD", subtotalCents: 20000, totalCents: 20000, tax: "calculated" });
     const [u] = await db.query!<{ currency: string; setup_session: string }>(`select currency, setup_session from users`);
-    expect(u).toEqual({ currency: "USD", setup_session: r.sessionId });
+    expect(u).toEqual({ currency: "USD", setup_session: first.sessionId });
+  });
+
+  it("switching back and forth many times never hits the card-session limit (the old 'Too many tries')", async () => {
+    const first = await openEmbeddedSetup(db.query!, db.gw!, { userId: db.userId!, ip: "203.0.113.9", returnUrl: RETURN });
+    if (!first.ok) throw new Error(first.reason);
+    for (let i = 0; i < 12; i++) {
+      const r = await actions.setPaymentCurrency(i % 2 ? "CAD" : "USD");
+      expect(r).toMatchObject({ ok: true, currency: i % 2 ? "CAD" : "USD", sessionId: first.sessionId });
+    }
   });
 
   it("without a location shows the plan price in the new currency, tax to come", async () => {
@@ -173,9 +183,7 @@ describe("setPaymentCurrency", () => {
     expect(r).toMatchObject({ ok: true, currency: "USD", price: { subtotalCents: 20000, tax: "pending" } });
   });
 
-  it("when the new session cannot be opened, answers with the account's currency and price as stored (never a stale one), and a retry opens in it", async () => {
-    const first = await openEmbeddedSetup(db.query!, db.gw!, { userId: db.userId!, ip: "203.0.113.9", returnUrl: RETURN });
-    if (!first.ok) throw new Error(first.reason);
+  it("when no card session can be opened, still changes the currency, answers with the account's currency and price as stored, and a retry opens", async () => {
     const create = db.gw!.createEmbeddedSetupSession;
     db.gw!.createEmbeddedSetupSession = async () => {
       throw new Error("Stripe is down");
