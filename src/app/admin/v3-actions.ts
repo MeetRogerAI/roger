@@ -326,14 +326,26 @@ export async function runJobAction(_p: V3State, fd: FormData): Promise<V3State> 
  * `v3.signupOpen`. Turning either on needs the confirm box; the order rules
  * live in setSwitch. Logged with who did it.
  */
+class SwitchRefused extends Error {}
+
 export async function launchSwitchAction(_p: V3State, fd: FormData): Promise<V3State> {
   const by = await requireAdmin();
   const name = field(fd, "name", 20);
   if (name !== "cycleLive" && name !== "signupOpen") return bad("Unknown switch.");
   const on = field(fd, "on", 5) === "true";
   if (on && field(fd, "confirm", 5) !== "yes") return bad("Tick the box to confirm.");
-  const r = await audited(query, { by, action: "launch_switch", detail: { name, on } }, () => setSwitch(query, name as LaunchSwitch, on));
-  if (!r.ok) return bad(r.reason);
+  // A refusal throws inside `audited`, so the log records it as an error, not as a change that happened.
+  try {
+    await audited(query, { by, action: "launch_switch", detail: { name, on } }, async () => {
+      const r = await setSwitch(query, name as LaunchSwitch, on);
+      if (!r.ok) throw new SwitchRefused(r.reason);
+      return r.state;
+    });
+  } catch (e) {
+    if (!(e instanceof SwitchRefused)) throw e;
+    refresh();
+    return bad(e.message);
+  }
   refresh();
   const what = name === "cycleLive" ? "The weekly cycle" : "Sign-up";
   return { status: "ok", message: `${what} is now ${on ? "on" : "off"}.`, at: Date.now() };

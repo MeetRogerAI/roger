@@ -52,4 +52,17 @@ describe("go-live switches (launch list g-open)", () => {
     expect(await setSwitch(q, "cycleLive", false)).toEqual({ ok: true, state: { cycleLive: false, signupOpen: false } });
     expect(await q("select count(*)::int as n from settings where key like 'v3.%'")).toEqual([{ n: 0 }]);
   });
+
+  it("closes sign-up again if a change at the same moment stopped the cycle (a race past the check)", async () => {
+    await setSwitch(q, "cycleLive", true);
+    // Another admin turns the cycle off between this call's check and its write.
+    const racing = (async (text: string, params?: unknown[]) => {
+      const r = await q(text, params);
+      if (/insert into settings/.test(text) && params?.[0] === "v3.signupOpen" && params?.[1] === true) await q("update settings set value = 'false'::jsonb where key = 'v3.cycleLive'");
+      return r;
+    }) as Query;
+    const r = await setSwitch(racing, "signupOpen", true);
+    expect(r).toMatchObject({ ok: false, reason: expect.stringContaining("sign-up was closed again") });
+    expect(await readSwitches(q)).toEqual({ cycleLive: false, signupOpen: false });
+  });
 });

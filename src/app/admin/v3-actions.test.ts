@@ -104,6 +104,8 @@ describe("the go-live switches (launch list g-open)", () => {
     admin = "admin@example.com";
     expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "signupOpen", on: "true", confirm: "yes" }))).toMatchObject({ status: "error", message: expect.stringContaining("weekly cycle first") });
     expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "retentionDays", on: "true", confirm: "yes" }))).toMatchObject({ status: "error", message: "Unknown switch." });
+    // The refused flip is in the log as an error, never as a change that happened.
+    expect(await current("select detail->>'outcome' as outcome, detail->>'name' as name from admin_actions")).toEqual([{ outcome: "error", name: "signupOpen" }]);
   });
 });
 
