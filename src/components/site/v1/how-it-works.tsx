@@ -3,9 +3,9 @@ import Link from "next/link";
 import { CopyTextButton } from "@/components/app/copy-text-button";
 import { SimpleMarkdown } from "@/components/app/simple-markdown";
 import { firstExample } from "@/data/site/examples";
-import { v1Copy } from "@/data/site/v1";
 import { zackAgents } from "@/data/zack";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
+import { v1Copy } from "@/lib/site/content/model";
 import { playbookParts } from "@/lib/site/playbook";
 import { getPlaybookPreface, publicIdeaView, type IdeaView } from "@/lib/site/sample";
 import type { BuiltVersion } from "@/lib/site/version";
@@ -51,7 +51,7 @@ export function zackFiles(agents: readonly { name: string; file: string; availab
 
 export { playbookParts };
 
-type Note = { part: string; note: string };
+type Note = { id: string; part: string; note: string };
 
 /**
  * Each playbook part beside its note, when the playbook has exactly the parts
@@ -108,7 +108,7 @@ export function V1HowItWorksView({
       <ReadingSection id="week" title={how.week.title}>
         <dl className="border-b border-rule">
           {how.week.days.map((d) => (
-            <div key={d.day} className="grid gap-x-8 gap-y-2 border-t border-rule py-6 sm:grid-cols-[7rem_minmax(0,1fr)]">
+            <div key={d.id} className="grid gap-x-8 gap-y-2 border-t border-rule py-6 sm:grid-cols-[7rem_minmax(0,1fr)]">
               <dt className="text-title">{d.day}</dt>
               <dd className="text-body">{d.body}</dd>
             </div>
@@ -121,7 +121,7 @@ export function V1HowItWorksView({
       <ReadingSection id={how.zack.id} title={how.zack.title}>
         <dl className="space-y-8">
           {how.zack.points.map((point) => (
-            <div key={point.title}>
+            <div key={point.id}>
               <dt className="text-title">{point.title}</dt>
               <dd className="mt-2 text-body">{point.body}</dd>
             </div>
@@ -175,7 +175,7 @@ export function V1HowItWorksView({
           <ol data-anatomy={paired ? "paired" : "listed"} className="mt-10 space-y-6 md:space-y-4">
             {paired ? (
               paired.map(({ note, part }) => (
-                <AnatomyRow key={note.part} note={note}>
+                <AnatomyRow key={note.id} note={note}>
                   <SimpleMarkdown source={part} className="text-small" />
                 </AnatomyRow>
               ))
@@ -183,7 +183,7 @@ export function V1HowItWorksView({
               <li className="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-8">
                 <dl className="space-y-4 md:order-2 md:pt-5">
                   {playbookNotes.map((note) => (
-                    <div key={note.part} data-note>
+                    <div key={note.id} data-note>
                       <dt className="text-small font-[620]">{note.part}</dt>
                       <dd className="text-small text-ink-2">{note.note}</dd>
                     </div>
@@ -207,12 +207,12 @@ export function V1HowItWorksView({
       <ReadingSection id="first-weeks" title={how.firstWeeks.title}>
         <ol className="border-b border-rule">
           {how.firstWeeks.steps.map((step, i) => (
-            <li key={step} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 border-t border-rule py-5">
+            <li key={step.id} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 border-t border-rule py-5">
               {/* Decoration: the list is ordered, so a screen reader already counts the steps. */}
               <span aria-hidden="true" data-claims="numeral" className="tabular text-title text-ink-2">
                 {i + 1}
               </span>
-              <span className="text-body">{step}</span>
+              <span className="text-body">{step.text}</span>
             </li>
           ))}
         </ol>

@@ -29,19 +29,26 @@
  * which fillCopy leaves alone and compoundingCaption in
  * src/lib/site/compounding.ts fills for each stack.
  *
+ * Ids. Every item of a list a page prints has an `id` (the questions, the hero
+ * steps, the problem statements and the others). Wording edited in the admin is
+ * stored under the item's id, never under its place in the list, so an id
+ * never changes once it is live and is never given to another item. Ids are
+ * letters, digits and hyphens, and none starts with "x-", which marks an item
+ * added in the admin. src/lib/site/content/registry.ts refuses a list without
+ * them.
+ *
  * Vocabulary (spec 0.4): outside `v1Zack`, and the one line
  * `zackWarning`, "agent" never appears without "AI" in front, because some
  * readers are called agents in their own work. A test holds this file to it.
  */
-import { fillAmounts, fillCopy, type Amounts } from "@/lib/site/amounts";
 import type { BrickWords, ClosingBandCopy, ControlBlockCopy, PriceBlockCopy, Question, QuestionGroup, SampleCardCopy, SharedCopy } from "./copy-types";
 
 /** The pages that show a subset of the questions: the homepage. /faq shows all of them. (/agents did too, until it was deleted on November 27, 2026.) */
 export type QuestionPage = "home";
 
 /**
- * `id` never changes once a question is live: an answer edited in the admin (/admin/questions) is stored under it
- * (src/lib/site/questions.ts). The wording here is the built-in text, which shows when there is no edit.
+ * `id` never changes once a question is live: an answer edited in the admin is stored under it. The wording here
+ * is the built-in text, which shows when there is no edit.
  */
 export type V1Question = Question & { id: string; on: QuestionPage[] };
 export type V1QuestionGroup = Omit<QuestionGroup, "items"> & { items: V1Question[] };
@@ -272,10 +279,11 @@ export const v1 = {
     title: "You decide what Zack shares",
     // The spec writes each point as one run of sentences; its first sentence is the title.
     points: [
-      { title: "Read every line.", body: "The exact instructions your Zack runs are in your dashboard." },
-      { title: "Set your own rules.", body: "Skip whole subjects, block names and words, or add rules in your own words." },
+      { id: "read", title: "Read every line.", body: "The exact instructions your Zack runs are in your dashboard." },
+      { id: "rules", title: "Set your own rules.", body: "Skip whole subjects, block names and words, or add rules in your own words." },
       // Peter, November 26, 2026: "Turn sharing off any time in your dashboard. is the hero. The hero is the subhead." Nothing else in this point.
       {
+        id: "off",
         title: "Turn sharing off any time in your dashboard.",
         body: "Protect your privacy and your most valuable ideas at any time.",
       },
@@ -338,10 +346,10 @@ export const v1 = {
       graphic: {
         name: "How Roger works, in four parts",
         steps: [
-          { label: "Use", title: "Set up your AI agents", body: "Set up your AI agents. If you don’t have any, our starter team takes about half an hour to install." },
-          { label: "Collect", title: "Zack reviews your week", body: "Each Sunday, an AI agent called Zack reviews your week and writes up what worked, with private details removed." },
-          { label: "Curate", title: "Cora picks your three ideas", body: "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. That is your Cora Curation." },
-          { label: "Deploy", title: "Approve The Ideas", body: "Say yes to the ideas you like and see them in action for you." },
+          { id: "use", label: "Use", title: "Set up your AI agents", body: "Set up your AI agents. If you don’t have any, our starter team takes about half an hour to install." },
+          { id: "collect", label: "Collect", title: "Zack reviews your week", body: "Each Sunday, an AI agent called Zack reviews your week and writes up what worked, with private details removed." },
+          { id: "curate", label: "Curate", title: "Cora picks your three ideas", body: "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. That is your Cora Curation." },
+          { id: "deploy", label: "Deploy", title: "Approve The Ideas", body: "Say yes to the ideas you like and see them in action for you." },
         ],
         pause: "Pause",
         play: "Play",
@@ -350,9 +358,9 @@ export const v1 = {
     problem: {
       title: "The problem",
       statements: [
-        "Everyone is being told to use AI. Almost nobody is told what to use it for.",
-        "The people getting real work out of AI agents rarely post how. It involves their clients and their business.",
-        "So each person works out the same things alone, a few months apart.",
+        { id: "told", text: "Everyone is being told to use AI. Almost nobody is told what to use it for." },
+        { id: "unposted", text: "The people getting real work out of AI agents rarely post how. It involves their clients and their business." },
+        { id: "alone", text: "So each person works out the same things alone, a few months apart." },
       ],
     },
     compounds: {
@@ -376,20 +384,20 @@ export const v1 = {
     week: {
       title: "The week",
       days: [
-        { day: "Sunday", body: "Zack reviews the past seven days of your own AI agent activity and writes up what worked, with private details removed. He runs on his own, or you can upload his report yourself." },
-        { day: "Monday", body: mondayOfTheWeek },
-        { day: "Tuesday", body: "Open an idea, press copy and paste it into your AI agent. It sets itself up and asks you what it needs to know." },
-        { day: "Wednesday", body: "Each idea you set up stays set up, and your three ideas stay in your dashboard for when you want them." },
+        { id: "sunday", day: "Sunday", body: "Zack reviews the past seven days of your own AI agent activity and writes up what worked, with private details removed. He runs on his own, or you can upload his report yourself." },
+        { id: "monday", day: "Monday", body: mondayOfTheWeek },
+        { id: "tuesday", day: "Tuesday", body: "Open an idea, press copy and paste it into your AI agent. It sets itself up and asks you what it needs to know." },
+        { id: "wednesday", day: "Wednesday", body: "Each idea you set up stays set up, and your three ideas stay in your dashboard for when you want them." },
       ],
     },
     zack: {
       id: "zack",
       title: "Zack, in detail",
       points: [
-        { title: "What he reads", body: zackReads },
-        { title: "What he never reads", body: zackSkips },
-        { title: "What he removes", body: zackRemoves },
-        { title: "What you can change", body: "Your dashboard shows the exact instructions your Zack runs. You can tell him to skip whole subjects, block specific words and names, share an outline only, or follow rules you write yourself." },
+        { id: "reads", title: "What he reads", body: zackReads },
+        { id: "never-reads", title: "What he never reads", body: zackSkips },
+        { id: "removes", title: "What he removes", body: zackRemoves },
+        { id: "change", title: "What you can change", body: "Your dashboard shows the exact instructions your Zack runs. You can tell him to skip whole subjects, block specific words and names, share an outline only, or follow rules you write yourself." },
       ],
       filesLink: { label: "Read the Zack files before you sign up" },
     },
@@ -401,26 +409,26 @@ export const v1 = {
       title: "The anatomy of an idea",
       prefaceLabel: "Added to the top of every playbook",
       notes: [
-        { part: "Play", note: "What the idea does, in a sentence." },
-        { part: "Trigger", note: "What starts it." },
-        { part: "Setup first", note: "What your AI agent asks you once, before the first run." },
-        { part: "Steps", note: "What your AI agent does, in order." },
-        { part: "Guardrails", note: "What it must never do." },
-        { part: "Output", note: "What you get back." },
-        { part: "Pitfalls seen", note: "What went wrong for someone else, and the fix." },
-        { part: "Done when", note: "How you know it worked." },
-        { part: "Paste to install", note: "The prompt you copy. The playbook goes with it." },
+        { id: "play", part: "Play", note: "What the idea does, in a sentence." },
+        { id: "trigger", part: "Trigger", note: "What starts it." },
+        { id: "setup-first", part: "Setup first", note: "What your AI agent asks you once, before the first run." },
+        { id: "steps", part: "Steps", note: "What your AI agent does, in order." },
+        { id: "guardrails", part: "Guardrails", note: "What it must never do." },
+        { id: "output", part: "Output", note: "What you get back." },
+        { id: "pitfalls", part: "Pitfalls seen", note: "What went wrong for someone else, and the fix." },
+        { id: "done-when", part: "Done when", note: "How you know it worked." },
+        { id: "paste", part: "Paste to install", note: "The prompt you copy. The playbook goes with it." },
       ],
     },
     firstWeeks: {
       title: "Your first {freeLists} weeks",
       steps: [
-        "You start, and we ask for a card. It is not charged.",
-        "Zack runs on Sunday.",
-        "Your first {freeLists} Cora Curations arrive, one each Monday. They are free.",
-        "After your {lastFreeList} Cora Curation, we email you with what happens next.",
-        "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
-        "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
+        { id: "start", text: "You start, and we ask for a card. It is not charged." },
+        { id: "zack-runs", text: "Zack runs on Sunday." },
+        { id: "arrive", text: "Your first {freeLists} Cora Curations arrive, one each Monday. They are free." },
+        { id: "email", text: "After your {lastFreeList} Cora Curation, we email you with what happens next." },
+        { id: "charged", text: "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing." },
+        { id: "closes", text: "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge." },
       ],
     },
     noAgent: {
@@ -445,7 +453,20 @@ export const v1 = {
     signatureAlt: "Peter’s signature",
   },
 
+  /**
+   * /library's own words on a site version: its heading, the lines around the rows, and the band it ends on. The
+   * rows, and the words inside the search, the filters and the watch form, are not here.
+   */
   library: {
+    /** The heading, which is set on two lines. */
+    title: { first: "The use-case", second: "library" },
+    /** "[count]" stands for the number of use cases, which the page puts in. It is not written {count}, because names in braces are amounts from the settings. */
+    intro: "[count] real things people’s AI agents did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.",
+    watchLink: "Watch for what you need",
+    watch: {
+      title: "Not in the library yet?",
+      note: "The morning someone’s AI agent does it, you get one email with the link. Every email has a link to stop.",
+    },
     band: "This is what people post in public. Roger sends you what works in private.",
   },
 } satisfies SharedCopy & Record<string, unknown>;
@@ -560,47 +581,13 @@ export const v1Zack = {
 export type V1Copy = typeof v1;
 export type V1ZackCopy = typeof v1Zack;
 
-/**
- * Questions and answers edited in the admin, by question id (/admin/questions; read by getQuestionOverrides in
- * src/lib/site/questions.ts). A part left out keeps the built-in wording.
- */
-export type QuestionOverrides = Record<string, { q?: string; a?: string }>;
-
 /** Every question with its group and its built-in wording, amounts not yet filled in. The admin's list. */
 export function builtInQuestions(): (V1Question & { group: string })[] {
   return questions.flatMap((group) => group.items.map((item) => ({ ...item, group: group.title })));
 }
 
-/** True for an edit a page can print: some text, naming only amounts that exist. Anything else falls back to the built-in wording. */
-function printable(text: string | undefined, amounts: Amounts): text is string {
-  if (typeof text !== "string" || text.trim() === "") return false;
-  try {
-    fillAmounts(text, amounts);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** The question groups with each edit in place of the built-in wording, amounts not yet filled in. */
-export function questionsWith(overrides: QuestionOverrides, amounts: Amounts): V1QuestionGroup[] {
-  return questions.map((group) => ({
-    ...group,
-    items: group.items.map((item) => {
-      const edit = Object.hasOwn(overrides, item.id) ? overrides[item.id] : undefined;
-      return edit ? { ...item, q: printable(edit.q, amounts) ? edit.q : item.q, a: printable(edit.a, amounts) ? edit.a : item.a } : item;
-    }),
-  }));
-}
-
-/**
- * The two copy objects with every amount filled in, ready for a page. `overrides` are the questions edited in
- * the admin: the pages that show questions pass them, and amounts named in an edit are filled like any other.
- */
-export function v1Copy(amounts: Amounts, overrides: QuestionOverrides = {}): { copy: V1Copy; zack: V1ZackCopy } {
-  const shared = Object.keys(overrides).length > 0 ? { ...v1, questions: questionsWith(overrides, amounts) } : v1;
-  return { copy: fillCopy(shared, amounts), zack: fillCopy(v1Zack, amounts) };
-}
+// The copy a page prints, with its amounts filled in and any stored edits in place, is v1Copy in
+// src/lib/site/content/model.ts. It is not here, because that module reads this one.
 
 /**
  * What PriceBlock takes, from filled copy: the shared price words, the block's

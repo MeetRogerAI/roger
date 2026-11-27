@@ -15,7 +15,7 @@ import { jar, nextHeaders, nextNavigation, resetNextFakes } from "@/test-helpers
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/navigation", () => nextNavigation);
 vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), cache: <T,>(f: T) => f }));
-vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), refresh: () => {}, updateTag: () => {}, revalidatePath: () => {} }));
+vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), refresh: () => {}, updateTag: () => {}, revalidatePath: () => {}, cacheLife: () => {}, cacheTag: () => {} }));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {}, connection: async () => {} }));
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key", secretStatus: async () => ({}) }));
 
@@ -49,7 +49,7 @@ const withParams = {
   users: (await import("@/app/admin/users/page")).default,
   runs: (await import("@/app/admin/runs/page")).default,
   cora: (await import("@/app/admin/cora/page")).default,
-  sample: (await import("@/app/admin/sample/page")).default,
+  questions: (await import("@/app/admin/questions/page")).default,
 };
 
 const form = (o: Record<string, string>) => {
@@ -100,8 +100,8 @@ describe("an admin", () => {
     await signInAs(adminUser);
     await current("insert into runs (user_id, week_of, route, agent, sharing, raw_text, status) values ($1, '2026-12-14', 'connector', 'hark', 'share', 'x', 'flagged')", [member]);
     const props = { searchParams: Promise.resolve({ q: "ana", user: member }), params: Promise.resolve({ id: member }) } as never;
-    for (const page of [pages.flags, pages.testimonials, pages.interest]) expect(await page()).not.toBeNull();
-    for (const page of [withParams.ops, withParams.users, withParams.runs, withParams.cora, withParams.sample]) expect(await page(props)).not.toBeNull();
+    for (const page of [pages.flags, pages.testimonials, pages.interest, pages.settings]) expect(await page()).not.toBeNull();
+    for (const page of Object.values(withParams)) expect(await page(props)).not.toBeNull();
     expect(await (await import("@/app/admin/users/[id]/page")).default(props)).not.toBeNull();
   });
 

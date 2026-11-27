@@ -16,7 +16,7 @@ export function ControlBlock({ copy, night = false, id = "control" }: { copy: Co
         <SectionHead id={titleId} title={copy.title} night={night} />
         <Reveal as="ul" className="mx-auto mt-14 grid max-w-[64rem] gap-10 md:grid-cols-3 md:gap-12">
           {copy.points.map((point) => (
-            <li key={point.title} className={`border-t pt-6 ${night ? "border-night-rule" : "border-rule-strong"}`}>
+            <li key={point.id} className={`border-t pt-6 ${night ? "border-night-rule" : "border-rule-strong"}`}>
               <p className="text-title">{point.title}</p>
               <p className={`mt-3 text-body ${night ? "text-night-ink-2" : "text-ink-2"}`}>{point.body}</p>
             </li>

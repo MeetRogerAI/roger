@@ -1,6 +1,7 @@
-import { v1Copy, type QuestionOverrides } from "@/data/site/v1";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
-import { getQuestionOverrides } from "@/lib/site/questions";
+import type { Overlay } from "@/lib/site/content/format";
+import { v1Copy } from "@/lib/site/content/model";
+import { getQuestionOverrides, questionOverlay } from "@/lib/site/questions";
 import type { BuiltVersion } from "@/lib/site/version";
 import { Questions } from "./blocks/questions";
 import { PageHead, StartBand } from "./blocks/reading";
@@ -18,21 +19,21 @@ import { PageHead, StartBand } from "./blocks/reading";
 /** Reads the amounts the answers name and the admin's edits, both cached, so the page keeps its static shell. */
 export async function V1Faq({ version }: { version: BuiltVersion }) {
   const [amounts, questions] = await Promise.all([getAmounts(), getQuestionOverrides()]);
-  return <V1FaqView version={version} amounts={amounts} questions={questions} />;
+  return <V1FaqView version={version} amounts={amounts} content={questionOverlay(questions)} />;
 }
 
 export function V1FaqView({
   version,
   amounts,
-  questions = {},
+  content,
 }: {
   /** The version being served. v2 and v3 show this page until they have their own. */
   version: BuiltVersion;
   amounts: Amounts;
-  /** Questions and answers edited in the admin. Left out, every question has its built-in wording. */
-  questions?: QuestionOverrides;
+  /** The stored edits to show, as one overlay on the code copy. Left out, the page prints the code copy alone. */
+  content?: Overlay;
 }) {
-  const { copy } = v1Copy(amounts, questions);
+  const { copy } = v1Copy(amounts, content);
 
   return (
     <div data-site={version}>

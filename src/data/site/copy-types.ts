@@ -16,6 +16,12 @@
 
 export type Question = { q: string; a: string };
 
+/**
+ * One line of a list a page prints, such as a problem statement. `id` is the item's name in the copy: it never
+ * changes once it is live, because wording edited in the admin is stored under it, not under the item's place.
+ */
+export type TextItem = { id: string; text: string };
+
 /** One heading on /faq with its questions. */
 export type QuestionGroup = { id: string; title: string; items: Question[] };
 
@@ -83,7 +89,7 @@ export type ClosingBandCopy = { line: string; sub?: string; start: string; trial
 /** "You decide what Zack shares": each point is a short title and the sentences under it. */
 export type ControlBlockCopy = {
   title: string;
-  points: { title: string; body: string }[];
+  points: { id: string; title: string; body: string }[];
   link: { label: string; href: string };
 };
 

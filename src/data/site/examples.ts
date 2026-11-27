@@ -2,7 +2,7 @@
  * The plays shown under "Cora Curation Examples" on the homepage
  * (Peter's third homepage review, November 27, 2026). Real plays from real
  * Zack runs, bundled with the site: the public pages read nothing else for
- * this section, and the play chosen at /admin/sample no longer reaches them.
+ * this section. The admin screen that chose a pool play for it is removed.
  *
  * Each example is known in code by its id only. Who a play came from is not
  * recorded here, in a comment or anywhere on the site.

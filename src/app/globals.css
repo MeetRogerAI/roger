@@ -118,6 +118,13 @@
   html {
     scroll-padding-top: 72px;
   }
+  /* Below lg the admin pins its Menu button under the header (admin-ui.tsx): 60px of header and 64px of button.
+     Without the extra room a link to a part of a page (/admin/users/…#add-run) lands with its heading under the button. */
+  @media (max-width: 1023.98px) {
+    html:has([data-admin-nav]) {
+      scroll-padding-top: 136px;
+    }
+  }
   body {
     background: var(--color-ground);
     color: var(--color-ink);
@@ -183,7 +190,7 @@
     }
   }
 
-  /* Buttons: a filled pill for the one action; everything else is a text link. */
+  /* Buttons: a filled pill for the one action. Beside it, an outlined pill for the second (the header's "Sign in"); everything else is a text link. */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -242,6 +249,15 @@
   }
   .btn-light:hover {
     background: #ffffff;
+  }
+  /* The second action beside a filled one: no fill, so the filled button stays the only one. For light grounds. */
+  .btn-outline {
+    background: transparent;
+    color: var(--color-ink);
+    border-color: var(--color-ink);
+  }
+  .btn-outline:hover {
+    background: var(--color-ground-2);
   }
   .btn[aria-disabled="true"] {
     background: var(--color-ground-2);

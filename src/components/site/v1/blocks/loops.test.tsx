@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { v3Defaults } from "@/data/config";
 import { compoundingSteps } from "@/data/site/compounding";
-import { v1Copy } from "@/data/site/v1";
+import { v1Copy } from "@/lib/site/content/model";
 import { amountsFrom } from "@/lib/site/amounts";
 import { CompoundingLoop, LOOP_START_MS, LOOP_STATE_MS, arrival, nextState } from "./compounding-loop";
 import { HERO_STEP_MS, HeroSteps, nextStep } from "./hero-steps";
@@ -45,7 +45,7 @@ describe("the hero's four steps", () => {
   });
 
   it("names the fourth step in Peter's words (November 27, 2026)", () => {
-    expect(graphic.steps[3]).toEqual({ label: "Deploy", title: "Approve The Ideas", body: "Say yes to the ideas you like and see them in action for you." });
+    expect(graphic.steps[3]).toEqual({ id: "deploy", label: "Deploy", title: "Approve The Ideas", body: "Say yes to the ideas you like and see them in action for you." });
     expect(markup).not.toContain("Paste to install");
     expect(markup).not.toContain("press copy");
   });
