@@ -12,7 +12,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../../db/seeds/sample-play.fixture.json";
 import { v3Defaults } from "@/data/config";
 import { compoundingNumbers } from "@/data/site/compounding";
-import { samplePlay } from "@/data/site/sample-play";
+import { examples } from "@/data/site/examples";
 import { v1Copy } from "@/data/site/v1";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
@@ -122,8 +122,9 @@ describe("reading a page", () => {
 });
 
 describe("rule (a): agent without AI in front", () => {
-  it("fails a page that says agents without AI, outside /agents and /zack (plan U10)", () => {
-    for (const path of ["/", "/pricing", "/faq", "/how-it-works", "/about", "/library", "/privacy", "/terms"]) {
+  it("fails a page that says agents without AI, outside /zack (plan U10)", () => {
+    // /agents is not a page any more (Peter, November 27, 2026), so its address has no exemption left.
+    for (const path of ["/", "/agents", "/faq", "/how-it-works", "/about", "/library", "/privacy", "/terms"]) {
       expect(broken("vocabulary", line("Works with all your agents.", path)), path).toEqual(["agents"]);
       expect(broken("vocabulary", line("Paste it into your agent.", path)), path).toEqual(["agent"]);
     }
@@ -131,11 +132,14 @@ describe("rule (a): agent without AI in front", () => {
 
   it("passes AI agent and AI agents, whatever the case of agent", () => {
     expect(check(line("Your AI agents, smarter. One AI agent. An AI Agent."))).toEqual([]);
+    // The homepage's closing button (Peter, November 27, 2026) writes it with a capital A.
+    expect(check(line("Level up your use of AI Agents Now."))).toEqual([]);
+    expect(rulesBroken(line("Level up your use of Agents Now."))).toEqual(["vocabulary"]);
   });
 
-  it("passes on /agents, /zack and /zack/[agent], and nowhere that only starts the same way", () => {
-    for (const path of ["/agents", "/zack", "/zack/claude", "/zack/other"]) expect(check(line("Add Zack to your agent.", path)), path).toEqual([]);
-    expect(rulesBroken(line("Add Zack to your agent.", "/agents-and-more"))).toEqual(["vocabulary"]);
+  it("passes on /zack and /zack/[agent], and nowhere that only starts the same way", () => {
+    for (const path of ["/zack", "/zack/claude", "/zack/other"]) expect(check(line("Add Zack to your agent.", path)), path).toEqual([]);
+    expect(rulesBroken(line("Add Zack to your agent.", "/agents"))).toEqual(["vocabulary"]);
     expect(rulesBroken(line("Add Zack to your agent.", "/zackary"))).toEqual(["vocabulary"]);
   });
 
@@ -208,11 +212,22 @@ describe("rule (c): time saved and productivity", () => {
     expect(broken("time-saved", inZone("Roger gives you one hour back.", "legal", "/privacy"))).toEqual(["one hour"]);
   });
 
-  it("allows the sample play’s own “save” (store) only inside the sample", () => {
-    const play = "Save a skill called Client email in two tones. Check a saved note first, or saved context.";
+  it("allows the example plays’ own “save” (store) only inside an example, and only in the four phrases they use", () => {
+    const play = "Save this as a skill called Daily prospect outreach drafts. Save each email as an unsent draft. If the mailbox can’t be reached, save nothing and report the error. Say how many drafts were saved.";
     expect(check(inZone(play, "sample"))).toEqual([]);
-    expect(broken("time-saved", line(play))).toEqual(["Save", "saved", "saved"]);
+    expect(broken("time-saved", line(play))).toEqual(["Save", "Save", "save", "saved"]);
     expect(broken("time-saved", inZone("This play saves 25 minutes a run.", "sample"))).toEqual(["25 minutes", "saves"]);
+    // The retired play's phrases have no allowance left, and no other use of the word has one.
+    expect(broken("time-saved", inZone("Save a skill called Client email in two tones. Check a saved note first.", "sample"))).toEqual(["Save", "saved"]);
+    expect(broken("time-saved", inZone("Save each morning for research.", "sample"))).toEqual(["Save"]);
+  });
+
+  it("allows “a 20-minute call”, the length of a meeting an example’s email asks for, only inside an example and only in those words", () => {
+    const ask = "What is the one ask (for example “a 20-minute call”)?";
+    expect(check(inZone(ask, "sample"))).toEqual([]);
+    expect(broken("time-saved", line(ask))).toEqual(["20-minute"]);
+    expect(broken("time-saved", inZone("It gives you a 20-minute head start.", "sample"))).toEqual(["20-minute"]);
+    expect(broken("time-saved", inZone("Ask for a 30-minute call.", "sample"))).toEqual(["30-minute"]);
   });
 
   it("allows the free run’s storing and waiting messages only on /zack", () => {
@@ -331,7 +346,7 @@ describe("rule (f): every number is explained", () => {
 
   it("allows a legal document’s date and its 30-day promise inside the document only", () => {
     expect(check(inZone("We will answer within 30 days. Last updated November 2026.", "legal", "/privacy"))).toEqual([]);
-    expect(broken("number", line("We will answer within 30 days. Last updated November 2026.", "/pricing"))).toEqual(["30", "2026"]);
+    expect(broken("number", line("We will answer within 30 days. Last updated November 2026.", "/faq"))).toEqual(["30", "2026"]);
     expect(broken("number", inZone("Since November 2026 we have served 30 clients.", "legal", "/terms"))).toEqual(["2026", "30"]);
   });
 
@@ -423,6 +438,28 @@ describe("the allow-list", () => {
     }
   });
 
+  it("allows “Payment starts in week 3”, the line under the price, with the week the settings give and no other number", () => {
+    expect(check(line("Your first two Cora Curations are free. Payment starts in week 3."))).toEqual([]);
+    // Only that phrase: the same number anywhere else is a violation.
+    expect(broken("number", line("Payment begins in week 3."))).toEqual(["3"]);
+    expect(broken("number", line("You pay from week 3 on."))).toEqual(["3"]);
+    // Only that week: another number in the phrase is one.
+    expect(broken("number", line("Payment starts in week 4."))).toEqual(["4"]);
+    expect(broken("number", line("Payment starts in week 30."))).toEqual(["30"]);
+    // The week follows the settings: with three free Cora Curations it is week 4, and week 3 is then a violation.
+    const three = { ...context, amounts: amountsFrom({ ...v3Defaults, freeRuns: 3 }) };
+    expect(checkRule("number", line("Payment starts in week 4."), three)).toEqual([]);
+    expect(checkRule("number", line("Payment starts in week 3."), three).map((v) => v.found)).toEqual(["3"]);
+  });
+
+  it("allows the short title “20 new prospects every day”, in those words only", () => {
+    expect(check(line("20 new prospects every day"))).toEqual([]);
+    expect(broken("number", line("20 new prospects every week"))).toEqual(["20"]);
+    expect(broken("number", line("25 new prospects every day"))).toEqual(["25"]);
+    // It names what a play drafts, never people who use Roger: that is still caught.
+    expect(rulesBroken(line("20 new users every day"))).toEqual(["number", "user-count"]);
+  });
+
   it("excuses nothing for the rules that have no exception by wording", () => {
     expect([...new Set(allowed.map((entry) => entry.rule))].sort()).toEqual(["number", "time-saved", "user-count"]);
   });
@@ -439,10 +476,12 @@ const quotes: Testimonial[] = [
   { id: "c", person: "Sample R.", attribution: "Made-up attribution", quote: "Two of the three ideas were running by Tuesday.", saidOn: null, audience: "both", position: 2, cleared: true },
 ];
 
-// A play as the admin's choice would arrive: the bundled play's text, with Cora's scores and every time figure the app's card can show.
+// A play as the admin's choice at /admin/sample would arrive: a title of its own, with Cora's scores and every time figure the app's card can show.
+// No public page reads that choice any more (November 27, 2026), which the tests below hold it to.
 const scoredPlay: SamplePlay = {
-  ...samplePlay,
+  ...examples[0].play,
   id: "chosen-in-admin",
+  title: "A play chosen in the admin",
   figures: { ...fixture.figures, math: "Worked out from 25 minutes saved, 8 runs a week." },
   scores: { hours: fixture.f_hours, reach: fixture.f_reach, ease: fixture.f_ease, proof: fixture.f_proof, surprise: fixture.f_surprise },
   score: fixture.score,
@@ -476,58 +515,63 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
   }, 120_000);
 
   it("renders all of them, each with the header and the footer", () => {
-    expect(sitePagePaths).toEqual(["/", "/agents", "/pricing", "/faq", "/how-it-works", "/about", "/zack", "/zack/claude", "/zack/other", "/library", "/privacy", "/terms", "/watch/confirm", "/watch/stop", "/a-page-that-is-not-there"]);
+    // /agents and /pricing are not pages any more (Peter, November 27, 2026).
+    expect(sitePagePaths).toEqual(["/", "/faq", "/how-it-works", "/about", "/zack", "/zack/claude", "/zack/other", "/library", "/privacy", "/terms", "/watch/confirm", "/watch/stop", "/a-page-that-is-not-there"]);
     for (const pages of [bare, full]) {
       expect(pages.map((page) => page.path)).toEqual(sitePagePaths);
       for (const page of pages) {
         expect(page.markup, page.path).toContain("<header");
         expect(page.markup, page.path).toContain("<footer");
-        expect(page.markup, page.path).toContain("For people who run AI agents");
-        expect(readPage(page.path, page.markup).segments.map((s) => s.text).join(" ").length, page.path).toBeGreaterThan(300);
+        // The footer's "Pricing" goes to the homepage's price section, and nothing links to either deleted page.
+        expect(page.markup, page.path).toContain('href="/#price"');
+        expect(page.markup, page.path).not.toMatch(/href="\/(?:pricing|agents)["?#]/);
+        expect(page.markup, page.path).not.toContain("For people who run AI agents");
+        // Not an empty page. The shortest, an expired watch link, is the header, one sentence, one link and the footer, which lost a link with /agents.
+        expect(readPage(page.path, page.markup).segments.map((s) => s.text).join(" ").length, page.path).toBeGreaterThan(250);
         expect(page.meta.length, page.path).toBeGreaterThan(0);
       }
     }
   });
 
-  it("has no violation with no testimonial and the bundled sample play: the site as a preview shows it", () => {
+  it("has no violation with no testimonial: the site as a preview shows it", () => {
     expect(describeViolations(failures(bare))).toBe("");
   });
 
-  it("has no violation with testimonials and a scored sample play: the site as production may show it", () => {
+  it("has no violation with testimonials, and with a play chosen in the admin: the site as production may show it", () => {
     expect(describeViolations(failures(full))).toBe("");
   });
 
-  it("really did render the optional sections the second time", () => {
+  it("really did render the optional section the second time, and shows the bundled examples whatever play the admin chose", () => {
     const home = (pages: RenderedPage[]) => pages.find((page) => page.path === "/")!.markup;
-    const agentsPage = (pages: RenderedPage[]) => pages.find((page) => page.path === "/agents")!.markup;
     expect(home(bare)).not.toContain("What people say");
-    expect(home(bare)).not.toContain("data-score=");
-    // The homepage shows the quote for its audience and the one for both; /agents shows its own and the one for both.
+    // The homepage shows the quote for its audience and the one for both, and not the one for the audience of the deleted /agents page.
     expect(home(full)).toContain("It saves me about 3 hours a week!");
     expect(home(full)).toContain("Two of the three ideas were running by Tuesday.");
     expect(home(full)).not.toContain("I stopped working this out alone.");
-    expect(agentsPage(full)).toContain("I stopped working this out alone.");
-    expect(agentsPage(full)).not.toContain("It saves me about 3 hours a week!");
-    expect(home(full).match(/data-score="/g)).toHaveLength(5);
-    expect(home(full)).toContain(">7 of 10<");
-    // The play's time figures never reach a page, whatever it carries.
-    for (const page of full) {
-      expect(page.markup, page.path).not.toContain("hours a week,");
-      expect(page.markup, page.path).not.toContain("25 minutes");
+    // The play chosen at /admin/sample reaches no page: not its title, not its scores, not its time figures.
+    for (const pages of [bare, full]) {
+      for (const page of pages) {
+        expect(page.markup, page.path).not.toContain("A play chosen in the admin");
+        expect(page.markup, page.path).not.toContain("data-score=");
+        expect(page.markup, page.path).not.toContain("hours a week,");
+        expect(page.markup, page.path).not.toContain("25 minutes");
+      }
+      for (const example of examples) expect(home(pages), example.id).toContain(example.play.title);
     }
   });
 
   it("marks each zone only on the pages that have that content", () => {
     expect(pagesWith(full, "compounding")).toEqual(["/"]);
-    expect(pagesWith(full, "testimonial")).toEqual(["/", "/agents"]);
+    expect(pagesWith(full, "testimonial")).toEqual(["/"]);
     expect(pagesWith(bare, "testimonial")).toEqual([]);
-    expect(pagesWith(full, "sample")).toEqual(["/", "/agents", "/how-it-works"]);
-    expect(pagesWith(full, "letter")).toEqual(["/", "/about"]);
+    expect(pagesWith(full, "sample")).toEqual(["/", "/how-it-works"]);
+    // Peter's letter is on /about only: "Who runs this" is gone from the homepage.
+    expect(pagesWith(full, "letter")).toEqual(["/about"]);
     expect(pagesWith(full, "legal")).toEqual(["/privacy", "/terms"]);
     expect(pagesWith(full, "verbatim")).toEqual(["/how-it-works"]);
     expect(pagesWith(full, "library")).toEqual(["/library"]);
-    expect(pagesWith(full, "bricks")).toEqual(["/", "/agents"]);
-    expect(pagesWith(full, "numeral")).toEqual(["/", "/agents", "/how-it-works", "/zack", "/zack/claude", "/zack/other"]);
+    expect(pagesWith(full, "bricks")).toEqual(["/"]);
+    expect(pagesWith(full, "numeral")).toEqual(["/", "/how-it-works", "/zack", "/zack/claude", "/zack/other"]);
   });
 
   it("keeps a numeral mark to a numeral: no sentence hides in one", () => {
@@ -558,7 +602,7 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
 
   it("says “Monday list” and “one list at a time” on no marketing page, and on the library only what its rows say", () => {
     for (const pages of [bare, full]) {
-      expect(marketing(pages).map((page) => page.path)).toEqual(["/", "/agents", "/pricing", "/faq", "/how-it-works", "/about", "/zack", "/zack/claude", "/zack/other", "/watch/confirm", "/watch/stop", "/a-page-that-is-not-there"]);
+      expect(marketing(pages).map((page) => page.path)).toEqual(["/", "/faq", "/how-it-works", "/about", "/zack", "/zack/claude", "/zack/other", "/watch/confirm", "/watch/stop", "/a-page-that-is-not-there"]);
       for (const page of marketing(pages)) {
         expect(words(page), page.path).not.toMatch(/monday lists?\b/i);
         expect(words(page), page.path).not.toMatch(/one list at a time|one at a time|one-at-a-time/i);
@@ -575,9 +619,10 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     for (const pages of [bare, full]) {
       for (const page of marketing(pages)) expect(words(page, { letter: false }), page.path).not.toMatch(/real estate|realtor|brokerage/i);
     }
-    // The documented exception: the paragraph of his letter about his own background, on the homepage and /about, which is his to change.
+    // The documented exception: the paragraph of his letter about his own background, on /about, which is his to change.
+    // The homepage no longer prints the letter, so nothing on it names a trade at all.
     const withLetter = marketing(bare).filter((page) => /real estate/i.test(words(page)));
-    expect(withLetter.map((page) => page.path)).toEqual(["/", "/about"]);
+    expect(withLetter.map((page) => page.path)).toEqual(["/about"]);
     for (const page of withLetter) expect(words(page)).toContain("I made my first real estate investment at 17");
   });
 
@@ -590,23 +635,44 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     }
   });
 
-  it("gives every start link, on every page and in the header, exactly the words “Get two free Cora Curations”", () => {
+  it("gives every start link, on every page and in the header, exactly the words “Get two free Cora Curations”, but for the homepage's closing button", () => {
     const plain = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const closing = "Level up your use of AI Agents Now.";
     for (const pages of [bare, full]) {
       for (const page of pages) {
         const starts = [...page.markup.matchAll(/<a\b[^>]*href="\/start(?:[?#][^"]*)?"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => plain(m[1]));
         // The header's button is on every page, so every page has at least one.
         expect(starts.length, page.path).toBeGreaterThanOrEqual(1);
-        for (const label of starts) expect(label, page.path).toBe("Get two free Cora Curations");
+        // The one exception, in Peter's words (November 27, 2026): the last start button of the homepage, once.
+        if (page.path === "/") {
+          expect(starts.filter((label) => label === closing), page.path).toHaveLength(1);
+          // It is the closing band's: the last start link of the page's shell (a copy of the price block for the visitor's country streams in after it).
+          const shell = page.markup.split('<div hidden id="S:')[0];
+          expect(shell.slice(shell.lastIndexOf('href="/start')), page.path).toContain(`>${closing}</a>`);
+        }
+        for (const label of starts.filter((l) => !(page.path === "/" && l === closing))) expect(label, page.path).toBe("Get two free Cora Curations");
+        if (page.path !== "/") expect(page.markup, page.path).not.toContain(closing);
         expect(page.markup, page.path).not.toContain("Start free");
       }
     }
     const count = (path: string) => bare.find((page) => page.path === path)!.markup.match(/href="\/start(?:[?#][^"]*)?"/g)!.length;
-    // The header's, then the page's own: hero, price and closing band on the homepage; price and band on /pricing.
+    // The header's, then the page's own: hero, price and closing band on the homepage.
     // The price block is in the markup twice where it streams: in the shell, and again for the visitor's country.
     expect(count("/")).toBe(5);
-    expect(count("/pricing")).toBeGreaterThanOrEqual(3);
     expect(count("/faq")).toBe(2);
+  });
+
+  it("prints the note under the price in Peter's words on every page that has it, and the old note nowhere", () => {
+    const note = "Your first two Cora Curations are free. Payment starts in week 3.";
+    for (const pages of [bare, full]) {
+      // Under the homepage's price, and under the button of /library's closing band.
+      expect(pages.filter((page) => words(page).includes(note)).map((page) => page.path)).toEqual(["/", "/library"]);
+      for (const page of marketing(pages)) expect(words(page), page.path).not.toMatch(/We ask for a card when you start\. It is charged with/);
+      // The homepage says a card is asked for in one place only: the answer to “When is my card charged?”.
+      const home = words(pages.find((page) => page.path === "/")!);
+      expect(home).not.toContain("Card required.");
+      expect(home.match(/\bcard\b/gi)).toHaveLength(1);
+    }
   });
 
   it("passes Peter’s two lines with no exception: the hero’s “battle-tested” line and the line under the price", () => {
@@ -631,18 +697,29 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     expect(rulesBroken(line("Try it for 2 full weeks."))).toEqual(["number"]);
   });
 
-  it("keeps the folded sample idea readable to the check: its text is in the page, in the sample zone, with the AI agent it was written on named", () => {
-    for (const path of ["/", "/agents"]) {
-      const page = bare.find((p) => p.path === path)!;
-      const sample = readPage(path, page.markup).segments.filter((s) => s.zones.includes("sample")).map((s) => s.text).join(" ");
-      expect(sample, path).toContain(samplePlay.description);
-      expect(sample, path).toContain(samplePlay.pasteToInstall);
-      expect(sample, path).toContain("Claude drafts only. It never sends.");
-      expect(sample, path).toContain("Written on Claude.");
-      expect(sample, path).toContain("The Idea Summary");
-      // Folded as it arrives: no row is open in the markup.
-      expect(page.markup, path).not.toMatch(/<details[^>]*\sopen(?:[\s=>])/);
+  it("keeps every folded example readable to the check: its text is in the page, in the sample zone, whichever example is showing", () => {
+    const page = bare.find((p) => p.path === "/")!;
+    const sample = readPage("/", page.markup).segments.filter((s) => s.zones.includes("sample")).map((s) => s.text).join(" ");
+    for (const example of examples) {
+      expect(sample, example.id).toContain(example.play.description);
+      expect(sample, example.id).toContain(example.play.pasteToInstall);
+      expect(sample, example.id).toContain(`${example.label} ${example.play.title} The Idea Summary`);
     }
+    expect(sample).toContain("Never post or schedule anything on social media.");
+    expect(sample).toContain("Never send. Drafts only, and the member sends.");
+    expect(sample).not.toContain("Written on");
+    // Folded as it arrives: no row is open in the markup.
+    expect(page.markup).not.toMatch(/<details[^>]*\sopen(?:[\s=>])/);
+    // The short titles in the row above the cards are outside the zone, and pass on their own.
+    const outside = readPage("/", page.markup).segments.filter((s) => !s.zones.includes("sample")).map((s) => s.text).join(" ");
+    expect(outside).toContain("On-demand video creation 20 new prospects every day");
+  });
+
+  it("would catch an example’s numbers and its “save” if a card lost its mark, so the pass above is the mark’s doing", () => {
+    const home = bare.find((page) => page.path === "/")!;
+    const unmarked = home.markup.replaceAll(' data-claims="sample"', "");
+    expect(unmarked).not.toBe(home.markup);
+    expect(rulesBroken(readPage("/", unmarked))).toEqual(["number", "time-saved"]);
   });
 
   it("would catch the compounding labels if the section lost its mark", () => {
@@ -770,7 +847,7 @@ describe(`every line of the ${VERSION} copy file, rendered or not`, () => {
   }
 
   it("passes the text rules: an error message that no test renders is still held to them", () => {
-    const { copy, agents, zack } = v1Copy(amounts);
+    const { copy, zack } = v1Copy(amounts);
     // The rules that need no zone to judge a line. Numbers are judged on the pages, where each has its zone.
     const textRules = ruleIds.filter((rule) => rule !== "number");
     const failuresOf = (value: unknown, path: string, skip: string[] = []) =>
@@ -780,21 +857,20 @@ describe(`every line of the ${VERSION} copy file, rendered or not`, () => {
     // The Zack warning is printed on /zack only (spec A.11), and the brick caption’s {week} and {bricks} are filled per stack.
     expect(failuresOf(copy, "/", ["zackWarning"])).toEqual([]);
     expect(failuresOf(copy.zackWarning, "/zack")).toEqual([]);
-    expect(failuresOf(agents, "/agents")).toEqual([]);
     expect(failuresOf(zack, "/zack")).toEqual([]);
   });
 });
 
-describe("a play chosen in the admin is data, not copy", () => {
+describe("a play is data, not copy", () => {
   it("is read by the same rules: the made-up seed play would fail the homepage on its wording", () => {
-    // db/seeds/sample-play.fixture.json says "the agent reads yesterday's buyer inquiries". A real play chosen in the
-    // admin is checked by reading it before go-live (plan, "Go-live check"): no test can see production's choice.
+    // db/seeds/sample-play.fixture.json says "the agent reads yesterday's buyer inquiries". An example added to
+    // src/data/site/examples.ts is held to the rule on every page that prints it, by the tests above.
     const card = renderToStaticMarkup(
       <article data-claims="sample">
         <p>{fixture.description}</p>
       </article>,
     );
     expect(rulesBroken(readPage("/", card))).toEqual(["vocabulary"]);
-    expect(check(readPage("/agents", card))).toEqual([]);
+    expect(rulesBroken(readPage("/how-it-works", card))).toEqual(["vocabulary"]);
   });
 });

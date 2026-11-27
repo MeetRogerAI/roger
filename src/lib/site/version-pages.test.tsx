@@ -137,11 +137,14 @@ describe("a site version before its pages are built", () => {
   });
 
   it("renders the signed-out header in the static markup: five links, Sign in and the start button (spec A.3)", async () => {
-    path = "/pricing";
+    path = "/faq";
     const markup = await pageMarkup(<RootLayout params={Promise.resolve({})}>{null}</RootLayout>);
     const header = markup.match(/<header[\s\S]*?<\/header>/)![0];
     // The logo, the five links, Sign in, then the start button with no address of its own beyond /start.
-    expect(hrefs(header)).toEqual(["#main", "/", "/how-it-works", "/pricing", "/library", "/faq", "/about", "/signin", "/start"]);
+    // "Pricing" is the price section of the homepage: there is no /pricing page (Peter, November 27, 2026).
+    expect(hrefs(header)).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start"]);
+    expect(hrefs(markup)).not.toContain("/pricing");
+    expect(hrefs(markup)).not.toContain("/agents");
     expect(header).toContain('<a aria-current="page"');
     expect(header).toContain(">Sign in</a>");
     // The same words as every other start button, at every width.
@@ -165,33 +168,33 @@ describe("a site version before its pages are built", () => {
     expect(hrefs(admin)).toEqual(["#main", "/", "/#how", "/zack", "/library", "/#questions", "/#letter"]);
   });
 
-  it("puts the nine items of spec A.3 in the footer, with no Circles or refunds link", async () => {
+  it("puts eight items in the footer, Pricing to the homepage's price section, with no Circles, refunds or /agents link", async () => {
     path = "/";
     const markup = await pageMarkup(<RootLayout params={Promise.resolve({})}>{null}</RootLayout>);
     const footer = markup.match(/<footer[\s\S]*?<\/footer>/)![0];
     const items = [...footer.matchAll(/<a [^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g)].map((m) => [m[1], m[2]]);
     expect(items).toEqual([
       ["mailto:hello@meetroger.ai", "hello@meetroger.ai"],
-      ["/pricing", "Pricing"],
+      ["/#price", "Pricing"],
       ["/how-it-works", "How it works"],
       ["/faq", "FAQ"],
       ["/about", "About"],
       ["/library", "Use cases"],
-      ["/agents", "For people who run AI agents"],
       ["/privacy", "Privacy"],
       ["/terms", "Terms"],
     ]);
     expect(footer).not.toContain("Circle");
     expect(footer).not.toContain("Refunds");
-    expect(footer).not.toContain("/#");
+    // The one address with a "#" is the price section.
+    expect(hrefs(footer).filter((h) => h.includes("#"))).toEqual(["/#price"]);
   });
 
   it("gives /zack and /zack/[agent] the public header and footer, and unlisted pages the quiet footer", async () => {
     for (const at of ["/zack", "/zack/claude"]) {
       path = at;
       const markup = await pageMarkup(<RootLayout params={Promise.resolve({})}>{null}</RootLayout>);
-      expect(hrefs(markup.match(/<header[\s\S]*?<\/header>/)![0]), at).toContain("/pricing");
-      expect(hrefs(markup.match(/<footer[\s\S]*?<\/footer>/)![0]), at).toContain("/agents");
+      expect(hrefs(markup.match(/<header[\s\S]*?<\/header>/)![0]), at).toContain("/#price");
+      expect(hrefs(markup.match(/<footer[\s\S]*?<\/footer>/)![0]), at).toContain("/how-it-works");
     }
     path = "/rlpsignature";
     const markup = await pageMarkup(<RootLayout params={Promise.resolve({})}>{null}</RootLayout>);
@@ -207,8 +210,8 @@ describe("a site version before its pages are built", () => {
     expect(page).toContain("That page isn’t here");
     const markup = await pageMarkup(<RootLayout params={Promise.resolve({})}><NotFound /></RootLayout>);
     // The header, the footer and the page itself are all there, so the check below is not passing on an empty page.
-    expect(hrefs(markup.match(/<header[\s\S]*?<\/header>/)![0])).toContain("/pricing");
-    expect(hrefs(markup.match(/<footer[\s\S]*?<\/footer>/)![0])).toContain("/agents");
+    expect(hrefs(markup.match(/<header[\s\S]*?<\/header>/)![0])).toContain("/#price");
+    expect(hrefs(markup.match(/<footer[\s\S]*?<\/footer>/)![0])).toContain("/how-it-works");
     expect(hrefs(markup.match(/<main[\s\S]*?<\/main>/)![0])).toEqual(["/start", "/"]);
     expect(hrefs(markup).filter((h) => hidden.some((x) => h.startsWith(x)))).toEqual([]);
     expect(markup).not.toContain("Circle");
@@ -272,7 +275,8 @@ describe("a site version before its pages are built", () => {
     // One link, the primary button, to /start with nothing added on the server.
     expect(hrefs(band)).toEqual(["/start"]);
     expect(band).toContain('<a class="btn btn-l" href="/start">Get two free Cora Curations</a>');
-    expect(band).toContain("Your first two Cora Curations are free. We ask for a card when you start.");
+    expect(band).toContain("Your first two Cora Curations are free. Payment starts in week 3.");
+    expect(band).not.toContain("We ask for a card");
     // It is the page's only start link.
     expect(hrefs(markup).filter((h) => h.startsWith("/start"))).toEqual(["/start"]);
   });

@@ -50,9 +50,14 @@ describe("/site-preview/blocks", () => {
     const markup = await pageMarkup(<SiteBlocksPreview />);
     expect(markup).toContain('data-plan="monthly"');
     expect(markup).toContain("You decide what Zack shares");
-    expect(markup).toContain("Client email in two tones");
-    // The blocks of Peter's homepage review (November 26, 2026): the hero's four parts, the seven-state loop, one plan, and the folded card.
+    // The examples of Peter's third review (November 27, 2026), each a full card, and the retired play nowhere.
+    expect(markup).toContain("Cora Curation Examples");
+    expect(markup).toContain("Phone camera roll to styled Reels");
+    expect(markup).toContain("Daily prospect outreach drafts");
+    expect(markup).not.toContain("Client email in two tones");
+    // The blocks of Peter's homepage reviews: the hero's four steps, the seven-state loop, one plan, and the folded card.
     expect(markup).toContain("data-hero-steps");
+    expect(markup).toContain("Approve The Ideas");
     expect(markup.match(/data-loop-state="/g)).toHaveLength(7);
     expect(markup).not.toContain('data-plan="list"');
     expect(markup).toContain('data-fold="playbook"');

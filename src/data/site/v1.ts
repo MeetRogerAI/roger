@@ -13,11 +13,15 @@
  * - Peter's homepage review of November 26, 2026 (section 7 there): the site
  *   speaks to anyone who uses AI agents, not to people in real estate; the
  *   marketing pages show the monthly price only; what arrives each Monday is
- *   called a "Cora Curation"; and every start button reads the same.
+ *   called a "Cora Curation"; and every start button reads the same;
+ * - Peter's third homepage review, of November 27, 2026 (section 9 there):
+ *   "How it works" is merged into the hero, "Who runs this" is gone from the
+ *   homepage, the examples section, the shorter line under the price, and the
+ *   closing band's own button.
  *
  * Amounts are never typed here. A line names them in braces, {monthlyUsd},
  * {monthlyCad}, {higherUsd}, {higherCad}, {freeLists}, {firstPaidList},
- * {lastFreeList} and {trialCloseDays}, and fillCopy in
+ * {firstPaidWeek}, {lastFreeList} and {trialCloseDays}, and fillCopy in
  * src/lib/site/amounts.ts puts the values in.
  *
  * The week numbers and brick counts of "It compounds" live in
@@ -25,17 +29,21 @@
  * which fillCopy leaves alone and compoundingCaption in
  * src/lib/site/compounding.ts fills for each stack.
  *
- * Vocabulary (spec 0.4): outside `v1Agents` and `v1Zack`, and the one line
+ * Vocabulary (spec 0.4): outside `v1Zack`, and the one line
  * `zackWarning`, "agent" never appears without "AI" in front, because some
  * readers are called agents in their own work. A test holds this file to it.
  */
-import { fillCopy, type Amounts } from "@/lib/site/amounts";
+import { fillAmounts, fillCopy, type Amounts } from "@/lib/site/amounts";
 import type { BrickWords, ClosingBandCopy, ControlBlockCopy, PriceBlockCopy, Question, QuestionGroup, SampleCardCopy, SharedCopy } from "./copy-types";
 
-/** The pages that show a subset of the questions. /faq shows all of them. */
-export type QuestionPage = "home" | "agents";
+/** The pages that show a subset of the questions: the homepage. /faq shows all of them. (/agents did too, until it was deleted on November 27, 2026.) */
+export type QuestionPage = "home";
 
-export type V1Question = Question & { on: QuestionPage[] };
+/**
+ * `id` never changes once a question is live: an answer edited in the admin (/admin/questions) is stored under it
+ * (src/lib/site/questions.ts). The wording here is the built-in text, which shows when there is no edit.
+ */
+export type V1Question = Question & { id: string; on: QuestionPage[] };
 export type V1QuestionGroup = Omit<QuestionGroup, "items"> & { items: V1Question[] };
 
 /**
@@ -65,16 +73,19 @@ const questions: V1QuestionGroup[] = [
     title: "Getting started",
     items: [
       {
+        id: "no-agents-yet",
         q: "I don’t use AI agents yet. Can I start?",
         a: "Yes. The startup page walks you through installing one and setting up a starter team. Most people finish in about half an hour.",
         on: ["home"],
       },
       {
+        id: "which-agents",
         q: "Which AI agents does Roger work with?",
         a: "Every AI agent. Zack has ready-made files for Claude, Duet, Grok Bot and Hark. On any other, one prompt adapts him, or you can upload his report yourself.",
-        on: ["agents"],
+        on: [],
       },
       {
+        id: "each-week",
         q: "What do I have to do each week?",
         a: "Open your three ideas on Monday and set up the ones you want. Zack runs on his own on Sunday.",
         on: ["home"],
@@ -86,31 +97,37 @@ const questions: V1QuestionGroup[] = [
     title: "Zack and privacy",
     items: [
       {
+        id: "zack-reads",
         q: "What does Zack read?",
         a: `${zackReads} ${zackSkips}`,
         on: ["home"],
       },
       {
+        id: "what-leaves",
         q: "What leaves my account?",
         a: "Two files each week. Zack’s report is a write-up of your most useful plays, which he is instructed to write with names, clients, addresses, amounts and other private details replaced by placeholders. A private matching profile describes your work and your setup in general words, and is not shared with other users. You agree to this when you sign up, and you can turn it off.",
-        on: ["agents"],
+        on: [],
       },
       {
+        id: "see-and-change",
         q: "Can I see and change what Zack does?",
         a: "Yes. Your dashboard shows the exact instructions your Zack runs. You can tell him to skip whole subjects, block specific words and names, share an outline only, or follow rules you write yourself.",
-        on: ["agents"],
+        on: [],
       },
       {
+        id: "who-sees",
         q: "Who sees my plays?",
         a: "Other Roger users, without your name or anything that identifies you. A play is described as ‘run by 3 users’, never as yours.",
         on: ["home"],
       },
       {
+        id: "competitors",
         q: "I compete with other people on Roger. What if I don’t want to share?",
         a: "You decide exactly what Zack shares, down to skipping whole subjects and blocking names. If you switch sharing off completely in your dashboard, your Cora Curation still arrives every Monday and the price becomes {higherUsd} a month ({higherCad} in Canada).",
-        on: ["agents"],
+        on: [],
       },
       {
+        id: "delete-sent",
         q: "Can I delete what I’ve sent?",
         a: "Yes. You can delete any weekly report from your dashboard.",
         on: [],
@@ -122,24 +139,28 @@ const questions: V1QuestionGroup[] = [
     title: "Cora and the ideas",
     items: [
       {
+        id: "what-is-a-curation",
         q: "What is a Cora Curation?",
         a: `What arrives each Monday: ${curationIs}. Cora is the AI agent that ranks every play in Roger.`,
-        on: ["home", "agents"],
+        on: ["home"],
       },
       {
+        id: "how-chosen",
         q: "How are my three ideas chosen?",
         a: "Cora scores every play on hours saved, reach, ease to copy, proof and surprise, then matches plays to the kind of work your own week shows. She never sends something you already run.",
         on: [],
       },
       {
+        id: "does-not-fit",
         q: "What if an idea doesn’t fit me?",
         a: "Paste it into your AI agent anyway and ask how it would apply to you. Every playbook starts by telling your AI agent to adapt it to your setup.",
         on: [],
       },
       {
+        id: "other-agent",
         q: "Will an idea work on my AI agent if it came from a different one?",
         a: "Yes. Your own AI agent rewrites the playbook for itself before installing it.",
-        on: ["agents"],
+        on: [],
       },
     ],
   },
@@ -148,26 +169,31 @@ const questions: V1QuestionGroup[] = [
     title: "Price and billing",
     items: [
       {
+        id: "cost",
         q: "What does it cost?",
         a: `{monthlyUsd} a month, plus tax where it applies. In Canada it is {monthlyCad} a month, plus HST. ${valueLine}`,
         on: ["home"],
       },
       {
+        id: "card-charged",
         q: "When is my card charged?",
         a: "The first charge comes with your {firstPaidList} Cora Curation, and the charge repeats once a month after that. Your first {freeLists} Cora Curations are free, and we email you after the {lastFreeList} one with what happens next.",
-        on: ["home", "agents"],
+        on: ["home"],
       },
       {
+        id: "why-a-card",
         q: "Why do you need a card for a free trial?",
         a: "So that nothing changes on your {firstPaidList} Monday. If you don’t want to continue, cancel in one click before then and you pay nothing.",
         on: [],
       },
       {
+        id: "missed-week",
         q: "What if Zack misses a week?",
         a: "The first miss each month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). We email you both times.",
         on: [],
       },
       {
+        id: "refund",
         q: "Can I get a refund?",
         a: "No. You get {freeLists} free Cora Curations before any charge, and you can cancel any time.",
         on: [],
@@ -180,16 +206,14 @@ const questions: V1QuestionGroup[] = [
 const headline = "Your AI agents, smarter every Monday.";
 const subLine = "Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network.";
 
-// Lines of /pricing, /how-it-works and /about that each page's search description repeats. None names an amount, so static metadata can read them.
-const firstIncluded = `A Cora Curation every Monday: ${curationIs}.`;
-const underMonthly = "One price, charged once a month. Cancel in one click.";
+// Lines of /how-it-works and /about that each page's search description repeats. None names an amount, so static metadata can read them.
 const mondayOfTheWeek = "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. They arrive as your Cora Curation, each with a full playbook.";
 const runBy = "Roger is run by Peter Kuperman.";
 
 /** A reading page's browser title, search description and shared-link line, from its own heading and one of its own lines. */
 const pageMeta = (title: string, description: string) => ({ title: `Roger: ${title}`, headline: title, description });
 
-/** Everything but /agents and /zack. The vocabulary rule applies to all of it except `zackWarning`. */
+/** Everything but /zack. The vocabulary rule applies to all of it except `zackWarning`. */
 export const v1 = {
   // --- The strings shared behaviour needs (SharedCopy) ---
   buttons: {
@@ -199,8 +223,8 @@ export const v1 = {
     openApp: "Open Roger",
   },
   cardLine: "Card required. Charged only with your {firstPaidList} Cora Curation.",
-  trialLine:
-    "Your first {freeLists} Cora Curations are free. We ask for a card when you start. It is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
+  /** Under the price (Peter's words, November 27, 2026). The week is the one of the first paid Cora Curation, from the settings. */
+  trialLine: "Your first {freeLists} Cora Curations are free. Payment starts in week {firstPaidWeek}.",
   price: {
     switchLabel: "Show prices in",
     perMonth: "month",
@@ -213,7 +237,7 @@ export const v1 = {
   zackWarning:
     "Check your report for client names or private details before pasting. It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form.",
   questions,
-  /** Header links. The footer shows the same five under the same labels. */
+  /** Header links. The footer shows the same five under the same labels. "Pricing" goes to the homepage's price section. */
   nav: {
     howItWorks: "How it works",
     pricing: "Pricing",
@@ -223,8 +247,6 @@ export const v1 = {
   },
   footer: {
     place: "Roger, Toronto",
-    /** The link to /agents. The spec's "agents" is "AI agents" here (vocabulary rule; approved by Peter). */
-    agents: "For people who run AI agents",
     privacy: "Privacy",
     terms: "Terms",
   },
@@ -265,16 +287,18 @@ export const v1 = {
     more: { label: "All questions", href: "/faq" },
   },
   testimonials: { title: "What people say" },
+  /**
+   * "Cora Curation Examples" (Peter, November 27, 2026): real plays, one shown at a time. The plays and the short
+   * title of each are in ./examples.ts. `nav` names the row that switches between them, for a screen reader.
+   */
   sample: {
-    title: "What arrives on Monday",
-    line: "This is one idea, as it arrives.",
+    title: "Cora Curation Examples",
+    nav: "Examples",
     /** The first of the card's two headings, and the two rows under it. Every row is folded until it is opened. */
     idea: { title: "The Idea", summary: "Summary", copy: "What To Copy" },
     install: {
       help: "The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions.",
       copy: "Copy prompt and playbook",
-      writtenOn: "Written on",
-      writtenOnNote: "Words like “skill” or “routine” may have another name on your AI agent.",
     },
     scores: {
       title: "Cora’s scores",
@@ -288,7 +312,7 @@ export const v1 = {
      * `whole` is that row's label for a play whose playbook is not written as numbered parts.
      */
     playbook: { title: "The Playbook", steps: "steps", whole: "The full playbook" },
-  } satisfies SampleCardCopy & { title: string; line: string },
+  } satisfies SampleCardCopy & { title: string; nav: string },
   bricks: {
     /** Each brick's label for screen readers: "Week 2, idea 1: set up". */
     week: "Week",
@@ -307,14 +331,18 @@ export const v1 = {
     hero: {
       headline,
       sub: subLine,
-      secondary: { label: "See how it works", href: "#how" },
       /**
-       * The picture beside the headline: the four steps of "How it works" below, one headline at a time.
-       * One label for each step, in the steps' order: Use is step 1, Collect step 2, Curate step 3, Deploy step 4.
+       * Beside the headline: how Roger works, in four steps, one at a time (Peter, November 27, 2026: the homepage's
+       * "How it works" section is merged into the hero). Each step is its label, its headline and its text.
        */
       graphic: {
         name: "How Roger works, in four parts",
-        labels: ["Use", "Collect", "Curate", "Deploy"],
+        steps: [
+          { label: "Use", title: "Set up your AI agents", body: "Set up your AI agents. If you don’t have any, our starter team takes about half an hour to install." },
+          { label: "Collect", title: "Zack reviews your week", body: "Each Sunday, an AI agent called Zack reviews your week and writes up what worked, with private details removed." },
+          { label: "Curate", title: "Cora picks your three ideas", body: "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. That is your Cora Curation." },
+          { label: "Deploy", title: "Approve The Ideas", body: "Say yes to the ideas you like and see them in action for you." },
+        ],
         pause: "Pause",
         play: "Play",
       },
@@ -327,60 +355,20 @@ export const v1 = {
         "So each person works out the same things alone, a few months apart.",
       ],
     },
-    how: {
-      id: "how",
-      title: "How it works",
-      steps: [
-        { title: "Set up your AI agents", body: "Set up your AI agents. If you don’t have any, our starter team takes about half an hour to install." },
-        { title: "Zack reviews your week", body: "Each Sunday, an AI agent called Zack reviews your week and writes up what worked, with private details removed." },
-        { title: "Cora picks your three ideas", body: "Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. That is your Cora Curation." },
-        { title: "Paste to install", body: "Open one, press copy, paste it into your AI agent. It sets itself up and asks you what it needs to know." },
-      ],
-    },
     compounds: {
       title: "It compounds",
       line: "Three ideas a week. Each one you set up stays set up. Six months in, your AI agents do things you would not have thought to ask for.",
       /** The loop's own words: its name for a screen reader, and its one button. */
       loop: { name: "The stack, week by week", pause: "Pause", play: "Play" },
     },
-    whoRuns: {
-      title: "Who runs this",
-      leadIn: runBy,
-      /** Read out for his photograph, once the file exists. */
-      photoAlt: "Peter Kuperman",
-      link: { label: "Read Peter’s letter", href: "/about" },
-    },
-    closing: { line: "See what your first {freeLists} Cora Curations bring." },
+    /**
+     * The homepage ends on its line and one button, with nothing under either (Peter, November 27, 2026).
+     * This button alone has its own words. Every other start button reads `buttons.start`.
+     */
+    closing: { line: "See what your first {freeLists} Cora Curations bring.", start: "Level up your use of AI Agents Now." },
   },
-  /** Under the closing band's line, on every page that ends on one: the line under the price. */
+  /** Under the closing band's line on /library: the line under the price. */
   closingSub: valueLine,
-
-  pricing: {
-    title: "Pricing",
-    meta: pageMeta("Pricing", `${firstIncluded} ${underMonthly}`),
-    included: {
-      title: "What is included",
-      items: [
-        firstIncluded,
-        "Your own history of every idea you have received.",
-        "Your Zack controls.",
-        "A compounding view of what you have set up.",
-      ],
-    },
-    explained: {
-      title: "Monthly, explained",
-      body: "A Cora Curation every Monday. Your first {freeLists} are free. Your card is charged once a month, starting with your {firstPaidList} Cora Curation.",
-      under: underMonthly,
-    },
-    contributing: {
-      title: "How contributing works",
-      body: "Roger works because everyone’s Zack contributes. If Zack misses a week, the first miss each month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). We email you both times, and the difference appears on your next invoice. If you switch sharing off in your dashboard, the monthly price is {higherUsd} ({higherCad} in Canada).",
-    },
-    refunds: {
-      title: "No refunds",
-      body: "There are no refunds. You get {freeLists} free Cora Curations before any charge, and you can cancel in one click.",
-    },
-  },
 
   howItWorks: {
     title: "How it works",
@@ -462,65 +450,12 @@ export const v1 = {
   },
 } satisfies SharedCopy & Record<string, unknown>;
 
-// The /agents headline and sub-line, which that page's browser title and search description repeat.
-const agentsHeadline = "Stop figuring out AI agents alone.";
-const agentsSubLine = "Every Monday, Roger sends you the three plays most worth installing, drawn from what other heavy users ran last week.";
-
 /**
- * /agents, for people who already run AI agents. Kept apart from `v1` because
- * this page may say "agent" on its own (spec 0.4).
- */
-export const v1Agents = {
-  /** The browser title, the search description and the shared link's one line: this page's own headline and sub-line. */
-  meta: {
-    title: `Roger: ${agentsHeadline}`,
-    headline: agentsHeadline,
-    description: agentsSubLine,
-  },
-  hero: {
-    headline: agentsHeadline,
-    sub: agentsSubLine,
-    secondary: { label: "Run Zack on yourself first", href: "/zack" },
-  },
-  /**
-   * The strip under the hero. The spec's line is "Zack files for Claude, Duet,
-   * Grok Bot and Hark. Any other agent adapts one with a single prompt." The
-   * names are not typed here: the page takes them from src/data/zack.ts, the
-   * agents whose file exists, so the sentence stays true when a file is added
-   * or removed (agentsStripLine in src/components/site/v1/agents.tsx).
-   */
-  strip: {
-    title: "Works with every agent",
-    filesFor: "Zack files for",
-    and: "and",
-    others: "Any other agent adapts one with a single prompt.",
-  },
-  problem: {
-    title: "The problem",
-    statements: [
-      "The most useful things people do with agents never get posted. They involve clients, money, and how the business runs.",
-      "What gets posted is the highlight reel, never the playbook.",
-      "So you work out alone what someone else solved last month.",
-    ],
-  },
-  how: {
-    title: "How it works",
-    steps: [
-      { title: "Add Zack", body: "Add Zack to your agent. He reviews your past seven days and writes up your best plays, with identities removed." },
-      {
-        title: "Cora picks your three",
-        body: "Cora scores every play in the pool on hours saved, reach, ease to copy, proof and surprise, then picks the three that fit your work and that you don’t already run.",
-      },
-      { title: "Paste to install", body: "Each idea comes with a full playbook. Paste it into your agent and it adapts itself to your setup." },
-    ],
-  },
-  closing: { line: "Find out what other heavy users know." },
-};
-
-/**
- * /zack and /zack/[agent], the free Zack run, linked from /agents only. Kept
- * apart from `v1` for the same reason. The warning above the paste box is
- * `v1.zackWarning`, because shared behaviour needs it.
+ * /zack and /zack/[agent], the free Zack run. Kept apart from `v1` because
+ * these pages may say "agent" on its own (spec 0.4). The warning above the
+ * paste box is `v1.zackWarning`, because shared behaviour needs it. The page
+ * that linked here, /agents, was deleted on November 27, 2026; /zack is still
+ * served and is in the sitemap.
  */
 const zackTitle = "Run Zack on yourself first";
 const zackIntro = "Zack runs in your own agent account and writes up your best plays from the past seven days. Nothing is sent to Roger unless you paste it here.";
@@ -623,12 +558,48 @@ export const v1Zack = {
 };
 
 export type V1Copy = typeof v1;
-export type V1AgentsCopy = typeof v1Agents;
 export type V1ZackCopy = typeof v1Zack;
 
-/** The three copy objects with every amount filled in, ready for a page. */
-export function v1Copy(amounts: Amounts): { copy: V1Copy; agents: V1AgentsCopy; zack: V1ZackCopy } {
-  return { copy: fillCopy(v1, amounts), agents: fillCopy(v1Agents, amounts), zack: fillCopy(v1Zack, amounts) };
+/**
+ * Questions and answers edited in the admin, by question id (/admin/questions; read by getQuestionOverrides in
+ * src/lib/site/questions.ts). A part left out keeps the built-in wording.
+ */
+export type QuestionOverrides = Record<string, { q?: string; a?: string }>;
+
+/** Every question with its group and its built-in wording, amounts not yet filled in. The admin's list. */
+export function builtInQuestions(): (V1Question & { group: string })[] {
+  return questions.flatMap((group) => group.items.map((item) => ({ ...item, group: group.title })));
+}
+
+/** True for an edit a page can print: some text, naming only amounts that exist. Anything else falls back to the built-in wording. */
+function printable(text: string | undefined, amounts: Amounts): text is string {
+  if (typeof text !== "string" || text.trim() === "") return false;
+  try {
+    fillAmounts(text, amounts);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The question groups with each edit in place of the built-in wording, amounts not yet filled in. */
+export function questionsWith(overrides: QuestionOverrides, amounts: Amounts): V1QuestionGroup[] {
+  return questions.map((group) => ({
+    ...group,
+    items: group.items.map((item) => {
+      const edit = Object.hasOwn(overrides, item.id) ? overrides[item.id] : undefined;
+      return edit ? { ...item, q: printable(edit.q, amounts) ? edit.q : item.q, a: printable(edit.a, amounts) ? edit.a : item.a } : item;
+    }),
+  }));
+}
+
+/**
+ * The two copy objects with every amount filled in, ready for a page. `overrides` are the questions edited in
+ * the admin: the pages that show questions pass them, and amounts named in an edit are filled like any other.
+ */
+export function v1Copy(amounts: Amounts, overrides: QuestionOverrides = {}): { copy: V1Copy; zack: V1ZackCopy } {
+  const shared = Object.keys(overrides).length > 0 ? { ...v1, questions: questionsWith(overrides, amounts) } : v1;
+  return { copy: fillCopy(shared, amounts), zack: fillCopy(v1Zack, amounts) };
 }
 
 /**
@@ -639,7 +610,7 @@ export function priceBlockCopy(copy: Pick<V1Copy, "priceBlock" | "price" | "tria
   return { ...copy.priceBlock, ...copy.price, trialLine: copy.trialLine, start: copy.buttons.start };
 }
 
-/** What ClosingBand takes, from filled copy and the page's own closing line. The line under it is the one under the price. */
+/** What ClosingBand takes on /library, from filled copy and the page's own closing line. The line under it is the one under the price. */
 export function closingBandCopy(copy: Pick<V1Copy, "trialLine" | "buttons" | "closingSub">, line: string): ClosingBandCopy {
   return { line, sub: copy.closingSub, start: copy.buttons.start, trialLine: copy.trialLine };
 }

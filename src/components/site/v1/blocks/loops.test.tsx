@@ -1,9 +1,10 @@
 /**
- * The two loops of the homepage (Peter's homepage review, November 26, 2026):
- * the hero's four parts and the seven states of "It compounds". Tests run in
- * node, with no browser, so what is checked here is what the server sends (the
- * still picture a visitor with no script reads), the arithmetic of each loop,
- * and the rules in globals.css that decide when anything moves.
+ * The two loops of the homepage (Peter's homepage reviews of November 26 and
+ * 27, 2026): the hero's four steps and the seven states of "It compounds".
+ * Tests run in node, with no browser, so what is checked here is what the
+ * server sends (the still picture a visitor with no script reads), the
+ * arithmetic of each loop, the rule for being on screen, and the rules in
+ * globals.css that decide when anything moves.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -13,13 +14,13 @@ import { v3Defaults } from "@/data/config";
 import { compoundingSteps } from "@/data/site/compounding";
 import { v1Copy } from "@/data/site/v1";
 import { amountsFrom } from "@/lib/site/amounts";
-import { CompoundingLoop, LOOP_LAST_MS, LOOP_STATE_MS, arrival, dwellFor, nextState } from "./compounding-loop";
+import { CompoundingLoop, LOOP_START_MS, LOOP_STATE_MS, arrival, nextState } from "./compounding-loop";
 import { HERO_STEP_MS, HeroSteps, nextStep } from "./hero-steps";
-import { holdsAfter, isPlaying, noHolds, stepAfter, type HoldEvent, type Holds } from "./use-loop-play";
+import { ON_SCREEN_SHARE, holdsAfter, isOnScreen, isPlaying, noHolds, stepAfter, type HoldEvent, type Holds } from "./use-loop-play";
 
 const { copy } = v1Copy(amountsFrom(v3Defaults));
 const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8").replace(/\r\n/g, "\n");
-const source = (file: string) => readFileSync(path.join(process.cwd(), "src/components/site/v1/blocks", file), "utf8");
+const source = (file: string) => readFileSync(path.join(process.cwd(), "src/components/site/v1/blocks", file), "utf8").replace(/\r\n/g, "\n");
 
 const text = (html: string) =>
   html
@@ -30,39 +31,71 @@ const text = (html: string) =>
 /** The part of globals.css inside its "Bricks in motion" motion query: the only rules that hide or move anything in either loop. */
 const motion = (() => {
   const start = css.indexOf("@media (prefers-reduced-motion: no-preference) {", css.indexOf("Bricks in motion"));
-  return css.slice(start, css.indexOf("@keyframes brick-drop", start));
+  return css.slice(start, css.indexOf('"Cora Curation Examples"', start));
 })();
 
-describe("the hero's four parts", () => {
+describe("the hero's four steps", () => {
   const graphic = copy.home.hero.graphic;
-  const headlines = copy.home.how.steps.map((step) => step.title);
-  const markup = renderToStaticMarkup(<HeroSteps copy={graphic} headlines={headlines} />);
+  const markup = renderToStaticMarkup(<HeroSteps copy={graphic} words={copy.bricks} />);
+  const parts = [...markup.matchAll(/<li data-step="(\d)" data-active="(yes|no)">(.*?)<\/li>(?=<li data-step|<\/ol>)/g)];
 
-  it("has the four labels Use, Collect, Curate and Deploy, one for each step of “How it works”, in order", () => {
-    expect(graphic.labels).toEqual(["Use", "Collect", "Curate", "Deploy"]);
-    expect(headlines).toEqual(["Set up your AI agents", "Zack reviews your week", "Cora picks your three ideas", "Paste to install"]);
+  it("has the four labels Use, Collect, Curate and Deploy, each with its headline and its text, in order", () => {
+    expect(graphic.steps.map((step) => step.label)).toEqual(["Use", "Collect", "Curate", "Deploy"]);
+    expect(graphic.steps.map((step) => step.title)).toEqual(["Set up your AI agents", "Zack reviews your week", "Cora picks your three ideas", "Approve The Ideas"]);
   });
 
-  it("with no script, is a list of all four parts, each its label and its headline and nothing else", () => {
-    const parts = [...markup.matchAll(/<li data-step="(\d)"[^>]*>(.*?)<\/li>/g)].map((m) => text(m[2]));
-    expect(parts).toEqual(["Use Set up your AI agents", "Collect Zack reviews your week", "Curate Cora picks your three ideas", "Deploy Paste to install"]);
-    // Headline only: no step's body text is in the picture.
-    for (const step of copy.home.how.steps) expect(markup).not.toContain(step.body);
-    // Nothing in the list is hidden by a class or an attribute: it is hidden only by the motion rules, under html.js.
-    const list = /<ol data-step-list[^>]*>.*?<\/ol>/.exec(markup)![0];
-    expect(list).not.toMatch(/\bhidden\b|sr-only|invisible|opacity-0|aria-hidden/);
+  it("names the fourth step in Peter's words (November 27, 2026)", () => {
+    expect(graphic.steps[3]).toEqual({ label: "Deploy", title: "Approve The Ideas", body: "Say yes to the ideas you like and see them in action for you." });
+    expect(markup).not.toContain("Paste to install");
+    expect(markup).not.toContain("press copy");
   });
 
-  it("has the labels as real buttons that mark the current part, and a real Pause button, both shown only as part of the loop", () => {
+  it("with no script, is an ordered list of all four steps, each its label, its number, its headline and its text", () => {
+    expect(parts).toHaveLength(4);
+    for (const [i, part] of parts.entries()) {
+      const step = graphic.steps[i];
+      const inner = part[3];
+      expect(text(/<span data-step-label[^>]*>(.*?)<\/span>/.exec(inner)![1]), step.label).toBe(step.label);
+      expect(/<span aria-hidden="true" data-claims="numeral" data-step-number[^>]*>(\d)<\/span>/.exec(inner)![1], step.label).toBe(String(i + 1));
+      expect(text(/<h2 data-step-headline[^>]*>(.*?)<\/h2>/.exec(inner)![1]), step.label).toBe(step.title);
+      expect(text(/<p data-step-body[^>]*>(.*?)<\/p>/.exec(inner)![1]), step.label).toBe(step.body);
+    }
+    // Nothing in the list is hidden by a class: a step is hidden only by the motion rules, under html.js.
+    const list = /<ol data-step-list[^>]*>.*<\/ol>/.exec(markup)![0];
+    expect(list).not.toMatch(/class="[^"]*(?<![\w-])(?:hidden|invisible|opacity-0)(?![\w-])[^"]*"/);
+    expect(parts.map((p) => p[2])).toEqual(["yes", "no", "no", "no"]);
+  });
+
+  it("draws 3, 6, 9 and 12 ideas for steps 1 to 4, as “How it works” drew them: the night colour of the first level, three across", () => {
+    const stacks = parts.map((part) => [...part[3].matchAll(/<li data-week="\d+" data-brick="\d+" data-set-up="yes"[^>]*class="([^"]*)"/g)].map((m) => m[1]));
+    expect(stacks.map((s) => s.length)).toEqual([3, 6, 9, 12]);
+    expect(parts.map((part) => /data-bricks="(\d+)"/.exec(part[3])![1])).toEqual(["3", "6", "9", "12"]);
+    // One colour and one size for every idea, the ones the deleted section used (BrickStack size "m", night, level 1).
+    expect(new Set(stacks.flat())).toEqual(new Set(["size-5 rounded-[5px] bg-f-reach-night"]));
+    // Three across: 3 × 20 and two gaps of 6.
+    for (const part of parts) expect(part[3]).toContain('style="width:72px"');
+    // Each idea is labelled for a screen reader in the copy's words, so colour is never the only signal.
+    expect(text(parts[1][3])).toContain("Week 2, idea 3: set up");
+    expect(text(markup)).not.toMatch(/bricks?/i);
+  });
+
+  it("keeps a row as tall as the tallest stack in every step, so the numbers share a line", () => {
+    for (const part of parts) expect(part[3]).toContain('<div class="flex h-[98px] items-end justify-between gap-6">');
+    // Four rows of 20 and three gaps of 6.
+    expect(4 * 20 + 3 * 6).toBe(98);
+  });
+
+  it("has the labels as real buttons that mark the current step, and a real Pause button, both shown only as part of the loop", () => {
     const tabs = /<div data-step-tabs="true" role="group" aria-label="([^"]*)" class="([^"]*)">(.*?)<\/div>/.exec(markup)!;
     expect(tabs[1]).toBe(graphic.name);
     expect(tabs[2].split(" ")).toContain("hidden");
     const buttons = [...tabs[3].matchAll(/<button type="button"([^>]*)>([^<]*)<\/button>/g)];
     expect(buttons.map((b) => b[2])).toEqual(["Use", "Collect", "Curate", "Deploy"]);
     expect(buttons.map((b) => b[1].includes('aria-current="step"'))).toEqual([true, false, false, false]);
+    const controls = /<div data-step-controls="true" class="([^"]*)">/.exec(markup)!;
+    expect(controls[1].split(" ")).toContain("hidden");
     const pause = /<button type="button" data-step-pause="true" class="([^"]*)">([^<]*)<\/button>/.exec(markup)!;
     expect(pause[2]).toBe("Pause");
-    expect(pause[1].split(" ")).toContain("hidden");
     expect(graphic.play).toBe("Play");
     // Each control is at least 44px tall.
     for (const classes of [pause[1], ...buttons.map((b) => /class="([^"]*)"/.exec(b[1])![1])]) expect(classes.split(" ")).toContain("min-h-11");
@@ -73,34 +106,28 @@ describe("the hero's four parts", () => {
     expect(source("hero-steps.tsx")).not.toMatch(/aria-live=|role="status"/);
   });
 
-  it("keeps four bricks as decoration, one for each part, hidden from a screen reader and dimmed only by the motion rules", () => {
-    const bricks = /<ul aria-hidden="true" data-step-bricks="true"[^>]*>(.*?)<\/ul>/.exec(markup)![1];
-    expect(bricks.match(/<li/g)).toHaveLength(4);
-    expect(text(bricks)).toBe("");
-    expect(bricks).not.toMatch(/opacity-|\bhidden\b|invisible/);
-    expect(motion).toContain('.js .hero-steps [data-step-bricks] [data-lit="no"]');
-  });
-
-  it("steps through the four parts and comes back to the first", () => {
+  it("steps through the four steps and comes back to the first, each long enough to read its text", () => {
     expect([0, 1, 2, 3].map((i) => nextStep(i, 4))).toEqual([1, 2, 3, 0]);
     expect(nextStep(0, 0)).toBe(0);
-    expect(HERO_STEP_MS).toBeGreaterThanOrEqual(2500);
+    expect(HERO_STEP_MS).toBeGreaterThanOrEqual(4000);
   });
 
-  it("takes what stops it from the shared rules, gives a part a label jumped to its full time, and never starts under reduced motion", () => {
+  it("takes what stops it from the shared rules, moves only on screen, gives a step a label jumped to its full time, and never starts under reduced motion", () => {
     const code = source("hero-steps.tsx");
     expect(code).toContain("useLoopPlay()");
     expect(code).toContain("{...holdProps}");
     expect(code).toContain("onClick={toggle}");
-    // One timeout for each part, started again when the part changes; an interval would cut short a part a label jumped to.
+    // The frame is the stage that has to be on screen.
+    expect(code).toContain("<div ref={stageRef} data-step-stage");
+    // One timeout for each step, started again when the step changes; an interval would cut short a step a label jumped to.
     expect(code).not.toContain("setInterval");
     expect(code).toContain("}, [playing, current, count]);");
-    // The shared wait, which returns its own cancel, so leaving a part clears its timer.
+    // The shared wait, which returns its own cancel, so leaving a step clears its timer.
     expect(code).toContain("return stepAfter(HERO_STEP_MS, () => setCurrent((c) => nextStep(c, count)));");
     expect(code).toContain('window.matchMedia("(prefers-reduced-motion: no-preference)").matches');
   });
 
-  it("becomes a loop only under html.js and with motion allowed: every rule that hides a part or shows a control is inside the motion query", () => {
+  it("becomes a loop only under html.js and with motion allowed: every rule that hides a step or shows a control is inside the motion query", () => {
     const rules = [...css.matchAll(/^([^\n{}]*\.hero-steps[^\n{}]*)\{/gm)].map((m) => ({ selector: m[1].trim(), at: m.index }));
     expect(rules.length).toBeGreaterThan(5);
     const motionStart = css.indexOf(motion);
@@ -112,7 +139,23 @@ describe("the hero's four parts", () => {
       else expect(rule.selector, rule.selector).toMatch(/^\.js \.hero-steps /);
     }
     expect(motion).toContain(".js .hero-steps [data-step-tabs]");
-    expect(motion).toContain(".js .hero-steps [data-step-pause]");
+    expect(motion).toContain(".js .hero-steps [data-step-controls]");
+  });
+
+  it("keeps its height from step to step: all four share one grid cell, so the frame is as tall as the tallest", () => {
+    const rule = /\.js \.hero-steps \[data-step\] \{([^}]*)\}/.exec(motion)![1];
+    expect(rule).toContain("grid-area: 1 / 1;");
+    // A step that is not showing keeps its box (visibility, not display), which is what reserves the height.
+    expect(rule).toContain("visibility: hidden;");
+    expect(rule).not.toContain("display:");
+    expect(motion).not.toMatch(/\.hero-steps[^{]*\{[^}]*\b(?:height|min-height|max-height)\s*:/);
+  });
+
+  it("moves with opacity and transform only", () => {
+    for (const m of motion.matchAll(/\.hero-steps[^{]*\{([^}]*)\}/g)) {
+      const moved = [...m[1].matchAll(/transition:\s*([^;]*);/g)].flatMap((t) => t[1].split(",").map((part) => part.trim().split(/\s+/)[0]));
+      for (const property of moved) expect(["opacity", "transform", "visibility"], m[0].slice(0, 60)).toContain(property);
+    }
   });
 });
 
@@ -130,6 +173,41 @@ describe("what stops and starts a loop", () => {
     expect(isPlaying(after(keyboardFocus, { type: "blur", left: true }))).toBe(true);
     // Focus moving from one control of the loop to another is still focus in the loop.
     expect(isPlaying(after(keyboardFocus, { type: "blur", left: false }))).toBe(false);
+  });
+
+  it("moves only while it is on screen, whatever else is true (Peter, November 27, 2026)", () => {
+    expect(isPlaying(noHolds, false, false)).toBe(false);
+    expect(isPlaying(noHolds, false, true)).toBe(true);
+    // Coming on screen does not release a hold: a paused loop stays paused.
+    expect(isPlaying(after(press), false, true)).toBe(false);
+    expect(isPlaying(after(keyboardFocus), false, true)).toBe(false);
+    expect(isPlaying(noHolds, true, true)).toBe(false);
+  });
+
+  it("counts a stage as on screen when half of it is in the window, or when it fills half of the window", () => {
+    expect(ON_SCREEN_SHARE).toBe(0.5);
+    // A stage 400 tall in a window 900 tall.
+    expect(isOnScreen(0, 0, 900)).toBe(false);
+    expect(isOnScreen(0.49, 196, 900)).toBe(false);
+    expect(isOnScreen(0.5, 200, 900)).toBe(true);
+    expect(isOnScreen(1, 400, 900)).toBe(true);
+    // A stage 2000 tall can never show half of itself in a window 800 tall: filling half of the window counts.
+    expect(isOnScreen(0.19, 380, 800)).toBe(false);
+    expect(isOnScreen(0.2, 400, 800)).toBe(true);
+    // A page left by a click stays in the document, hidden: nothing of it is in the window.
+    expect(isOnScreen(0, 0, 0)).toBe(false);
+  });
+
+  it("asks the browser whether the stage is on screen, starts off screen, and lets go when the page is put away", () => {
+    const code = source("use-loop-play.ts");
+    expect(code).toContain("new IntersectionObserver(");
+    expect(code).toContain("observer.observe(stage);");
+    expect(code).toContain("observer.disconnect();");
+    // Off screen until the browser says otherwise, on the server and before the first report.
+    expect(code).toContain("const [onScreen, setOnScreen] = useState(false);");
+    expect(code).toContain("playing: isPlaying(holds, tabHidden, onScreen),");
+    // No scroll listener: the browser reports the stage coming and going.
+    expect(code).not.toMatch(/addEventListener\("scroll"|onScroll|getBoundingClientRect/);
   });
 
   it("is never stopped by a pointer resting on it, which is what made “It compounds” look as if it ended (Peter, November 26, 2026)", () => {
@@ -189,27 +267,23 @@ describe("a loop's clock, run for many cycles", () => {
     return { seen, stop: () => cancel(), resume: effect };
   }
 
-  it("“It compounds” goes 1, 2, 3, 4, 10, 17, 26 and round again, without end, each state for the same time and week 26 a little longer", () => {
+  it("“It compounds” goes 1, 2, 3, 4, 10, 17, 26 and round again, without end, every state for the same time", () => {
     vi.useFakeTimers();
     try {
       const count = compoundingSteps.length;
-      // It starts on the last state, the finished picture, as the server sent it.
-      const loop = run({ start: count - 1, count, dwell: (c) => dwellFor(c, count) });
-      const cycle = LOOP_LAST_MS + (count - 1) * LOOP_STATE_MS;
+      // Once begun it is at the first week.
+      const loop = run({ start: 0, count, dwell: () => LOOP_STATE_MS });
+      const cycle = count * LOOP_STATE_MS;
       vi.advanceTimersByTime(5 * cycle);
       const weeks = loop.seen.map((s) => compoundingSteps[s.state].week);
       // Five full cycles, and it is still going.
-      expect(weeks).toEqual(Array(5).fill([1, 2, 3, 4, 10, 17, 26]).flat());
+      expect(weeks).toEqual(Array(5).fill([2, 3, 4, 10, 17, 26, 1]).flat());
       expect(vi.getTimerCount()).toBe(1);
-      // An even pace: every state but the last stays up the same time, in every cycle.
-      const stayed = loop.seen.slice(0, -1).map((s, i) => ({ week: compoundingSteps[s.state].week, ms: loop.seen[i + 1].at - s.at }));
-      for (const s of stayed) expect(s.ms, `week ${s.week}`).toBe(s.week === 26 ? LOOP_LAST_MS : LOOP_STATE_MS);
-      // Week 26 stays a little longer, not twice as long.
-      expect(LOOP_LAST_MS).toBeGreaterThan(LOOP_STATE_MS);
-      expect(LOOP_LAST_MS).toBeLessThanOrEqual(LOOP_STATE_MS * 1.5);
-      // Reaching week 26 is not an end, the first time or any time: the next state always follows it.
+      // An even pace: every state stays up the same time, week 26 too, in every cycle.
+      expect(new Set(loop.seen.slice(1).map((s, i) => s.at - loop.seen[i].at))).toEqual(new Set([LOOP_STATE_MS]));
+      // Reaching week 26 is not an end, the first time or any time: week 1 always follows it.
       const afterLast = loop.seen.flatMap((s, i) => (compoundingSteps[s.state].week === 26 && loop.seen[i + 1] ? [compoundingSteps[loop.seen[i + 1].state].week] : []));
-      expect(afterLast).toEqual([1, 1, 1, 1]);
+      expect(afterLast).toEqual([1, 1, 1, 1, 1]);
       vi.advanceTimersByTime(100 * cycle);
       expect(loop.seen).toHaveLength(105 * count);
     } finally {
@@ -217,13 +291,13 @@ describe("a loop's clock, run for many cycles", () => {
     }
   });
 
-  it("stops when it is paused and goes on from the same state, for a full wait, when it is played again", () => {
+  it("stops when it is held (paused, or scrolled off screen) and goes on from the same state, for a full wait, when it is let go", () => {
     vi.useFakeTimers();
     try {
       const count = compoundingSteps.length;
-      const loop = run({ start: count - 1, count, dwell: (c) => dwellFor(c, count) });
-      vi.advanceTimersByTime(LOOP_LAST_MS + LOOP_STATE_MS + 500);
-      expect(loop.seen.map((s) => s.state)).toEqual([0, 1]);
+      const loop = run({ start: 0, count, dwell: () => LOOP_STATE_MS });
+      vi.advanceTimersByTime(2 * LOOP_STATE_MS + 500);
+      expect(loop.seen.map((s) => s.state)).toEqual([1, 2]);
       loop.stop();
       expect(vi.getTimerCount()).toBe(0);
       vi.advanceTimersByTime(60_000);
@@ -232,13 +306,13 @@ describe("a loop's clock, run for many cycles", () => {
       vi.advanceTimersByTime(LOOP_STATE_MS - 1);
       expect(loop.seen).toHaveLength(2);
       vi.advanceTimersByTime(1);
-      expect(loop.seen.map((s) => s.state)).toEqual([0, 1, 2]);
+      expect(loop.seen.map((s) => s.state)).toEqual([1, 2, 3]);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("the hero's four parts go round without end too, each for the same time", () => {
+  it("the hero's four steps go round without end too, each for the same time", () => {
     vi.useFakeTimers();
     try {
       const loop = run({ start: 0, count: 4, dwell: () => HERO_STEP_MS });
@@ -259,6 +333,7 @@ describe("the “It compounds” loop", () => {
 
   it("with no script, is the last state: week 26 and all 78 ideas, none marked out", () => {
     expect(markup).toContain('data-state="6"');
+    expect(markup).toContain('data-started="no"');
     expect(markup).toContain('data-bricks="78"');
     expect(markup.match(/data-brick="/g)).toHaveLength(78);
     expect(markup).not.toContain("data-out=");
@@ -290,13 +365,29 @@ describe("the “It compounds” loop", () => {
     expect(motion).toContain(".js .compounding-loop [data-loop-pause]");
   });
 
-  it("goes through the seven states in order and loops, waiting a little longer on the last", () => {
-    const order = [6];
+  it("goes through the seven states in order and loops, every state for the same time", () => {
+    const order = [0];
     for (let i = 0; i < 8; i++) order.push(nextState(order.at(-1)!, 7));
-    expect(order).toEqual([6, 0, 1, 2, 3, 4, 5, 6, 0]);
-    expect([0, 1, 2, 3, 4, 5].map((i) => dwellFor(i, 7))).toEqual(Array(6).fill(LOOP_STATE_MS));
-    expect(dwellFor(6, 7)).toBe(LOOP_LAST_MS);
-    expect(LOOP_LAST_MS).toBeGreaterThan(LOOP_STATE_MS);
+    expect(order).toEqual([0, 1, 2, 3, 4, 5, 6, 0, 1]);
+    // One time for every state: there is no separate, longer wait on the last.
+    expect(source("compounding-loop.tsx")).not.toMatch(/LOOP_LAST_MS|dwellFor/);
+    expect(LOOP_STATE_MS).toBeGreaterThanOrEqual(1800);
+    // Long enough for the largest arrival to finish and rest before the next: under a second of arriving, then the fade.
+    expect(LOOP_STATE_MS).toBeGreaterThanOrEqual(900 + 560 + 400);
+  });
+
+  it("starts from week 1 the first time its stage is on screen, after a short look at the whole stack", () => {
+    const code = source("compounding-loop.tsx");
+    expect(code).toContain("const [started, setStarted] = useState(false);");
+    expect(code).toMatch(/if \(!started\) \{\s*return stepAfter\(LOOP_START_MS, \(\) => \{\s*setStarted\(true\);\s*setCurrent\(0\);\s*\}\);\s*\}/);
+    expect(LOOP_START_MS).toBeGreaterThan(0);
+    expect(LOOP_START_MS).toBeLessThan(LOOP_STATE_MS);
+    // The stage is the week, the count and the stack: what has to be on screen for the loop to move.
+    expect(code).toContain("<div ref={stageRef} data-loop-stage");
+    const stage = /<div data-loop-stage="true"[^>]*>(.*?)<\/figure><\/div>/.exec(markup)![1];
+    expect(stage).toContain("data-loop-caption");
+    expect(stage).toContain('data-bricks="78"');
+    expect(stage).not.toContain("data-loop-states");
   });
 
   it("spreads the bricks that arrive with a state over under a second, counting from the bricks already there", () => {
@@ -324,8 +415,8 @@ describe("the “It compounds” loop", () => {
     expect(code).toContain("{...holdProps}");
     expect(code).toContain("onClick={toggle}");
     // The shared wait, which returns its own cancel; one for each state, so the last state schedules the first.
-    expect(code).toContain("return stepAfter(dwellFor(current, steps.length), () => setCurrent((c) => nextState(c, steps.length)));");
-    expect(code).toContain("}, [playing, current, steps.length]);");
+    expect(code).toContain("return stepAfter(LOOP_STATE_MS, () => setCurrent((c) => nextState(c, steps.length)));");
+    expect(code).toContain("}, [playing, current, started, steps.length]);");
     expect(code).not.toContain("setInterval");
     expect(code).toContain('window.matchMedia("(prefers-reduced-motion: no-preference)").matches');
     expect(code).not.toMatch(/aria-live=|role="status"/);
@@ -342,6 +433,22 @@ describe("the “It compounds” loop", () => {
       else expect(rule.selector, rule.selector).toMatch(/^\.js \.compounding-loop /);
     }
     expect(motion).toContain('.js .compounding-loop [data-brick][data-out="yes"]');
+  });
+
+  it("moves a brick with opacity and transform only, so nothing is laid out again, and fades the wall where it stands at the wrap", () => {
+    const rule = (selector: string) => new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`).exec(motion)![1];
+    const arriving = rule(".js .compounding-loop [data-brick]");
+    const out = rule('.js .compounding-loop [data-brick][data-out="yes"]');
+    for (const block of [arriving, out]) {
+      const moved = [...block.matchAll(/transition:\s*([^;]*);/g)].flatMap((t) => t[1].split(",").map((part) => part.trim().split(/\s+/)[0]));
+      expect(new Set(moved)).toEqual(new Set(["opacity", "transform"]));
+      expect(block).not.toMatch(/\b(?:width|height|margin|top|left|display)\s*:/);
+    }
+    // Going out: the fade runs, and the move back up waits until the brick cannot be seen. No brick is seen to jump.
+    expect(out).toMatch(/opacity 420ms var\(--ease-out\),\s*transform 0s linear 420ms;/);
+    // Coming in: eased, one after another from the bricks already there.
+    expect(arriving).toContain("transition-delay: calc(max(0, var(--i, 0) - var(--from, 0)) * var(--per, 30ms));");
+    expect(arriving).not.toContain("ease-spring");
   });
 
   it("fits a phone: nine bricks across at the small size is narrower than the page at 320px, and thirteen across from the lg breakpoint", () => {

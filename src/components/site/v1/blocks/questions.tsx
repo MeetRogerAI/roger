@@ -51,9 +51,10 @@ export function Questions({
         </div>
         <div>
           <div className="space-y-1">
-            {items.map((item) => (
+            {items.map((item, i) => (
               <details
-                key={item.q}
+                // By place as well as wording: two questions an admin has given the same words (/admin/questions) are still two rows.
+                key={`${i}:${item.q}`}
                 name={shared}
                 className={`group rounded-[8px] px-5 transition-colors duration-[180ms] sm:px-6 ${night ? "bg-night-2" : "bg-ground-2 open:bg-surface"}`}
               >

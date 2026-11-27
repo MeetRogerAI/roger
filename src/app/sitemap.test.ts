@@ -19,10 +19,12 @@ describe("sitemap", () => {
     expect(sitemap().map((e) => e.priority)).toEqual([1, 0.6, 0.6, 0.6]);
   });
 
-  it("lists exactly the spec's eleven paths under a version", () => {
+  it("lists exactly the nine public paths under a version, without the deleted /agents and /pricing", () => {
     for (site of ["v1", "v2", "v3"] as const) {
-      expect(paths(), site).toEqual(["/", "/agents", "/pricing", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"]);
-      expect(sitemap().map((e) => e.priority), site).toEqual([1, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6]);
+      expect(paths(), site).toEqual(["/", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"]);
+      expect(sitemap().map((e) => e.priority), site).toEqual([1, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6]);
+      // A redirected address is never listed, and neither is an address with a "#".
+      for (const path of paths()) expect(path, site).not.toMatch(/^\/(?:agents|pricing)$|#/);
     }
   });
 

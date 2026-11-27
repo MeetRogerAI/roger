@@ -13,8 +13,8 @@ import { compoundingCaption } from "@/lib/site/compounding";
  * the week and the count in words.
  *
  * Nothing here moves. Each brick carries data-week, data-brick and --i (its
- * place in the stack) so "how it works", the /agents hero and the "It
- * compounds" loop can stage them (globals.css, "Bricks in motion").
+ * place in the stack) so the hero's four steps and the "It compounds" loop
+ * can stage them (globals.css, "Bricks in motion").
  */
 export type BrickLevel = 1 | 2 | 3 | 4 | 5;
 

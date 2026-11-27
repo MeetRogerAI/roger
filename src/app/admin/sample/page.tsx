@@ -4,7 +4,10 @@ import { isAdmin } from "@/lib/admin-auth";
 import { sampleCandidates } from "@/lib/admin/content";
 import { query } from "@/lib/db-query";
 
-/** Sample idea (spec B.12, A.4): the one pool play the public site shows. Choosing it needs the "I have read this play" tick. */
+/**
+ * Sample idea (spec B.12, A.4): one pool play marked as the public sample. Choosing it needs the "I have read this play" tick.
+ * No public page reads the choice since November 27, 2026 (src/data/site/examples.ts), and the page says so.
+ */
 export default async function SamplePage({ searchParams }: PageProps<"/admin/sample">) {
   await connection();
   if (!(await isAdmin())) return null;
@@ -18,8 +21,11 @@ export default async function SamplePage({ searchParams }: PageProps<"/admin/sam
     <section className="max-w-[56rem] space-y-10">
       <header>
         <h1 className="text-h3">Sample idea</h1>
-        <p className="mt-2 text-small text-ink-2">
-          {current ? `The public site shows “${current.title}”${current.checkedBy ? `, read by ${current.checkedBy}` : ""}.` : "No sample is chosen, so the public site shows none."}
+        <p data-unused role="note" className="mt-3 rounded-[8px] border border-accent p-4 text-small">
+          Not used by the public site. Since November 27, 2026 the homepage shows the examples bundled with the site (“Cora Curation Examples”), and no public page reads the play chosen here. The choice is still stored.
+        </p>
+        <p className="mt-3 text-small text-ink-2">
+          {current ? `Chosen: “${current.title}”${current.checkedBy ? `, read by ${current.checkedBy}` : ""}.` : "No play is chosen."}
         </p>
       </header>
 

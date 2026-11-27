@@ -1,14 +1,16 @@
 /**
- * The four v1 reading pages (plan U7): /pricing, /faq, /how-it-works and
- * /about, each in its spec section's order (A.7 to A.10), and the rules all
- * four keep (vocabulary, claims, amounts from the settings, start links with
- * no audience of their own).
+ * The three v1 reading pages (plan U7): /faq, /how-it-works and /about, each
+ * in its spec section's order (A.8 to A.10), and the rules all three keep
+ * (vocabulary, claims, amounts from the settings, start links with no
+ * audience of their own). /pricing was a fourth until November 27, 2026.
  */
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { siteConfig, v3Defaults } from "@/data/config";
+import { firstExample } from "@/data/site/examples";
 import { letter, letterShown } from "@/data/site/letter";
-import { samplePlay } from "@/data/site/sample-play";
-import { v1Copy } from "@/data/site/v1";
+import { v1Copy, type QuestionOverrides } from "@/data/site/v1";
 import { amountsFrom, hasBareDollar } from "@/lib/site/amounts";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
@@ -22,7 +24,6 @@ vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 
 const { publicIdeaView } = await import("@/lib/site/sample");
-const { V1Pricing, V1PricingView } = await import("./pricing");
 const { V1Faq, V1FaqView } = await import("./faq");
 const { V1HowItWorks, V1HowItWorksView, PREFACE_MARK, annotate, playbookParts, zackFiles } = await import("./how-it-works");
 const { V1About, V1AboutView } = await import("./about");
@@ -30,6 +31,8 @@ const { V1About, V1AboutView } = await import("./about");
 const amounts = amountsFrom(v3Defaults);
 const { copy } = v1Copy(amounts);
 const preface = v3Defaults.playbookPreface;
+// The idea /how-it-works takes apart: the first of the homepage's examples.
+const samplePlay = firstExample.play;
 const idea = publicIdeaView(samplePlay, preface);
 const files = [
   { name: "Claude", href: "/zack/zack-the-collector-claude.md" },
@@ -71,10 +74,9 @@ function sectionMarkup(markup: string, name: string): string {
 
 const startBand = (markup: string) => /<div data-start-band[\s\S]*?<\/div><\/div>/.exec(markup)?.[0] ?? "";
 
-// The shell is the page a visitor with no script reads; the part streamed in for the visitor's country follows it.
+// The shell is the page a visitor with no script reads; a part streamed in later would follow it.
 const STREAMED = '<div hidden id="S:';
 const shell = (markup: string) => markup.split(STREAMED)[0];
-const streamed = (markup: string) => markup.slice(shell(markup).length);
 
 /** The one block the vocabulary rule leaves out: the quotation of the playbook preface, by its mark. */
 const prefaceQuote = new RegExp(`<blockquote data-verbatim="${PREFACE_MARK}"[^>]*>([\\s\\S]*?)</blockquote>`, "g");
@@ -84,16 +86,14 @@ const bareAgent = /(?<!\bAI )\bagents?\b/i;
 const timeFigure = /\d\s*(?:hours?|hrs?|minutes?|mins?)\b/i;
 const emoji = /\p{Extended_Pictographic}/u;
 
-const pricing = async (over: { amounts?: typeof amounts } = {}) => shell(await pageMarkup(<V1PricingView version="v1" amounts={over.amounts ?? amounts} />));
-const faq = async (over: { amounts?: typeof amounts } = {}) => shell(await pageMarkup(<V1FaqView version="v1" amounts={over.amounts ?? amounts} />));
+const faq = async (over: { amounts?: typeof amounts; questions?: QuestionOverrides } = {}) => shell(await pageMarkup(<V1FaqView version="v1" amounts={over.amounts ?? amounts} questions={over.questions} />));
 const how = async (over: { amounts?: typeof amounts; idea?: typeof idea; preface?: string; files?: typeof files } = {}) =>
   shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={over.amounts ?? amounts} idea={over.idea ?? idea} preface={over.preface ?? preface} files={over.files ?? files} />));
 const about = async (over: { photo?: string; signature?: string } = {}) =>
   shell(await pageMarkup(<V1AboutView version="v1" amounts={amounts} photo={over.photo ?? ""} signature={over.signature ?? ""} />));
 
-/** The four pages as each route serves them, and as each view renders with the test's own inputs. */
+/** The three pages as each route serves them, and as each view renders with the test's own inputs. */
 const pages = {
-  pricing: { served: (v: "v1" | "v2" | "v3" = "v1") => pageMarkup(<V1Pricing version={v} />), view: pricing, mark: copy.pricing.included.title },
   faq: { served: (v: "v1" | "v2" | "v3" = "v1") => pageMarkup(<V1Faq version={v} />), view: faq, mark: "Zack and privacy" },
   "how-it-works": { served: (v: "v1" | "v2" | "v3" = "v1") => pageMarkup(<V1HowItWorks version={v} />), view: how, mark: copy.howItWorks.cora.title },
   about: { served: (v: "v1" | "v2" | "v3" = "v1") => pageMarkup(<V1About version={v} />), view: about, mark: letter.greeting },
@@ -102,138 +102,26 @@ const each = Object.entries(pages);
 
 beforeEach(() => resetNextFakes());
 
-describe("/pricing on v1", () => {
-  it("has A.7's six parts in order: the price block as the heading, four sections on ground, then the start button", async () => {
-    const markup = await pricing();
-    expect(sections(markup)).toEqual([
-      { name: "price", ground: "night" },
-      { name: "included", ground: "ground" },
-      { name: "explained", ground: "ground" },
-      { name: "contributing", ground: "ground" },
-      { name: "refunds", ground: "ground" },
-    ]);
-    expect(markup.indexOf("data-start-band")).toBeGreaterThan(markup.indexOf('id="refunds"'));
-    // Three hairlines: between each pair of ground sections that are neighbours.
-    expect(markup.match(/data-hairline/g)).toHaveLength(3);
-  });
-
-  it("opens with the price block as the page's one h1, Peter's line under it, and monthly as the one plan", async () => {
-    const markup = await pricing();
-    expect(markup.match(/<h1\b/g)).toHaveLength(1);
-    expect(markup).toMatch(/<h1 id="price-title"[^>]*>Pricing<\/h1>/);
-    const price = sectionMarkup(markup, "price");
-    expect(text(price).startsWith("Pricing Get two Cora Curations for free and pay only after you have tried the product for two full weeks.")).toBe(true);
-    expect([...price.matchAll(/data-plan="(\w+)"/g)].map((m) => m[1])).toEqual(["monthly"]);
-    expect(text(price)).not.toMatch(/Most people choose this|one list|one at a time|\/ list\b/i);
-    for (const line of ["US$200 / month USD", "CA$280 / month CAD"]) expect(text(price)).toContain(line);
-    expect(text(price)).toContain(copy.trialLine);
-  });
-
-  it("never skips a heading level: the plan's name is an h2 under the h1, and no level is jumped after it", async () => {
-    const full = await pageMarkup(<V1PricingView version="v1" amounts={amounts} />);
-    // The shell, and a streamed copy of the price block if there is one.
-    for (const part of [shell(full), streamed(full)].filter(Boolean)) {
-      const price = sectionMarkup(part, "price");
-      expect([...price.matchAll(/<(h[1-6])\b[^>]*>(.*?)<\/\1>/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual(["h1 Pricing", "h2 Monthly"]);
-    }
-    const levels = [...shell(full).matchAll(/<h([1-6])\b/g)].map((m) => Number(m[1]));
-    expect(levels[0]).toBe(1);
-    for (const [i, level] of levels.entries()) if (i > 0) expect(level, `heading ${i + 1} of ${levels.join(" ")}`).toBeLessThanOrEqual(levels[i - 1] + 1);
-  });
-
-  it("renders the price block for the visitor's country", async () => {
-    // Whether the block for the country is in place or streamed in after a USD shell, the last one rendered is the one shown.
-    const pressed = (markup: string) => [...markup.matchAll(/aria-pressed="true"[^>]*>(\w+)</g)].map((m) => m[1]);
-    expect(pressed(await pageMarkup(<V1PricingView version="v1" amounts={amounts} />)).at(-1)).toBe("USD");
-    resetNextFakes({}, { "x-vercel-ip-country": "CA" });
-    const canada = await pageMarkup(<V1PricingView version="v1" amounts={amounts} />);
-    expect(pressed(canada).at(-1)).toBe("CAD");
-    expect(pressed(canada).slice(0, -1).every((c) => c === "USD")).toBe(true);
-    // Both currencies stay in the markup either way, for a visitor with no script.
-    for (const line of ["US$200 / month USD", "CA$280 / month CAD"]) expect(text(canada)).toContain(line);
-    expect(hrefs(sectionMarkup(streamed(canada) || canada, "price"))).toEqual(["/start"]);
-  });
-
-  it("lists what is included as a plain list of four, with no group session line", async () => {
-    const included = sectionMarkup(await pricing(), "included");
-    expect([...included.matchAll(/<li[^>]*>(.*?)<\/li>/g)].map((m) => text(m[1]))).toEqual([
-      "A Cora Curation every Monday: three ideas picked for you by Cora, each with a full playbook.",
-      "Your own history of every idea you have received.",
-      "Your Zack controls.",
-      "A compounding view of what you have set up.",
-    ]);
-    expect(text(await pricing())).not.toMatch(/group session|weekly session/i);
-  });
-
-  it("explains monthly, the one way to buy, in one paragraph with one line under it (covers AE3)", async () => {
-    const markup = await pricing();
-    const explained = sectionMarkup(markup, "explained");
-    // No columns to compare: there is nothing to compare monthly with.
-    expect(explained).not.toMatch(/<h3\b|grid-cols-2/);
-    expect(text(explained)).toBe(
-      "Monthly, explained A Cora Curation every Monday. Your first two are free. Your card is charged once a month, starting with your third Cora Curation. One price, charged once a month. Cancel in one click.",
-    );
-    expect(explained).toMatch(/<p data-under-monthly[^>]*>One price, charged once a month\./);
-    // Nothing on the page offers or explains buying one list, as the page serves it too.
-    for (const page of [markup, await pageMarkup(<V1Pricing version="v1" />)]) {
-      expect(text(page)).not.toMatch(/one list|one at a time|one-at-a-time|lists you order|Monday lists?\b/i);
-    }
-  });
-
-  it("explains contributing in the copy's words, with both currencies for the higher rate", async () => {
-    const contributing = text(sectionMarkup(await pricing(), "contributing"));
-    expect(contributing).toBe(`How contributing works ${copy.pricing.contributing.body}`);
+describe("the page that is gone: /pricing (Peter, November 27, 2026)", () => {
+  it("has no page component and no copy of its own: the price is the homepage's block, and “Pricing” links to it", async () => {
+    for (const file of ["src/components/site/v1/pricing.tsx", "src/app/pricing/page.tsx"]) expect(existsSync(path.join(process.cwd(), file)), file).toBe(false);
+    expect(Object.keys(copy)).not.toContain("pricing");
+    // What the reading pages still say about the price, in place of the deleted page: /faq states the price, the
+    // free Cora Curations, the higher rate and the refund rule.
+    const seen = text(await faq());
     for (const fact of [
-      "the first miss each month is forgiven",
+      "US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST.",
       "A second miss makes that month US$400 (CA$560 in Canada).",
-      "We email you both times, and the difference appears on your next invoice.",
-      "If you switch sharing off in your dashboard, the monthly price is US$400 (CA$560 in Canada).",
+      "the price becomes US$400 a month (CA$560 in Canada).",
+      "No. You get two free Cora Curations before any charge, and you can cancel any time.",
     ])
-      expect(contributing).toContain(fact);
-    expect(contributing).not.toMatch(/one-at-a-time|On monthly/i);
+      expect(seen).toContain(fact);
   });
 
-  it("never presents the higher rate as a plan to choose", async () => {
-    const markup = await pageMarkup(<V1PricingView version="v1" amounts={amounts} />);
-    // One plan, in the price block and nowhere else, in the shell and in a streamed copy of the block if there is one.
-    for (const part of [shell(markup), streamed(markup)].filter(Boolean)) expect([...part.matchAll(/data-plan="(\w+)"/g)].map((m) => m[1])).toEqual(["monthly"]);
-    const page = shell(markup);
-    // The higher rate is in the running text of one section, and in no other.
-    for (const s of sections(page)) expect(/US\$400|CA\$560/.test(sectionMarkup(page, s.name)), s.name).toBe(s.name === "contributing");
-    expect(startBand(page)).not.toMatch(/US\$400|CA\$560/);
-    const contributing = sectionMarkup(page, "contributing");
-    // That section is a heading and one paragraph: no card, no price line, no list, no button and no link.
-    expect(contributing).not.toMatch(/data-plan|<a\b|<button\b|<h3\b|<ul\b|<li\b|rounded-\[8px\]|\/ month|\/ list/);
-    expect(contributing.match(/<p\b/g)).toHaveLength(1);
-    // Never set as a price: the figure is not followed by a unit and a currency code, anywhere.
-    expect(text(markup)).not.toMatch(/(?:US\$400|CA\$560) \/ /);
-    // And not called a plan, an option or a tier.
-    expect(text(contributing)).not.toMatch(/\bplan\b|\boption\b|\btier\b|\bchoose\b/i);
-  });
-
-  it("states the no-refund line plainly", async () => {
-    const refunds = text(sectionMarkup(await pricing(), "refunds"));
-    expect(refunds).toBe("No refunds There are no refunds. You get two free Cora Curations before any charge, and you can cancel in one click.");
-  });
-
-  it("ends on the primary start button, with the card line under it", async () => {
-    const band = startBand(await pricing());
-    expect(text(band)).toBe("Get two free Cora Curations Card required. Charged only with your third Cora Curation.");
-    expect(band).toMatch(/<a class="btn btn-l" href="\/start">/);
-  });
-
-  it("takes every price from the amounts, never from the copy", async () => {
+  it("takes every price a reading page prints from the amounts, never from the copy", async () => {
     const other = amountsFrom({ ...v3Defaults, priceUsd: 311, priceCad: 433, priceRunUsd: 322, priceRunCad: 444, priceHigherUsd: 655, priceHigherCad: 877, freeRuns: 3 });
-    const seen = text(await pricing({ amounts: other }));
-    for (const line of [
-      "US$311 / month USD",
-      "CA$433 / month CAD",
-      "A second miss makes that month US$655 (CA$877 in Canada).",
-      "You get three free Cora Curations before any charge",
-      // Both counts in Peter's line are the number of free Cora Curations.
-      "Get three Cora Curations for free and pay only after you have tried the product for three full weeks.",
-    ])
-      expect(seen).toContain(line);
+    const seen = text(await faq({ amounts: other }));
+    for (const line of ["US$311 a month", "CA$433 a month", "A second miss makes that month US$655 (CA$877 in Canada).", "You get three free Cora Curations before any charge"]) expect(seen).toContain(line);
     // The price of one list is not on the page.
     expect([...new Set(seen.match(/(?:US|CA)\$\d+(?:,\d{3})*/g))].sort()).toEqual(["CA$433", "CA$877", "US$311", "US$655"]);
   });
@@ -279,6 +167,31 @@ describe("/faq on v1", () => {
     const names = [...(await faq()).matchAll(/<details\b([^>]*)>/g)].map((m) => /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "");
     expect(names).toHaveLength(18);
     expect(new Set(names)).toEqual(new Set(["faq-questions"]));
+  });
+
+  it("prints a question or an answer edited in the admin in place of the built-in one, as plain text, with its amounts filled in", async () => {
+    const markup = await faq({
+      questions: {
+        refund: { a: "No. Your first {freeLists} Cora Curations are free, at {monthlyUsd} a month after that. <b>Cancel</b> any time." },
+        "who-sees": { q: "Who can see my plays?" },
+        // An edit naming an amount that does not exist is not printed: the built-in answer stays.
+        "missed-week": { a: "It costs {nothing}." },
+        // An id that is no question's is ignored.
+        "not-a-question": { q: "Hello?", a: "Hello." },
+      },
+    });
+    const seen = text(markup);
+    expect(seen).toContain("Can I get a refund? No. Your first two Cora Curations are free, at US$200 a month after that. &lt;b&gt;Cancel&lt;/b&gt; any time.");
+    // Text, never markup: the angle brackets are printed, not obeyed.
+    expect(markup).toContain("&lt;b&gt;Cancel&lt;/b&gt;");
+    expect(markup).not.toContain("<b>Cancel</b>");
+    expect(seen).toContain("Who can see my plays? Other Roger users, without your name or anything that identifies you.");
+    expect(seen).not.toContain("Who sees my plays?");
+    expect(seen).toContain("What if Zack misses a week? The first miss each month is forgiven.");
+    expect(seen).not.toMatch(/\{nothing\}|Hello/);
+    expect(markup.match(/<details/g)).toHaveLength(18);
+    // With no edits the page is the built-in copy, which is what a build with no database shows.
+    expect(await faq({ questions: {} })).toBe(await faq());
   });
 });
 
@@ -377,7 +290,9 @@ describe("/how-it-works on v1", () => {
     expect(anatomy.match(/<p data-note/g)).toHaveLength(9);
     expect(anatomy).toContain('data-anatomy="paired"');
     // The whole playbook is there, and the copy button of the card.
-    for (const line of ["Claude drafts only. It never sends.", "The user can paste either version and send it with no more than a name swap."]) expect(seen).toContain(line);
+    for (const line of ["Never post or schedule anything on social media. Finished files and drafts only.", "The requester has 3 Reels they like the look of, captions for each, and a plan for the rest."]) expect(seen).toContain(line);
+    // It is the first of the homepage's examples, under its short title.
+    expect(seen).toContain("On-demand video creation Phone camera roll to styled Reels");
     expect(anatomy).toMatch(/<button type="button" class="btn btn-m btn-ink[^"]*">/);
     expect(anatomy).not.toMatch(/<dialog/i);
   });
@@ -401,7 +316,7 @@ describe("/how-it-works on v1", () => {
   it("anatomy: a playbook written another way gets the notes as a list, never a note beside the wrong part", async () => {
     const notes = copy.howItWorks.anatomy.notes.slice(0, -1);
     expect(playbookParts(samplePlay.playbookMd)).toHaveLength(8);
-    expect(annotate(samplePlay.playbookMd, notes)?.map((row) => row.part.split("\n")[0])).toEqual(["## 1. Play", "## 2. Trigger", "## 3. Setup first", "## 4. Steps", "## 5. Guardrails", "## 6. Output", "## 7. Pitfalls seen", "## 8. Done when"]);
+    expect(annotate(samplePlay.playbookMd, notes)?.map((row) => row.part.split("\n")[0])).toEqual(["## 1. Play", "## 2. Trigger", "## 3. Setup first (answer once)", "## 4. Steps", "## 5. Guardrails", "## 6. Output", "## 7. Pitfalls seen", "## 8. Done when"]);
     expect(playbookParts("Before any heading.\n\n## One\ntext\n## Two")).toEqual(["Before any heading.", "## One\ntext", "## Two"]);
     // Eight parts in another order, and a playbook with fewer parts: no pairing.
     expect(annotate(samplePlay.playbookMd.replace("## 1. Play", "## 1. Trigger").replace("## 2. Trigger", "## 2. Play"), notes)).toBeNull();
@@ -526,7 +441,7 @@ describe("/about on v1", () => {
   });
 });
 
-describe("the four reading pages together", () => {
+describe("the three reading pages together", () => {
   it("serve v1's page under every site version, with that version's wrapper", async () => {
     for (const [name, page] of each) {
       for (const version of ["v1", "v2", "v3"] as const) {
@@ -571,13 +486,13 @@ describe("the four reading pages together", () => {
     // Four amounts: the monthly price and the higher rate, each in two currencies. The price of one list is on none of these pages.
     expect([...new Set(seen.match(/(?:US|CA)\$\d+(?:,\d{3})*/g))].sort()).toEqual(["CA$280", "CA$560", "US$200", "US$400"]);
     const dearerList = amountsFrom({ ...v3Defaults, priceRunUsd: 322, priceRunCad: 444 });
-    const withList = [await pricing({ amounts: dearerList }), await faq({ amounts: dearerList }), await how({ amounts: dearerList })].map(text).join(" ");
+    const withList = [await faq({ amounts: dearerList }), await how({ amounts: dearerList })].map(text).join(" ");
     expect(withList).not.toMatch(/322|444/);
   });
 
   it("give no start button a path in its server-rendered address, so a remembered audience carries through (AE11)", async () => {
-    // The price block and the band on /pricing; the band alone on the other three.
-    const counts = { pricing: 2, faq: 1, "how-it-works": 1, about: 1 };
+    // The band alone, on each of the three.
+    const counts = { faq: 1, "how-it-works": 1, about: 1 };
     for (const [name, page] of each) {
       for (const markup of [shell(await page.served()), await page.view()]) {
         const starts = hrefs(markup).filter((h) => h.startsWith("/start"));

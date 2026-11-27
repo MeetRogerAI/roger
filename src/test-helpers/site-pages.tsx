@@ -56,8 +56,6 @@ export const WATCH_TOKEN = "watch-token-for-the-claims-check";
  */
 const routes: { path: string; load: () => Promise<Route>; props?: () => Props }[] = [
   { path: "/", load: () => import("@/app/page") },
-  { path: "/agents", load: () => import("@/app/agents/page") },
-  { path: "/pricing", load: () => import("@/app/pricing/page") },
   { path: "/faq", load: () => import("@/app/faq/page") },
   { path: "/how-it-works", load: () => import("@/app/how-it-works/page") },
   { path: "/about", load: () => import("@/app/about/page") },

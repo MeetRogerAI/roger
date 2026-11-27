@@ -3,12 +3,12 @@ import { StartLink } from "@/components/site/shared/start-link";
 import { SectionHead } from "./section-head";
 
 /**
- * What the four reading pages share (spec A.7 to A.10): /pricing,
- * /how-it-works, /faq and /about. A page heading, a section of running text
- * and the start button a page ends on.
+ * What the three reading pages share (spec A.8 to A.10): /how-it-works, /faq
+ * and /about. A page heading, a section of running text and the start button
+ * a page ends on.
  *
- * A reading page's h1 is set in the size of a section heading, as the price
- * block's is on /pricing, so the headings under it take the next size down.
+ * A reading page's h1 is set in the size of a section heading, so the
+ * headings under it take the next size down.
  */
 
 /** The heading that opens a reading page, on ground. The first section's own space follows it. */
@@ -47,7 +47,7 @@ export function ReadingSection({ id, title, width = "text", children }: { id: st
 /**
  * The start button a reading page ends on, a night chapter: the primary
  * button with the card line under it. No audience is given, so the link
- * carries the one remembered from the homepage or /agents (plan KTD9, AE11).
+ * carries the one remembered from the homepage or the free Zack run (plan KTD9, AE11).
  */
 export function StartBand({ start, cardLine }: { start: string; cardLine: string }) {
   return (

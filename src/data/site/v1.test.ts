@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ZACK_AGENTS } from "@/lib/zack/agents";
 import { sitePrivacy } from "./legal";
-import { v1, v1Agents } from "./v1";
+import { v1 } from "./v1";
 
 /**
  * Approved by Peter on November 26, 2026: the site's wording follows the Zack
@@ -37,7 +37,7 @@ describe("the site's wording about Zack follows the Zack 2.0 instructions", () =
     expect(answer("What does Zack read?")).toBe(`${reads} ${skips}`);
     expect(point("What he reads")).toBe(reads);
     expect(point("What he never reads")).toBe(skips);
-    const all = JSON.stringify([v1, v1Agents]);
+    const all = JSON.stringify(v1);
     expect(all).not.toContain("Only your own activity inside your AI agent account");
     expect(all).not.toContain("He does not read your email, calendar or files");
   });

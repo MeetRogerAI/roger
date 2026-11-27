@@ -4,13 +4,12 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // Zack's instructions and connector texts are read from disk at request time.
-  // /agents lists the agents whose Zack file exists, and /how-it-works links each of those files
-  // (src/data/zack.ts looks in public/zack). Both pages are regenerated in a function, which has
-  // public/ beside it only if the files are traced in. Without the entry the names or links could vanish.
+  // /how-it-works links the Zack file of each agent that has one (src/data/zack.ts looks in public/zack).
+  // The page is regenerated in a function, which has public/ beside it only if the files are traced in.
+  // Without the entry the links could vanish.
   outputFileTracingIncludes: {
     "/api/zack/instructions": ["./content/zack/**/*"],
     "/app/**": ["./content/zack/**/*"],
-    "/agents": ["./public/zack/*.md"],
     "/how-it-works": ["./public/zack/*.md"],
   },
   experimental: {
@@ -44,6 +43,10 @@ const nextConfig: NextConfig = {
       { source: "/hampton", destination: "/zack", permanent: true },
       { source: "/rlp", destination: "/zack", permanent: true },
       { source: "/founders", destination: "/zack", permanent: true },
+      // /pricing and /agents were deleted (Peter's decision of November 27, 2026). The price is a section of the
+      // homepage, and the homepage speaks to everyone who uses AI agents. Links already out there still land.
+      { source: "/pricing", destination: "/#price", permanent: true },
+      { source: "/agents", destination: "/", permanent: true },
     ];
   },
 };
