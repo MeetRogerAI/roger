@@ -98,6 +98,11 @@ The order is B2, then B3, then B4 (build spec T5). Nothing here changes B1's go-
   - **Token:** the GitHub token is server-only, scoped to this one repository (contents and pull requests: write), owned and rotated by Peter, and added as a new launch-list item.
 - R20. Every Zack run and Cora list records the instruction-file version it used. `/admin/review` shows the measures before and after each merged proposal.
 - R21. Members' replies and notes are stored against their record and feed the review bot (spec B.16). They're deleted with the account, by the existing retention and deletion job.
+- R21a. **The B.16 rows moved into B3 on November 27** (decided by Peter; see `docs/plans/2026-11-27-002-feat-v3-launch-close-out-plan.md`, Unit 1, the "Roadmap authority" decision and "New in planning"). The close-out plan found these items in no roadmap home and added them to spec B.16. B3 builds:
+  - **Admin read logging** (from launch list S22): every time an admin opens a member's runs or picks, `admin_actions` records it.
+  - **Cora change 11, upgrades:** a list may offer an upgrade to a play the member already runs, at most one of the three picks, behind its own switch (off).
+  - **Cora change 15, adoption counts:** an idea counts as adopted when the member's next profile shows it used, with "installed" and "used" reported separately.
+  - **Sandbox scenario tests:** `SCENARIO_TARGET=sandbox` runs the scenario tests against the Stripe sandbox on test clocks and the scenario-test database (replaced for launch by a manual test-clock journey on preview).
 
 **B4: Levels (built on fixtures, switched off)**
 - R22. **Overrides the "Before B4 starts" gate** in build spec 3.6 and design spec B.16a (decided by Peter). B4 is built in full now, against sample `roger-level` blocks, behind `v3.levelsLive` (off).
