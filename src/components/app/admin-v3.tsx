@@ -12,6 +12,7 @@ import {
   excuseWeekAction,
   extraFreeListAction,
   flagAction,
+  launchSwitchAction,
   linkContributorAction,
   nudgeAction,
   pilotLinkAction,
@@ -512,6 +513,45 @@ export function SampleChooser({ plays }: { plays: { id: string; title: string; c
 }
 
 /** The Cora buttons. "As of" appears only where the server would accept it (it checks again). */
+/** The go-live switches (launch list g-open). Each turns on only with its box ticked. */
+export function LaunchSwitches({ cycleLive, signupOpen }: { cycleLive: boolean; signupOpen: boolean }) {
+  const rows: { name: "cycleLive" | "signupOpen"; title: string; on: boolean; confirm: string }[] = [
+    { name: "cycleLive", title: "Weekly cycle (v3.cycleLive)", on: cycleLive, confirm: "I have checked that no subscription is on the higher price by mistake." },
+    { name: "signupOpen", title: "Sign-up (v3.signupOpen)", on: signupOpen, confirm: "Privacy and terms are live and the cycle is on." },
+  ];
+  return (
+    <div className="space-y-4">
+      {rows.map((r) => (
+        <LaunchSwitchRow key={r.name} {...r} />
+      ))}
+    </div>
+  );
+}
+
+function LaunchSwitchRow({ name, title, on, confirm }: { name: "cycleLive" | "signupOpen"; title: string; on: boolean; confirm: string }) {
+  const [s, act, pending] = useActionState(launchSwitchAction, idle);
+  const [ticked, setTicked] = useState(false);
+  return (
+    <form action={act} className="grid gap-2 rounded-[8px] border border-rule p-4">
+      <p className="text-small">
+        <span className="font-[600]">{title}</span>: {on ? "on" : "off"}
+      </p>
+      <Hidden values={{ name, on: on ? "false" : "true", confirm: ticked ? "yes" : "" }} />
+      {!on && (
+        <label className="flex items-start gap-2 text-small">
+          <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} className="mt-1" /> {confirm}
+        </label>
+      )}
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={pending || (!on && !ticked)} className={on ? quiet : small}>
+          {on ? "Turn off" : "Turn on"}
+        </button>
+        <Msg s={s} />
+      </div>
+    </form>
+  );
+}
+
 export function CoraButtons({ asOfAllowed }: { asOfAllowed: boolean }) {
   const [s, act, pending] = useActionState(runJobAction, idle);
   const [cs, cact, cpending] = useActionState(chargeAndSendAction, idle);
