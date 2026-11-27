@@ -35,7 +35,7 @@ describe("the redirect list", () => {
     expect(block).toMatch(/<section id=\{id\}[^>]*-scroll-mt-3/);
     const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
     expect(css).toContain("scroll-padding-top: 72px;");
-    expect(readFileSync(path.join(process.cwd(), "src/components/site-header.tsx"), "utf8")).toContain('className="wrap flex h-[60px] items-center gap-6"');
+    expect(readFileSync(path.join(process.cwd(), "src/components/site-header.tsx"), "utf8")).toContain('className="wrap flex h-[60px] items-center gap-4 sm:gap-6"');
   });
 
   it("links to the price section, never to a redirected address, from the header and the footer", () => {

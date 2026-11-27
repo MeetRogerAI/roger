@@ -183,7 +183,7 @@
     }
   }
 
-  /* Buttons: a filled pill for the one action; everything else is a text link. */
+  /* Buttons: a filled pill for the one action. Beside it, an outlined pill for the second (the header's "Sign in"); everything else is a text link. */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -242,6 +242,15 @@
   }
   .btn-light:hover {
     background: #ffffff;
+  }
+  /* The second action beside a filled one: no fill, so the filled button stays the only one. For light grounds. */
+  .btn-outline {
+    background: transparent;
+    color: var(--color-ink);
+    border-color: var(--color-ink);
+  }
+  .btn-outline:hover {
+    background: var(--color-ground-2);
   }
   .btn[aria-disabled="true"] {
     background: var(--color-ground-2);
