@@ -6,6 +6,8 @@
  *                          it refuses: only what would break a page.
  *   draftChanges           every field whose draft wording is not what the
  *                          site shows now. This is what a publish would change.
+ *   listChanges            the same for a list's items (U7): each one added,
+ *                          removed, put back or moved, as a plain sentence.
  *   sectionChanges         the same for a page's sections (U6): each one
  *                          switched off or on, or moved, as a plain sentence.
  *   pageStatus             both, counted per page, for the Pages screen.
@@ -30,9 +32,10 @@ import { compoundingFinal, compoundingNumbers } from "@/data/site/compounding";
 import { fillAmounts, type Amounts } from "../amounts";
 import { checkClaims, textPage, type RuleId } from "../claims";
 import { captionNames } from "../compounding";
+import { shortened } from "./caption";
 import type { Overlay } from "./format";
-import { baseline, layoutOn, sameLayout, sectionLayout, textAt } from "./model";
-import { siteRegistry, type Field, type Page, type Registry, type Section } from "./registry";
+import { applyOverlay, baseline, layoutOn, listItems, readField, sameLayout, sectionLayout, textAt } from "./model";
+import { TOGGLE_OFF, TOGGLE_ON, fieldsOfItem, isAddedId, resolveField, siteRegistry, type Field, type List, type Page, type Registry, type Section } from "./registry";
 import { canonical } from "./store";
 import { asPlaceholder, placeholdersIn, plainBlock, plainLine, unknownPlaceholder, usableDestination } from "./text";
 
@@ -43,7 +46,7 @@ import { asPlaceholder, placeholdersIn, plainBlock, plainLine, unknownPlaceholde
 /** What was typed, as it is stored: one line for a line, tidy paragraphs for a block, and an address without the spaces around it. */
 export function tidyFor(field: Field, typed: string): string {
   if (field.kind === "block") return plainBlock(typed);
-  if (field.kind === "destination") return typed.trim();
+  if (field.kind === "destination" || field.kind === "toggle") return typed.trim();
   return plainLine(typed);
 }
 
@@ -61,9 +64,12 @@ export const tooLongToRead = (field: Field): string => `This is far longer than 
  * Why a tidied text cannot be saved in this field, in the owner's words, or null when it can (plan KTD10). Only
  * what would break a page is refused: no words at all, more than the field holds, a name in braces that does not
  * exist, and an address a link may not point at. Whether the wording is wise is a warning at publish, not this.
+ *
+ * `hasOriginal` is false for a text of an item added in the admin, which has no first wording to go back to.
  */
-export function saveRefusal(field: Field, text: string): string | null {
-  if (plainLine(text) === "") return "This cannot be left empty. To get the first wording back, use “Reset to the original wording”.";
+export function saveRefusal(field: Field, text: string, hasOriginal = true): string | null {
+  if (field.kind === "toggle") return text === TOGGLE_ON || text === TOGGLE_OFF ? null : "This can only be switched on or off. Reload the page and try again.";
+  if (plainLine(text) === "") return hasOriginal ? "This cannot be left empty. To get the first wording back, use “Reset to the original wording”." : "This cannot be left empty.";
   if (text.length > field.max) return `This is ${text.length} characters long, and the most that fits here is ${field.max}. Shorten it by ${text.length - field.max}.`;
   if (field.kind === "destination") return usableDestination(text) ? null : "This is not an address a link can use. Start it with “/” for a page of this site, or with “https://”.";
   const unknown = unknownPlaceholder(text, field.placeholders);
@@ -82,23 +88,126 @@ export function wordingOf(overlay: Overlay, fieldId: string, base: unknown = bas
 
 export type Change = {
   field: Field;
-  /** What the site shows now. */
+  /** What the site shows now. Empty when `fresh`. */
   from: string;
   /** What the draft would make it show. */
   to: string;
   /** True when the draft goes back to the original wording. */
   toOriginal: boolean;
+  /**
+   * True when the field's ITEM is not on the site now: the draft adds it to its list, or puts it back. Its wording
+   * is new to the site, so the wording rules read it, but it is told as part of the item's own sentence
+   * (listChanges) and not as a text that changes.
+   */
+  fresh: boolean;
 };
 
-/** Every field whose draft wording differs from what is published, in the order the pages and their sections are listed. */
+/** The two things a publish would swap, as what the pages would print: what the site shows now, and what the draft would make it show. */
+function sides(content: { draft: Overlay; published: Overlay }, base: unknown, registry: Registry) {
+  return { site: applyOverlay(base, content.published, registry), draft: applyOverlay(base, content.draft, registry) };
+}
+
+/** The lists of the registry in the order the pages and their sections are listed. */
+function listsInOrder(registry: Registry): { list: List; page: Page; section: Section }[] {
+  const out: { list: List; page: Page; section: Section }[] = [];
+  for (const page of registry.pages) {
+    for (const section of page.sections) {
+      for (const list of registry.lists.values()) if (list.page === page.id && list.section === section.id) out.push({ list, page, section });
+    }
+  }
+  return out;
+}
+
+/**
+ * Every field whose wording the draft would change on the site, in the order the pages and their sections are
+ * listed; an added item's fields come after its section's own.
+ *
+ * What is compared is what the pages would PRINT (the draft applied, against what is published applied), so a
+ * field of an item the draft has removed is not here, and a field of an item the draft adds or puts back is, marked
+ * `fresh`. Count the texts that change with `!change.fresh`; hand all of them to wordingWarnings.
+ */
 export function draftChanges(content: { draft: Overlay; published: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): Change[] {
-  const touched = new Set([...Object.keys(content.draft.text), ...Object.keys(content.published.text)]);
+  const touched = (overlay: Overlay) => Object.keys(overlay.text).length + Object.keys(overlay.lists).length > 0;
+  if (!touched(content.draft) && !touched(content.published)) return [];
+  const { site, draft } = sides(content, base, registry);
   const out: Change[] = [];
-  for (const field of registry.fields.values()) {
-    if (!touched.has(field.id)) continue;
-    const from = wordingOf(content.published, field.id, base, registry);
-    const to = wordingOf(content.draft, field.id, base, registry);
-    if (from !== to) out.push({ field, from, to, toOriginal: !Object.hasOwn(content.draft.text, field.id) });
+  const compare = (field: Field) => {
+    const to = readField(draft, field);
+    const from = readField(site, field);
+    if (to === undefined || from === to) return;
+    // A switch a new item leaves off is nothing to tell.
+    if (from === undefined && field.toggle && to === TOGGLE_OFF) return;
+    out.push({ field, from: from ?? "", to, toOriginal: to === readField(base, field), fresh: from === undefined });
+  };
+  for (const page of registry.pages) {
+    for (const section of page.sections) {
+      for (const field of section.fields) compare(field);
+      for (const list of registry.lists.values()) {
+        if (list.page !== page.id || list.section !== section.id) continue;
+        for (const item of listItems(draft, list.id, registry)) if (isAddedId(item)) for (const field of fieldsOfItem(list, item, registry)) compare(field);
+      }
+    }
+  }
+  return out;
+}
+
+/** One thing a publish would change about a list's items, as a sentence the owner reads. */
+export type ListChange = {
+  page: Page;
+  section: Section;
+  list: List;
+  /** The item's id. */
+  item: string;
+  /** "added": a new item. "back": an item of the original list that the site does not show now. "removed", and "moved": it changes its place among the items that stay. */
+  kind: "added" | "back" | "removed" | "moved";
+  /** The whole of it, with the page and the section: "FAQ, Getting started: a new question “…” is added, as number 3 of 6." */
+  says: string;
+  /** For "added" and "back": each text the item will show, in the order the owner reads them. */
+  fields: { field: Field; text: string }[];
+};
+
+/**
+ * What a publish would change about each list's items (plan R8), in the order the pages are listed: first the
+ * items removed, then the ones added or put back, then the ones that move, each in the order the page shows them.
+ *
+ * An item is named by its wording (its first field: a question's question, a step's label), shortened, as a
+ * visitor reads it: `read` fills the amounts in. A move is told for as few items as explain the new order, as for
+ * sections, and only among the items that are on the site both before and after.
+ */
+export function listChanges(content: { draft: Overlay; published: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry, read: (text: string) => string = (text) => text): ListChange[] {
+  if (Object.keys(content.draft.lists).length + Object.keys(content.published.lists).length === 0) return [];
+  const { site, draft } = sides(content, base, registry);
+  const out: ListChange[] = [];
+  for (const { list, page, section } of listsInOrder(registry)) {
+    if (!Object.hasOwn(content.draft.lists, list.id) && !Object.hasOwn(content.published.lists, list.id)) continue;
+    const from = listItems(site, list.id, registry);
+    const to = listItems(draft, list.id, registry);
+    const original = listItems(base, list.id, registry);
+    const noun = list.item.toLowerCase();
+    const where = `${page.label}, ${section.label}`;
+    const fieldsIn = (model: unknown, item: string) => fieldsOfItem(list, item, registry).flatMap((field) => {
+      const text = readField(model, field);
+      return text === undefined ? [] : [{ field, text }];
+    });
+    const name = (model: unknown, item: string) => `“${shortened(read(fieldsIn(model, item)[0]?.text ?? ""))}”`;
+    for (const [at, item] of from.entries()) {
+      if (!to.includes(item)) out.push({ page, section, list, item, kind: "removed", says: `${where}: ${noun} ${at + 1} ${name(site, item)} is removed.`, fields: [] });
+    }
+    for (const [at, item] of to.entries()) {
+      if (from.includes(item)) continue;
+      const place = `as number ${at + 1} of ${to.length}`;
+      const back = original.includes(item);
+      out.push({ page, section, list, item, kind: back ? "back" : "added", says: back ? `${where}: ${noun} ${name(draft, item)} is put back, ${place}.` : `${where}: a new ${noun} ${name(draft, item)} is added, ${place}.`, fields: fieldsIn(draft, item) });
+    }
+    const before = from.filter((item) => to.includes(item));
+    const after = to.filter((item) => from.includes(item));
+    const still = kept(before, after);
+    for (const [at, item] of after.entries()) {
+      if (still.has(item)) continue;
+      const up = at < before.indexOf(item);
+      const says = up ? `${where}: ${noun} ${name(draft, item)} moves up, above ${name(draft, after[at + 1])}.` : `${where}: ${noun} ${name(draft, item)} moves down, below ${name(draft, after[at - 1])}.`;
+      out.push({ page, section, list, item, kind: "moved", says, fields: [] });
+    }
   }
   return out;
 }
@@ -161,25 +270,45 @@ export function sectionChanges(content: { draft: Overlay; published: Overlay }, 
 }
 
 export type PageStatus = {
-  /** What is saved as a draft and not published yet: fields whose wording would change, and changes to the page's sections. */
+  /** What is saved as a draft and not published yet: fields whose wording would change, changes to the page's sections, and changes to its lists. */
   drafts: number;
-  /** Fields whose draft wording differs from the original. */
+  /** Texts whose draft wording differs from the original, among those the draft shows (not those of an item it removes). */
   edits: number;
+  /** Tick boxes of items ("Show on the homepage") the draft has the other way from the original. Not texts. */
+  ticks: number;
   /** True when the draft has the page's sections in another order than the original, or one of them switched the other way. */
   rearranged: boolean;
+  /** True when the draft has one of the page's lists with other items than the original, or in another order. */
+  relisted: boolean;
 };
 
 /** For each page, how many changes have a draft waiting, how many fields differ from the original wording, and whether its sections do. */
 export function pageStatus(content: { draft: Overlay; published: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): Map<string, PageStatus> {
-  const out = new Map<string, PageStatus>(registry.pages.map((page) => [page.id, { drafts: 0, edits: 0, rearranged: false }]));
-  for (const change of draftChanges(content, base, registry)) out.get(change.field.page)!.drafts++;
+  const out = new Map<string, PageStatus>(registry.pages.map((page) => [page.id, { drafts: 0, edits: 0, ticks: 0, rearranged: false, relisted: false }]));
+  for (const change of draftChanges(content, base, registry)) if (!change.fresh) out.get(change.field.page)!.drafts++;
   for (const change of sectionChanges(content, base, registry)) out.get(change.page.id)!.drafts++;
+  for (const change of listChanges(content, base, registry)) out.get(change.page.id)!.drafts++;
+  const drafted = Object.keys(content.draft.text).length > 0 ? applyOverlay(base, content.draft, registry) : base;
   for (const id of Object.keys(content.draft.text)) {
-    const field = registry.fields.get(id);
-    if (field && content.draft.text[id] !== textAt(base, id, registry)) out.get(field.page)!.edits++;
+    const field = resolveField(id, registry);
+    // A text of an item the draft itself added has no original to differ from: the item is counted with its list.
+    const original = textAt(base, id, registry);
+    // And the wording the draft keeps for an item it removes is on no page: that item is counted with its list too.
+    const shows = field ? readField(drafted, field) : undefined;
+    if (!field || original === undefined || shows === undefined || shows === original) continue;
+    if (field.kind === "toggle") out.get(field.page)!.ticks++;
+    else out.get(field.page)!.edits++;
   }
   for (const page of registry.pages) out.get(page.id)!.rearranged = !sameLayout(layoutOn(content.draft, page.id, base, registry), sectionLayout(base, page.id, registry));
+  for (const list of registry.lists.values()) if (Object.hasOwn(content.draft.lists, list.id)) out.get(list.page)!.relisted = true;
   return out;
+}
+
+/** How many changes are saved as a draft and not published yet, on all pages: the count the Pages screens show, and the number of rows in the review's list. */
+export function draftCount(content: { draft: Overlay; published: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): number {
+  let count = 0;
+  for (const status of pageStatus(content, base, registry).values()) count += status.drafts;
+  return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -309,7 +438,7 @@ export function namesFilled(text: string, amounts: Amounts): { name: string; sho
 export function wordingWarnings(changes: readonly Change[], amounts: Amounts): WordingWarning[] {
   const out: WordingWarning[] = [];
   for (const change of changes) {
-    if (change.toOriginal || change.field.kind === "destination") continue;
+    if (change.toOriginal || change.field.kind === "destination" || change.field.kind === "toggle") continue;
     const text = printed(change.to, amounts);
     if (text === null) continue;
     const found = checkClaims(textPage(change.field.claims.path, [text], change.field.claims.zones), { amounts, compounding: compoundingNumbers });

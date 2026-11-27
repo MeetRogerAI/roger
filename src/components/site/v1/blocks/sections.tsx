@@ -13,6 +13,18 @@ import { SectionHead } from "./section-head";
  * pages use too.
  */
 
+/**
+ * The columns of a row of short items (the problem's statements, the control block's points), by how many there
+ * are: three side by side as built, and up to six as two rows of three (an admin may add and remove them in
+ * Pages). One, two and four get columns of their own count, so no row is left with a hole in it. The classes are
+ * written out so that Tailwind finds them.
+ */
+export function itemColumns(count: number): string {
+  if (count === 1) return "max-w-[40rem] gap-10 md:grid-cols-1 md:gap-12";
+  if (count === 2 || count === 4) return "max-w-[48rem] gap-10 md:grid-cols-2 md:gap-12";
+  return "max-w-[64rem] gap-10 md:grid-cols-3 md:gap-12";
+}
+
 /** "The problem", on ground: three statements side by side. */
 export function Problem({ copy, id = "problem" }: { copy: { title: string; statements: TextItem[] }; id?: string }) {
   const titleId = `${id}-title`;
@@ -20,13 +32,16 @@ export function Problem({ copy, id = "problem" }: { copy: { title: string; state
     <section id={id} aria-labelledby={titleId} className="scroll-mt-14 bg-ground">
       <div className="wrap py-24 md:py-32">
         <SectionHead id={titleId} title={copy.title} />
-        <Reveal as="ul" className="mx-auto mt-14 grid max-w-[64rem] gap-10 md:grid-cols-3 md:gap-12">
-          {copy.statements.map((statement) => (
-            <li key={statement.id} className="border-t border-rule-strong pt-6">
-              <p className="text-lead">{statement.text}</p>
-            </li>
-          ))}
-        </Reveal>
+        {/* An admin may remove every statement (Pages): then the section is its heading alone. */}
+        {copy.statements.length > 0 && (
+          <Reveal as="ul" className={`mx-auto mt-14 grid ${itemColumns(copy.statements.length)}`}>
+            {copy.statements.map((statement) => (
+              <li key={statement.id} className="border-t border-rule-strong pt-6">
+                <p className="text-lead">{statement.text}</p>
+              </li>
+            ))}
+          </Reveal>
+        )}
       </div>
     </section>
   );

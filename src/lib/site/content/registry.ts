@@ -61,9 +61,14 @@ export type SiteCopy = typeof codeModel;
 
 /**
  * How a field's text is tidied and printed: `line` is one line of plain text; `block` keeps its line breaks (a
- * playbook); `destination` is the address of a link (plan KTD12).
+ * playbook); `destination` is the address of a link (plan KTD12); `toggle` is a switch of an item, which holds
+ * "yes" or "no" and prints no words ("show this question on the homepage").
  */
-export type FieldKind = "line" | "block" | "destination";
+export type FieldKind = "line" | "block" | "destination" | "toggle";
+
+/** What a toggle holds, as text, so that it is stored, compared and reviewed like every other field. */
+export const TOGGLE_ON = "yes";
+export const TOGGLE_OFF = "no";
 
 export type Field = {
   /** The path in the copy, joined with dots, a list item's id standing where its index would. */
@@ -86,6 +91,27 @@ export type Field = {
   claims: { path: string; zones: readonly Zone[] };
   /** The array it is an item of, by that array's id, the item's id, and what one item is called ("Step"; null where an item has no name of its own). Absent for a field outside any array. */
   item?: { array: string; id: string; noun: string | null };
+  /**
+   * For a toggle: where the copy holds it. The item has a list under `key`, and the toggle is on while that list
+   * holds `value` (a question's `on` holds "home"). The last part of the field's path is the toggle's own name,
+   * which the copy does not have: ./model.ts reads and writes a toggle through this.
+   */
+  toggle?: { key: string; value: string };
+};
+
+/** One field of an item of a list, as every item of the list has it: what a built-in item's field is, and what an added item's is made from. */
+export type ItemField = {
+  /** The field's key in the item: "q". The last part of the field's id. */
+  name: string;
+  /** "Question". */
+  label: string;
+  kind: FieldKind;
+  max: number;
+  placeholders: readonly string[];
+  zones: readonly Zone[];
+  toggle?: { key: string; value: string };
+  /** What an item added in the admin holds here until it is given something: null for a text, which it must be given; "no" for a toggle. */
+  fresh: string | null;
 };
 
 /** The three backgrounds a page's sections are painted on (globals.css). */
@@ -123,6 +149,17 @@ export type List = {
   section: string;
   /** The built-in items' ids, in the copy's order. */
   items: readonly string[];
+  /** The path of the array in the copy, in parts. */
+  path: readonly string[];
+  /** The address the wording rules check an item's text under: the page's. */
+  claimsPath: string;
+  /** Each field an item has, in the order the admin reads them. The first is the one whose wording names the item. */
+  fields: readonly ItemField[];
+  /** The fewest and the most items the page can draw (plan U7). Equal, the list can only be reordered. */
+  min: number;
+  max: number;
+  /** What an item added in the admin holds beside its id and its texts: a question's empty `on`. */
+  blank: Readonly<Record<string, unknown>>;
 };
 
 export type Registry = {
@@ -155,6 +192,19 @@ export type SectionSpec = {
   fields?: Record<string, FieldSpec>;
 };
 
+export type ArraySpec = {
+  item: string | null;
+  list?: string;
+  /** For a list: the fewest and the most items the page can draw. Left out: none, and LIST_CAP. */
+  min?: number;
+  max?: number;
+  /** For a list: the switches each item has, by name, each with its label and where the copy holds it (Field.toggle). They come after the item's texts. */
+  toggles?: Record<string, { label: string; key: string; value: string }>;
+};
+
+/** The most items any list may hold, where its spec names no smaller number. The stored shape's own bound (./format.ts, LIST_MAX). */
+export const LIST_CAP = 30;
+
 export type PageSpec = { id: string; label: string; path: string; sections: SectionSpec[] };
 
 export type RegistrySpec = {
@@ -164,7 +214,7 @@ export type RegistrySpec = {
    * field's label (null to leave the label as it is). `list` is the list's label, for an array an admin may add
    * to, remove from and reorder; without it the items are edited as text only.
    */
-  arrays: Record<string, { item: string | null; list?: string }>;
+  arrays: Record<string, ArraySpec>;
   /** Every string and array of the copy that Pages does not edit, by pattern, each with the reason. */
   notEditable: Record<string, string>;
 };
@@ -174,6 +224,8 @@ const short = (label: string): FieldSpec => ({ label, max: 80 });
 const line = (label: string): FieldSpec => ({ label, max: 200 });
 const lead = (label: string): FieldSpec => ({ label, max: 400 });
 const para = (label: string): FieldSpec => ({ label, max: 1500 });
+/** The longest label a hero step may have: each is a button in the row above the picture (src/components/site/v1/blocks/hero-steps.tsx). */
+export const HERO_STEP_LABEL_MAX = 10;
 
 /** A section with no words of its own: the night band a reading page ends on. Its button and its line are under Shared. */
 const startBand: SectionSpec = { id: "startBand", label: "Start button band", ground: "night" };
@@ -198,7 +250,10 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
             fields: {
               "home.hero.headline": line("Headline"),
               "home.hero.sub": lead("Line under the headline"),
-              "home.hero.graphic.steps.*.label": short("Label"),
+              // A button in a row of up to five, which shares a phone's width: about eight letters fit on one line
+              // there. A longer word is hyphenated onto a second line inside its button (globals.css, .hero-steps),
+              // never run out of it; past this limit it would take three.
+              "home.hero.graphic.steps.*.label": { label: "Label", max: HERO_STEP_LABEL_MAX },
               "home.hero.graphic.steps.*.title": line("Headline"),
               "home.hero.graphic.steps.*.body": lead("Text"),
               "home.hero.graphic.pause": short("Pause button"),
@@ -433,14 +488,21 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
       },
     ],
     arrays: {
-      "home.hero.graphic.steps": { item: "Step", list: "Hero steps" },
-      "home.problem.statements": { item: "Statement", list: "Problem statements" },
-      "control.points": { item: "Point", list: "Control points" },
-      "howItWorks.week.days": { item: "Day", list: "Days of the week" },
-      "howItWorks.firstWeeks.steps": { item: "Step", list: "First-weeks steps" },
+      // HOW MANY ITEMS EACH LIST MAY HOLD is what its block can draw (plan U7). The blocks lay out by the count.
+      //
+      // The hero's picture shows one step at a time, with a row of one button for each above it, and each step's
+      // stack is three squares taller than the one before. Five buttons are what the row holds on a phone, and
+      // five rows of squares what the frame is drawn for. With one step there is nothing to step through.
+      "home.hero.graphic.steps": { item: "Step", list: "Hero steps", min: 2, max: 5 },
+      // Three columns: up to two rows of them. (One, two and four items get columns of their own count.)
+      "home.problem.statements": { item: "Statement", list: "Problem statements", max: 6 },
+      "control.points": { item: "Point", list: "Control points", max: 6 },
+      // Rows down the page, which take any number. A week has seven days.
+      "howItWorks.week.days": { item: "Day", list: "Days of the week", max: 7 },
+      "howItWorks.firstWeeks.steps": { item: "Step", list: "First-weeks steps", max: 12 },
       // The groups are /faq's sections, not a list; each group's questions are one.
       questions: { item: null },
-      "questions.*.items": { item: "Question", list: "Questions" },
+      "questions.*.items": { item: "Question", list: "Questions", max: 20, toggles: { home: { label: "Show on the homepage", key: "on", value: "home" } } },
       // Text only: each anatomy note is paired with a playbook part by its place, and the Zack points follow the Zack instructions.
       "howItWorks.zack.points": { item: "Point" },
       "howItWorks.anatomy.notes": { item: "Note" },
@@ -467,7 +529,8 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
       "questionsBlock.more.href": "An address in the code, not wording.",
       "howItWorks.noAgent.link.href": "An address in the code, not wording.",
       "howItWorks.zack.id": "The section's anchor, which the control block's link names.",
-      "questions.*.items.*.on": "Which pages show a question. Not text.",
+      "home.hero.graphic.nameAny": "A name only a screen reader hears.",
+      "questions.*.items.*.on": "Which pages show a question. Not text: Pages edits it as the question’s “Show on the homepage” switch (arrays, toggles).",
     },
   };
 }
@@ -499,7 +562,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
  * - an array that is neither in `arrays` nor in `notEditable`, or one in `arrays` whose items are not objects with
  *   unique ids (letters, digits, hyphens; not starting with "x-");
  * - a pattern of the spec that matches nothing in the copy;
- * - a list whose items' fields are not all in one section.
+ * - a list whose items' fields are not all in one section, or are not each one key of the item (an added item's
+ *   field is `<list>.<item>.<key>`), or whose built-in items are fewer or more than the list may hold.
  */
 export function buildRegistry(copy: unknown, spec: RegistrySpec): Registry {
   type Declared = { pattern: readonly string[]; text: string; page: PageSpec; section: SectionSpec; field: FieldSpec; order: number; used: boolean };
@@ -550,6 +614,9 @@ export function buildRegistry(copy: unknown, spec: RegistrySpec): Registry {
       const [hit] = hits;
       hit.used = true;
       const array = inside.at(-1);
+      // A field of an item of a list is one key of the item: `<list>.<item>.<key>` is how an added item's is addressed.
+      const list = array ? lists.get(array.id) : undefined;
+      if (list && path.length !== list.path.length + 2) throw new Error(`Site content: "${at}" is inside an item of the list "${list.id}", whose fields must each be one key of the item.`);
       found.push({
         // Every field of an array sorts where the array's first pattern is, so an item's fields stay together.
         order: array ? array.order : hit.order,
@@ -588,7 +655,25 @@ export function buildRegistry(copy: unknown, spec: RegistrySpec): Registry {
       if (array.list !== undefined) {
         const [first] = own;
         if (!first || own.some((entry) => entry.page !== first.page || entry.section !== first.section)) throw new Error(`Site content: the fields of the list "${at}" must all be in one section, and there must be one.`);
-        lists.set(at, { id: at, label: array.list, item: array.item ?? "Item", page: first.page.id, section: first.section.id, items: [...ids] });
+        const min = array.min ?? 0;
+        const max = array.max ?? LIST_CAP;
+        if (min > max || max > LIST_CAP || ids.size < min || ids.size > max) throw new Error(`Site content: the list "${at}" has ${ids.size} items and may hold ${min} to ${max} (and never more than ${LIST_CAP}).`);
+        const fields: ItemField[] = own.map((entry) => ({
+          name: entry.pattern.at(-1)!,
+          label: entry.field.label,
+          kind: entry.field.kind ?? "line",
+          max: entry.field.max,
+          placeholders: entry.field.placeholders ?? amountPlaceholderNames,
+          zones: entry.field.zones ?? entry.section.zones ?? [],
+          fresh: null,
+        }));
+        const blank: Record<string, unknown> = {};
+        for (const [name, toggle] of Object.entries(array.toggles ?? {})) {
+          if (!isId(name) || fields.some((field) => field.name === name)) throw new Error(`Site content: the list "${at}" has an unusable or repeated toggle "${name}".`);
+          fields.push({ name, label: toggle.label, kind: "toggle", max: TOGGLE_ON.length, placeholders: [], zones: [], toggle: { key: toggle.key, value: toggle.value }, fresh: TOGGLE_OFF });
+          blank[toggle.key] = [];
+        }
+        lists.set(at, { id: at, path, label: array.list, item: array.item ?? "Item", page: first.page.id, section: first.section.id, claimsPath: first.page.path, items: [...ids], fields, min, max, blank });
       }
       // A list the code has emptied still has its patterns: they are not a mistake in the spec.
       if (node.length === 0) for (const entry of own) entry.used = true;
@@ -596,6 +681,9 @@ export function buildRegistry(copy: unknown, spec: RegistrySpec): Registry {
       for (const item of node as Record<string, unknown>[]) {
         const here: Inside = { id: at, item: item.id as string, noun: array.item, order };
         for (const [key, value] of Object.entries(item)) if (key !== "id") walk(value, [...path, item.id as string, part(key, `${at}.${item.id as string}`)], [...inside, here]);
+        // The item's switches, after its texts. They are fields like any other, though the copy holds them otherwise (Field.toggle).
+        const list = lists.get(at);
+        for (const field of list?.fields ?? []) if (field.toggle) found.push({ order, walk: found.length, field: itemField(list!, field, item.id as string) });
       }
       return;
     }
@@ -630,6 +718,54 @@ export function buildRegistry(copy: unknown, spec: RegistrySpec): Registry {
   return { pages, fields, lists };
 }
 
+/** One field of one item of a list, built-in or added: the list's item field, at that item. */
+function itemField(list: List, field: ItemField, itemId: string): Field {
+  return {
+    id: `${list.id}.${itemId}.${field.name}`,
+    path: [...list.path, itemId, field.name],
+    page: list.page,
+    section: list.section,
+    label: `${list.item} “${itemId}”: ${field.label}`,
+    name: field.label,
+    kind: field.kind,
+    max: field.max,
+    placeholders: field.placeholders,
+    claims: { path: list.claimsPath, zones: field.zones },
+    item: { array: list.id, id: itemId, noun: list.item },
+    ...(field.toggle ? { toggle: field.toggle } : {}),
+  };
+}
+
+/** True for the id of an item added in the admin. */
+export const isAddedId = (value: unknown): value is string => isId(value) && value.startsWith(ADDED_PREFIX) && value.length > ADDED_PREFIX.length;
+
+/**
+ * The field an id names: a built-in one, or a field of an item ADDED in the admin (plan KTD2, KTD3), whose id is
+ * `<list>.<item>.<key>` with an item id that starts with "x-". Such a field is in no table: it is made here from
+ * the list's own item fields, so it has the limit, the kind, the names in braces and the claims zones a built-in
+ * item's field has. Undefined for anything else.
+ *
+ * Whether the item exists is not known here, only that the id is one an added item's field could have. Where an
+ * overlay is applied, normalised or strictly read, the item is looked for (./model.ts, ./format.ts).
+ */
+export function resolveField(id: string, registry: Registry = siteRegistry): Field | undefined {
+  const known = registry.fields.get(id);
+  if (known || typeof id !== "string") return known;
+  const key = id.lastIndexOf(".");
+  const item = key > 0 ? id.lastIndexOf(".", key - 1) : -1;
+  if (item <= 0) return undefined;
+  const list = registry.lists.get(id.slice(0, item));
+  const itemId = id.slice(item + 1, key);
+  const field = list?.fields.find((entry) => entry.name === id.slice(key + 1));
+  if (!list || !field || !isAddedId(itemId)) return undefined;
+  return itemField(list, field, itemId);
+}
+
+/** Every field of one item of a list, in the order the admin reads them: the registry's own for a built-in item, made here for an added one. */
+export function fieldsOfItem(list: List, itemId: string, registry: Registry = siteRegistry): Field[] {
+  return list.fields.flatMap((field) => resolveField(`${list.id}.${itemId}.${field.name}`, registry) ?? []);
+}
+
 /** The site's registry: the code model under the site's spec. Built once, when the module loads, so a copy and a spec that disagree fail at once. */
 export const siteRegistry: Registry = buildRegistry(codeModel, siteSpec(codeModel));
 
@@ -648,6 +784,7 @@ export const siteRegistry: Registry = buildRegistry(codeModel, siteSpec(codeMode
 export function usableValue(field: Field, value: unknown): value is string {
   // Empty once tidied: spaces alone, or only characters that print nothing, would leave a heading with no words.
   if (typeof value !== "string" || plainLine(value) === "") return false;
+  if (field.kind === "toggle") return value === TOGGLE_ON || value === TOGGLE_OFF;
   if (field.kind === "destination") return usableDestination(value);
   return unknownPlaceholder(value, field.placeholders) === null;
 }

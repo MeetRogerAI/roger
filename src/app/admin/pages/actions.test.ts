@@ -51,7 +51,7 @@ vi.mock("@/lib/admin-auth", () => ({
   isAdmin: async () => Boolean(admin),
 }));
 
-const { publishAction, savePageAction, sectionsAction, undoPublishAction } = await import("./actions");
+const { listAction, publishAction, savePageAction, sectionsAction, undoPublishAction } = await import("./actions");
 const { default: PagesScreen } = await import("./page");
 const { default: EditorScreen } = await import("./[page]/page");
 const { default: ReviewScreen } = await import("./review/page");
@@ -903,5 +903,273 @@ describe("the questions the old Edit Questions screen edited (plan R10)", () => 
     expect(await home()).not.toContain("A new headline");
     expect(await stored(LEGACY_QUESTIONS_KEY)).toEqual(legacy);
     expect(words(await reviewScreen())).toContain("What will change: 1 text");
+  });
+});
+
+describe("a page's lists (plan U7, R8)", () => {
+  beforeEach(() => {
+    admin = OWNER;
+  });
+  const STARTED = "questions.getting-started.items";
+  const BILLING = "questions.price-and-billing.items";
+  const STATEMENTS = "home.problem.statements";
+  const STEPS = "home.hero.graphic.steps";
+  const POINTS = "control.points";
+  const press = (page: string, list: string, op: string, more: Record<string, string> = {}) => listAction(form({ page, list, op, ...more }));
+  const add = (page: string, list: string, texts: Record<string, string>) => press(page, list, "add", Object.fromEntries(Object.entries(texts).map(([key, value]) => [`new:${key}`, value])));
+  const draft = async () => (await readStored(current)).draft;
+  /** The items of a list on its editing screen, in order: each by its legend. */
+  const legends = (markup: string, list: string) => {
+    const block = markup.split(`data-list="${list}"`)[1].split("data-list=")[0];
+    return [...block.matchAll(/<li data-item-row="[^"]+"><fieldset[^>]*><legend[^>]*>(.*?)<\/legend>/g)].map((m) => words(m[1]).trim());
+  };
+  const listBlock = (markup: string, list: string) => markup.split(`data-list="${list}"`)[1].split("data-list=")[0];
+  const DRAFT = "Saved as a draft: visitors see no change until you publish.";
+  const STALE = "This page has changed since you opened it, so nothing was saved. Reload the page and try again.";
+
+  it("is refused for someone who is not an admin, before the form is read", async () => {
+    admin = null;
+    await expect(listAction(unread())).rejects.toThrow("Not signed in");
+    await expect(press("home", STATEMENTS, "remove", { item: "told" })).rejects.toThrow("Not signed in");
+    expect(await stored()).toBeUndefined();
+    expect(cache).toEqual({ tags: [], refreshed: 0 });
+  });
+
+  it("adds a question with its question and its answer as a draft: the id is made here, the page is marked, and no visitor sees it", async () => {
+    const before = await faq();
+    const state = await add("faq", STARTED, { q: "  Is there a\nyearly price? ", a: "Not yet. It is {monthlyUsd} a month.", id: "x-chosen-by-the-form" });
+    expect(state).toMatchObject({ status: "ok", message: `Added: question “Is there a yearly price?” is number 4 of 4. ${DRAFT}` });
+    const id = state.added!;
+    expect(id).toMatch(/^x-[0-9a-f]{12}$/);
+    expect(await draft()).toEqual({ ...newOverlay(), text: { [`${STARTED}.${id}.q`]: "Is there a yearly price?", [`${STARTED}.${id}.a`]: "Not yet. It is {monthlyUsd} a month." }, lists: { [STARTED]: { order: [], removed: [], added: [id] } } });
+    expect(cache).toEqual({ tags: [], refreshed: 1 });
+    expect(await faq()).toBe(before);
+    expect(await logged()).toEqual([]);
+    // A second one gets another id.
+    expect((await add("faq", STARTED, { q: "Another?", a: "Yes." })).added).not.toBe(id);
+
+    expect(row(await pagesScreen(), "faq")).toContain("2 drafts not published");
+    expect(row(await pagesScreen(), "faq")).toContain("Lists changed from the original");
+    expect(row(await pagesScreen(), "faq")).toContain("Original wording");
+    expect(row(await pagesScreen(), "home")).not.toContain("Lists changed");
+  });
+
+  it("refuses a new item with a required field empty, over its limit or naming an amount that does not exist, says which, and stores nothing", async () => {
+    const state = await add("faq", STARTED, { q: "   ", a: "It is {monthlyUsdd}." });
+    expect(state).toMatchObject({ status: "error", message: "Not added yet. 2 fields need filling in or fixing first. Nothing you typed is lost.", errors: { q: "This cannot be left empty.", a: expect.stringContaining("{monthlyUsdd} is not a name this text can use") } });
+    expect(await add("faq", STARTED, { q: "A question?" })).toMatchObject({ status: "error", errors: { a: "This cannot be left empty." } });
+    expect(await add("home", POINTS, { title: "x".repeat(201), body: "Text." })).toMatchObject({ status: "error", errors: { title: "This is 201 characters long, and the most that fits here is 200. Shorten it by 1." } });
+    expect(await stored()).toBeUndefined();
+    expect(cache.refreshed).toBe(0);
+  });
+
+  it("moves an item, removes one and puts it back, and says each in the owner's words", async () => {
+    const [first, second, third] = builtInQuestions().slice(0, 3).map((item) => item.q);
+    expect(await press("faq", STARTED, "up", { item: "each-week" })).toMatchObject({ status: "ok", message: `Question “${third}” is now number 2 of 3, above “${second}”. ${DRAFT}` });
+    expect(await press("faq", STARTED, "down", { item: "no-agents-yet" })).toMatchObject({ status: "ok", message: `Question “${first}” is now number 2 of 3, below “${third}”. ${DRAFT}` });
+    expect(await press("faq", STARTED, "up", { item: "each-week" })).toMatchObject({ status: "ok", message: `Question “${third}” is already the first one.` });
+    expect(await press("faq", STARTED, "remove", { item: "which-agents" })).toMatchObject({ status: "ok", message: `Question “${second}” is removed from the list. ${DRAFT} “Put back” under the list brings it back.` });
+    expect((await draft()).lists).toEqual({ [STARTED]: { order: ["each-week", "no-agents-yet"], removed: ["which-agents"], added: [] } });
+    expect(await press("faq", STARTED, "back", { item: "which-agents" })).toMatchObject({ status: "ok", message: `Question “${second}” is back in the list, as number 3 of 3. ${DRAFT}` });
+    expect(await press("faq", STARTED, "reset")).toMatchObject({ status: "ok", message: `This list is back to the original questions, in the original order. ${DRAFT}` });
+    expect(await press("faq", STARTED, "reset")).toMatchObject({ status: "ok", message: "This list is already the original one." });
+    expect((await draft()).lists).toEqual({});
+  });
+
+  it("refuses a list of another page, an unknown list, page, item or press, and an id that is no id, storing nothing", async () => {
+    for (const [page, list, op, item] of [
+      ["home", STARTED, "remove", "each-week"],
+      ["faq", STATEMENTS, "remove", "told"],
+      ["faq", "questions", "up", "getting-started"],
+      ["howItWorks", "howItWorks.zack.points", "remove", "reads"],
+      ["nope", STARTED, "up", "each-week"],
+      ["faq", "constructor", "up", "each-week"],
+      ["faq", STARTED, "up", "cost"],
+      ["faq", STARTED, "remove", "constructor"],
+      ["faq", STARTED, "back", "each-week"],
+      ["faq", STARTED, "up", "../x"],
+      ["faq", STARTED, "delete", "each-week"],
+      ["faq", STARTED, "", "each-week"],
+      ["faq", STARTED, "remove", ""],
+    ]) {
+      expect(await press(page, list, op, item ? { item } : {}), `${page} ${list} ${op} ${item}`).toMatchObject({ status: "error", message: STALE });
+    }
+    expect(await add("home", STARTED, { q: "A question?", a: "An answer." })).toMatchObject({ status: "error", message: STALE });
+    expect(await stored()).toBeUndefined();
+    expect(cache.refreshed).toBe(0);
+  });
+
+  it("keeps a list to what its page can draw, and says why: the hero needs two steps and holds five", async () => {
+    await press("home", STEPS, "remove", { item: "use" });
+    await press("home", STEPS, "remove", { item: "collect" });
+    expect(await press("home", STEPS, "remove", { item: "curate" })).toMatchObject({
+      status: "error",
+      message: "Not removed: this list needs at least 2 steps. It can hold 2 to 5 steps: the picture beside the headline shows one step at a time, with a button for each, and it has room for that many.",
+    });
+    const step = { label: "New", title: "A new step", body: "Its text." };
+    for (let i = 0; i < 3; i++) expect(await add("home", STEPS, step)).toMatchObject({ status: "ok" });
+    expect(await add("home", STEPS, step)).toMatchObject({ status: "error", message: expect.stringContaining("Not added: this list already has 5 steps, which is the most it can hold.") });
+    expect(await press("home", STEPS, "back", { item: "use" })).toMatchObject({ status: "error", message: expect.stringContaining("Not added: this list already has 5 steps") });
+    // The screen says the same before anything is pressed, and marks the buttons that have nothing to do.
+    const markup = await editorScreen("home");
+    const block = listBlock(markup, STEPS);
+    expect(words(block)).toContain("It can hold 2 to 5 steps: the picture beside the headline shows one step at a time, with a button for each, and it has room for that many.");
+    expect(words(block)).toContain("This list is full. Remove one to add another.");
+    expect(block).toMatch(/data-list-control="add" aria-disabled="true"/);
+    expect(block.match(/data-list-control="back" aria-disabled="true"/g)).toHaveLength(2);
+    expect(block).not.toMatch(/<button[^>]*data-list-control[^>]*\sdisabled/);
+  });
+
+  it("shows each list on its editing screen in the draft's order: items numbered by their place, an added one among them, a removed one under the list with Put back", async () => {
+    const plain = await editorScreen("faq");
+    const [first, second, third] = builtInQuestions().slice(0, 3).map((item) => item.q);
+    expect(legends(plain, STARTED)).toEqual([`Question 1 — “${first}”`, `Question 2 — “${second}”`, `Question 3 — “${third}”`]);
+    expect(plain.match(/data-list="/g)).toHaveLength(4);
+    expect(words(listBlock(plain, STARTED))).toContain("The questions of this group");
+    expect(words(listBlock(plain, STARTED))).toContain("It can hold up to 20 questions.");
+    expect(listBlock(plain, STARTED)).not.toContain("data-removed");
+    expect(listBlock(plain, STARTED)).not.toContain("data-list-reset");
+    // Each item: Move up, Move down and Remove, as buttons that keep the focus. The first cannot go up, the last cannot go down.
+    for (const control of ["up", "down", "remove"]) expect(listBlock(plain, STARTED).match(new RegExp(`data-list-control="${control}"`, "g"))).toHaveLength(3);
+    expect(listBlock(plain, STARTED).match(/data-list-control="up" aria-disabled="true"/g)).toHaveLength(1);
+    expect(listBlock(plain, STARTED).match(/data-list-control="down" aria-disabled="true"/g)).toHaveLength(1);
+    // A question's switch for the homepage, as the copy has it.
+    expect(box(plain, `${STARTED}.no-agents-yet.home`)).toMatch(/<input type="checkbox"[^>]*checked=""/);
+    expect(box(plain, `${BILLING}.refund.home`)).not.toMatch(/checked=""/);
+    expect(words(box(plain, `${BILLING}.refund.home`))).toContain("Show on the homepage Ticked, the homepage’s Questions section shows this question too");
+
+    const { added: id } = await add("faq", STARTED, { q: "Is there a yearly price?", a: "Not yet." });
+    await press("faq", STARTED, "up", { item: id! });
+    await press("faq", STARTED, "up", { item: id! });
+    await press("faq", STARTED, "remove", { item: "which-agents" });
+    await savePageAction(typed("faq", { [`${STARTED}.${id}.a`]: "Not yet. It is {monthlyUsd} a month." }));
+    const markup = await editorScreen("faq");
+    expect(legends(markup, STARTED)).toEqual([`Question 1 — “${first}”`, "Question 2 — “Is there a yearly price?”", `Question 3 — “${third}”`]);
+    const block = listBlock(markup, STARTED);
+    expect(words(block)).toContain("New: a draft, not published yet");
+    expect(words(block.split('data-removed-item="which-agents"')[1].split("</li>")[0])).toContain(`“${second}” (still on the site until you publish) Put back : ${second}`);
+    expect(block).toContain("data-list-reset");
+    expect(words(block)).toContain("2 changes to this list are saved as a draft and not on the site yet.");
+    // The added item's own boxes: its saved wording, no original to reset to, and marked as a draft.
+    expect(box(markup, `${STARTED}.${id}.a`)).toContain("Not yet. It is {monthlyUsd} a month.");
+    expect(box(markup, `${STARTED}.${id}.a`)).not.toContain("data-reset");
+    expect(box(markup, `${STARTED}.${id}.a`)).not.toContain("Changed from the original");
+    expect(words(box(markup, `${STARTED}.${id}.q`))).toContain("Draft, not published yet");
+    expect(words(markup)).toContain("2 changes are saved as a draft and not published yet");
+    // The removed question's boxes are not on screen.
+    expect(markup).not.toContain(`id="field-${STARTED}.which-agents.q"`);
+    // Home's lists are Home's.
+    const homeScreen = await editorScreen("home");
+    expect([...homeScreen.matchAll(/data-list="([^"]+)"/g)].map((m) => m[1])).toEqual([STEPS, STATEMENTS, POINTS]);
+    expect(words(listBlock(homeScreen, STATEMENTS))).toContain("It can hold up to 6 statements: the page sets them three in a row, in up to two rows.");
+  });
+
+  it("cannot reset or empty a text of an item that was added here, and saves a switch like a text", async () => {
+    const { added: id } = await add("faq", STARTED, { q: "Is there a yearly price?", a: "Not yet." });
+    expect(await savePageAction(form({ page: "faq", reset: `${STARTED}.${id}.a` }))).toMatchObject({ status: "error", message: STALE });
+    expect(await savePageAction(typed("faq", { [`${STARTED}.${id}.a`]: "  " }))).toMatchObject({ status: "error", errors: { [`${STARTED}.${id}.a`]: "This cannot be left empty." } });
+    expect(await savePageAction(typed("faq", { [`${STARTED}.${id}.home`]: "yes", [`${BILLING}.refund.home`]: "yes" }))).toMatchObject({ status: "ok", saved: { [`${STARTED}.${id}.home`]: "yes", [`${BILLING}.refund.home`]: "yes" } });
+    // Ticked, a built-in question's box differs from the original; a new question's has no original to differ from.
+    const screen = await editorScreen("faq");
+    expect(box(screen, `${BILLING}.refund.home`)).toContain("Changed from the original");
+    expect(box(screen, `${STARTED}.${id}.home`)).toContain('checked=""');
+    expect(box(screen, `${STARTED}.${id}.home`)).not.toContain("Changed from the original");
+    expect(box(screen, `${STARTED}.${id}.home`)).not.toContain("data-reset");
+    expect(await savePageAction(typed("faq", { [`${BILLING}.refund.home`]: "perhaps" }))).toMatchObject({ status: "error", errors: { [`${BILLING}.refund.home`]: expect.stringContaining("switched on or off") } });
+    // A text typed into an item another tab has removed is not stored, and says so.
+    await press("faq", STARTED, "remove", { item: id! });
+    expect(await savePageAction(typed("faq", { [`${STARTED}.${id}.a`]: "Late typing." }))).toMatchObject({ status: "error", message: STALE });
+    expect((await draft()).text).toEqual({ [`${BILLING}.refund.home`]: "yes" });
+    // A switch goes back to the original with its reset.
+    expect(await savePageAction(form({ page: "faq", reset: `${BILLING}.refund.home` }))).toMatchObject({ status: "ok" });
+    expect(await draft()).toEqual(newOverlay());
+  });
+
+  it("covers AE8 (questions): the review tells each list change in a plain sentence, a publish puts them on /faq and the homepage, undo takes them back, and the drafts stay", async () => {
+    const [, second, third] = builtInQuestions().slice(0, 3).map((item) => item.q);
+    const { added: id } = await add("faq", STARTED, { q: "Is there a yearly price?", a: "Our agent says not yet. It is {monthlyUsd} a month.", home: "yes" });
+    await press("faq", STARTED, "up", { item: id! });
+    await press("faq", STARTED, "remove", { item: "which-agents" });
+    await press("home", STEPS, "up", { item: "collect" });
+    await savePageAction(typed("faq", { [`${BILLING}.cost.home`]: "no" }));
+    const beforeFaq = await faq();
+    const beforeHome = await home();
+
+    const review = await reviewScreen();
+    const read = words(review);
+    // The one change outside the lists is a question's tick box, which is counted as what it is, not as a text.
+    expect(read).toContain("What will change: 1 tick box and 3 changes to lists");
+    expect(read).toContain("Home, Hero: step “Collect” moves up, above “Use”.");
+    expect(read).toContain(`FAQ, Getting started: question 2 “${second}” is removed.`);
+    expect(read).toContain("FAQ, Getting started: a new question “Is there a yearly price?” is added, as number 2 of 3.");
+    // The new item's texts, as a visitor will read them, and its switch.
+    expect(read).toContain("Question Is there a yearly price? Answer Our agent says not yet. It is US$200 a month. Show on the homepage On");
+    expect([...review.matchAll(/data-list-change="(\w+)"/g)].map((m) => m[1])).toEqual(["moved", "removed", "added"]);
+    expect(review).toContain(`href="/admin/pages/faq#list-${STARTED}"`);
+    expect(review).toContain(`href="/admin/pages/home#list-${STEPS}"`);
+    // The switch of a built-in question is a change of its own, told as on and off.
+    expect(read).toContain("Price and billing: Question 1 — “What does it cost?” · Show on the homepage Edit : Question 1 — “What does it cost?” · Show on the homepage On the site now On After publishing Off");
+    // The added answer is read by the wording rules, and named by its place in the draft.
+    expect(review).toContain('data-warning="vocabulary"');
+    expect(read).toContain("FAQ, Getting started: Question 2 — “Is there a yearly price?” · Answer The rule: It says “agent” without “AI” in front.");
+    expect(read).toContain("Publish anyway");
+    expect(read).toContain("Publishing is for the whole site, not one page. It puts all 4 changes above on the site at once (Home, FAQ)");
+    expect(words(await pagesScreen())).toContain("4 changes are saved as a draft");
+    // The Pages screen counts the built-in question's tick box as a tick box; the new question has no original to differ from.
+    expect(row(await pagesScreen(), "faq")).toContain("1 tick box changed from the original");
+    expect(row(await pagesScreen(), "faq")).toContain("Original wording");
+
+    expect(await publishNow()).toMatchObject({ status: "ok", message: "Published. Visitors see the changes from their next page view." });
+    expect(cache.tags).toEqual([CONTENT_TAG]);
+    const afterFaq = await faq();
+    expect(afterFaq).toContain("Is there a yearly price? Our agent says not yet. It is US$200 a month.");
+    expect(afterFaq).not.toContain(second);
+    expect(afterFaq.indexOf("Is there a yearly price?")).toBeLessThan(afterFaq.indexOf(third));
+    const afterHome = await home();
+    expect(afterHome).toContain("Is there a yearly price?");
+    expect(afterHome).not.toContain("What does it cost?");
+    expect(afterHome.indexOf("Zack reviews your week")).toBeLessThan(afterHome.indexOf("Set up your AI agents. If you"));
+    // One publish row, and one override row that names the added answer by its place.
+    expect((await logged()).map((entry) => [entry.action, entry.detail.where ?? null])).toEqual([
+      ["site_content_published", null],
+      ["site_content_wording_override", "FAQ, Getting started: Question 2: Answer"],
+    ]);
+    expect(words(await reviewScreen())).toContain("Nothing is waiting to be published.");
+    expect(row(await pagesScreen(), "faq")).toContain("No drafts waiting");
+    expect(row(await pagesScreen(), "faq")).toContain("Lists changed from the original");
+
+    expect(await undoPublishAction()).toMatchObject({ status: "ok" });
+    expect(await faq()).toBe(beforeFaq);
+    expect(await home()).toBe(beforeHome);
+    expect(words(await pagesScreen())).toContain("4 changes are saved as a draft");
+    // Put back and reset in the draft, published again: the pages are the original ones.
+    await press("faq", STARTED, "back", { item: "which-agents" });
+    expect(await press("faq", STARTED, "reset")).toMatchObject({ status: "ok" });
+    await press("home", STEPS, "reset");
+    await savePageAction(form({ page: "faq", reset: `${BILLING}.cost.home` }));
+    expect(await draft()).toEqual(newOverlay());
+    expect(words(await reviewScreen())).toContain("Nothing is waiting to be published.");
+  });
+
+  it("is not published when a list has changed since the draft was checked", async () => {
+    await press("home", STATEMENTS, "remove", { item: "told" });
+    const key = await keyNow();
+    await press("home", STATEMENTS, "up", { item: "alone" });
+    expect(await publishAction(form({ review: key }))).toMatchObject({ status: "error" });
+    expect((await readStored(current)).published.lists).toEqual({});
+    expect(cache.tags).toEqual([]);
+  });
+
+  it("has nothing to publish when the draft differs from the site only by wording kept for a removed item", async () => {
+    await press("home", STATEMENTS, "remove", { item: "told" });
+    await publishNow();
+    cache.tags = [];
+    await savePageAction(typed("home", { [`${STATEMENTS}.told.text`]: "Typed while it is removed." }));
+    expect(words(await reviewScreen())).toContain("Nothing is waiting to be published.");
+    expect(row(await pagesScreen(), "home")).toContain("No drafts waiting");
+    expect(await publishNow()).toMatchObject({ status: "ok", message: "Nothing was waiting to be published. Everything you have saved is on the site." });
+    // Put back, the item returns with that wording, as a change to review.
+    await press("home", STATEMENTS, "back", { item: "told" });
+    expect(words(await reviewScreen())).toContain("Home, The problem: statement “Typed while it is removed.” is put back, as number 1 of 3.");
   });
 });

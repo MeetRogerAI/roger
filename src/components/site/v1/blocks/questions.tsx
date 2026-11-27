@@ -53,8 +53,9 @@ export function Questions({
           <div className="space-y-1">
             {items.map((item, i) => (
               <details
-                // By place as well as wording: two questions an admin has given the same words (in Pages) are still two rows.
-                key={`${i}:${item.q}`}
+                // By the question's id, so a row is the same row wherever an admin moves it (Pages). One without an id, by
+                // its place as well as its wording: two with the same words are still two rows.
+                key={item.id ?? `${i}:${item.q}`}
                 name={shared}
                 className={`group rounded-[8px] px-5 transition-colors duration-[180ms] sm:px-6 ${night ? "bg-night-2" : "bg-ground-2 open:bg-surface"}`}
               >

@@ -571,6 +571,18 @@ docs/site/content-release.md
   - The questions accordion still shares one name across all groups on `/faq`.
 - **Verification:** In a browser, reorder the questions, remove a hero step and add a problem statement in drafts, publish, and see all three on the pages.
 
+### Notes for U8 to U10 from the U7 build and review (November 27, 2026)
+
+- Look up any field id from storage or a form with `resolveField(id)`, never `registry.fields.get`: added items' fields exist only through the resolver.
+- "Nothing waiting" is `shownOverlay(baseline, draft)` equal to `published`. The draft keeps the wording of removed items, so never compare `draft` with `published` directly.
+- `draftChanges` marks added and put-back items `fresh`; pass all of them to `wordingWarnings`; count with `draftCount`. `PageStatus` has `ticks` for tick boxes. List sentences come from `listChanges`.
+- A new list needs `min`/`max` in its spec, a title in `listWords`, and item fields that are each one key of the item (nested fields need flattening or a `notEditable` entry). `ListBlock` and `saveList` are generic.
+- Lowering a field's limit leaves longer stored text live (lenient read) but fails the strict read of `released.json` at the next snapshot.
+- U9: a link to a removed item's anchor must warn. Labels take the draft's order through `placesIn`.
+- U10: "Differs from the release" should count `pageStatus().relisted`, say that an item a release removed cannot be brought back by a site, and report a site's added items that a release pushed out of a full list (they are dropped without a message and the next save deletes them).
+- For Peter, not yet decided: the homepage shows every question ticked "Show on the homepage", with no limit.
+- Browser checks: build fresh per run (`next start` on an old build serves the last run's regenerated pages); wait for the list to redraw, not for the message.
+
 ### U8. Nav and footer links, and the examples
 
 - **Goal:** An admin manages the header's and footer's links with their destinations, and the Cora Curation examples.

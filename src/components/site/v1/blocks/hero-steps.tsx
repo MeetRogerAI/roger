@@ -38,11 +38,28 @@ export function nextStep(current: number, count: number): number {
 
 /** `id` is the step's name in the copy, which never changes; a step is never known by its place in the list. */
 export type HeroStep = { id: string; label: string; title: string; body: string };
-export type HeroStepsCopy = { name: string; steps: HeroStep[]; pause: string; play: string };
+export type HeroStepsCopy = { name: string; /** The name for a list that does not have NAMED_STEPS steps. */ nameAny?: string; steps: HeroStep[]; pause: string; play: string };
+
+/** How many steps the picture's name counts ("in four parts"). */
+const NAMED_STEPS = 4;
+
+/**
+ * The picture lays out by how many steps there are (an admin may add or remove one in Pages, between two and
+ * five: src/lib/site/content/registry.ts). The row of buttons has one column for each. Every step's number and
+ * stack share a box as tall as the LAST step's stack, which is one row of three squares for each step: 20 pixels
+ * a square and 6 between rows (BrickStack, size "m"). The classes are written out so that Tailwind finds them.
+ */
+const tabColumns: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4", 5: "grid-cols-5" };
+const stackHeight: Record<number, string> = { 3: "h-[72px]", 4: "h-[98px]", 5: "h-[124px]" };
+/** With fewer than three steps: no shorter than the step's number beside the stack. */
+const LEAST_HEIGHT = "h-[72px]";
+const MOST_HEIGHT = "h-[124px]";
 
 export function HeroSteps({ copy, words, className = "" }: { copy: HeroStepsCopy; /** The words of each idea's label in a stack. */ words: BrickWords; className?: string }) {
   const count = copy.steps.length;
-  const [current, setCurrent] = useState(0);
+  const [chosen, setCurrent] = useState(0);
+  // A step that is no longer there (the list got shorter under a page that stayed open) is the first one.
+  const current = chosen < count ? chosen : 0;
   const { playing, paused, toggle, stageRef, holdProps } = useLoopPlay();
 
   useEffect(() => {
@@ -56,7 +73,7 @@ export function HeroSteps({ copy, words, className = "" }: { copy: HeroStepsCopy
   return (
     <div data-hero-steps data-current={current} data-playing={playing ? "yes" : "no"} className={`hero-steps w-full lg:w-[27rem] xl:w-[30rem] ${className}`} {...holdProps}>
       {/* The labels as buttons. Shown only as part of the loop: with no script they could do nothing. */}
-      <div data-step-tabs role="group" aria-label={copy.name} className="mb-3 hidden grid-cols-4 gap-1 rounded-full border border-night-rule bg-night-2 p-1">
+      <div data-step-tabs role="group" aria-label={count === NAMED_STEPS || !copy.nameAny ? copy.name : copy.nameAny} className={`mb-3 hidden ${tabColumns[count] ?? "grid-cols-5"} gap-1 rounded-full border border-night-rule bg-night-2 p-1`}>
         {copy.steps.map((step, i) => (
           <button
             key={step.id}
@@ -78,7 +95,7 @@ export function HeroSteps({ copy, words, className = "" }: { copy: HeroStepsCopy
                 {step.label}
               </span>
               {/* As tall as the last step's stack, so the numbers share a line and the stacks grow up from it. */}
-              <div className="flex h-[98px] items-end justify-between gap-6">
+              <div className={`flex ${count < 3 ? LEAST_HEIGHT : (stackHeight[count] ?? MOST_HEIGHT)} items-end justify-between gap-6`}>
                 {/* Decoration: the list is ordered, so a screen reader already counts the steps. */}
                 <span aria-hidden="true" data-claims="numeral" data-step-number className="tabular text-[4.5rem] font-[650] leading-[0.8] tracking-[-0.04em] text-night-ink-2/60">
                   {i + 1}

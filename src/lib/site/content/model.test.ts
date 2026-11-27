@@ -1,8 +1,9 @@
 /**
  * The layers of site content (plan U3, KTD1, KTD4, KTD6): putting an overlay
  * on a model, reading an overlay back from two models, what counts as an edit,
- * and the one rule lists and sections are ordered by. Text, and since U6 each
- * page’s sections: which are on, and in which order.
+ * and the one rule lists and sections are ordered by. Text, since U6 each
+ * page’s sections (which are on, and in which order), and since U7 each
+ * list’s items. The lists have their own file too: ./lists.test.ts.
  */
 import { describe, expect, it } from "vitest";
 import { v3Defaults } from "@/data/config";
@@ -21,16 +22,18 @@ import {
   diffSectionEdit,
   diffToOverlay,
   layoutOn,
+  listItems,
   mergeOrder,
   normaliseOverlay,
   questionGroupsShown,
   releasedOverlay,
   sectionLayout,
   sectionsShown,
+  shownOverlay,
   textAt,
   v1Copy,
 } from "./model";
-import { buildRegistry, siteRegistry, siteSpec } from "./registry";
+import { buildRegistry, resolveField, siteRegistry, siteSpec } from "./registry";
 
 const amounts = amountsFrom(v3Defaults);
 const edits = (text: Record<string, string>): Overlay => ({ ...emptyOverlay, text });
@@ -184,12 +187,16 @@ describe("applyOverlay", () => {
     expect(hostile.link).toEqual({ label: "About", href: "/faq" });
   });
 
-  it("does not yet apply lists: an overlay that holds one changes the text and the sections only", () => {
+  it("applies text, sections and lists together: an overlay that holds all three changes all three (plan U7)", () => {
     const stored: Overlay = { ...edits({ [HEADLINE]: "Applied." }), sections: { home: { order: [], off: ["compounds"] } }, lists: { "home.problem.statements": { order: ["alone", "told"], removed: ["unposted"], added: [] } } };
     const out = applyOverlay(codeModel, stored);
     expect(out.home.hero.headline).toBe("Applied.");
-    expect(out.home.problem).toBe(codeModel.home.problem);
+    expect(out.home.problem.statements).toEqual([codeModel.home.problem.statements[2], codeModel.home.problem.statements[0]]);
+    // What the entry did not touch is the model's own.
+    expect(out.home.problem.statements[0]).toBe(codeModel.home.problem.statements[2]);
+    expect(out.control).toBe(codeModel.control);
     expect(sectionLayout(out, "home").off).toEqual(["compounds"]);
+    expect(codeModel.home.problem.statements).toHaveLength(3);
   });
 });
 
@@ -385,9 +392,9 @@ describe("diffToOverlay", () => {
     expect(diffToOverlay(codeModel, other)).toEqual(emptyOverlay);
   });
 
-  it("skips an item one of the two models does not have", () => {
+  it("writes an item the model does not have as removed from its list, and none of its wording", () => {
     const without = withCode((copy) => void copy.home.problem.statements.pop());
-    expect(diffToOverlay(codeModel, without)).toEqual(emptyOverlay);
+    expect(diffToOverlay(codeModel, without)).toEqual({ ...emptyOverlay, lists: { "home.problem.statements": { order: [], removed: ["alone"], added: [] } } });
     // An item only the model has is all new wording.
     expect(diffToOverlay(without, codeModel).text).toEqual({ [ALONE]: v1.home.problem.statements[2].text });
   });
@@ -424,7 +431,7 @@ describe("normaliseOverlay (KTD6)", () => {
     expect(Object.isFrozen(normaliseOverlay(codeModel, emptyOverlay).text)).toBe(false);
   });
 
-  it("carries list entries as read, until the unit that applies them compares them too", () => {
+  it("keeps a list entry that changes its list, beside the page's sections", () => {
     const stored: Overlay = { ...edits({ [HEADLINE]: v1.home.hero.headline }), sections: { home: { order: [], off: ["price"] } }, lists: { "control.points": { order: [], removed: ["off"], added: [] } } };
     expect(normaliseOverlay(codeModel, stored)).toEqual({ ...stored, text: {} });
   });
@@ -563,11 +570,14 @@ describe("the laws of the layers, on generated overlays", () => {
   const generated = (next: () => number, base: unknown): Overlay => {
     const pick = <T,>(from: readonly T[]): T => from[Math.floor(next() * from.length)];
     const text: Record<string, unknown> = {};
+    // Every generated text fits its field: a text over its field's limit is kept by the lenient reading (a limit lowered in
+    // code drops no edit) and refused by the strict one, which is the release file's loud failure, not a law of normalising.
+    const fit = (id: string, value: unknown) => (typeof value === "string" ? value.slice(0, resolveField(id)?.max ?? value.length) : value);
     const count = Math.floor(next() * 14);
     for (let i = 0; i < count; i++) {
       const id = next() < 0.1 ? pick(["home.hero.kicker", "meta.title", "constructor", "home", "home.problem.statements.0.text", "questions.price-and-billing.items.x-added.a"]) : pick(fieldIds);
       const same = textAt(base, id) ?? "x";
-      text[id] = pick<unknown>([`Edit ${i}`, `Edit ${i} at {monthlyUsd}`, same, same, `${same} `, same.toLowerCase(), "", "   ", HIDDEN, "{nope}", "Week {week}", "Two\nlines", "<b>bold</b>", 7, null, ["x"]]);
+      text[id] = fit(id, pick<unknown>([`Edit ${i}`, `Edit ${i} at {monthlyUsd}`, same, same, `${same} `, same.toLowerCase(), "", "   ", HIDDEN, "{nope}", "Week {week}", "Two\nlines", "<b>bold</b>", 7, null, ["x"]]));
     }
     // And the sections of some pages: an order that names some of them, some twice, a fixed one, one the page does not have; some switched off.
     const sections: Record<string, unknown> = {};
@@ -577,7 +587,22 @@ describe("the laws of the layers, on generated overlays", () => {
       const some = () => pool.filter(() => next() < 0.5).map((id) => [next(), id] as const).sort((a, b) => a[0] - b[0]).map(([, id]) => id);
       sections[page.id] = next() < 0.1 ? pick<unknown>(["x", null, { order: "x" }, { order: [], off: [] }]) : { order: next() < 0.4 ? [] : [...some(), ...some().slice(0, 2)], off: next() < 0.4 ? [] : some() };
     }
-    return { ...emptyOverlay, text, sections } as Overlay;
+    // And some lists (plan U7): items removed, added (the ids shared between layers, so one layer meets another's),
+    // and ordered, among them ids the list does not have. An added item mostly has its texts, and sometimes lacks one.
+    const lists: Record<string, unknown> = {};
+    for (const list of siteRegistry.lists.values()) {
+      if (next() < 0.75) continue;
+      const mine = ["x-a1", "x-b2", "x-c3"];
+      const pool = [...list.items, ...mine, "gone", "constructor"];
+      const some = (from: readonly string[], share = 0.4) => from.filter(() => next() < share).map((id) => [next(), id] as const).sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+      const added = some([...mine, "not-added", ...list.items.slice(0, 1)], 0.5);
+      for (const id of mine) {
+        if (!added.includes(id) && next() < 0.7) continue;
+        for (const field of list.fields) if (next() < 0.9) text[`${list.id}.${id}.${field.name}`] = fit(`${list.id}.${id}.${field.name}`, field.kind === "toggle" ? pick(["yes", "no", "maybe"]) : pick([`Added ${id}`, `Added ${id} for {monthlyUsd}`, "", "{nope}"]));
+      }
+      lists[list.id] = next() < 0.1 ? pick<unknown>(["x", null, { order: "x" }, { order: [], removed: [], added: [] }]) : { order: next() < 0.5 ? [] : [...some(pool), ...some(pool).slice(0, 2)], removed: next() < 0.5 ? [] : some(pool, 0.3), added };
+    }
+    return { ...emptyOverlay, text, sections, lists } as Overlay;
   };
   /** A model with its pages' sections beside it: two are the same only when both the words and the sections are. */
   const whole = (model: unknown) => ({ model, sections: Object.fromEntries(siteRegistry.pages.map((page) => [page.id, sectionLayout(model, page.id)])) });
@@ -592,7 +617,9 @@ describe("the laws of the layers, on generated overlays", () => {
       const stored = generated(next, codeModel);
       const x = applyOverlay(codeModel, stored);
       expect(whole(applyOverlay(codeModel, diffToOverlay(codeModel, x))), `run ${run}`).toEqual(whole(x));
-      expect(diffToOverlay(codeModel, x), `run ${run}`).toEqual(normaliseOverlay(codeModel, stored));
+      // normaliseOverlay keeps one thing more: the wording of an item the overlay itself removes (shownOverlay is it without).
+      expect(diffToOverlay(codeModel, x), `run ${run}`).toEqual(shownOverlay(codeModel, stored));
+      expect(shownOverlay(codeModel, normaliseOverlay(codeModel, stored)), `run ${run}`).toEqual(shownOverlay(codeModel, stored));
     });
     expect(JSON.stringify(codeModel)).toBe(before);
   });
@@ -605,8 +632,9 @@ describe("the laws of the layers, on generated overlays", () => {
       const once = normaliseOverlay(codeModel, stored);
       expect(normaliseOverlay(codeModel, once), `run ${run}`).toEqual(once);
       expect(whole(applyOverlay(codeModel, once)), `run ${run}`).toEqual(whole(applyOverlay(codeModel, stored)));
-      // No section entry is left that changes nothing: an empty one is never written.
+      // No section entry is left that changes nothing: an empty one is never written. Nor a list entry.
       for (const [page, entry] of Object.entries(once.sections)) expect(entry.order.length + entry.off.length, `run ${run} ${page}`).toBeGreaterThan(0);
+      for (const [list, entry] of Object.entries(once.lists)) expect(entry.order.length + entry.removed.length + entry.added.length, `run ${run} ${list}`).toBeGreaterThan(0);
       // No entry is left that says what the base says, and every entry left is one the strict reading accepts.
       for (const [id, text] of Object.entries(once.text)) expect(text, `run ${run} ${id}`).not.toBe(textAt(codeModel, id));
       expect(parseOverlayStrict(once), `run ${run}`).toEqual({ ok: true, overlay: once });
@@ -636,9 +664,17 @@ describe("the laws of the layers, on generated overlays", () => {
         expect(sectionsShown(page.id, one), `run ${run} ${page.id}`).toEqual(layout.order.filter((id) => !layout.off.includes(id)));
       }
       // The site's edit wins where both layers have the field; the release's shows where the site has none.
-      const site = normaliseOverlay(base, published).text;
-      const release = normaliseOverlay(codeModel, released).text;
-      expect(fieldIds.filter((id) => textAt(shown, id) !== (site[id] ?? release[id] ?? textAt(codeModel, id))), `run ${run}`).toEqual([]);
+      // (Of the fields the page still has: a field of an item a layer removed from its list is on no page.)
+      const site = shownOverlay(base, published).text;
+      const release = shownOverlay(codeModel, released).text;
+      expect(fieldIds.filter((id) => textAt(shown, id) !== undefined && textAt(shown, id) !== (site[id] ?? release[id] ?? textAt(codeModel, id))), `run ${run}`).toEqual([]);
+      // Every list shows each of its items once, and no more or fewer than its page can draw.
+      for (const list of siteRegistry.lists.values()) {
+        const items = listItems(shown, list.id);
+        expect(new Set(items).size, `run ${run} ${list.id}`).toBe(items.length);
+        expect(items.length, `run ${run} ${list.id}`).toBeGreaterThanOrEqual(list.min);
+        expect(items.length, `run ${run} ${list.id}`).toBeLessThanOrEqual(list.max);
+      }
       // And it can be filled and printed: nothing a layer holds can make a page throw. (Filling is the slow part, so one run in twenty.)
       if (run % 20 === 0) expect(() => v1Copy(amounts, one), `run ${run}`).not.toThrow();
     });
