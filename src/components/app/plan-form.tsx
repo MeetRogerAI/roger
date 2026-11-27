@@ -11,11 +11,12 @@ const idle: PlanState = { status: "idle" };
  * Product explains the weekly process and carries the Zack consent, which
  * starts unticked; Pricing states both prices. No plan picker and no
  * higher-rate line. Draft wording, for Peter's sign-off (launch list S18).
+ * A sponsored member (B2 Unit 10) sees who pays instead of prices and card copy.
  *
  * The only error is an unticked box, so React's reset after the action leaves
  * the form exactly as it was submitted.
  */
-export function PlanForm({ usd, cad, zackLink }: { usd: string; cad: string; zackLink: string }) {
+export function PlanForm({ usd, cad, zackLink, sponsor = null }: { usd: string; cad: string; zackLink: string; sponsor?: string | null }) {
   const [state, action, pending] = useActionState(savePlan, idle);
   const e = state.errors ?? {};
   const id = useId();
@@ -60,10 +61,14 @@ export function PlanForm({ usd, cad, zackLink }: { usd: string; cad: string; zac
         <h2 id={`${id}-pricing`} className="text-title">
           Pricing
         </h2>
-        <p className="mt-3 text-ink-2">
-          Roger is {usd} a month or {cad} a month, plus tax. We’ll ask for your card before Cora’s first full list is shown. Your free
-          trial includes your first two Cora lists, two Mondays.
-        </p>
+        {sponsor ? (
+          <p className="mt-3 text-ink-2">{sponsor} pays for your Roger membership, so you won’t be asked for a card.</p>
+        ) : (
+          <p className="mt-3 text-ink-2">
+            Roger is {usd} a month or {cad} a month, plus tax. We’ll ask for your card before Cora’s first full list is shown. Your free
+            trial includes your first two Cora lists, two Mondays.
+          </p>
+        )}
       </section>
 
       <button type="submit" className="btn btn-l" disabled={pending}>

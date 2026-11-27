@@ -9,6 +9,7 @@ import { unlinkGoogle } from "@/lib/auth/google";
 import { emailKey } from "@/lib/auth/tokens";
 import { query } from "@/lib/db-query";
 import { field } from "@/lib/form";
+import { renameOnBoard } from "@/lib/growth/leaderboard";
 import { hit } from "@/lib/rate-limit";
 
 /** The signed-in user. Every action here changes only this user's own row. */
@@ -29,9 +30,27 @@ export async function saveProfileAction(_prev: ProfileState, fd: FormData): Prom
   const v = validateProfile(typed);
   if (!v.ok) return { status: "error", errors: v.errors, values: typed, message: "Check the fields marked above." };
   if (!(await hit(`settings:profile:${u.id}`, { limit: 40, windowSeconds: 24 * 60 * 60 }))) return { status: "error", values: typed, message: "Too many changes today. Try again tomorrow." };
-  await saveProfile(query, u.id, { ...v.value, prefs });
+  // On the leaderboard, the display name is the board name: a change goes through the board's rules (B2 Unit 7).
+  const [lb] = await query<{ on_board: boolean; display_name: string }>(`select (leaderboard_opt_in_at is not null and leaderboard_name_key is not null) as on_board, display_name from users where id = $1`, [u.id]);
+  let displayName = v.value.displayName;
+  if (lb?.on_board && displayName !== lb.display_name) {
+    const fail = (message: string): ProfileState => ({ status: "error", errors: { displayName: message }, values: typed, message: "Check the fields marked above." });
+    if (!displayName) return fail("You’re on the leaderboard under this name. Leave the board first to clear it.");
+    const r = await renameOnBoard(query, u.id, displayName, { join: false, now: new Date() });
+    if (r.ok) displayName = r.name;
+    else if (r.reason !== "not_on_board") return fail(r.message);
+  }
+  // The stats email can be switched off from an email link while this form sits open (B2 Unit 8): its
+  // choice is written only when the member changed it here, never re-enabled by a stale form.
+  const change: Partial<Record<EmailPrefKey, boolean>> = { ...prefs };
+  const statsWas = fd.get("stats_was");
+  if (typeof statsWas === "string" && (statsWas === "on") === prefs.stats) delete change.stats;
+  await saveProfile(query, u.id, { ...v.value, displayName, prefs: change });
+  const [after] = await query<{ email_prefs: Record<string, unknown> | null }>(`select email_prefs from users where id = $1`, [u.id]);
+  const stored = after?.email_prefs ?? {};
+  const saved: ProfileValues = { ...v.value, displayName, prefs: { ...prefs, stats: stored.stats !== false } };
   refresh();
-  return { status: "saved", message: "Saved.", values: { ...v.value, prefs }, at: Date.now() };
+  return { status: "saved", message: "Saved.", values: saved, at: Date.now() };
 }
 
 /** "Unlink Google": Google stops signing this account in; other Google sessions end, this one stays. */

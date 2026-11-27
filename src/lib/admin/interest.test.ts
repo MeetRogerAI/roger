@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { FUNNEL_WEEKS, loadInterest } from "./interest";
 
 let query: Query;
@@ -9,6 +9,7 @@ const NOW = new Date("2026-12-10T15:00:00Z");
 const zero = (week: string) => ({ week, signedUp: 0, zackConnected: 0, firstTeaser: 0, cardSaved: 0, firstCharge: 0 });
 
 async function user(email: string, cols: Record<string, unknown> = {}): Promise<string> {
+  if (typeof cols.sponsor_id === "string") await testSponsor(query, cols.sponsor_id);
   const c = { status: "trial", plan: "monthly", ...cols };
   const keys = Object.keys(c);
   const [{ id }] = await query<{ id: string }>(

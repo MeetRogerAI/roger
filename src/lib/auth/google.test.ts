@@ -1,6 +1,7 @@
 import { generateKeyPairSync, sign, type JsonWebKey, type KeyObject } from "node:crypto";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createSponsor, sponsorHashFor } from "@/lib/sponsors/sponsors";
 import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { testDb } from "@/test-helpers/pglite-db";
@@ -228,6 +229,38 @@ describe("the callback", () => {
     expect(out).toMatchObject({ kind: "signed_in", next: "/start/plan", created: true });
     const [u] = await query<Record<string, unknown>>("select email, name, path, agent, currency, signup_step, google_sub, google_email, email_verified_at is not null as verified from users");
     expect(u).toEqual({ email: "ana@gmail.com", name: "Ana Google", path: "running", agent: "hark", currency: "CAD", signup_step: "plan", google_sub: "g-111", google_email: "ana@gmail.com", verified: true });
+  });
+
+  it("applies the referral carried from the sign-up on a new account only (B2 Unit 3)", async () => {
+    const [ref] = await query<{ id: string }>("insert into users (email, status) values ('rae@example.com', 'trial') returning id");
+    const out = await (await roundTrip({ newAccount: { ...signupDetails, referrer: { id: ref.id, via: "link" } } })).run();
+    expect(out).toMatchObject({ kind: "signed_in", created: true });
+    const [u] = await query<{ id: string; referred_by: string | null }>("select id, referred_by from users where email = 'ana@gmail.com'");
+    expect(u.referred_by).toBe(ref.id);
+    expect(await query("select referrer_id, referred_user_id, stage, source from referrals")).toEqual([{ referrer_id: ref.id, referred_user_id: u.id, stage: "trial", source: "link" }]);
+
+    // Signing in again with another referrer on the sign-up: the account exists, so nothing changes.
+    const [other] = await query<{ id: string }>("insert into users (email, status) values ('sol@example.com', 'trial') returning id");
+    const again = await (await roundTrip({ newAccount: { ...signupDetails, referrer: { id: other.id, via: "link" } } })).run();
+    expect(again).toMatchObject({ kind: "signed_in", created: false });
+    expect((await query<{ referred_by: string }>("select referred_by from users where email = 'ana@gmail.com'"))[0].referred_by).toBe(ref.id);
+    expect(await query("select 1 from referrals")).toHaveLength(1);
+  });
+
+  it("a sponsor code carried from the sign-up gives the new account a seat; a refused one leaves a trial and the message (B2 Unit 10)", async () => {
+    for (const k of ["sponsorsOn", "signupOpen", "cycleLive"]) await query("insert into settings (key, value) values ($1, 'true'::jsonb)", [`v3.${k}`]);
+    const s = await createSponsor(query, null, "peter@meetroger.ai", {
+      name: "Harbour Realty", currency: "CAD", standardCents: 20000, higherCents: 40000, seats: 1, billingEmail: "ap@harbour.example", billingCountry: "CA", billingPostal: "M5V 2T6",
+    });
+    if (!s.ok) throw new Error(s.message);
+    const out = await (await roundTrip({ newAccount: { ...signupDetails, sponsorHash: sponsorHashFor(s.code) } })).run();
+    expect(out).toMatchObject({ kind: "signed_in", created: true, next: "/start/plan" });
+    expect(await query("select sponsor_id, sponsor_seat from users where email = 'ana@gmail.com'")).toEqual([{ sponsor_id: s.id, sponsor_seat: 1 }]);
+
+    // The only seat is taken: the next sign-up with the code is an ordinary trial, told on Step 3.
+    const full = await (await roundTrip({ extra: { sub: "g-222", email: "bo@gmail.com" }, newAccount: { ...signupDetails, sponsorHash: sponsorHashFor(s.code) } })).run();
+    expect(full).toMatchObject({ kind: "signed_in", created: true, next: "/start/plan?sponsor=invalid" });
+    expect(await query("select sponsor_id from users where email = 'bo@gmail.com'")).toEqual([{ sponsor_id: null }]);
   });
 
   it("never links or signs in an admin address with Google, and a Google session is never admin", async () => {

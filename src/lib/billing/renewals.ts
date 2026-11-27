@@ -3,6 +3,7 @@ import { deliverLate } from "@/lib/cora/send-job";
 import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { planChangedEmail } from "@/lib/mail/templates/plan-changed";
+import { endSeatOnClose } from "@/lib/sponsors/sponsors";
 import { renewalFailedEmail, renewalHeldEmail, renewalPaidEmail } from "@/lib/mail/templates/renewal";
 import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnCancelScheduled, adjustmentOnSubscriptionEnded, adjustmentOnSwitchScheduled, adjustmentOnSwitchToPerRun, ANCHOR, ISO } from "./adjustment";
@@ -197,6 +198,7 @@ export async function subscriptionEnded(q: Query, d: RenewalDeps, o: { subscript
     [o.subscription, o.endedAt.toISOString(), unpaidFrom],
   );
   if (!ended) return "none";
+  await endSeatOnClose(q, ended.id).catch((e) => console.error("[renewal] sponsor seat end", ended.id, e instanceof Error ? e.message : e));
   await adjustmentOnSubscriptionEnded(q, d, ended.id).catch((e) => console.error("[renewal] ended adjustment", ended.id, e instanceof Error ? e.message : e));
   if (!ended.asked) {
     await alertAdmins("subscription_ended_unasked", o.subscription, adminAlert("A subscription ended without a cancellation in Roger", [`User ${ended.id}, subscription ${o.subscription}. The account is now cancelled.`]), d).catch(() => {});

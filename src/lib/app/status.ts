@@ -1,4 +1,5 @@
 import { addDays, torontoDate } from "@/lib/clock";
+import { creditLines, creditLineText, type DisplayCredit } from "@/lib/billing/credit-lines";
 import { amount, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { ContributionStatus } from "@/lib/billing/contribution";
 import { holdDate } from "@/lib/billing/period";
@@ -43,8 +44,16 @@ export type StatusFacts = {
   hasCard: boolean;
   /** No card: when the first held list's teaser was sent (a held list is waiting for the card). */
   firstTeaserAt?: string | null;
+  /** Referral credit for the told first charge (B2 plan Unit 5): words only, after the amount. Absent: none shown. */
+  credit?: DisplayCredit;
   now: Date;
 };
+
+/** A line stating a told first charge, followed by its credit line when referral credit applies (B2 plan Unit 5). */
+function withCredit(line: string, quote: NonNullable<StatusFacts["quote"]>, credit: DisplayCredit | undefined): string {
+  const c = creditLineText(creditLines(quote.totalCents, quote.currency, credit ?? null), quote.currency);
+  return c ? `${line} ${c}.` : line;
+}
 
 /** The close of a leftover per-run account's status line: monthly is the only plan, and nothing can be ordered. */
 export const PLAN_QUESTIONS = "Monthly is now the only plan. Write to us if you have questions about yours.";
@@ -82,7 +91,7 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
   if (f.status === "held" && f.holdReason === "renewal_unpaid") {
     return "Your monthly payment didn’t go through, so your lists are paused. Update your card on the billing page and they start again straight away.";
   }
-  if (f.status === "held" && f.holdReason === "amount_changed") return amountChangedLine(f.quote);
+  if (f.status === "held" && f.holdReason === "amount_changed") return amountChangedLine(f.quote, f.credit);
   if (f.status === "held") return "Your payment didn’t go through, so your list is waiting. Update your card on the billing page and it comes straight away.";
   if (f.status === "closed") return "Your account is closed. Nothing more will be charged.";
   if (f.status === "cancelled") {
@@ -97,7 +106,7 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
   }
   if (f.status === "trial" && f.switchedFromPerRun) {
     const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
-    return `Monthly starts with your next list: ${next}.`;
+    return f.quote ? withCredit(`Monthly starts with your next list: ${next}.`, f.quote, f.credit) : `Monthly starts with your next list: ${next}.`;
   }
   // Leftover per-run states (preview only). One at a time is retired (plan 2026-11-26-001, Unit 9) and nothing can be
   // ordered any more, so these lines promise no order (review fixes Unit 9, F2).
@@ -118,7 +127,8 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
     const next = f.quote
       ? `${longDate(f.quote.week)}, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax`
       : `${money(amount(s, "monthly", cur, f.sharing === "share" ? "standard" : "higher"), cur)} ${tax}`;
-    return `Free list ${n} of ${f.freeRuns}. Your next list is your first paid one: ${next}.`;
+    const line = `Free list ${n} of ${f.freeRuns}. Your next list is your first paid one: ${next}.`;
+    return f.quote ? withCredit(line, f.quote, f.credit) : line;
   }
   if (f.plan === "per_run") {
     const paid = f.orderCents != null ? `${moneyCents(f.orderCents, cur)} with tax` : `${money(amount(s, "per_run", cur), cur)} ${tax}`;
@@ -154,10 +164,14 @@ export function changedAmountChargeDate(quote: Pick<NonNullable<StatusFacts["quo
   return Number.isNaN(at) ? null : torontoDate(new Date(at + 24 * 3600_000));
 }
 
-function amountChangedLine(quote: StatusFacts["quote"]): string {
+function amountChangedLine(quote: StatusFacts["quote"], credit?: DisplayCredit): string {
   const when = changedAmountChargeDate(quote);
   if (!quote || !when) return "Your first charge amount changed, so your list waits a day while we tell you the new amount.";
-  return `Your first charge is now ${moneyCents(quote.totalCents, quote.currency)} with tax, not the amount we told you before. We charge it on ${longDate(when)}, and your list comes straight after; if you’d rather not, cancel on the billing page before then.`;
+  return withCredit(
+    `Your first charge is now ${moneyCents(quote.totalCents, quote.currency)} with tax, not the amount we told you before. We charge it on ${longDate(when)}, and your list comes straight after; if you’d rather not, cancel on the billing page before then.`,
+    quote,
+    credit,
+  );
 }
 
 /** What sharing off means under the contributor rule (the strip, and the sharing confirmation on /app/zack). */

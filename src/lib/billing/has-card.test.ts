@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadUsers } from "@/lib/cora/context";
 import type { Query } from "@/lib/db-query";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { CARDED_STATUSES, HAS_CARD_OR_SPONSORED_SQL, HAS_CARD_SQL, hasCard, hasCardOrSponsored, isNoCardTrial, NO_CARD_TRIAL_SQL } from "./has-card";
 
 let query: Query;
 beforeEach(async () => {
   ({ query } = await testDb());
+  await testSponsor(query, SPONSOR);
 });
 
 const SPONSOR = "00000000-0000-4000-8000-000000000001";

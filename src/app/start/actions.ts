@@ -13,6 +13,9 @@ import { decodeDraft, DRAFT_COOKIE, DRAFT_DAYS, encodeDraft, type SignupDraft } 
 import { parseStartParams } from "@/lib/signup/params";
 import { parseQuiz, routeFor } from "@/lib/signup/quiz";
 import { rememberEmail } from "@/lib/signup/known-email";
+import { resolveReferrer, type Referrer } from "@/lib/referrals/attribution";
+import { REF_COOKIE } from "@/lib/referrals/cookie";
+import { cleanSponsorCode, SPONSOR_COOKIE } from "@/lib/sponsors/code";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export type StartFormState = { status: "idle" | "ok" | "error"; message?: string; errors?: Record<string, string>; email?: string };
@@ -40,6 +43,20 @@ async function saveDraft(d: SignupDraft) {
 
 async function readDraft(): Promise<SignupDraft | null> {
   return decodeDraft((await cookies()).get(DRAFT_COOKIE)?.value);
+}
+
+/**
+ * The referrer this browser's `roger-ref` cookie names, read when the sign-up
+ * link is asked for (B2 Unit 3): the link may be opened on another device.
+ * Any doubt means no referrer; it never stops a sign-up.
+ */
+async function cookieReferrer(): Promise<Referrer | null> {
+  try {
+    return await resolveReferrer(query, (await cookies()).get(REF_COOKIE)?.value, new Date());
+  } catch (e) {
+    console.error("[start] referral cookie not read", e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 /** Saves an email for later. Sends nothing, and answers the same whether or not it was already saved. */
@@ -84,7 +101,11 @@ export async function submitQuiz(_prev: StartFormState, fd: FormData): Promise<S
     utm: field(fd, "utm", 200),
   });
   const path = routeFor(parsed.answers);
-  await saveDraft({ answers: parsed.answers, path, continuedAnyway: false, source: p.path, cur: p.cur ?? "USD", ref: p.ref, zack: p.zack, utm: p.utm });
+  // A sponsor code the proxy put in its cookie moves into the draft (B2 Unit 10); one already in the draft is kept.
+  const jar = await cookies();
+  const sponsor = cleanSponsorCode(jar.get(SPONSOR_COOKIE)?.value) ?? (await readDraft())?.sponsor ?? null;
+  await saveDraft({ answers: parsed.answers, path, continuedAnyway: false, source: p.path, cur: p.cur ?? "USD", ref: p.ref, zack: p.zack, utm: p.utm, sponsor });
+  if (jar.get(SPONSOR_COOKIE)) jar.delete({ name: SPONSOR_COOKIE, path: "/start" });
   redirect(path === "not_ready" ? "/start/not-ready" : "/start/account");
 }
 
@@ -114,7 +135,8 @@ export async function startGoogleSignup(fd: FormData) {
     if (!(await hit(`google:ip:${clientIp(await headers())}`, limits.googleStartPerIp))) {
       url = "/signin?e=limited";
     } else {
-      const started = await beginGoogle(query, cfg, { next: "/start/plan", newAccount: newAccountFrom(d, `${field(fd, "firstName", 40)} ${field(fd, "lastName", 40)}`.trim()) });
+      const newAccount = newAccountFrom(d, `${field(fd, "firstName", 40)} ${field(fd, "lastName", 40)}`.trim(), await cookieReferrer());
+      const started = await beginGoogle(query, cfg, { next: "/start/plan", newAccount });
       (await cookies()).set(GOOGLE_STATE_COOKIE, started.state, googleStateCookie());
       url = started.url;
     }
@@ -143,7 +165,7 @@ export async function submitAccount(_prev: StartFormState, fd: FormData): Promis
   if (!isEmail(email)) errors.email = "Enter a valid email address.";
   if (Object.keys(errors).length) return { status: "error", errors };
   try {
-    const outcome = await startAccount(query, { name, email, draft: d, ip: clientIp(await headers()) });
+    const outcome = await startAccount(query, { name, email, draft: d, ip: clientIp(await headers()), referrer: await cookieReferrer() });
     if (outcome === "send_failed") return { status: "error", message: "We couldn’t send the email just now. Try again in a minute." };
     await rememberEmail(email);
   } catch (e) {

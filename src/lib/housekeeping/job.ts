@@ -18,10 +18,15 @@ import {
 import type Stripe from "stripe";
 import { syncStripeEmails } from "@/lib/auth/email-change";
 import { stripe } from "@/lib/billing/stripe";
-import { stripeGateway, type CardGateway } from "@/lib/billing/gateway";
+import { stripeCredits, stripeGateway, type CardGateway, type CreditGateway } from "@/lib/billing/gateway";
+import { grantForReferredUser, grantLateReferrals } from "@/lib/referrals/credit";
+import type { CreditDeps } from "@/lib/referrals/credit-money";
+import { postPendingCredits } from "@/lib/referrals/credit-post";
+import { lapseClosedCredits } from "@/lib/referrals/credit-reversal";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, voidLeftoverInvoices } from "@/lib/billing/orders";
-import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords } from "./retention";
+import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords, purgeReferralData, purgeSessionGuests } from "./retention";
+import { retryPendingReferrals } from "@/lib/referrals/attribution";
 import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
 import { noCardClocks, type NoCardClock } from "./clocks";
 import { sendUnsentWelcomes } from "@/lib/signup/finish";
@@ -31,6 +36,7 @@ import { applyDueSwitches } from "@/lib/billing/switch";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
 import { deliverLate, sendUnsentTeasers } from "@/lib/cora/send-job";
 import { sendPendingUnlocks } from "@/lib/cora/unlock";
+import { runPointsTask } from "@/lib/growth/points";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -54,12 +60,38 @@ export type PassContext = {
  * the task asks `stripeGateway()` (null without a key); `null`: Stripe is
  * not set up. The route passes it; scenarios pass their fake Stripe.
  */
-export type HourlyDeps = ChargeDeps & { card?: CardGateway | null };
+export type HourlyDeps = ChargeDeps & { card?: CardGateway | null; credits?: CreditGateway | null };
 // The plan tasks (switches, cancellations) are handed no card gateway, as before this seam: only the no-card close reads it.
 export type HourlyTask = { name: string; run: (q: Query, d: HourlyDeps, ctx: PassContext) => Promise<unknown> };
 
 /** The card gateway a task uses: the one given, else Stripe's own. */
 export const hourlyCard = (d: HourlyDeps): CardGateway | null => (d.card === undefined ? stripeGateway() : d.card);
+
+/** Stripe's customer balance for referral credit (B2 Unit 4), the same way: given, else Stripe's own; null when not set up. */
+export const hourlyCredits = (d: HourlyDeps): CreditGateway | null => (d.credits === undefined ? stripeCredits() : d.credits);
+
+/**
+ * The referral credit tasks share one time budget per pass (B2 whole-branch re-review): it starts when the first of
+ * them runs and ends CREDIT_BUDGET_MS later, or at the pass's deadline if that is sooner. A slow Stripe or a backlog
+ * of failing rows then costs at most this much, and the tasks after them (cancellations, renewals, reconcile) still run.
+ */
+export const CREDIT_BUDGET_MS = 60_000;
+const creditBudgets = new WeakMap<PassContext, number>();
+export function creditDeadline(c: PassContext): number {
+  let at = creditBudgets.get(c);
+  if (at === undefined) {
+    at = Math.min(c.deadline, Date.now() + CREDIT_BUDGET_MS);
+    creditBudgets.set(c, at);
+  }
+  return at;
+}
+
+/** The credit deps for a task, or null when Stripe is not set up. Never ahead of the real clock; stops at the credit budget. */
+function creditDeps(d: HourlyDeps, c: PassContext): CreditDeps | null {
+  const credits = hourlyCredits(d);
+  if (!credits) return null;
+  return { credits, settings: d.settings, now: new Date(Math.min(d.now.getTime(), Date.now())), query: d.query, transport: d.transport, sleep: d.sleep, deadline: creditDeadline(c) };
+}
 
 /**
  * The no-card clocks, read once per pass and shared by the nudges, the held
@@ -89,12 +121,41 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "idle_retention", run: (q, d) => applyIdleRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
   // Old sign-up interest, notification and Stripe event records (privacy P6). Never ahead of the real clock.
   { name: "old_records", run: (q, d) => purgeOldRecords(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
+  // Guests' addresses on invitations never taken up (90 days), and referrals whose account was deleted. Never ahead of the real clock.
+  { name: "referral_retention", run: (q, d) => purgeReferralData(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
+  // B2 Unit 9. Group-session guests who never signed up lose their name and address 90 days after the session. Never ahead of the real clock.
+  { name: "session_guest_retention", run: (q, d) => purgeSessionGuests(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
   // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
   { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.
-  { name: "charge_retries", run: (q, d) => dueRetries(q, d) },
+  { name: "charge_retries", run: (q, d) => dueRetries(q, { ...d, balances: hourlyCredits(d) }) },
   // After the retries, so a day-7 attempt runs before its trial closes.
   { name: "close_unpaid_trials", run: (q, d) => closeUnpaidTrials(q, d) },
+  // B2 whole-branch review (reliability P1): the referral credit tasks call Stripe once per row, so they come after
+  // the charge tasks and stop at the pass's deadline (CreditDeps.deadline): a slow Stripe balance API can never
+  // starve a charge retry or a trial close. The database-only purges stay at the front.
+  // Referrals whose attribution failed at sign-up (users.pending_referrer_id). Guarded writes: safe to overlap.
+  // A referral recorded late may follow its member's first paid invoice: the grant is attempted then too (B2 Unit 4);
+  // one that fails is left to referral_late_grants.
+  {
+    name: "referral_pending",
+    run: (q, d, c) => {
+      const cd = d.settings ? creditDeps(d, c) : null;
+      return retryPendingReferrals(q, new Date(Math.min(d.now.getTime(), Date.now())), 200, {
+        grant: cd ? (userId) => grantForReferredUser(q, cd, userId) : undefined,
+        mail: { query: d.query, transport: d.transport, sleep: d.sleep },
+        deadline: creditDeadline(c),
+      });
+    },
+  },
+  // B2 Unit 4. Referral credit waiting to post: a grant whose referrer now has a card, or recorded while referrals
+  // were switched off, and any clawback or lapse left unposted; then any "you earned a credit" email still unsent.
+  { name: "referral_credits", run: async (q, d, c) => { const cd = creditDeps(d, c); return cd ? postPendingCredits(q, cd) : "Stripe is not set up."; } },
+  // B2 Unit 4. A referral still in trial whose member has paid and has no grant (a late referral, or a grant that
+  // failed): granted now, retried hourly up to a cap.
+  { name: "referral_late_grants", run: async (q, d, c) => { const cd = creditDeps(d, c); return cd ? grantLateReferrals(q, cd) : "Stripe is not set up."; } },
+  // B2 Unit 4. A closed account's credit: pending rows lapse, an unused posted balance is taken back (one lapse row per close).
+  { name: "referral_credit_lapse", run: async (q, d, c) => { const cd = creditDeps(d, c); return cd ? lapseClosedCredits(q, cd) : "Stripe is not set up."; } },
   // Plan 2026-11-26-001, Unit 2. A welcome that failed when sign-up ended (a server action has no retry): the free-tool
   // claim re-run and the welcome sent, for trials with no card that consented since this flow shipped.
   { name: "welcome_unsent", run: (q, d, c) => sendUnsentWelcomes(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
@@ -112,7 +173,7 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Sunday 6:00 PM in the member's time zone: upload-route members with no run yet.
   { name: "upload_reminders", run: (q, d, c) => sendUploadReminders(q, { ...d, deadline: c.deadline }) },
   // 48 hours before a first charge: the reminder with the stored date and amount.
-  { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, d) },
+  { name: "first_charge_reminders", run: (q, d) => sendFirstChargeReminders(q, { ...d, balances: hourlyCredits(d) }) },
   // Order invoices left open after a failed void.
   { name: "void_leftover_invoices", run: async (q, d) => (d.orders ? voidLeftoverInvoices(q, { ...d, orders: d.orders }) : 0) },
   // Orders for a week Cora failed: closed with no list and no charge, the member told (Unit 17).
@@ -124,12 +185,17 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Plan 2026-11-26-001, Unit 5. A card saved after a held list whose unlock did not finish (the list undelivered, or
   // delivered without its email): delivered and emailed now, whatever the list's age (deliver_late stops at 8 days).
   { name: "unlock_pending", run: (q, d, c) => sendPendingUnlocks(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
+  // B2 Unit 6. The points cache (leaderboard rank, stats email): the current week recomputed, past weeks closed once
+  // and then left alone. Hourly rather than after the Cora merge, because points also come from lists delivered by
+  // the hourly tasks above (deliver_late, unlock_pending) and a failure here must never hold up a Cora week. Leased.
+  // A full rebuild instead while one is owed (a late seed link, a late contributor, a seed import).
+  { name: "points", run: (q, d, c) => runPointsTask(q, { now: d.now, realNow: c.realNow }) },
   // The contributor rule: misses settled (forgiven, or the adjustment), then any Stripe items due (a carried one after its renewal).
   { name: "contributions", run: (q, d) => processContributions(q, d) },
   // Stripe deletes of dropped adjustment items that failed, until Stripe confirms them.
   { name: "adjustment_deletes", run: (q, d) => retryDeletes(q, d) },
   // Three days before an invoice carrying an adjustment: the itemised email, from Stripe's preview.
-  { name: "invoice_itemised", run: (q, d) => sendItemisedNotices(q, d) },
+  { name: "invoice_itemised", run: (q, d) => sendItemisedNotices(q, { ...d, balances: hourlyCredits(d) }) },
   // Once a day (4 AM Toronto): pending invoice items with no live adjustment are deleted.
   { name: "reconcile_pending_items", run: async (q, d, c) => (wallParts(d.now).hour === 4 ? reconcilePendingItems(q, d, { deadline: c.deadline }) : "not this hour") },
   // A paid user left held or in trial is made active.
@@ -170,10 +236,13 @@ export async function reconcileStripe(q: Query, d: ChargeDeps, c: PassContext, g
     const s = stripe();
     const card = stripeGateway(s);
     if (!s || !card) return { skipped: "Stripe is not set up." };
+    const credits = stripeCredits(s) ?? undefined;
     const mail = { query: d.query, transport: d.transport, sleep: d.sleep };
     io = {
       source: stripeEventSource(s),
-      handle: (e) => handleStripeEvent(q, card, e, { getSettings: async () => d.settings, now: d.now, adjust: d.adjust, plans: d.plans, billing: d.gw, orders: d.orders, ...mail }),
+      handle: (e) => handleStripeEvent(q, card, e, { getSettings: async () => d.settings, now: d.now, adjust: d.adjust, plans: d.plans, billing: d.gw, orders: d.orders, credits,
+        // Credit ledger stamps are never ahead of the real clock, as in the hourly credit tasks (an "as of" pass replays events).
+        creditsNow: new Date(Math.min(d.now.getTime(), Date.now())), creditDeadline: c.deadline, ...mail }),
     };
   }
   if (!(await reconcilePassUnderway(q, d.now))) return "not due";

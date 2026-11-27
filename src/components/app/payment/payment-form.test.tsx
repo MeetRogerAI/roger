@@ -137,4 +137,12 @@ describe("PaymentForm", () => {
     expect(html).toMatch(/role="alert"[^>]*>Stripe couldn’t use that billing address\./);
     expect(html.indexOf("Stripe couldn’t use")).toBeLessThan(html.indexOf("Start free trial"));
   });
+
+  // B2 plan Unit 5: the page's credit reaches the Price Box (shown once the tax is known).
+  it("passes the member's referral credit to the Price Box", () => {
+    const ontario = { currency: "CAD" as const, subtotalCents: 28000, discountCents: 0, tax: "calculated" as const, taxCents: 3640, taxName: "HST", taxRate: 13, totalCents: 31640 };
+    const t = text(renderToStaticMarkup(<PaymentForm {...props} price={ontario} publishableKey={null} credit={{ cents: 28000, currency: "CAD" }} />));
+    expect(t).toContain("Credit applied to your first charge −CA$280.00 Card charged then CA$36.40");
+    expect(text(renderToStaticMarkup(<PaymentForm {...props} price={ontario} publishableKey={null} />))).not.toContain("Credit applied");
+  });
 });

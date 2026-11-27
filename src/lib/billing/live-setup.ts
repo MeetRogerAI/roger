@@ -26,7 +26,11 @@ export const PRICES: PriceSpec[] = [
   { env: "STRIPE_PRICE_MONTHLY_HIGHER_CAD", lookupKey: "roger_monthly_higher_cad", currency: "cad", amount: 56000, nickname: "Monthly higher rate CAD" },
 ];
 
-/** The seven events the webhook handles (S16). */
+/**
+ * The events the webhook handles: B1's seven (S16), plus B2's three for
+ * referral credit clawback and dispute freeze (B2 plan Unit 4). Re-running the
+ * setup after B2 merges adds the missing ones to the existing endpoint.
+ */
 export const WEBHOOK_EVENTS = [
   "checkout.session.completed",
   "invoice.paid",
@@ -35,6 +39,9 @@ export const WEBHOOK_EVENTS = [
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "customer.updated",
+  "charge.refunded",
+  "charge.dispute.created",
+  "charge.dispute.closed",
 ] as const;
 
 export const LIVE_WEBHOOK_URL = "https://meetroger.ai/api/stripe/webhook";

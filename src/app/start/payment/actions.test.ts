@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { nextHeaders, nextNavigation, outcome, resetNextFakes } from "@/test-helpers/next-fakes";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 
 /**
  * Plan 2026-11-26-001, Unit 6: the Payment page's server actions. Each one
@@ -92,7 +92,7 @@ describe("the shared guard", () => {
     ["a card already saved", async () => void (await db.query!(`update users set trial_started_at = now()`))],
     ["a closed account", async () => void (await db.query!(`update users set status = 'closed'`))],
     ["no held list yet", async () => void (await db.query!(`delete from picks`), await db.query!(`delete from cora_user_weeks`))],
-    ["a sponsored member", async () => void (await db.query!(`update users set sponsor_id = id`))],
+    ["a sponsored member", async () => void (await db.query!(`update users set sponsor_id = $1`, [await testSponsor(db.query!)]))],
   ];
   for (const [name, setup] of cases) {
     it(`refuses every action for ${name}, with no database or Stripe change`, async () => {

@@ -1,3 +1,4 @@
+import { endSeatOnClose, UNBILLED_SEAT_SQL } from "@/lib/sponsors/sponsors";
 import { adjustmentOnAccountClosed, type AdjustDeps } from "@/lib/billing/adjustment";
 import { retireSessionForGood } from "@/lib/billing/card-setup";
 import type { CardGateway } from "@/lib/billing/gateway";
@@ -10,8 +11,14 @@ import { revokeUserSessions } from "@/lib/auth/session";
 import { normaliseEmail } from "@/lib/auth/tokens";
 import { isEmail } from "@/lib/form";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
+import { voidDeletedReferrals } from "@/lib/referrals/stage";
+import { UNSETTLED_CREDIT_SQL } from "@/lib/referrals/credit";
+import { CLOSED_NO_CARD } from "@/lib/billing/no-card";
+import { longDate } from "@/lib/dates";
+import { NEEDS_LAPSE_SQL } from "@/lib/referrals/credit-reversal";
 import { addressChangedBySupportEmail, addressMovedAwayEmail, nudgeEmail, type Nudge } from "@/lib/mail/templates/admin-user";
 import { checkReport, storeReport, type Stored } from "@/lib/zack/receive";
+import { owePointsRebuild, rebuildPoints } from "@/lib/growth/points";
 import { logAdminAction } from "./log";
 
 /**
@@ -33,6 +40,23 @@ export async function saveNote(q: Query, by: string, userId: string, note: strin
   if (!rows.length) return no("No such user.");
   await logAdminAction(q, { by, userId, action: "note", detail: { length: text.length } });
   return ok("Note saved.");
+}
+
+/**
+ * "Clear display name" (B2 Unit 7, origin R12: an admin can remove a name):
+ * clears the display name and takes the member off the leaderboard. Logged
+ * with the name that was removed.
+ */
+export async function clearDisplayName(q: Query, by: string, userId: string): Promise<Done> {
+  const [r] = await q<{ name: string; was_on: boolean }>(
+    `update users u set display_name = '', leaderboard_name_key = null, leaderboard_opt_in_at = null
+     from (select id, display_name, leaderboard_opt_in_at from users where id = $1) o
+     where u.id = o.id returning o.display_name as name, o.leaderboard_opt_in_at is not null as was_on`,
+    [userId],
+  );
+  if (!r) return no("No such user.");
+  await logAdminAction(q, { by, userId, action: "clear_display_name", detail: { name: r.name, wasOnLeaderboard: r.was_on } });
+  return ok(r.was_on ? "Display name cleared and removed from the leaderboard." : "Display name cleared.");
 }
 
 /** A charge in flight for the user: anything that changes what they owe waits for it. */
@@ -122,7 +146,7 @@ export function isMonday(s: string): boolean {
  * an unlink is logged against that user, and a move from one user to another
  * is logged against both.
  */
-export async function linkContributor(q: Query, by: string, contributorId: string, userId: string | null): Promise<Done> {
+export async function linkContributor(q: Query, by: string, contributorId: string, userId: string | null, now: Date = new Date()): Promise<Done> {
   try {
     const rows = await q<{ label: string; previous: string | null }>(
       `update seed_contributors s set user_id = $2 from (select id, user_id from seed_contributors where id = $1) old
@@ -133,7 +157,12 @@ export async function linkContributor(q: Query, by: string, contributorId: strin
     const { label, previous } = rows[0];
     if (previous && previous !== userId) await logAdminAction(q, { by, userId: previous, action: "unlink_contributor", detail: { contributorId, label, movedTo: userId } });
     if (userId && previous !== userId) await logAdminAction(q, { by, userId, action: "link_contributor", detail: { contributorId, label, movedFrom: previous } });
-    return ok(userId ? `Linked ${label}. Cora leaves their seed plays out of this user’s lists.` : `Unlinked ${label}.`);
+    // A seed record scores for the account it is linked to (B2 Unit 6), in every week: closed weeks included.
+    const points = previous !== userId ? await rebuildPoints(q, { now }) : null;
+    // Lease busy: the next hourly pass rebuilds instead.
+    if (points && "busy" in points) await owePointsRebuild(q, "seed contributor link changed while points were busy");
+    const later = points && "busy" in points ? " Points will be rebuilt in the next hourly pass." : "";
+    return ok((userId ? `Linked ${label}. Cora leaves their seed plays out of this user’s lists.` : `Unlinked ${label}.`) + later);
   } catch (e) {
     if (/unique|duplicate/i.test((e as Error).message)) return no("That user is already linked to another contributor.");
     if (/foreign key/i.test((e as Error).message)) return no("No such user.");
@@ -193,6 +222,8 @@ export type CloseDeps = AdjustDeps & { gw?: BillingGateway | null; card?: CardGa
 /** Ends what a closed account still has open. Every step is safe to run again. */
 async function cleanUpClosed(q: Query, d: CloseDeps, userId: string): Promise<number> {
   await revokeUserSessions(q, userId);
+  // A sponsored seat's history ends with the account (B2 Unit 10): its sponsor isn't billed after that month.
+  await endSeatOnClose(q, userId);
   await q(`update login_tokens set revoked_at = now() where user_id = $1 and used_at is null and revoked_at is null`, [userId]);
   await q(`update orders set status = 'cancelled', updated_at = now() where user_id = $1 and status = 'ordered'`, [userId]);
   // Whole-branch review W3 (the closing lesson, as cancel and the no-card close do): the stored Payment session is
@@ -215,11 +246,18 @@ const isAdminAddress = (email: string) => adminEmails().includes(email.toLowerCa
  * their anonymous form. The admin log keeps its rows, including the deleted
  * address (see the privacy note in the plan). Refused while a dropped
  * higher-rate item may still be in Stripe (its delete not yet confirmed):
- * deleting the account would lose the record the hourly retry needs.
+ * deleting the account would lose the record the hourly retry needs. Refused
+ * too while referral credit is still settling (pending, waiting for the
+ * switch, or frozen by a dispute; B2 Unit 4): the hourly lapse settles a
+ * closed account's credit first. The ledger itself outlives the account.
  */
 export async function deleteAccount(q: Query, by: string, userId: string, confirmEmail: string): Promise<Done> {
-  const [u] = await q<{ email: string; status: string; stripe_open: boolean }>(
-    `select email, status, exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced') as stripe_open
+  const [u] = await q<{ email: string; status: string; stripe_open: boolean; credit_open: boolean; seat_unbilled: boolean; reopen_until: string | null }>(
+    `select email, status, exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced') as stripe_open,
+       (${UNSETTLED_CREDIT_SQL("u")} or ${NEEDS_LAPSE_SQL("u")}) as credit_open, ${UNBILLED_SEAT_SQL("u")} as seat_unbilled,
+       -- A no-card close can still be reopened by its card for 7 days: its credit is only settled after that.
+       case when u.closed_reason = '${CLOSED_NO_CARD}' and u.trial_started_at is null and u.access_ends_at > now() - interval '7 days'
+         then ((u.access_ends_at + interval '7 days') at time zone 'America/Toronto')::date::text end as reopen_until
      from users u where id = $1`,
     [userId],
   );
@@ -228,13 +266,24 @@ export async function deleteAccount(q: Query, by: string, userId: string, confir
   if (u.status !== "closed") return no("Close the account first.");
   if (normaliseEmail(confirmEmail) !== u.email.toLowerCase()) return no("Type the account’s email address to confirm.");
   if (u.stripe_open) return no("A higher-rate item for this account may still be in Stripe. Wait for the hourly pass to remove it, then delete.");
+  if (u.credit_open && u.reopen_until) {
+    return no(`This account still has referral credit, settled once its card can no longer reopen it (after ${longDate(u.reopen_until)}). Delete it after that.`);
+  }
+  if (u.credit_open) return no("This account still has referral credit being settled. Wait for the hourly pass to settle it, then delete.");
+  if (u.seat_unbilled) {
+    return no("This member held a sponsored seat in a month whose sponsor invoice isn’t sent yet. Send that invoice on the Sponsors page, then delete.");
+  }
   const gone = await q<{ email: string }>(
     `delete from users u where u.id = $1 and u.status = 'closed' and lower(u.email) <> all($2::text[])
        and not exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced')
+       and not ${UNSETTLED_CREDIT_SQL("u")} and not ${NEEDS_LAPSE_SQL("u")} and not ${UNBILLED_SEAT_SQL("u")}
      returning u.email`,
     [userId, adminEmails()],
   );
   if (!gone.length) return no("The account changed meanwhile. Reload and try again.");
+  // Their referral row lost its user through the foreign key: it can never pay now, so it is void (B2 Unit 3).
+  // The hourly referral_retention pass catches up if this fails.
+  await voidDeletedReferrals(q, new Date()).catch((e) => console.error("[admin] referral not voided after delete", (e as Error)?.message));
   await logAdminAction(q, { by, userId, action: "delete_account", detail: { email: gone[0].email } });
   return ok("Account deleted.");
 }

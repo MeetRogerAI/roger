@@ -1,11 +1,12 @@
 import type Stripe from "stripe";
-import { stripeGateway } from "@/lib/billing/gateway";
+import { stripeCredits, stripeGateway } from "@/lib/billing/gateway";
 import { stripe } from "@/lib/billing/stripe";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { hasDb } from "@/lib/db";
 import { query } from "@/lib/db-query";
 import { readV3Settings } from "@/lib/v3-settings";
+import { WEBHOOK_LEASE } from "@/lib/referrals/credit-balance";
 
 export const maxDuration = 60;
 
@@ -36,6 +37,9 @@ export async function POST(request: Request) {
       plans: stripePlans(s) ?? undefined,
       billing: stripeBilling(s) ?? undefined,
       orders: stripeOrders(s) ?? undefined,
+      credits: stripeCredits(s) ?? undefined,
+      // Inside maxDuration: a 90-second credit lease, no Stripe credit write after 40 seconds (credit-balance.ts).
+      creditLease: WEBHOOK_LEASE,
     });
     return Response.json({ received: true, outcome });
   } catch (e) {

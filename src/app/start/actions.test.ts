@@ -18,10 +18,20 @@ vi.mock("@/lib/db-query", () => ({
 }));
 vi.mock("@/lib/rate-limit", async (orig) => ({ ...(await orig<typeof import("@/lib/rate-limit")>()), hit: async () => allowed }));
 const startAccount = vi.fn(async () => "new" as const);
-vi.mock("@/lib/signup/account", () => ({ startAccount: (...a: unknown[]) => startAccount(...(a as [])) }));
+vi.mock("@/lib/signup/account", async (orig) => ({ ...(await orig<typeof import("@/lib/signup/account")>()), startAccount: (...a: unknown[]) => startAccount(...(a as [])) }));
+// The referral cookie is resolved when the sign-up link is asked for (B2 Unit 3): stand-in keyed on the raw cookie.
+vi.mock("@/lib/referrals/attribution", () => ({
+  resolveReferrer: async (_q: unknown, raw: string | undefined) => (raw === "good-cookie" ? { id: "referrer-1", via: "link" } : null),
+}));
 
-const { submitQuiz, submitAccount, startAnyway, saveNotOpenLead } = await import("./actions");
-const { DRAFT_COOKIE, encodeDraft } = await import("@/lib/signup/draft");
+type BeginArgs = [q: unknown, cfg: unknown, o: { newAccount?: { referrer?: unknown } }];
+const beginGoogle = vi.fn(async (...args: BeginArgs) => (void args, { url: "https://accounts.google.test/auth", state: "st" }));
+vi.mock("@/lib/auth/google", async (orig) => ({ ...(await orig<typeof import("@/lib/auth/google")>()), beginGoogle: (...a: Parameters<typeof beginGoogle>) => beginGoogle(...a) }));
+
+const { submitQuiz, submitAccount, startAnyway, saveNotOpenLead, startGoogleSignup } = await import("./actions");
+const { DRAFT_COOKIE, decodeDraft, encodeDraft } = await import("@/lib/signup/draft");
+const { SPONSOR_COOKIE } = await import("@/lib/sponsors/code");
+const { sponsorHashFor } = await import("@/lib/sponsors/sponsors");
 const { KNOWN_EMAIL_COOKIE } = await import("@/lib/signup/known-email");
 
 const idle = { status: "idle" as const };
@@ -78,6 +88,20 @@ describe("the quiz", () => {
     expect(await outcome(() => submitQuiz(idle, quiz({ uses: "not_yet", software: "avoid" })))).toEqual({ redirect: "/start/not-ready" });
   });
 
+  it("moves a sponsor code from the proxy's cookie into the draft, and clears the cookie (B2 Unit 10)", async () => {
+    resetNextFakes({ [SPONSOR_COOKIE]: "ABCDEFGH2345" }, { "x-vercel-forwarded-for": "1.2.3.4" });
+    expect(await outcome(() => submitQuiz(idle, quiz()))).toEqual({ redirect: "/start/account" });
+    expect(decodeDraft(jar.get(DRAFT_COOKIE))?.sponsor).toBe("ABCDEFGH2345");
+    expect(jar.has(SPONSOR_COOKIE)).toBe(false);
+    // Back at the quiz later, with no cookie: the draft keeps the code.
+    expect(await outcome(() => submitQuiz(idle, quiz()))).toEqual({ redirect: "/start/account" });
+    expect(decodeDraft(jar.get(DRAFT_COOKIE))?.sponsor).toBe("ABCDEFGH2345");
+  });
+
+  it("a draft from before sponsors still reads, with no sponsor", () => {
+    expect(decodeDraft(draft)?.sponsor ?? null).toBeNull();
+  });
+
   it("shows inline errors and saves nothing for a missing answer", async () => {
     const r = await outcome(() => submitQuiz(idle, quiz({ uses: "" })));
     expect(r).toMatchObject({ value: { status: "error", errors: { uses: "Choose one." } } });
@@ -124,6 +148,57 @@ describe("the account step's names and email", () => {
     expect(await submitAccount(idle, fd)).toEqual({ status: "ok", email: "Ana@Example.com" });
     expect(startAccount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ name: "Ana Lima" }));
     expect(jar.get(KNOWN_EMAIL_COOKIE)).toBe("ana@example.com");
+  });
+
+  it("carries the referrer this browser's referral cookie names, and none without one (B2 Unit 3)", async () => {
+    const fd = new FormData();
+    fd.set("firstName", "Ana");
+    fd.set("lastName", "Lima");
+    fd.set("email", "ana@example.com");
+    resetNextFakes({ [DRAFT_COOKIE]: draft, "roger-ref": "good-cookie" });
+    await submitAccount(idle, fd);
+    expect(startAccount).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ referrer: { id: "referrer-1", via: "link" } }));
+    resetNextFakes({ [DRAFT_COOKIE]: draft });
+    await submitAccount(idle, fd);
+    expect(startAccount).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ referrer: null }));
+  });
+});
+
+describe("the account step with Google", () => {
+  it("puts the referrer this browser's cookie names into the sign-up it carries, and none without one (B2 Unit 3)", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "cid");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
+    try {
+      const fd = new FormData();
+      fd.set("firstName", "Ana");
+      fd.set("lastName", "Lima");
+      resetNextFakes({ [DRAFT_COOKIE]: draft, "roger-ref": "good-cookie" }, { "x-vercel-forwarded-for": "1.2.3.4" });
+      expect(await outcome(() => startGoogleSignup(fd))).toEqual({ redirect: "https://accounts.google.test/auth" });
+      expect(beginGoogle.mock.lastCall?.[2].newAccount?.referrer).toEqual({ id: "referrer-1", via: "link" });
+      resetNextFakes({ [DRAFT_COOKIE]: draft }, { "x-vercel-forwarded-for": "1.2.3.4" });
+      await outcome(() => startGoogleSignup(fd));
+      expect(beginGoogle.mock.lastCall?.[2].newAccount?.referrer).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it("carries a sponsor code from the draft as its hash only, never as a referrer (B2 Unit 10)", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "cid");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
+    try {
+      const fd = new FormData();
+      fd.set("firstName", "Ana");
+      fd.set("lastName", "Lima");
+      const withSponsor = encodeDraft({ ...decodeDraft(draft)!, sponsor: "ABCDEFGH2345" });
+      resetNextFakes({ [DRAFT_COOKIE]: withSponsor }, { "x-vercel-forwarded-for": "1.2.3.4" });
+      await outcome(() => startGoogleSignup(fd));
+      const carried = beginGoogle.mock.lastCall?.[2].newAccount as Record<string, unknown>;
+      expect(carried.sponsorHash).toBe(sponsorHashFor("ABCDEFGH2345"));
+      expect(carried.referrer).toBeNull();
+      expect(JSON.stringify(carried)).not.toContain("ABCDEFGH2345");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

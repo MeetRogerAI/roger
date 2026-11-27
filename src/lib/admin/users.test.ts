@@ -7,7 +7,7 @@ import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakeAdjustments } from "@/test-helpers/fake-adjustments";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { memberStatusLine } from "./user-detail";
 import { addRunForUser, changeUserEmail, closeAccount, deleteAccount, giveExtraFreeList, isMonday, saveNote, sendNudge } from "./users";
 
@@ -270,6 +270,35 @@ describe("closing and deleting an account", () => {
     expect(await deleteAccount(query, ADMIN, uid, "ana@example.com")).toMatchObject({ ok: true });
   });
 
+  it("won't delete a sponsored member while a month they held a billable seat in isn't invoiced (B2 Unit 10)", async () => {
+    const sponsor = await testSponsor(query);
+    await query("update users set sponsor_id = $1, sponsor_seat = 1 where id = $2", [sponsor, uid]);
+    await query("insert into sponsor_seat_history (sponsor_id, user_id, seat, held_from) values ($1, $2, 1, '2026-10-01T12:00:00Z')", [sponsor, uid]);
+    for (const w of ["2026-10-19", "2026-10-26", "2026-11-02"]) {
+      await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, delivered_at) values ($1, $2, 'picked', 3, now())", [uid, w]);
+    }
+    expect(await closeAccount(query, deps(fakeBilling()), ADMIN, uid)).toMatchObject({ ok: true });
+    const [{ month }] = await query<{ month: string }>("select to_char(date_trunc('month', held_to at time zone 'America/Toronto'), 'YYYY-MM-DD') as month from sponsor_seat_history");
+    expect(await deleteAccount(query, ADMIN, uid, "ana@example.com")).toEqual({ ok: false, message: expect.stringMatching(/sponsored seat in a month whose sponsor invoice isn’t sent yet/) });
+    // Every month from the third list (November) to the close, invoiced and sent: then it may go.
+    await query(
+      `insert into sponsor_invoices (sponsor_id, month, stripe_invoice, sent_at)
+       select $1, m::date, 'in_' || to_char(m, 'YYYYMM'), now() from generate_series('2026-11-01'::date, $2::date, interval '1 month') m`,
+      [sponsor, month],
+    );
+    await query("update sponsor_invoices set sent_at = null where month = $1", [month]);
+    expect(await deleteAccount(query, ADMIN, uid, "ana@example.com")).toMatchObject({ ok: false });
+    await query("update sponsor_invoices set sent_at = now()");
+    expect(await deleteAccount(query, ADMIN, uid, "ana@example.com")).toMatchObject({ ok: true });
+  });
+
+  it("a sponsored member who never reached a third list has nothing to bill, and may be deleted", async () => {
+    const sponsor = await testSponsor(query);
+    await query("update users set sponsor_id = $1, status = 'closed' where id = $2", [sponsor, uid]);
+    await query("insert into sponsor_seat_history (sponsor_id, user_id, seat, held_from) values ($1, $2, 1, '2026-10-01T12:00:00Z')", [sponsor, uid]);
+    expect(await deleteAccount(query, ADMIN, uid, "ana@example.com")).toMatchObject({ ok: true });
+  });
+
   it("deletes only a closed account, with its email typed, and keeps the log", async () => {
     expect(await deleteAccount(query, ADMIN, uid, "ana@example.com")).toMatchObject({ ok: false });
     await query("update users set status = 'closed'");
@@ -296,7 +325,7 @@ describe("other row actions", () => {
     expect((await u()).free_lists_used).toBe(1);
     expect(await log()).toEqual([]);
     // A sponsored member needs no card.
-    await query("update users set sponsor_id = '00000000-0000-4000-8000-000000000001' where id = $1", [uid]);
+    await query("update users set sponsor_id = $1 where id = $2", [await testSponsor(query), uid]);
     expect(await giveExtraFreeList(query, ADMIN, uid)).toMatchObject({ ok: true });
   });
 

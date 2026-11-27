@@ -4,6 +4,8 @@ import type { CardGateway, MonthlyPreview } from "./gateway";
 import { isNoCardTrial } from "./has-card";
 import { checkBillingLocation } from "./location";
 import { asDuration } from "./discount-words";
+import { displayCredit } from "./credit-display";
+import type { DisplayCredit } from "./credit-lines";
 import type { PromoView } from "./payment-view";
 import { basePreview, TAX_UNAVAILABLE } from "./payment-view";
 import { quoteMonthly, type PreviewCache } from "./preview";
@@ -172,6 +174,15 @@ export async function paymentPrice(
   }
   // invalid_location, not_allowed: the plan price, tax still to come.
   return { price: base(promo), promo, notice };
+}
+
+/**
+ * Referral credit already on the member's balance, for the Price Box (B2 plan Unit 5): plain cents and currency
+ * (the browser gets nothing else). Null when none, or not usable (`displayCredit`).
+ */
+export async function paymentCredit(q: Query, userId: string, now: Date): Promise<DisplayCredit> {
+  const c = await displayCredit(q, userId, now);
+  return c ? { cents: c.cents, currency: c.currency } : null;
 }
 
 /** The plan price in cents for display before Stripe's preview (the settings' amount). */

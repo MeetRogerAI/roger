@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/access";
 import { CHECKOUT_LIMITED, finishCardSave, openEmbeddedSetup, type EmbeddedSetup } from "@/lib/billing/card-setup";
-import { stripeGateway, type CardGateway, type MonthlyPreview } from "@/lib/billing/gateway";
+import { stripeCredits, stripeGateway, type CardGateway, type MonthlyPreview } from "@/lib/billing/gateway";
 import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import {
   finishedSavePath,
@@ -96,7 +96,7 @@ async function accountPrice(g: Guarded, currency: Currency, loc: BillingLocation
  * is called outside any try.
  */
 async function finishSaved(userId: string, gw: CardGateway, sessionId: string): Promise<never> {
-  const r = await finishCardSave(query, gw, sessionId, { expectUserId: userId, getSettings: readV3Settings });
+  const r = await finishCardSave(query, gw, sessionId, { expectUserId: userId, getSettings: readV3Settings, credits: stripeCredits() ?? undefined });
   redirect(finishedSavePath(sessionId, r));
 }
 

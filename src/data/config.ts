@@ -118,7 +118,10 @@ export type SiteConfig = typeof siteConfig;
  * Wednesday. Zack's schedule is Sunday in the user's own time zone.
  *
  * `signupOpen` and `cycleLive` default to off so production does nothing
- * until an admin opens it (requirements R10).
+ * until an admin opens it (requirements R10). The B2 switches (`referralsOn`,
+ * `leaderboardOn`, `statsOn`, `sponsorsOn`) also default to off, and each
+ * B2 surface needs its own switch as well as those two. `statsAt` must be
+ * between 08:00 and 12:00.
  */
 export const v3Defaults = {
   priceUsd: 200,
@@ -141,6 +144,10 @@ export const v3Defaults = {
   retentionDays: 90,
   signupOpen: false,
   cycleLive: false,
+  referralsOn: false,
+  leaderboardOn: false,
+  statsOn: false,
+  sponsorsOn: false,
   sessionDay: "",
   sessionTime: "",
   sessionLink: "",

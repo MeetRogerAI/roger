@@ -88,6 +88,10 @@ export default async function CoraPage({ searchParams }: PageProps<"/admin/cora"
         <div className="mt-6">
           <ActionButton action="closeOrders" label="Close open orders in failed weeks" />
         </div>
+        <div className="mt-3">
+          <ActionButton action="rebuildPoints" label="Rebuild points" pendingLabel="Rebuilding…" />
+          <p className="mt-1 text-meta text-ink-2">Recomputes every week of the leaderboard points, closed weeks included. Linking or unlinking a seed contributor does this already.</p>
+        </div>
         {log.length > 0 && (
           <ul className="mt-6 text-meta text-ink-2">
             {log.map((l) => (

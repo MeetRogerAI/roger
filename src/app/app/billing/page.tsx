@@ -4,12 +4,11 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { CancelForm, UndoForm, UpdateCardButton } from "@/components/app/billing-panel";
-import { loadBilling } from "@/lib/app/billing";
+import { invoiceAmount, loadBilling } from "@/lib/app/billing";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
 import { completeCardUpdate, type CardUpdateOutcome } from "@/lib/billing/card-setup";
 import { stripeGateway } from "@/lib/billing/gateway";
-import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { afterCardChange } from "@/lib/billing/renewals";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { torontoDate } from "@/lib/clock";
@@ -94,6 +93,7 @@ async function BillingPage({ searchParams }: { searchParams: PageProps<"/app/bil
             </>
           )}
         </p>
+        {view.nextChargeCredit && <p className="mt-1 text-small text-ink-2 tabular-nums">{view.nextChargeCredit}</p>}
         <p className="mt-4 rounded-[8px] border border-rule bg-surface p-4 text-small">{home.missBanner ?? home.statusLine}</p>
         {view.canUpdateCard && (
           <div className="mt-4">
@@ -114,7 +114,7 @@ async function BillingPage({ searchParams }: { searchParams: PageProps<"/app/bil
               <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-small">
                 <span>
                   {longDate(torontoDate(new Date(i.created * 1000)))}
-                  {i.number ? ` · ${i.number}` : ""} · {moneyCents(i.totalCents, i.currency as Currency)} · {STATUS_WORDS[i.status] ?? i.status}
+                  {i.number ? ` · ${i.number}` : ""} · {invoiceAmount(i)} · {STATUS_WORDS[i.status] ?? i.status}
                 </span>
                 {i.hostedUrl && (
                   <a href={i.hostedUrl} className="tlink" target="_blank" rel="noopener noreferrer">

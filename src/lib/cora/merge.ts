@@ -2,6 +2,7 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import { rethrowIfUnavailable } from "@/lib/ai/errors";
 import type { Query } from "@/lib/db-query";
+import { releaseLease, takeLease } from "@/lib/leases";
 
 /**
  * Merging new plays into the pool (spec B.7 change 2, Cora 2.0 change 3).
@@ -64,25 +65,25 @@ function overlap(a: string, b: string): number {
   return n;
 }
 
-/** Takes or renews a named lease; false when someone else holds it. */
-export async function takeLease(q: Query, name: string, holder: string, seconds: number): Promise<boolean> {
-  const rows = await q(
-    `insert into leases (name, holder, until) values ($1, $2, now() + make_interval(secs => $3))
-     on conflict (name) do update set holder = excluded.holder, until = excluded.until
-     where leases.until < now() or leases.holder = excluded.holder
-     returning name`,
-    [name, holder, seconds],
-  );
-  return rows.length > 0;
-}
-
-export async function releaseLease(q: Query, name: string, holder: string): Promise<void> {
-  await q(`delete from leases where name = $1 and holder = $2`, [name, holder]);
-}
+// The leases moved to a shared module (B2 Unit 6 review); re-exported for existing callers.
+export { releaseLease, takeLease } from "@/lib/leases";
 
 type Row = MergePlay & { week_of: string; shareable: boolean; body: Record<string, unknown> };
 
-export type MergeTally = { joined: number; created: number; matchOnly: number; kept: number; failed: number; busy: boolean };
+export type MergeTally = {
+  joined: number;
+  created: number;
+  matchOnly: number;
+  kept: number;
+  failed: number;
+  busy: boolean;
+  /**
+   * The earliest contributed_week of contributors this pass added to an existing pool play (B2 Unit 6), or
+   * null. Picks of that play from later weeks now score for them, so a week the points cache has closed may
+   * be owed a rebuild (src/lib/growth/points.ts owePointsRebuildFor). A new pool play has no picks yet.
+   */
+  earliestContribution: string | null;
+};
 
 /**
  * The binding sharing check, inside every statement that puts a play's text or
@@ -107,13 +108,44 @@ export const MERGE_ATTEMPTS = 3;
 /** Who contributed a play, one key per person: a user id, or "seed:<contributor id>". */
 const CONTRIBUTOR = `(select coalesce(cp.user_id::text, 'seed:' || cp.contributor_id::text) from plays cp where cp.id = $1)`;
 
+/**
+ * Set-up confirmation (spec B.10 "confirmed by Zack", B2 Unit 6), a CTE of the
+ * match branch ($1 the play, $2 the pool play, $3 the job clock). It runs only
+ * when this statement wins the claim (`placed`), so a play placed twice never
+ * confirms twice. A later run from the picked member whose play joins the same
+ * pool play confirms that member's pick of it: delivered, not a dry run, for
+ * an earlier list week than the run's. The order is by week alone, never by
+ * comparing stamps from two clocks (job-clock-not-database-now).
+ *
+ * At most one pick per (member, pool play) is ever confirmed, the latest
+ * delivered one, and only while none is confirmed yet: a play Cora picked for
+ * the member again is one set-up, not two (B2 Unit 6 review, anti-farming).
+ * A matching-only play confirms too: the member runs it, even if not shared.
+ * Seed runs have no user and confirm nothing. Stamped with the job clock.
+ */
+const CONFIRM_SETUP = `confirmed as (
+  update picks k set setup_confirmed_at = coalesce($3::timestamptz, now())
+  where exists (select 1 from placed)
+    and (k.user_id, k.week_of, k.position) = (
+      select e.user_id, e.week_of, e.position
+      from picks e join plays cp on cp.id = $1 join runs cr on cr.id = cp.run_id
+      where cr.user_id is not null and e.user_id = cr.user_id and e.pool_play_id = $2
+        and not e.dry_run and e.delivered_at is not null and e.week_of < cr.week_of
+        and not exists (select 1 from picks done where done.user_id = e.user_id and done.pool_play_id = $2 and done.setup_confirmed_at is not null)
+      order by e.week_of desc, e.position
+      limit 1
+    )
+)`;
+
 export async function mergePending(
   q: Query,
   model: MergeModel,
-  o: { until?: Date; limit?: number; runIds?: string[]; holder?: string; week?: string } = {},
+  o: { until?: Date; limit?: number; runIds?: string[]; holder?: string; week?: string; now?: Date } = {},
 ): Promise<MergeTally> {
-  const tally: MergeTally = { joined: 0, created: 0, matchOnly: 0, kept: 0, failed: 0, busy: false };
+  const tally: MergeTally = { joined: 0, created: 0, matchOnly: 0, kept: 0, failed: 0, busy: false, earliestContribution: null };
   const holder = o.holder ?? crypto.randomUUID();
+  // The job clock (B2 Unit 6): stamped on set-up confirmations (their week is a point's week) and contributed_at (audit).
+  const at = o.now ? o.now.toISOString() : null;
   if (!(await takeLease(q, "cora-merge", holder, 120))) return { ...tally, busy: true };
   try {
     const rows = await q<Row>(
@@ -149,7 +181,7 @@ export async function mergePending(
       }
       try {
         if (match) {
-          const [r] = await q<{ placed: boolean; shared: boolean }>(
+          const [r] = await q<{ placed: boolean; shared: boolean; added: string | null }>(
             `with ok as (select ${STILL_SHAREABLE} as shared),
              placed as (update plays set pool_play_id = $2, merged_at = now() where id = $1 and merged_at is null returning week_of),
              seen as (
@@ -157,13 +189,17 @@ export async function mergePending(
                where id = $2 and (select shared from ok) and exists (select 1 from placed)
              ),
              who as (
-               insert into pool_play_contributors (pool_play_id, contributor)
-               select $2, ${CONTRIBUTOR} where (select shared from ok) and exists (select 1 from placed)
+               insert into pool_play_contributors (pool_play_id, contributor, contributed_at, contributed_week)
+               select $2, ${CONTRIBUTOR}, coalesce($3::timestamptz, now()), (select week_of from placed) where (select shared from ok) and exists (select 1 from placed)
                on conflict do nothing
-             )
-             select exists (select 1 from placed) as placed, (select shared from ok) as shared`,
-            [p.id, match],
+               returning contributed_week
+             ),
+             ${CONFIRM_SETUP}
+             select exists (select 1 from placed) as placed, (select shared from ok) as shared,
+                    (select to_char(min(contributed_week), 'YYYY-MM-DD') from who) as added`,
+            [p.id, match, at],
           );
+          if (r?.added && (!tally.earliestContribution || r.added < tally.earliestContribution)) tally.earliestContribution = r.added;
           if (r?.placed) {
             if (r.shared) tally.joined++;
             else tally.matchOnly++;
@@ -185,9 +221,12 @@ export async function mergePending(
                select $10, $2, $3, $4, $5, $6, $7, $8, $9, $9 from claim where (select shared from ok)
                returning id
              ),
-             who as (insert into pool_play_contributors (pool_play_id, contributor) select np.id, ${CONTRIBUTOR} from np on conflict do nothing)
+             who as (
+               insert into pool_play_contributors (pool_play_id, contributor, contributed_at, contributed_week)
+               select np.id, ${CONTRIBUTOR}, coalesce($11::timestamptz, now()), $9::date from np on conflict do nothing
+             )
              select exists (select 1 from np) as created, exists (select 1 from claim) as claimed`,
-            [p.id, p.title, p.category, s("description"), s("heavy_use_for"), s("playbook_md"), s("install_notes"), p.job, p.week_of, newId],
+            [p.id, p.title, p.category, s("description"), s("heavy_use_for"), s("playbook_md"), s("install_notes"), p.job, p.week_of, newId, at],
           );
           if (r?.created) tally.created++;
           else if (r?.claimed) tally.kept++;

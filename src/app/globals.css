@@ -53,12 +53,12 @@
   --color-f-proof-night: #a593ea;
   --color-f-surprise-night: #e283b0;
   --color-marker-night: #f0705f;
-  /* Brick and graph colour per level: reach, ease, proof, surprise, hours */
-  --color-level-1: var(--color-f-reach);
-  --color-level-2: var(--color-f-ease);
-  --color-level-3: var(--color-f-proof);
-  --color-level-4: var(--color-f-surprise);
-  --color-level-5: var(--color-f-hours);
+  /* Brick and graph colour per Season (spec B.15): reach, ease, proof, surprise, hours */
+  --color-season-1: var(--color-f-reach);
+  --color-season-2: var(--color-f-ease);
+  --color-season-3: var(--color-f-proof);
+  --color-season-4: var(--color-f-surprise);
+  --color-season-5: var(--color-f-hours);
 
   /* Type: Mona Sans, one family; width and weight do the contrast */
   --font-sans: var(--font-mona), system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", sans-serif;

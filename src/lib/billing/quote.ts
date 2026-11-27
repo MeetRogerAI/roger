@@ -7,6 +7,8 @@ import { asDuration, discountEnds, type DiscountTerms } from "./discount-words";
 import type { V3Settings } from "@/lib/v3-settings";
 import { previewFirst, sharingAtCutoff } from "./first-charge";
 import { carriedDifferenceCents } from "./adjustment";
+import { emailCredit, type BalanceReader } from "./credit-display";
+import type { DisplayCredit } from "./credit-lines";
 import { HAS_CARD_SQL, hasCard } from "./has-card";
 import { firstChargePricing, type Currency } from "./prices";
 import type { BillingGateway } from "./subscriptions";
@@ -20,6 +22,10 @@ import type { BillingGateway } from "./subscriptions";
  *
  * Amounts are priced the way the charge prices them: from the user's sharing
  * at the cutoff of the Monday being quoted.
+ *
+ * Referral credit (B2 plan Unit 5) is never part of the quote: `totalCents`
+ * is the invoice total before the customer balance, and the emails only add
+ * the credit applied and the card charge, from the balance at sending.
  */
 export type Quote = {
   totalCents: number;
@@ -41,7 +47,8 @@ export type Quote = {
    */
   recurringCents?: number;
 };
-export type QuoteDeps = { gw: BillingGateway; settings: V3Settings; now: Date } & MailDeps;
+/** `balances`: Stripe's customer balance, read live for the emails' referral credit (B2 plan Unit 5); without it, the cache. */
+export type QuoteDeps = { gw: BillingGateway; balances?: BalanceReader | null; settings: V3Settings; now: Date } & MailDeps;
 
 type U = {
   id: string;
@@ -147,7 +154,7 @@ export async function noticeQuoteChange(q: Query, d: QuoteDeps, userId: string):
   const fresh = await preview(q, d, u);
   if (!fresh || same(u.quote, fresh)) return false;
   // Unique per refresh: switching back and forth still tells the user each time.
-  const res = await tell(q, d, u, "quote_changed", `${fresh.week}:${fresh.at}`, fresh, quoteChangedEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency }));
+  const res = await tell(q, d, u, "quote_changed", `${fresh.week}:${fresh.at}`, fresh, quoteChangedEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, credit: await emailCredit(q, u.id, d.now, d.balances) }));
   return res === "sent";
 }
 
@@ -164,13 +171,14 @@ export async function tellFirstCharge(
   userId: string,
   kind: string,
   ref: string,
-  build: (quote: Quote) => Rendered,
+  /** `credit`: the member's referral credit as the email is sent (words only, B2 plan Unit 5). */
+  build: (quote: Quote, credit: DisplayCredit) => Rendered,
 ): Promise<SendResult | null> {
   const u = await load(q, userId);
   if (!u || !quotable(u)) return null;
   const fresh = await preview(q, d, u);
   if (!fresh) return null;
-  return tell(q, d, u, kind, ref, fresh, build(fresh));
+  return tell(q, d, u, kind, ref, fresh, build(fresh, await emailCredit(q, u.id, d.now, d.balances)));
 }
 
 /** Spec B.13 email 7, sent when the second free list is delivered (Unit 13 calls this). */
@@ -179,7 +187,7 @@ export async function sendFirstPaidNext(q: Query, d: QuoteDeps, userId: string):
   if (!u || !quotable(u)) return false;
   const fresh = await preview(q, d, u);
   if (!fresh) return false;
-  const res = await tell(q, d, u, "first_paid_next", fresh.week, fresh, firstPaidNextEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh) }));
+  const res = await tell(q, d, u, "first_paid_next", fresh.week, fresh, firstPaidNextEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh), credit: await emailCredit(q, u.id, d.now, d.balances) }));
   return res === "sent";
 }
 
@@ -206,7 +214,7 @@ export async function sendFirstChargeReminders(q: Query, d: QuoteDeps): Promise<
       const u = (await load(q, id))!;
       const fresh = await preview(q, d, u);
       if (!fresh) continue;
-      const res = await tell(q, d, u, "first_charge_reminder", week, fresh, firstChargeReminderEmail({ week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh) }));
+      const res = await tell(q, d, u, "first_charge_reminder", week, fresh, firstChargeReminderEmail({ week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh), credit: await emailCredit(q, u.id, d.now, d.balances) }));
       if (res === "sent") n++;
     } catch (e) {
       console.error("[quote] reminder", id, e instanceof Error ? e.message : e);

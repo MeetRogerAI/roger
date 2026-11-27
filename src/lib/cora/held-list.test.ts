@@ -7,7 +7,7 @@ import type { BillingGateway } from "@/lib/billing/subscriptions";
 import { runHourly } from "@/lib/housekeeping/job";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { deliverWeek } from "./deliver";
 import { RECORD_PICKS_SQL, SUPERSEDE_AT_READY_SQL } from "./job";
 import { deliverLate, runSendJob, sendHeldTeaser, sendUnsentTeasers } from "./send-job";
@@ -45,11 +45,11 @@ const REASON = "Fits the sales work your week shows.";
 
 /** A trial with no card by default (sign-up ends without one). */
 async function member(email: string, o: { card?: boolean; sponsored?: boolean } = {}) {
-  // users.sponsor_id has no foreign key; only whether it is set matters.
+  // Only whether users.sponsor_id is set matters here.
   const [u] = await query<{ id: string }>(
     `insert into users (email, status, plan, sharing, free_lists_used, email_prefs, currency, trial_started_at, sponsor_id)
-     values ($1, 'trial', 'monthly', 'share', 0, '{}', 'USD', $2, case when $3 then gen_random_uuid() end) returning id`,
-    [email, o.card ? "2026-11-16T15:00:00Z" : null, Boolean(o.sponsored)],
+     values ($1, 'trial', 'monthly', 'share', 0, '{}', 'USD', $2, $3) returning id`,
+    [email, o.card ? "2026-11-16T15:00:00Z" : null, o.sponsored ? await testSponsor(query) : null],
   );
   return u.id;
 }

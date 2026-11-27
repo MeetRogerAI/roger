@@ -78,7 +78,7 @@ describe("live Stripe setup (launch list g-live-prices, g-live-webhook)", () => 
     const text = describePlan(plan).join("\n");
     expect(text).toContain("USD 200.00 monthly, tax exclusive (STRIPE_PRICE_MONTHLY_USD)");
     expect(text).toContain("CAD 560.00 monthly, tax exclusive (STRIPE_PRICE_MONTHLY_HIGHER_CAD)");
-    expect(text).toContain(`Create webhook ${LIVE_WEBHOOK_URL} on ${STRIPE_API_VERSION} with 7 events`);
+    expect(text).toContain(`Create webhook ${LIVE_WEBHOOK_URL} on ${STRIPE_API_VERSION} with ${WEBHOOK_EVENTS.length} events`);
   });
 
   it("shows which account the key opens and its tax settings before anything is applied", async () => {
@@ -114,11 +114,15 @@ describe("live Stripe setup (launch list g-live-prices, g-live-webhook)", () => 
   });
 
   it("adds missing events to an existing endpoint, keeping the ones it has", async () => {
-    const f = fakeStripe({ endpoints: [endpoint({ enabled_events: ["invoice.paid", "charge.refunded"] })] });
+    const f = fakeStripe({ endpoints: [endpoint({ enabled_events: ["invoice.paid", "customer.created"] })] });
     const plan = await planSetup(f.c, "live");
     expect(plan.steps.at(-1)).toMatchObject({ kind: "webhook", action: "add_events", missing: WEBHOOK_EVENTS.filter((e) => e !== "invoice.paid") });
     await applySetup(f.c, plan);
-    expect(new Set(f.endpoints[0].enabled_events)).toEqual(new Set([...WEBHOOK_EVENTS, "charge.refunded"]));
+    expect(new Set(f.endpoints[0].enabled_events)).toEqual(new Set([...WEBHOOK_EVENTS, "customer.created"]));
+  });
+
+  it("includes B2's clawback and dispute events (B2 plan Unit 4)", () => {
+    expect(WEBHOOK_EVENTS).toEqual(expect.arrayContaining(["charge.refunded", "charge.dispute.created", "charge.dispute.closed", "invoice.finalized"]));
   });
 
   it("refuses to apply when an endpoint is on another API version, or a price with our lookup key is wrong", async () => {

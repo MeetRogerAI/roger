@@ -20,6 +20,7 @@ import { replaceZackKey } from "@/lib/zack/key";
 import { checkReport, MAX_REPORT_CHARS, storeReport } from "@/lib/zack/receive";
 import { deleteRun, saveZackSettings, setSharing, validateSettings, type SettingsErrors, type Sharing } from "@/lib/zack/settings";
 import { sharingEffect } from "@/lib/zack/sharing-effect";
+import { stripeCredits } from "@/lib/billing/gateway";
 import { noticeQuoteChange } from "@/lib/billing/quote";
 import { stripeBilling } from "@/lib/billing/subscriptions";
 
@@ -99,7 +100,7 @@ export async function changeSharing(_prev: SharingState, fd: FormData): Promise<
   // The first charge's stored amount follows the change, and the user is told if it moved (spec check 21).
   // A monthly member's price is never changed here: what counts is sharing at each Sunday cutoff (the contributor rule).
   const gw = stripeBilling();
-  if (gw) await noticeQuoteChange(query, { gw, settings: await readV3Settings(), now: new Date() }, u.id).catch((e) => console.error("[quote] after sharing", e instanceof Error ? e.message : e));
+  if (gw) await noticeQuoteChange(query, { gw, balances: stripeCredits(), settings: await readV3Settings(), now: new Date() }, u.id).catch((e) => console.error("[quote] after sharing", e instanceof Error ? e.message : e));
   refresh();
   return { status: "saved", sharing, message: "Saved. This applies to sharing straight away." };
 }

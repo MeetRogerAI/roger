@@ -5,6 +5,7 @@ import { normaliseEmail } from "@/lib/auth/tokens";
 import type { Query } from "@/lib/db-query";
 import { isEmail } from "@/lib/form";
 import { appUrl } from "@/lib/mail/layout";
+import { applyReferralSafely, referralEmailKey } from "@/lib/referrals/attribution";
 
 /**
  * Spec B.4, "Existing pilot users": an admin makes an account for a person and
@@ -29,14 +30,18 @@ export async function createPilotLink(
   if (!isEmail(email) || !name) return { ok: false, reason: "invalid" };
   if (adminEmails().includes(email)) return { ok: false, reason: "admin_address" };
 
-  const rows = await q<{ id: string; status: string }>(
-    `insert into users (email, name, path, signup_step, created_by) values ($1, $2, 'running', 'plan', $3)
+  const rows = await q<{ id: string; status: string; created: boolean; pending_referrer_id: string | null }>(
+    // pending_referrer_id: a guest invitation's inviter, kept with the new account so a failed attribution is retried hourly (B2 Unit 3).
+    `insert into users (email, name, path, signup_step, created_by, pending_referrer_id) values ($1, $2, 'running', 'plan', $3,
+       (select r.referrer_id from referrals r where r.stage = 'invited' and r.referred_user_id is null and lower(r.referred_email) = $4 order by r.created_at, r.id limit 1))
      on conflict (email) do update set email = excluded.email
-     returning id, status`,
-    [email, name, o.createdBy],
+     returning id, status, (xmax = 0) as created, pending_referrer_id`,
+    [email, name, o.createdBy, referralEmailKey(email)],
   );
   const user = rows[0];
   if (user.status !== "signup") return { ok: false, reason: "already_signed_up" };
+  // A pilot account has no cookie to read: only a guest invitation for this address can name its referrer.
+  if (user.created && user.pending_referrer_id) await applyReferralSafely(q, { userId: user.id, email, referrer: null, now });
 
   const token = await issueToken(q, { email, purpose: "pilot", userId: user.id, nextPath: "/start/plan", createdBy: o.createdBy }, now);
   await logAdminAction(q, { by: o.createdBy, userId: user.id, action: "pilot_link", detail: { email } });

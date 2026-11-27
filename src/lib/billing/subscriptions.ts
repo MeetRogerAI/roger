@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { isHardDecline } from "./claims";
+import { invoiceCreditCents } from "./credit-lines";
 import { isCouponGone } from "./gateway";
 import { stripe } from "./stripe";
 
@@ -10,7 +11,17 @@ import { stripe } from "./stripe";
  * call is repeated, the subscription is looked up by its claim id.
  */
 export type ChargeResult =
-  | { kind: "succeeded"; object: string; amountCents: number | null; currency: string | null; receiptUrl?: string | null; /** A new subscription's billing cycle anchor (unix seconds). */ anchor?: number | null }
+  | {
+      kind: "succeeded";
+      object: string;
+      /** What the card paid (`amount_paid`): referral credit on the balance is already taken off. */
+      amountCents: number | null;
+      currency: string | null;
+      receiptUrl?: string | null;
+      /** A new subscription's billing cycle anchor (unix seconds). */ anchor?: number | null;
+      /** Referral credit the paid invoice used (B2 plan Unit 5), from its starting and ending balance. Words only. */
+      creditAppliedCents?: number | null;
+    }
   | { kind: "declined"; code: string | null; hard: boolean }
   /** Stripe could not work out the tax for the address: an admin looks, the user is not asked for a new card. */
   | { kind: "tax_address"; error: string }
@@ -152,6 +163,7 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
           anchor: sub.billing_cycle_anchor,
           amountCents: inv && typeof inv !== "string" ? inv.amount_paid : null,
           currency: inv && typeof inv !== "string" ? inv.currency.toUpperCase() : null,
+          creditAppliedCents: inv && typeof inv !== "string" ? invoiceCreditCents(inv) : null,
         };
       } catch (e) {
         // Deleted, or past redeem_by (Unit 4 spike): nothing was created; the caller re-quotes at full price.
@@ -380,7 +392,22 @@ export type SubscriptionInfo = {
   periodEnd: number | null;
   endedAt: number | null;
 };
-export type InvoiceRow = { id: string; number: string | null; created: number; totalCents: number; currency: string; status: string; hostedUrl: string | null; subscription: string | null };
+export type InvoiceRow = {
+  id: string;
+  number: string | null;
+  created: number;
+  totalCents: number;
+  currency: string;
+  status: string;
+  hostedUrl: string | null;
+  subscription: string | null;
+  /**
+   * Referral credit the invoice used, from its own `starting_balance`/`ending_balance` (B2 plan Unit 5), and what
+   * is left for the card (`amount_paid` once paid, `amount_due` before). Absent from rows made before Unit 5.
+   */
+  creditAppliedCents?: number;
+  cardCents?: number;
+};
 
 export interface PlanGateway {
   getSubscription(id: string): Promise<SubscriptionInfo | null>;
@@ -416,7 +443,8 @@ export function subscriptionInfo(x: Stripe.Subscription): SubscriptionInfo {
   };
 }
 
-const invoiceRow = (i: Stripe.Invoice): InvoiceRow => {
+/** A Stripe invoice as the billing page lists it (exported for tests). */
+export const invoiceRow = (i: Stripe.Invoice): InvoiceRow => {
   const sub = i.parent?.subscription_details?.subscription ?? null;
   return {
     id: i.id!,
@@ -427,6 +455,8 @@ const invoiceRow = (i: Stripe.Invoice): InvoiceRow => {
     status: i.status ?? "draft",
     hostedUrl: i.hosted_invoice_url ?? null,
     subscription: typeof sub === "string" ? sub : (sub?.id ?? null),
+    creditAppliedCents: invoiceCreditCents(i),
+    cardCents: i.status === "paid" ? i.amount_paid : i.amount_due,
   };
 };
 

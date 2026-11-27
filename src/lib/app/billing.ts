@@ -1,6 +1,8 @@
 import { torontoDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { ANCHOR, ISO } from "@/lib/billing/adjustment";
+import { displayCredit } from "@/lib/billing/credit-display";
+import { creditLines, creditLinesFromInvoice, creditLineText, type CreditLines, type DisplayCredit } from "@/lib/billing/credit-lines";
 import { HAS_CARD_SQL, NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import { periodAt } from "@/lib/billing/period";
 import { amount, money, moneyCents, priceId, taxPhrase, type Currency } from "@/lib/billing/prices";
@@ -26,6 +28,21 @@ export type BillingView = {
   plan: "monthly" | "per_run";
   planLine: string;
   nextCharge: string;
+  /**
+   * Under the next charge, when referral credit applies to it (B2 plan Unit 5): "Credit applied −X · Card charged Y",
+   * from the cached balance at render time, with the date it was read. Null otherwise.
+   */
+  nextChargeCredit: string | null;
+  /**
+   * The same in numbers, for agents and tests (B2 plan Unit 5): the usable referral credit (null when none or not
+   * usable), its currency and when it was read; the next charge's total before credit and the card's part after it
+   * (null when no total is stated, e.g. Stripe's preview failed).
+   */
+  creditCents: number | null;
+  creditCurrency: Currency | null;
+  creditAsOf: string | null;
+  nextTotalCents: number | null;
+  nextCardChargeCents: number | null;
   /** A trial with no card whose first list is held: the link to Payment (Step 4). */
   cardLink: { href: string; label: string } | null;
   invoices: InvoiceRow[];
@@ -86,6 +103,8 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
   const cancelling = u.status === "active" && Boolean(u.cancel_requested_at) && Boolean(u.stripe_subscription) && !switching;
 
   let nextCharge: string;
+  // The total the next charge's words state, for the credit line (the invoice total before credit).
+  let nextTotal: { cents: number; currency: string } | null = null;
   let cardLink: BillingView["cardLink"] = null;
   // No card yet (sign-up ends without one). A leftover switched one-at-a-time member is "trial" in the data, never in the words.
   const waiting = u.no_card && !u.switched;
@@ -97,6 +116,7 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
   } else if (u.status === "held" && u.hold_reason === "renewal_unpaid") nextCharge = "Your last monthly payment is unpaid. Update your card and it is charged straight away.";
   else if (u.status === "held" && u.hold_reason === "amount_changed") {
     const when = changedAmountChargeDate(u.quote);
+    if (u.quote && when) nextTotal = { cents: u.quote.totalCents, currency: u.quote.currency };
     nextCharge =
       u.quote && when
         ? `Your first charge changed to ${moneyCents(u.quote.totalCents, u.quote.currency)} with tax. It is charged on ${longDate(when)}, with your list. If you’d rather not, cancel before then.`
@@ -105,8 +125,13 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
   else if (u.status === "cancelled" || u.status === "closed") nextCharge = accessLeft && !u.at_once ? `Nothing more will be charged. Your lists continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
   else if (cancelling) nextCharge = accessLeft ? `Nothing more will be charged. Your lists continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
   else if (switching) nextCharge = `Nothing more is charged for monthly. It ends on ${date(u.access_ends_at!)}; after that, only the lists you order.`;
-  else if (u.plan === "monthly" && u.stripe_subscription) nextCharge = await renewalLine(d, u, monthly, tax);
+  else if (u.plan === "monthly" && u.stripe_subscription) {
+    const renewal = await renewalLine(d, u, monthly, tax);
+    nextCharge = renewal.text;
+    nextTotal = renewal.total;
+  }
   else if (u.plan === "monthly" && u.status === "trial") {
+    if (u.quote) nextTotal = { cents: u.quote.totalCents, currency: u.quote.currency };
     if (u.quote) nextCharge = `Your first charge, with your third list: no earlier than ${longDate(u.quote.week)}, ${moneyCents(u.quote.totalCents, u.quote.currency)} with tax.`;
     else if (u.free_lists_used < s.freeRuns) nextCharge = `Nothing until your free lists are done. Then ${monthly} a month, ${tax}, starting with your third list.`;
     else nextCharge = `Your first charge comes with your next list: ${monthly}, ${tax}.`;
@@ -123,6 +148,10 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
     }
   }
 
+  const credit = await displayCredit(q, userId, d.now);
+  const lines = nextTotal ? creditLines(nextTotal.cents, nextTotal.currency, credit) : null;
+  const nextChargeCredit = nextTotal && lines ? creditNote(lines, nextTotal.currency, credit) : null;
+
   const live = ["trial", "active", "held"].includes(u.status);
   // A paying one-at-a-time member waiting for their first monthly charge is "trial" in the data, never in the words.
   const label = u.status === "trial" && !u.switched ? "Cancel my trial" : u.stripe_subscription && u.status === "active" ? "Cancel my plan" : "Cancel my account";
@@ -134,6 +163,12 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
     plan: u.plan,
     planLine,
     nextCharge,
+    nextChargeCredit,
+    creditCents: credit?.cents ?? null,
+    creditCurrency: credit?.currency ?? null,
+    creditAsOf: credit?.asOf?.toISOString() ?? null,
+    nextTotalCents: lines?.totalCents ?? null,
+    nextCardChargeCents: lines?.cardChargedCents ?? null,
     cardLink,
     invoices,
     invoicesFailed,
@@ -144,19 +179,38 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
   };
 }
 
+/** The credit line under the next charge (B2 plan Unit 5), or null when no credit applies. */
+function creditNote(l: CreditLines, currency: string, credit: DisplayCredit): string | null {
+  const line = creditLineText(l, currency);
+  if (!line) return null;
+  return credit?.asOf ? `${line} (your credit balance as of ${longDate(torontoDate(credit.asOf))}).` : `${line}.`;
+}
+
+/**
+ * An invoice's amount as the list shows it: the total, and for one that used referral credit, the credit and the
+ * card's part, from the invoice's own figures (B2 plan Unit 5): "Card charged" once paid, "Card due" while open.
+ * A void, uncollectible or draft invoice shows its total only (nothing was or will be taken).
+ */
+export function invoiceAmount(i: InvoiceRow): string {
+  const total = moneyCents(i.totalCents, i.currency as Currency);
+  if ((i.status !== "paid" && i.status !== "open") || !i.creditAppliedCents || i.cardCents == null) return total;
+  const line = creditLineText(creditLinesFromInvoice(i.totalCents, i.creditAppliedCents, i.cardCents), i.currency, { due: i.status === "open" });
+  return line ? `${total} · ${line}` : total;
+}
+
 /** The coming renewal: its date from the subscription's anchor, its total with tax from Stripe's preview (any month's difference included). */
-async function renewalLine(d: BillingDeps, u: U, monthly: string, tax: string): Promise<string> {
+async function renewalLine(d: BillingDeps, u: U, monthly: string, tax: string): Promise<{ text: string; total: { cents: number; currency: string } | null }> {
   const end = periodAt(u.anchor, d.now)?.endDate;
   const when = end ? `${longDate(end)}: ` : "";
   if (d.adjust && u.stripe_customer && u.stripe_subscription) {
     try {
       const p = await d.adjust.previewRenewal({ customer: u.stripe_customer, subscription: u.stripe_subscription });
-      return `Next charge ${when}${moneyCents(p.totalCents, p.currency as Currency)} with tax.`;
+      return { text: `Next charge ${when}${moneyCents(p.totalCents, p.currency as Currency)} with tax.`, total: { cents: p.totalCents, currency: p.currency } };
     } catch (e) {
       console.error("[billing] renewal preview", e instanceof Error ? e.message : e);
     }
   }
-  return `Next charge ${when}${monthly}, ${tax}.`;
+  return { text: `Next charge ${when}${monthly}, ${tax}.`, total: null };
 }
 
 /** One at a time: nothing unless ordered; a list's price with tax from Stripe's preview where it can be read. */

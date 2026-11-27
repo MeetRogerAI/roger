@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import type { Counter } from "@/lib/rate-limit";
 import { fakeGateway, type FakePromo } from "@/test-helpers/fake-card-gateway";
-import { testDb } from "@/test-helpers/pglite-db";
+import { TEST_SPONSOR, testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { checkPromoCode } from "./promo";
 
 /** An in-memory rate counter (the Postgres one is tested in rate-limit.pg.test.ts). */
@@ -112,7 +112,7 @@ describe("checkPromoCode (plan 2026-11-26-001, Unit 4)", () => {
 
   it.each([
     ["a trial whose card is saved", "update users set trial_started_at = now() where id = $1"],
-    ["a sponsored trial", "update users set sponsor_id = id where id = $1"],
+    ["a sponsored trial", `update users set sponsor_id = '${TEST_SPONSOR}' where id = $1`],
     ["an active member", "update users set status = 'active', trial_started_at = now() where id = $1"],
     ["an account still signing up", "update users set status = 'signup' where id = $1"],
   ])("refuses %s (not_allowed), without counting or asking Stripe", async (_n, sql) => {
@@ -120,6 +120,7 @@ describe("checkPromoCode (plan 2026-11-26-001, Unit 4)", () => {
     gw.payment.addPromotion({ code: "WELCOME20" });
     const find = vi.spyOn(gw, "findPromotion");
     const counter = vi.fn(memoryCounter());
+    await testSponsor(query);
     await query(sql, [userId]);
     expect(await check(gw, "WELCOME20", { counter })).toEqual({ ok: false, reason: "not_allowed" });
     expect(find).not.toHaveBeenCalled();

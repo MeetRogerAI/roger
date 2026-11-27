@@ -2,8 +2,14 @@ import type Stripe from "stripe";
 import type { Query } from "@/lib/db-query";
 import { completeCardSetup, completeCardUpdate, type CompleteOptions } from "./card-setup";
 import { adminAlert, alertAdmins } from "@/lib/mail/send";
+import { cacheInvoiceBalance } from "./credit-display";
+import { invoiceCreditCents } from "./credit-lines";
 import { settleFromInvoice } from "./first-charge";
-import type { CardGateway } from "./gateway";
+import type { CardGateway, CreditGateway } from "./gateway";
+import { grantForInvoice } from "@/lib/referrals/credit";
+import { CreditBusy } from "@/lib/referrals/credit-balance";
+import type { CreditDeps } from "@/lib/referrals/credit-money";
+import { clawbackForRefunds, creditsForDispute } from "@/lib/referrals/credit-reversal";
 import { adjustmentOnSubscriptionEnded, markInvoiced } from "./adjustment";
 import { noticeQuoteChange } from "./quote";
 import { afterCardChange, renewalFailed, renewalPaid, subscriptionEnded, syncSubscription, type RenewalDeps } from "./renewals";
@@ -39,7 +45,19 @@ export async function handleStripeEvent(
   q: Query,
   gw: CardGateway,
   event: Stripe.Event,
-  o: Omit<CompleteOptions, "expectUserId"> & { adjust?: AdjustmentGateway; plans?: PlanGateway; billing?: BillingGateway; orders?: OrderGateway },
+  o: Omit<CompleteOptions, "expectUserId"> & {
+    adjust?: AdjustmentGateway;
+    plans?: PlanGateway;
+    billing?: BillingGateway;
+    orders?: OrderGateway;
+    credits?: CreditGateway;
+    /** The credit ledger's clock: never ahead of the real one (the reconcile's "as of" replay passes it). */
+    creditsNow?: Date;
+    /** The credit lease and its work budget (the webhook route passes WEBHOOK_LEASE: it runs for at most 60 seconds). */
+    creditLease?: CreditDeps["leaseBudget"];
+    /** The caller's deadline for credit work (the reconcile passes its pass's). */
+    creditDeadline?: number;
+  },
 ): Promise<EventOutcome> {
   if (!(await claimEvent(q, event.id, event.type))) return "duplicate";
   // Unit 15's handlers: settings are read only when one of them runs.
@@ -61,7 +79,7 @@ export async function handleStripeEvent(
       // "Update card" on /app/billing: the new default card, then a held charge retried at once.
       const id = event.data.object.id;
       const d = await rdeps();
-      const result = await completeCardUpdate(q, gw, id, { after: (userId) => afterCardChange(q, d, userId, id) });
+      const result = await completeCardUpdate(q, gw, id, { after: (userId) => afterCardChange(q, d, userId, id), mail: o });
       if (result === "pending") throw new NotReadyYet("Checkout reported complete but the session is not complete yet");
       outcome = "handled";
       if (result !== "done") note = result;
@@ -80,6 +98,18 @@ export async function handleStripeEvent(
       const inv = event.data.object;
       const items = (inv.lines?.data ?? []).map((l) => l.parent?.invoice_item_details?.invoice_item).filter((x): x is string => Boolean(x));
       if (items.length && (await markInvoiced(q, o, inv.id ?? "", items))) outcome = "handled";
+      // B2 Unit 5: an invoice that used (or changed) the referral credit leaves its ending balance as the cached
+      // balance, so the displays do not keep showing credit Stripe has spent. No Stripe call; never over a newer reading.
+      const finalized = inv.status_transitions?.finalized_at ?? event.created;
+      if (
+        await cacheInvoiceBalance(q, {
+          customer: typeof inv.customer === "string" ? inv.customer : (inv.customer?.id ?? null),
+          starting_balance: inv.starting_balance,
+          ending_balance: inv.ending_balance,
+          finalizedAt: new Date(finalized * 1000),
+        })
+      )
+        outcome = "handled";
     }
     // The subscription ended: an adjustment still pending can never be collected, so it is deleted.
     if (event.type === "customer.subscription.deleted") {
@@ -112,7 +142,7 @@ export async function handleStripeEvent(
       const [u] = await q<{ id: string }>(`select id from users where stripe_customer = $1`, [event.data.object.id]);
       if (u) {
         const d = await rdeps();
-        await noticeQuoteChange(q, { gw: o.billing, settings: d.settings, now: d.now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
+        await noticeQuoteChange(q, { gw: o.billing, balances: o.credits ?? null, settings: d.settings, now: d.now, query: o.query, transport: o.transport, sleep: o.sleep }, u.id);
         outcome = "handled";
       }
     }
@@ -126,8 +156,16 @@ export async function handleStripeEvent(
       if (claimId && sub && !renewal) {
         const r = await settleFromInvoice(
           q,
-          { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, anchor: planLineStart(inv) },
-          { settings: await o.getSettings(), now: o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
+          {
+            claimId,
+            subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id,
+            amountCents: inv.amount_paid,
+            currency: inv.currency,
+            anchor: planLineStart(inv),
+            // The paid invoice's own balance figures: the subscribed email states the referral credit it used.
+            creditAppliedCents: invoiceCreditCents(inv),
+          },
+          { settings: await o.getSettings(), now: o.creditsNow ?? o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
         );
         outcome = "handled";
         if (r !== "charged") note = `invoice.paid: ${r}`;
@@ -149,6 +187,56 @@ export async function handleStripeEvent(
           note = "order invoice paid after its claim failed";
         }
         outcome = "handled";
+      }
+    }
+    // Referral credit (B2 Unit 4): the grant on a paid invoice, a clawback on a refund or a lost dispute, a freeze while one
+    // is open. Each handler re-reads Stripe and is safe to run again; a failure (a Stripe call, the email) answers 500.
+    // Its ledger stamps use the job clock, never ahead of the real one (creditsNow), as every other credit write does.
+    //
+    // CreditBusy (B2 whole-branch review: another change holds the member's credit lease, or this webhook's shorter
+    // budget ran out) is decided per event:
+    // - invoice.paid: answered 200 with a note. The event's other work (the first charge, a renewal) is done, and the
+    //   hourly sweep already finishes the grant: referral_late_grants grants a paid trial referral with no grant, and
+    //   referral_credits posts an unposted one and sends its email. A 500 would only replay the whole event.
+    // - charge.refunded and charge.dispute.*: credit is all these events do, and nothing hourly looks for a reversal
+    //   (only this event, or the reconcile's replay of a failed one, does), so CreditBusy still answers 500 and
+    //   Stripe sends it again.
+    if (o.credits) {
+      const credits = o.credits;
+      const cd = async (): Promise<CreditDeps> => ({
+        credits,
+        settings: await o.getSettings(),
+        now: o.creditsNow ?? o.now ?? new Date(),
+        query: o.query,
+        transport: o.transport,
+        sleep: o.sleep,
+        leaseBudget: o.creditLease,
+        deadline: o.creditDeadline,
+      });
+      switch (event.type) {
+        case "invoice.paid": {
+          const inv = event.data.object;
+          if (!inv.id) break;
+          try {
+            const r = await grantForInvoice(q, await cd(), inv.id, typeof inv.customer === "string" ? inv.customer : (inv.customer?.id ?? null));
+            if (r !== "none") {
+              outcome = "handled";
+              note ??= `referral credit: ${r}`;
+            }
+          } catch (e) {
+            if (!(e instanceof CreditBusy)) throw e;
+            note ??= "referral credit busy: left to the hourly sweep";
+            console.warn(`[stripe] ${event.id}: ${e.message}; the hourly credit sweep finishes the grant`);
+          }
+          break;
+        }
+        case "charge.refunded":
+          if ((await clawbackForRefunds(q, await cd(), event.data.object.id)) > 0) outcome = "handled";
+          break;
+        case "charge.dispute.created":
+        case "charge.dispute.closed":
+          if ((await creditsForDispute(q, await cd(), event.data.object.id)) !== "none") outcome = "handled";
+          break;
       }
     }
     await q(`update stripe_events set status = 'done', done_at = now(), error = $2 where id = $1`, [event.id, note]);

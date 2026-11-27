@@ -1,3 +1,4 @@
+import { creditLines, moneyExact, PRICE_BOX_CARD, PRICE_BOX_CREDIT, type DisplayCredit } from "./credit-lines";
 import { discountEnds, discountWords, thenWords, type DiscountTerms } from "./discount-words";
 import type { BillingCountry, MonthlyPreview } from "./gateway";
 import { checkBillingLocation, OUTSIDE_COVERAGE } from "./location";
@@ -78,6 +79,30 @@ export function taxLine(p: MonthlyPreview): { label: string; value: string } {
 /** "CA$316.40", or "CA$280 + tax" while the tax is still to come. */
 export function totalText(p: MonthlyPreview): string {
   return p.tax === "pending" ? `${moneyCents(p.totalCents, p.currency)} + tax` : moneyCents(p.totalCents, p.currency);
+}
+
+type Row = { label: string; value: string };
+
+/**
+ * The Price Box's credit rows (B2 plan Unit 5), shown after the first month's total: "Credit applied to your first
+ * charge −X" and "Card charged then Y", and, so the credit is not read as a lower price, the month after it ("Then
+ * CA$316.40 a month"; null when the discount's own "Then" line already says it). Null when there is no credit to
+ * apply, when the currency toggle shows the other currency (a balance has one currency), or while the tax is still
+ * to come (the total, and so the card's part, is not known yet). Words drafted for Peter's sign-off.
+ */
+export function creditRows(
+  p: MonthlyPreview,
+  credit: DisplayCredit | undefined,
+  promo: PromoView | null = null,
+): { credit: Row; card: Row; then: string | null } | null {
+  if (p.tax === "pending") return null;
+  const l = creditLines(p.totalCents, p.currency, credit ?? null);
+  if (l.creditAppliedCents <= 0) return null;
+  return {
+    credit: { label: PRICE_BOX_CREDIT, value: `−${moneyExact(l.creditAppliedCents, p.currency)}` },
+    card: { label: PRICE_BOX_CARD, value: moneyExact(l.cardChargedCents, p.currency) },
+    then: thenLine(promo, p) ? null : thenWords(p.totalCents, p.currency),
+  };
 }
 
 /**

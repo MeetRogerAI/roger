@@ -4,6 +4,7 @@ import { CheckoutElementsProvider, PaymentElement, useCheckoutElements, type Str
 import { loadStripe, type Appearance, type Stripe } from "@stripe/stripe-js";
 import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { applyPromo, openSession, quoteTax, removePromo, setPaymentCurrency, type BillingLocationInput, type Priced } from "@/app/start/payment/actions";
+import type { DisplayCredit } from "@/lib/billing/credit-lines";
 import type { MonthlyPreview } from "@/lib/billing/gateway";
 import { billingErrors, canQuote, COUNTRIES, OTHER_COUNTRY, TAX_UNAVAILABLE, type PromoView } from "@/lib/billing/payment-view";
 import type { Currency } from "@/lib/billing/prices";
@@ -77,6 +78,7 @@ export function PaymentForm({
   name,
   addressError,
   supportEmail,
+  credit = null,
 }: {
   publishableKey: string | null;
   session: PaymentSession | null;
@@ -88,6 +90,8 @@ export function PaymentForm({
   name: string;
   addressError: string | null;
   supportEmail: string;
+  /** Referral credit on the member's balance, from the server (B2 plan Unit 5). Shown only in its own currency. */
+  credit?: DisplayCredit;
 }) {
   const [session, setSession] = useState(initialSession);
   const [price, setPrice] = useState(initialPrice);
@@ -282,6 +286,7 @@ export function PaymentForm({
           onCurrency={changeCurrency}
           currencyBusy={busy !== null}
           notice={notice}
+          credit={credit}
           promoSlot={<PromoField promo={promo} onApply={apply} onRemove={remove} disabled={busy !== null} />}
         />
       </div>

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { mergeV3 } from "@/lib/v3-settings";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { linkContributor } from "./users";
 import { ATTENTION_LABELS, attentionFor, eligibleCounts, excuseDefaultWeek, filterOps, loadOps, opsWeek, STATUS_KEYS, statusKey } from "./ops";
 
@@ -14,6 +14,7 @@ const WEEK = "2026-12-14";
 const SUNDAY_EVENING = new Date("2026-12-14T01:30:00Z");
 
 async function user(email: string, cols: Record<string, unknown> = {}): Promise<string> {
+  if (typeof cols.sponsor_id === "string") await testSponsor(query, cols.sponsor_id);
   const c = { status: "trial", plan: "monthly", sharing: "share", currency: "USD", ...cols };
   const keys = Object.keys(c);
   const [{ id }] = await query<{ id: string }>(

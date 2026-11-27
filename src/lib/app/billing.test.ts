@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
-import type { AdjustmentGateway } from "@/lib/billing/subscriptions";
+import type Stripe from "stripe";
+import { invoiceRow, type AdjustmentGateway } from "@/lib/billing/subscriptions";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakePlans } from "@/test-helpers/fake-plans";
-import { testDb } from "@/test-helpers/pglite-db";
-import { CARD_LATER, loadBilling, NO_CARD_YET } from "./billing";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
+import { CARD_LATER, invoiceAmount, loadBilling, NO_CARD_YET } from "./billing";
 
 const ONE_AT_A_TIME = /one (list )?at a time|per list|order a list|switch plan/i;
 
@@ -104,7 +105,7 @@ describe("a trial with no card yet: what the billing page says (plan 2026-11-26-
   const WEEK = "2026-12-07";
   async function noCard(email: string, o: { sponsored?: boolean } = {}) {
     return member(
-      `insert into users (email, status, plan, currency, free_lists_used, sponsor_id) values ('${email}', 'trial', 'monthly', 'USD', 0, ${o.sponsored ? "gen_random_uuid()" : "null"}) returning id`,
+      `insert into users (email, status, plan, currency, free_lists_used, sponsor_id) values ('${email}', 'trial', 'monthly', 'USD', 0, ${o.sponsored ? `'${await testSponsor(query)}'` : "null"}) returning id`,
     );
   }
   async function held(userId: string) {
@@ -167,5 +168,74 @@ describe("a leftover one-at-a-time account (preview only) still renders", () => 
     expect(v).toMatchObject({ plan: "per_run", cardLink: null, cancel: { label: "Cancel my account" } });
     expect(v?.planLine).toMatch(/^One list at a time:/);
     expect(v).not.toHaveProperty("offer");
+  });
+});
+
+/** B2 plan Unit 5: referral credit under the next charge, and on invoices that used it. */
+describe("referral credit on the billing page", () => {
+  const active = () =>
+    member(
+      "insert into users (email, status, plan, currency, stripe_customer, stripe_subscription, first_charge_at, billing_anchor) values ('c@example.com', 'active', 'monthly', 'USD', 'cus_c', 'sub_c', '2026-12-03T11:05:00Z', '2026-12-03T11:05:00Z') returning id",
+    );
+
+  it("the next renewal: credit applied and the card's part, with the date the balance was read", async () => {
+    const id = await active();
+    await query("update users set credit_balance_cents = 20000, credit_balance_at = '2026-12-10T15:00:00Z' where id = $1", [id]);
+    const v = await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust() });
+    expect(v?.nextCharge).toBe("Next charge Sunday, January 3: US$226 with tax.");
+    expect(v?.nextChargeCredit).toBe("Credit applied −US$200.00 · Card charged US$26.00 (your credit balance as of Thursday, December 10).");
+    // The same in numbers, for agents.
+    expect(v).toMatchObject({ creditCents: 20000, creditCurrency: "USD", creditAsOf: "2026-12-10T15:00:00.000Z", nextTotalCents: 22600, nextCardChargeCents: 2600 });
+  });
+
+  it("no line with no credit, a balance read before the last charge, credit in another currency, or no previewed total", async () => {
+    const id = await active();
+    expect((await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust() }))?.nextChargeCredit).toBeNull();
+    await query("update users set credit_balance_cents = 20000, credit_balance_at = '2026-12-01T15:00:00Z' where id = $1", [id]);
+    expect((await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust() }))?.nextChargeCredit).toBeNull();
+    await query("update users set credit_balance_at = '2026-12-10T15:00:00Z', currency = 'CAD' where id = $1", [id]);
+    expect((await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust() }))?.nextChargeCredit).toBeNull();
+    await query("update users set currency = 'USD' where id = $1", [id]);
+    expect((await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust(true) }))?.nextChargeCredit).toBeNull();
+  });
+
+  it("a trial's told first charge: the total stays, the credit line follows", async () => {
+    const id = await member(
+      `insert into users (email, status, plan, currency, stripe_customer, free_lists_used, trial_started_at, quote, credit_balance_cents, credit_balance_at)
+       values ('t@example.com', 'trial', 'monthly', 'USD', 'cus_t', 2, '2026-11-30T15:00:00Z', '{"totalCents":22600,"currency":"USD","week":"2026-12-14"}', 30000, '2026-12-10T15:00:00Z') returning id`,
+    );
+    const v = await loadBilling(query, id, { settings, now: SATURDAY, plans });
+    expect(v?.nextCharge).toContain("US$226 with tax.");
+    expect(v?.nextChargeCredit).toBe("Credit applied −US$226.00 · Card charged US$0.00 (your credit balance as of Thursday, December 10).");
+  });
+
+  it("with no credit the numbers are empty, and a stated total has no card part beyond itself", async () => {
+    const id = await active();
+    expect(await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust() })).toMatchObject({
+      creditCents: null,
+      creditCurrency: null,
+      creditAsOf: null,
+      nextTotalCents: 22600,
+      nextCardChargeCents: 22600,
+    });
+    expect(await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust(true) })).toMatchObject({ nextTotalCents: null, nextCardChargeCents: null });
+  });
+
+  it("an invoice that used credit shows its own figures: charged once paid, due while open, the total alone otherwise", () => {
+    const row = { id: "in_1", number: "R-1", created: 1, totalCents: 31640, currency: "CAD", status: "paid", hostedUrl: null, subscription: "sub_1" };
+    expect(invoiceAmount(row)).toBe("CA$316.40");
+    expect(invoiceAmount({ ...row, creditAppliedCents: 0, cardCents: 31640 })).toBe("CA$316.40");
+    const used = { ...row, creditAppliedCents: 28000, cardCents: 3640 };
+    expect(invoiceAmount(used)).toBe("CA$316.40 · Credit applied −CA$280.00 · Card charged CA$36.40");
+    expect(invoiceAmount({ ...used, status: "open" })).toBe("CA$316.40 · Credit applied −CA$280.00 · Card due CA$36.40");
+    for (const status of ["void", "uncollectible", "draft"]) expect(invoiceAmount({ ...used, status })).toBe("CA$316.40");
+  });
+
+  it("the invoice mapping reads the credit from the invoice's balances: none for a debt it collected", () => {
+    const inv = (o: Partial<Stripe.Invoice>) =>
+      invoiceRow({ id: "in_1", number: "R-1", created: 1, total: 31640, currency: "cad", status: "paid", hosted_invoice_url: null, parent: null, amount_paid: 3640, amount_due: 3640, ...o } as Stripe.Invoice);
+    expect(inv({ starting_balance: -28000, ending_balance: 0 })).toMatchObject({ creditAppliedCents: 28000, cardCents: 3640 });
+    expect(inv({ starting_balance: 500, ending_balance: 0, amount_paid: 32140 })).toMatchObject({ creditAppliedCents: 0, cardCents: 32140 });
+    expect(inv({ status: "open", starting_balance: -28000, ending_balance: 0, amount_paid: 0 })).toMatchObject({ creditAppliedCents: 28000, cardCents: 3640 });
   });
 });

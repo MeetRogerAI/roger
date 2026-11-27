@@ -2,6 +2,7 @@ import { weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { processRun, type IntakeDeps } from "@/lib/intake/process";
 import { zackVersion } from "@/lib/zack/receive";
+import { owePointsRebuild } from "@/lib/growth/points";
 import { mergePending, type MergeModel, type MergeTally } from "./merge";
 
 /**
@@ -21,7 +22,7 @@ export function dateFromFileName(name: string): string | null {
   return name.match(/(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
 }
 
-export async function importSeedRun(q: Query, input: SeedInput, deps: IntakeDeps & { merge: MergeModel }): Promise<SeedResult> {
+export async function importSeedRun(q: Query, input: SeedInput, deps: IntakeDeps & { merge: MergeModel; now?: Date }): Promise<SeedResult> {
   const label = input.label.replace(/\s+/g, " ").trim();
   const agent = input.agent.trim().toLowerCase();
   if (!label || !agent) throw new Error("A seed run needs a contributor label and an agent.");
@@ -53,6 +54,9 @@ export async function importSeedRun(q: Query, input: SeedInput, deps: IntakeDeps
   // A replacement is new text: its old plays go, and any pool play left with no plays is retired by the merge.
   if (existing) await q(`delete from plays where run_id = $1`, [run.id]);
   const intake = await processRun(q, run.id, deps);
-  const merge = await mergePending(q, deps.merge, { runIds: [run.id] });
+  // The import's clock (an admin action: the real time unless a caller passes its own), stamped on contributed_at.
+  const merge = await mergePending(q, deps.merge, { runIds: [run.id], now: deps.now ?? new Date() });
+  // A seed run can change who contributed to plays already picked, in any week: the next hourly pass rebuilds points.
+  await owePointsRebuild(q, `seed import: ${label}, week of ${week}`);
   return { runId: run.id, contributorId: c.id, weekOf: week, replaced: Boolean(existing), intake, merge };
 }

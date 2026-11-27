@@ -88,3 +88,28 @@ describe("PriceBox", () => {
     expect(t).toContain("That code no longer applies");
   });
 });
+
+/** B2 plan Unit 5: referral credit already on the balance. */
+describe("PriceBox with referral credit", () => {
+  const credit = { cents: 28000, currency: "CAD" as const };
+  it("after the first month's total: the credit to the first charge, the card's part, then the month after", () => {
+    const t = text(renderToStaticMarkup(<PriceBox price={ontario} promo={null} credit={credit} />));
+    expect(t).toContain("Total per month CA$316.40 Credit applied to your first charge −CA$280.00 Card charged then CA$36.40 Then CA$316.40 a month");
+    expect(t).toContain("Due today: $0. Your first charge comes with your third list.");
+  });
+
+  it("with a discount that ends: its own Then line comes first, and is not repeated", () => {
+    const p = { ...ontario, discountCents: 5600, taxCents: 2912, totalCents: 25312 };
+    const t = text(renderToStaticMarkup(<PriceBox price={p} promo={promo} credit={credit} />));
+    expect(t).toContain("First month CA$253.12 Then CA$316.40 a month Credit applied to your first charge −CA$253.12 Card charged then CA$0.00");
+    expect(t.match(/Then CA\$316\.40 a month/g)).toHaveLength(2); // shown once, and once in the live region
+  });
+
+  it("unchanged with no credit, with the toggle on the other currency, or before the tax is known", () => {
+    const plain = renderToStaticMarkup(<PriceBox price={ontario} promo={null} />);
+    expect(renderToStaticMarkup(<PriceBox price={ontario} promo={null} credit={null} />)).toBe(plain);
+    expect(renderToStaticMarkup(<PriceBox price={ontario} promo={null} credit={{ cents: 28000, currency: "USD" }} />)).toBe(plain);
+    const pending = basePreview("CAD", 28000, null);
+    expect(renderToStaticMarkup(<PriceBox price={pending} promo={null} credit={credit} />)).toBe(renderToStaticMarkup(<PriceBox price={pending} promo={null} />));
+  });
+});

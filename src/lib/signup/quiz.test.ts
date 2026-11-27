@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseQuiz, primaryAgent, routeFor } from "./quiz";
+import { rogerLevels } from "@/data/roger-levels";
+import { parseQuiz, primaryAgent, quizSchema, routeFor } from "./quiz";
 
 const slugs = ["claude", "grok-bot", "duet", "hark"];
 
@@ -106,11 +107,35 @@ describe("primary agent and level", () => {
     expect(r.ok && primaryAgent(r.answers)).toBe("Lindy");
   });
 
-  it("takes levels 0 to 8 only", () => {
+  it("takes levels 0 to 9 only", () => {
     const zero = parseQuiz(form({ level: "0" }), slugs);
     expect(zero.ok && zero.answers.level).toBe(0);
     expect(parseQuiz(form({ level: "8" }), slugs).ok).toBe(true);
-    for (const bad of ["9", "-1", "2.5", "x"]) expect(parseQuiz(form({ level: bad }), slugs).ok, bad).toBe(false);
+    for (const bad of ["10", "-1", "2.5", "x"]) {
+      const r = parseQuiz(form({ level: bad }), slugs);
+      expect(!r.ok && r.errors.level, bad).toBe("Choose the one closest to you.");
+    }
+  });
+
+  it("takes exactly the levels on the v1.1 list: 0 up to the last one, 9", () => {
+    expect(rogerLevels.map((l) => l.level)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(parseQuiz(form({ level: String(rogerLevels.at(-1)?.level) }), slugs).ok).toBe(true);
+    expect(parseQuiz(form({ level: "10" }), slugs).ok).toBe(false);
+  });
+
+  it("stores level 9 with the levels list it was given on", () => {
+    const r = parseQuiz(form({ level: "9" }), slugs);
+    expect(r.ok && r.answers.level).toBe(9);
+    expect(r.ok && r.answers.levelQuiz).toBe("1.1");
+  });
+
+  it("still reads answers saved before the marker, and refuses an unknown marker", () => {
+    // As saved before levels v1.1: no levelQuiz.
+    const old = { work: "other", role: "Broker", uses: "every_day", agents: ["claude"], agentOther: "", primary: "claude", count: "6+", level: 8, help: [], software: "often" };
+    const r = quizSchema.safeParse(old);
+    expect(r.success && r.data.level).toBe(8);
+    expect(r.success && r.data.levelQuiz).toBeUndefined();
+    expect(quizSchema.safeParse({ ...old, levelQuiz: "2.0" }).success).toBe(false);
   });
 });
 

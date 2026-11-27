@@ -292,3 +292,61 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
     expect(created).toEqual([null]);
   });
 });
+
+/** B2 plan Unit 5: referral credit is words only; the told amount and the charge's comparison stay the invoice total. */
+describe("referral credit in the first-charge emails", () => {
+  const credit = (cents: number, at: string) => query("update users set credit_balance_cents = $1, credit_balance_at = $2", [cents, at]);
+  // Stripe takes the balance off the invoice: what the card pays, and the credit the paid invoice used.
+  const creditGw = (creditCents: number): BillingGateway => ({
+    ...gw,
+    createSubscription: async ({ price }) => {
+      created.push(price);
+      const total = prices[price];
+      const applied = Math.min(creditCents, total);
+      return { kind: "succeeded", object: "sub_1", amountCents: total - applied, currency: "USD", creditAppliedCents: applied };
+    },
+  });
+
+  it("the second-list and 48-hour emails show the credit on the balance as they are sent; the told amount is the total", async () => {
+    await credit(20000, "2026-12-01T12:00:00Z");
+    await sendFirstPaidNext(query, deps(MONDAY_BEFORE), uid);
+    await sendFirstChargeReminders(query, deps(SATURDAY));
+    expect(sent).toHaveLength(2);
+    for (const m of sent) {
+      expect(m.text).toContain("we’ll charge US$226, tax included");
+      expect(m.text).toContain("Credit applied −US$200.00 · Card charged US$26.00.");
+      expect(m.text).toContain("as this email is sent");
+    }
+    expect((await told()).total).toBe(22600);
+  });
+
+  it("credit posted between the quote and the charge: no amount_changed hold, and the subscribed email shows the paid invoice's figures", async () => {
+    await sendFirstPaidNext(query, deps(MONDAY_BEFORE), uid);
+    await sendFirstChargeReminders(query, deps(SATURDAY));
+    expect(sent[1].text).not.toContain("Credit applied");
+    // A referral credit posts on Sunday: Stripe's preview total is unchanged (the balance is applied to amount_due, not total).
+    await credit(20000, "2026-12-13T12:00:00Z");
+    expect(await chargeFirst(query, { ...deps(MONDAY_CHARGE), gw: creditGw(20000) }, uid, WEEK)).toBe("charged");
+    const [u] = await query<{ status: string; hold_reason: string | null }>("select status, hold_reason from users");
+    expect(u).toEqual({ status: "active", hold_reason: null });
+    expect(sent.some((m) => m.subject === "Your first charge amount changed")).toBe(false);
+    const subscribed = sent.find((m) => m.subject === "You’re subscribed")!;
+    expect(subscribed.text).toContain("Your first month is US$226, tax included. Credit applied −US$200.00 · Card charged US$26.00.");
+  });
+
+  it("the 48-hour reminder reads the live Stripe balance over a stale cache", async () => {
+    await credit(5000, "2026-12-01T12:00:00Z");
+    await sendFirstPaidNext(query, deps(MONDAY_BEFORE), uid);
+    expect(sent[0].text).toContain("Credit applied −US$50.00 · Card charged US$176.00.");
+    expect(await sendFirstChargeReminders(query, { ...deps(SATURDAY), balances: { balance: async () => -20000 } })).toBe(1);
+    expect(sent[1].text).toContain("Credit applied −US$200.00 · Card charged US$26.00.");
+    expect(sent[1].text).toContain("as this email is sent");
+  });
+
+  it("a balance read before the member's last charge is not shown (it may have been spent)", async () => {
+    await credit(20000, "2026-12-01T12:00:00Z");
+    await query("update users set first_charge_at = '2026-12-05T12:00:00Z'");
+    await sendFirstPaidNext(query, deps(MONDAY_BEFORE), uid);
+    expect(sent[0].text).not.toContain("Credit applied");
+  });
+});

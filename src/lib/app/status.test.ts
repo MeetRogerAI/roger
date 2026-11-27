@@ -155,3 +155,32 @@ describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
     expect(statusLink(f({ firstTeaserAt: "2026-12-14T12:00:00Z" }))).toBeNull();
   });
 });
+
+/** B2 plan Unit 5: referral credit after a told first charge in the status line. */
+describe("statusLine with referral credit", () => {
+  const quote = { totalCents: 22600, currency: "USD" as const, week: "2026-12-21" };
+  const credit = { cents: 20000, currency: "USD" as const };
+  it("the next list is the first paid one: the amount, then the credit line", () => {
+    expect(statusLine(f({ freeListsUsed: 2, quote, credit }), s)).toBe(
+      "Free list 2 of 2. Your next list is your first paid one: Monday, December 21, US$226 with tax. Credit applied −US$200.00 · Card charged US$26.00.",
+    );
+  });
+
+  it("monthly starts with the next list (a switched one-at-a-time member)", () => {
+    expect(statusLine(f({ freeListsUsed: 2, switchedFromPerRun: true, quote, credit }), s)).toBe(
+      "Monthly starts with your next list: Monday, December 21 at the earliest, US$226 with tax. Credit applied −US$200.00 · Card charged US$26.00.",
+    );
+  });
+
+  it("held for a changed amount: the new amount and its date, then the credit line", () => {
+    const line = statusLine(f({ status: "held", holdReason: "amount_changed", freeListsUsed: 2, quote: { ...quote, at: "2026-12-14T11:05:00Z" }, credit }), s);
+    expect(line).toMatch(/^Your first charge is now US\$226 with tax, not the amount we told you before\. We charge it on Tuesday, December 15, .* before then\. Credit applied −US\$200\.00 · Card charged US\$26\.00\.$/);
+  });
+
+  it("no credit, credit in another currency, or no told amount: the line is unchanged", () => {
+    const plain = statusLine(f({ freeListsUsed: 2, quote }), s);
+    expect(statusLine(f({ freeListsUsed: 2, quote, credit: null }), s)).toBe(plain);
+    expect(statusLine(f({ freeListsUsed: 2, quote, credit: { cents: 20000, currency: "CAD" } }), s)).toBe(plain);
+    expect(statusLine(f({ freeListsUsed: 2, credit }), s)).not.toContain("Credit applied");
+  });
+});

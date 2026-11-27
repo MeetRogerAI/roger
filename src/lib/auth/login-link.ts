@@ -1,4 +1,6 @@
 import type { Query } from "@/lib/db-query";
+import { applyReferralSafely, type Referrer } from "@/lib/referrals/attribution";
+import { claimSponsorSeatSafely, type SeatClaim } from "@/lib/sponsors/sponsors";
 import { hashSecret, newSecret, normaliseEmail, safeNext } from "./tokens";
 
 /**
@@ -27,6 +29,17 @@ export type NewAccount = {
   ref: string;
   utm: string;
   zack: string | null;
+  /**
+   * Who referred them, resolved from the `roger-ref` cookie when the link was
+   * requested (B2 Unit 3). Absent on links made before B2.
+   */
+  referrer?: Referrer | null;
+  /**
+   * The hash of a sponsor code brought to sign-up (B2 Unit 10), in its own
+   * field: a sponsor is never a Referrer. The new account claims a seat with
+   * it; an invalid, revoked or full code leaves an ordinary trial.
+   */
+  sponsorHash?: string | null;
 };
 
 export async function issueToken(
@@ -123,7 +136,12 @@ export async function tokenIsLive(q: Query, token: string | undefined, now = new
   return (await livePurpose(q, token, now)) !== null;
 }
 
-export type SignedInUser = { id: string; email: string };
+export type SignedInUser = {
+  id: string;
+  email: string;
+  /** For an account this sign-up link created with a sponsor code: whether it got a seat (B2 Unit 10). */
+  sponsor?: SeatClaim["kind"];
+};
 
 /**
  * What a used token signs in to.
@@ -148,14 +166,19 @@ export async function userForToken(q: Query, t: UsedToken, now = new Date()): Pr
   }
   const a = t.newAccount;
   if (a) {
-    const rows = await q<SignedInUser>(
-      `insert into users (email, name, path, not_ready, profile, agent, currency, ref, utm, pending_zack_token, signup_step, email_verified_at)
-       values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, 'plan', $11)
+    const [row] = await q<SignedInUser & { created: boolean }>(
+      // pending_referrer_id: written with the account, so a failed attribution is retried hourly (B2 Unit 3).
+      `insert into users (email, name, path, not_ready, profile, agent, currency, ref, utm, pending_zack_token, signup_step, email_verified_at, pending_referrer_id)
+       values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, 'plan', $11, (select x.id from users x where x.id = $12::uuid))
        on conflict (email) do update set email_verified_at = coalesce(users.email_verified_at, excluded.email_verified_at)
-       returning id, email`,
-      [t.email, a.name, a.path, a.notReady, JSON.stringify(a.profile), a.agent, a.currency, a.ref, a.utm, a.zack, at],
+       returning id, email, (xmax = 0) as created`,
+      [t.email, a.name, a.path, a.notReady, JSON.stringify(a.profile), a.agent, a.currency, a.ref, a.utm, a.zack, at, a.referrer?.id ?? null],
     );
-    return rows[0] ?? null;
+    if (!row) return null;
+    // Only a row this insert created gets a referral (xmax = 0: no conflict update touched it).
+    if (row.created) await applyReferralSafely(q, { userId: row.id, email: row.email, referrer: a.referrer, now });
+    const claim = row.created && a.sponsorHash ? await claimSponsorSeatSafely(q, row.id, a.sponsorHash, { now }) : null;
+    return { id: row.id, email: row.email, ...(claim ? { sponsor: claim.kind } : {}) };
   }
   const rows = await q<SignedInUser>(`update users set email_verified_at = coalesce(email_verified_at, $2) where email = $1 returning id, email`, [t.email, at]);
   return rows[0] ?? null;

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import type { Counter } from "@/lib/rate-limit";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
-import { testDb } from "@/test-helpers/pglite-db";
+import { TEST_SPONSOR, testDb, testSponsor } from "@/test-helpers/pglite-db";
 import { previewCache, quoteMonthly } from "./preview";
 
 /** An in-memory counter that honours refunds (`by` -1). */
@@ -111,11 +111,12 @@ describe("quoteMonthly (plan 2026-11-26-001, Unit 4)", () => {
 
   it.each([
     ["a trial whose card is saved", "update users set trial_started_at = now() where id = $1"],
-    ["a sponsored trial", "update users set sponsor_id = id where id = $1"],
+    ["a sponsored trial", `update users set sponsor_id = '${TEST_SPONSOR}' where id = $1`],
     ["an active member", "update users set status = 'active', trial_started_at = now() where id = $1"],
   ])("refuses %s (not_allowed), without counting or asking Stripe", async (_n, sql) => {
     const gw = fakeGateway();
     const counter = vi.fn(memoryCounter());
+    await testSponsor(query);
     await query(sql, [u1]);
     expect(await quote(gw, { country: "CA", postal: "M5V 2T6" }, { counter })).toEqual({ ok: false, reason: "not_allowed" });
     expect(counter).not.toHaveBeenCalled();

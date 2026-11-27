@@ -5,6 +5,8 @@ import { isAdmin } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
 import { ATTENTION_LABELS, excuseDefaultWeek, statusKey, stripeCustomerUrl } from "@/lib/admin/ops";
 import { userDetail } from "@/lib/admin/user-detail";
+import { leaderboardEntryOf } from "@/lib/growth/leaderboard";
+import { moneyCents } from "@/lib/billing/prices";
 import { stripeMode } from "@/lib/billing/stripe";
 import { query } from "@/lib/db-query";
 import { NUDGES } from "@/lib/mail/templates/admin-user";
@@ -33,6 +35,7 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
   const now = new Date();
   const d = await userDetail(query, id, settings, now);
   if (!d) return <p className="text-small text-ink-2">No such user.</p>;
+  const board = await leaderboardEntryOf(query, id);
   const r = d.row;
   const quiz = d.profile as Record<string, unknown>;
 
@@ -151,6 +154,43 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
             ))}
           </ul>
         )}
+      </Section>
+
+      <Section title="Referral credit" id="referral-credit">
+        <p className="mb-3 text-small text-ink-2">
+          {d.creditBalance
+            ? `Balance ${d.creditBalance.currency ? moneyCents(d.creditBalance.cents, d.creditBalance.currency) : `${d.creditBalance.cents} cents`}, as read from Stripe ${when(d.creditBalance.asOf.toISOString())}.`
+            : "No balance read from Stripe yet."}
+        </p>
+        {d.credits.length === 0 ? (
+          <p className="text-small text-ink-2">No referral credit.</p>
+        ) : (
+          <ul className="divide-y divide-rule text-small">
+            {d.credits.map((c) => (
+              <li key={c.id} className="py-2 [overflow-wrap:anywhere]">
+                {when(c.createdAt)} · {c.kind} · {c.status} · {moneyCents(c.amountCents, c.currency)}
+                {c.offsetCents ? ` · offset ${moneyCents(c.offsetCents, c.currency)}` : ""}
+                {c.uncollectedCents ? ` · uncollected ${moneyCents(c.uncollectedCents, c.currency)}` : ""}
+                {c.reason ? ` · ${c.reason}` : ""}
+                {c.postedAt ? ` · posted ${when(c.postedAt)}` : ""}
+                <span className="text-meta text-ink-2">
+                  {" "}
+                  · row {c.id}
+                  {c.stripeTxn ? ` · ${c.stripeTxn}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Leaderboard" id="leaderboard">
+        <p className="mb-3 text-small text-ink-2 [overflow-wrap:anywhere]">
+          {board?.optedInAt ? `On the board as “${board.displayName}” since ${when(board.optedInAt)}.` : "Not on the board."}
+          {board?.displayName && !board.optedInAt ? ` Display name “${board.displayName}”.` : ""}
+          {!board?.displayName ? " No display name." : ""}
+        </p>
+        {(board?.displayName || board?.optedInAt) && <ActionButton action="clearDisplayName" values={{ userId: r.id }} label="Clear display name" pendingLabel="Clearing…" />}
       </Section>
 
       <Section title="Emails sent">
