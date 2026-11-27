@@ -25,16 +25,15 @@
   3. If a row with data-blocks naming the version you are about to build is still "open",
      stop and ask Peter for it. Do not invent the content. The only exceptions are rows
      whose "Until then" cell names a fallback; build with that fallback.
-  4. When Peter supplies an item, check it against its "Done when" cell. If it passes:
-     set data-status="done", set data-done-on="YYYY-MM-DD", change the status cell text
-     to "Done" and its class to "st done", and add one line to the Notes cell saying where
-     it now lives. Never mark an item done without evidence in the repo, in the database
-     settings, or from Peter in the conversation. Tick the matching checklist item too.
-  5. Build every default as written while it is "unconfirmed". When Peter confirms one,
-     set data-status="confirmed" and the status cell to "Confirmed". When Peter changes one,
-     set data-status="changed", write the new value in the Notes cell, and update the
-     matching section of the spec and the setting or rule in code in the same change.
-  6. Remove a row once it is done (Peter, 2026-11-26). Never renumber. Add new rows at the end of their table with the
+  4. When Peter supplies an item, check it against its "Done when" cell. If it passes, REMOVE
+     the row (and its matching checklist item), recording where the content now lives in the
+     commit message. Never treat an item as done without evidence in the repo, in the database
+     settings, or from Peter in the conversation (a tick on the checklist counts).
+  5. Build every default as written while it is "unconfirmed". When Peter confirms one, remove
+     the row. When Peter changes one, update the matching section of the spec and the setting
+     or rule in code in the same change, then remove the row.
+  6. The whole page only shrinks: with every merge into main, remove what is done (Peter,
+     2026-11-26). Never renumber. Add new rows at the end of their table with the
      next number.
   7. The counts in the Reference tab are computed from data-status when the page is opened.
 -->
@@ -224,23 +223,9 @@
 
   <section class="panel" id="reference" role="tabpanel" aria-labelledby="tab-reference" hidden>
     <div class="wrap-ref">
-
-
-  <h2>What Peter still has to supply, and the defaults waiting for his yes</h2>
-
   <div class="tiles" aria-label="Progress">
     <div class="tile"><b id="n-open">20</b><span>items still to supply</span></div>
     <div class="tile"><b id="n-unconf">11</b><span>defaults not yet confirmed</span></div>
-  </div>
-
-  <div class="how">
-    <h2>How this list is used</h2>
-    <ol>
-      <li>Claude Code reads it before starting any version of the build.</li>
-      <li>If an item that blocks that version is still open, Claude Code stops and asks Peter. It does not make the content up. Where a row names a fallback, the build goes ahead with the fallback.</li>
-      <li>When Peter supplies an item, Claude Code checks it against "Done when", marks the row done with the date, and notes where it now lives.</li>
-      <li>Every default is built as written. When Peter confirms or changes one, Claude Code records it here and, if it changed, updates the spec and the code together.</li>
-    </ol>
   </div>
 
 
@@ -563,10 +548,6 @@
   </section>
 
 
-  <footer>
-    <p>Statuses are stored in this file. To change one, edit the row's <code>data-status</code> and its status label; the counts at the top update when the page is opened.</p>
-  </footer>
-
     </div>
   </section>
 
@@ -668,13 +649,13 @@
   async function toggle(id, done, input) {
     if (!db || !canWrite) return;
     input.disabled = true;
-    status.textContent = 'Saving…';
+    status.textContent = '';
     try {
       var me = null;
       try { me = await user.id(); } catch (e) { me = null; }
       if (done) await db.collection('checks').doc(id).set({ done: true, by: me, at: new Date().toISOString() });
       else await db.collection('checks').doc(id).delete();
-      status.textContent = 'Saved.';
+      status.textContent = '';
     } catch (e) {
       input.checked = !done;
       status.textContent = 'Could not save that tick. Check your connection and try again.';
