@@ -3,7 +3,10 @@ import type { Query } from "@/lib/db-query";
 import { completeCardSetup, completeCardUpdate, type CompleteOptions } from "./card-setup";
 import { adminAlert, alertAdmins } from "@/lib/mail/send";
 import { settleFromInvoice } from "./first-charge";
-import type { CardGateway } from "./gateway";
+import type { CardGateway, CreditGateway } from "./gateway";
+import { grantForInvoice } from "@/lib/referrals/credit";
+import type { CreditDeps } from "@/lib/referrals/credit-money";
+import { clawbackForRefunds, creditsForDispute } from "@/lib/referrals/credit-reversal";
 import { adjustmentOnSubscriptionEnded, markInvoiced } from "./adjustment";
 import { noticeQuoteChange } from "./quote";
 import { afterCardChange, renewalFailed, renewalPaid, subscriptionEnded, syncSubscription, type RenewalDeps } from "./renewals";
@@ -39,7 +42,7 @@ export async function handleStripeEvent(
   q: Query,
   gw: CardGateway,
   event: Stripe.Event,
-  o: Omit<CompleteOptions, "expectUserId"> & { adjust?: AdjustmentGateway; plans?: PlanGateway; billing?: BillingGateway; orders?: OrderGateway },
+  o: Omit<CompleteOptions, "expectUserId"> & { adjust?: AdjustmentGateway; plans?: PlanGateway; billing?: BillingGateway; orders?: OrderGateway; credits?: CreditGateway; creditsNow?: Date },
 ): Promise<EventOutcome> {
   if (!(await claimEvent(q, event.id, event.type))) return "duplicate";
   // Unit 15's handlers: settings are read only when one of them runs.
@@ -127,7 +130,7 @@ export async function handleStripeEvent(
         const r = await settleFromInvoice(
           q,
           { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, anchor: planLineStart(inv) },
-          { settings: await o.getSettings(), now: o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
+          { settings: await o.getSettings(), now: o.creditsNow ?? o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
         );
         outcome = "handled";
         if (r !== "charged") note = `invoice.paid: ${r}`;
@@ -149,6 +152,31 @@ export async function handleStripeEvent(
           note = "order invoice paid after its claim failed";
         }
         outcome = "handled";
+      }
+    }
+    // Referral credit (B2 Unit 4): the grant on a paid invoice, a clawback on a refund or a lost dispute, a freeze while one
+    // is open. Each handler re-reads Stripe and is safe to run again; a failure (a Stripe call, the email) answers 500.
+    if (o.credits) {
+      const credits = o.credits;
+      const cd = async (): Promise<CreditDeps> => ({ credits, settings: await o.getSettings(), now: o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep });
+      switch (event.type) {
+        case "invoice.paid": {
+          const inv = event.data.object;
+          if (!inv.id) break;
+          const r = await grantForInvoice(q, await cd(), inv.id, typeof inv.customer === "string" ? inv.customer : (inv.customer?.id ?? null));
+          if (r !== "none") {
+            outcome = "handled";
+            note ??= `referral credit: ${r}`;
+          }
+          break;
+        }
+        case "charge.refunded":
+          if ((await clawbackForRefunds(q, await cd(), event.data.object.id)) > 0) outcome = "handled";
+          break;
+        case "charge.dispute.created":
+        case "charge.dispute.closed":
+          if ((await creditsForDispute(q, await cd(), event.data.object.id)) !== "none") outcome = "handled";
+          break;
       }
     }
     await q(`update stripe_events set status = 'done', done_at = now(), error = $2 where id = $1`, [event.id, note]);

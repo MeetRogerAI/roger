@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { stripeGateway } from "@/lib/billing/gateway";
+import { stripeCredits, stripeGateway } from "@/lib/billing/gateway";
 import { stripe } from "@/lib/billing/stripe";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { handleStripeEvent } from "@/lib/billing/webhook";
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       plans: stripePlans(s) ?? undefined,
       billing: stripeBilling(s) ?? undefined,
       orders: stripeOrders(s) ?? undefined,
+      credits: stripeCredits(s) ?? undefined,
     });
     return Response.json({ received: true, outcome });
   } catch (e) {

@@ -1,4 +1,4 @@
-import type Stripe from "stripe";
+import Stripe from "stripe";
 import { priceId, type Currency } from "./prices";
 import { stripe } from "./stripe";
 
@@ -497,4 +497,180 @@ export function judgePromotion(
     timesRedeemed: f.timesRedeemed,
     firstTimeOnly: f.firstTimeOnly,
   };
+}
+
+/**
+ * Referral credit (B2 plan Unit 4): the Stripe customer balance and the
+ * facts the ledger needs about the payment a credit was earned on. Shapes as
+ * seen in the sandbox on endive (Unit 4 spike, 2026-11-27):
+ *
+ * - A customer balance transaction is `type: "adjustment"`; a negative
+ *   amount is credit. It keeps its `metadata`, so a lost answer is found again
+ *   by listing the customer's transactions and matching
+ *   `metadata.credit_ledger_id`. The same idempotency key with other
+ *   parameters is refused (`StripeIdempotencyError`); with the same ones it
+ *   returns the first transaction.
+ * - The balance is applied to the next invoice's `amount_due` automatically,
+ *   including a first subscription invoice under `error_if_incomplete`:
+ *   `total` keeps tax (CA$316.40), `total_excluding_tax` is the subtotal after
+ *   discounts (CA$280.00), and `amount_due`/`amount_paid` are what is left
+ *   after the balance. A balance covering the whole total leaves the
+ *   subscription `active` and the invoice `paid` with `amount_paid` 0 and no
+ *   invoice payment (no payment intent at all); what is used shows as an
+ *   `applied_to_invoice` transaction.
+ * - An invoice links to its payment intent only through `payments`
+ *   (expand `payments`: `data[].payment.payment_intent`).
+ * - A refund names its `charge` and `payment_intent`; the charge (as sent
+ *   with `charge.refunded`) carries `amount_refunded` but not its refunds,
+ *   which are listed (here by payment intent). A dispute names `charge`,
+ *   `payment_intent`, `amount` and `status` (`needs_response` while open;
+ *   `won` or `lost` once closed).
+ */
+export type PaidInvoice = {
+  id: string;
+  customer: string | null;
+  /** The subscription the invoice bills; only subscription invoices earn credit. */
+  subscription: string | null;
+  status: string | null;
+  currency: Currency | null;
+  /** Subtotal after discounts, before tax: the value a credit is based on. */
+  totalExcludingTax: number;
+  amountPaid: number;
+  /** Null when nothing was charged to a card (the balance covered it). */
+  paymentIntent: string | null;
+};
+export type ChargeFacts = { id: string; amount: number; paymentIntent: string | null };
+/** A refund or a dispute on a payment: what reverses it. `created` is unix seconds. */
+export type RefundFacts = { id: string; amount: number; status: string | null; created: number };
+export type DisputeFacts = { id: string; status: string; charge: string | null; paymentIntent: string | null; amount: number; created: number };
+export type BalanceTxn = { id: string; endingBalance: number };
+
+/** Dispute statuses while the dispute is still open (anything else has closed it). */
+export const OPEN_DISPUTE_STATUSES: readonly string[] = ["warning_needs_response", "warning_under_review", "needs_response", "under_review"];
+
+export interface CreditGateway {
+  /** A customer balance transaction. Stripe's sign: negative is credit, positive takes credit away. */
+  postBalance(o: { customer: string; amountCents: number; currency: Currency; ledgerId: string; description: string; idempotencyKey: string }): Promise<BalanceTxn>;
+  /** The customer's balance transaction carrying `metadata.credit_ledger_id`, looked for back to `since` (unix seconds). */
+  findBalanceTransaction(customer: string, ledgerId: string, since: number): Promise<BalanceTxn | null>;
+  /** The customer's balance, Stripe's sign (negative is credit). */
+  balance(customer: string): Promise<number>;
+  /** An invoice re-read, with its payment intent (through `payments`). Null when Stripe has no such invoice. */
+  paidInvoice(id: string): Promise<PaidInvoice | null>;
+  /** The customer's paid invoices, oldest first (the last 24). */
+  paidInvoices(customer: string): Promise<PaidInvoice[]>;
+  charge(id: string): Promise<ChargeFacts | null>;
+  /** A payment's refunds, oldest first (every page). */
+  refundsFor(paymentIntent: string): Promise<RefundFacts[]>;
+  dispute(id: string): Promise<DisputeFacts | null>;
+  /** A payment's disputes, open or closed, oldest first. */
+  disputesFor(paymentIntent: string): Promise<DisputeFacts[]>;
+}
+
+type Ref = string | { id: string } | null | undefined;
+const idOf = (x: Ref): string | null => (x == null ? null : typeof x === "string" ? x : x.id);
+const toCurrency = (c: string | null | undefined): Currency | null => (c?.toUpperCase() === "USD" ? "USD" : c?.toUpperCase() === "CAD" ? "CAD" : null);
+const missing = (e: unknown) => e instanceof Stripe.errors.StripeError && e.code === "resource_missing";
+/** Pages a list call needs at most (100 a page): beyond this something is wrong, and the caller fails rather than guess. */
+const MAX_PAGES = 20;
+
+export function paidInvoiceFrom(inv: Stripe.Invoice): PaidInvoice {
+  if (!inv.id) throw new Error("Stripe returned an invoice with no id");
+  const pays = inv.payments?.data ?? [];
+  const pay = pays.find((p) => p.status === "paid") ?? pays[0];
+  return {
+    id: inv.id,
+    customer: idOf(inv.customer),
+    subscription: idOf(inv.parent?.subscription_details?.subscription),
+    status: inv.status ?? null,
+    currency: toCurrency(inv.currency),
+    totalExcludingTax: inv.total_excluding_tax ?? inv.subtotal ?? 0,
+    amountPaid: inv.amount_paid,
+    paymentIntent: idOf(pay?.payment?.payment_intent),
+  };
+}
+
+export function disputeFrom(d: Stripe.Dispute): DisputeFacts {
+  return { id: d.id, status: d.status, charge: idOf(d.charge), paymentIntent: idOf(d.payment_intent), amount: d.amount, created: d.created };
+}
+
+export function stripeCredits(s: Stripe | null = stripe()): CreditGateway | null {
+  if (!s) return null;
+  return {
+    async postBalance({ customer, amountCents, currency, ledgerId, description, idempotencyKey }) {
+      const t = await s.customers.createBalanceTransaction(
+        customer,
+        { amount: amountCents, currency: currency.toLowerCase(), description, metadata: { credit_ledger_id: ledgerId } },
+        { idempotencyKey },
+      );
+      return { id: t.id, endingBalance: t.ending_balance };
+    },
+    async findBalanceTransaction(customer, ledgerId, since) {
+      // Newest first: pages until the transactions are older than the ledger row.
+      let after: string | undefined;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const list = await s.customers.listBalanceTransactions(customer, { limit: 100, ...(after ? { starting_after: after } : {}) });
+        const t = list.data.find((x) => x.metadata?.credit_ledger_id === ledgerId);
+        if (t) return { id: t.id, endingBalance: t.ending_balance };
+        const last = list.data.at(-1);
+        if (!list.has_more || !last || last.created < since) return null;
+        after = last.id;
+      }
+      throw new Error(`Too many balance transactions to search for ledger row ${ledgerId}`);
+    },
+    async balance(customer) {
+      const c = await s.customers.retrieve(customer);
+      return c.deleted ? 0 : (c.balance ?? 0);
+    },
+    async paidInvoice(id) {
+      try {
+        return paidInvoiceFrom(await s.invoices.retrieve(id, { expand: ["payments"] }));
+      } catch (e) {
+        if (missing(e)) return null;
+        throw e;
+      }
+    },
+    async paidInvoices(customer) {
+      const page = await s.invoices.list({ customer, status: "paid", limit: 24, expand: ["data.payments"] });
+      return page.data.map(paidInvoiceFrom).reverse();
+    },
+    async charge(id) {
+      try {
+        const c = await s.charges.retrieve(id);
+        return { id: c.id, amount: c.amount, paymentIntent: idOf(c.payment_intent) };
+      } catch (e) {
+        if (missing(e)) return null;
+        throw e;
+      }
+    },
+    async refundsFor(paymentIntent) {
+      const out: RefundFacts[] = [];
+      let after: string | undefined;
+      for (let page = 0; ; page++) {
+        if (page >= MAX_PAGES) throw new Error(`Too many refunds on ${paymentIntent}`);
+        const list = await s.refunds.list({ payment_intent: paymentIntent, limit: 100, ...(after ? { starting_after: after } : {}) });
+        out.push(...list.data.map((r) => ({ id: r.id, amount: r.amount, status: r.status ?? null, created: r.created })));
+        const last = list.data.at(-1);
+        if (!list.has_more || !last) break;
+        after = last.id;
+      }
+      return sortByCreated(out);
+    },
+    async dispute(id) {
+      try {
+        return disputeFrom(await s.disputes.retrieve(id));
+      } catch (e) {
+        if (missing(e)) return null;
+        throw e;
+      }
+    },
+    async disputesFor(paymentIntent) {
+      const list = await s.disputes.list({ payment_intent: paymentIntent, limit: 100 });
+      return sortByCreated(list.data.map(disputeFrom));
+    },
+  };
+}
+
+export function sortByCreated<T extends { created: number; id: string }>(xs: T[]): T[] {
+  return [...xs].sort((a, b) => a.created - b.created || a.id.localeCompare(b.id));
 }

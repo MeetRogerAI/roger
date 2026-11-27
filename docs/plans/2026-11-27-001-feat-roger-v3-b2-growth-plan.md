@@ -403,7 +403,7 @@ sequenceDiagram
 
 **Verification:** Attribution works end to end in a PGlite test from cookie to user row.
 
-- [ ] **Unit 4: Referral credit ledger, posting and clawback**
+- [x] **Unit 4: Referral credit ledger, posting and clawback**
 
 **Goal:** R7 (posting), R8 and R9.
 
@@ -703,7 +703,11 @@ sequenceDiagram
 
 **Files:**
 - Modify: `artifacts/Roger v3 - design spec.md` (a "What changed in 1.6" note for the B2 as-built decisions: credit rules, opt-in, sponsor billing period, `v3.*On` switches, and the `/u` unsubscribe)
-- Modify: `artifacts/launch-list.html`. Add items for the sandbox Stripe spike result, `UNSUB_SECRET` and `REF_SECRET`. Add `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed` on both endpoints to S16.
+- Modify: `artifacts/launch-list.html`. Add these items:
+  - the sandbox Stripe spike result;
+  - `UNSUB_SECRET` and `REF_SECRET`;
+  - **apply `db/schema.sql` (setup.mjs) to roger-db before merging B2**, because nothing applies it on deploy, and the hourly referral tasks read new columns;
+  - one launch caution: **referral credit paid from earned credit chains**. Peter chose invoice value, so one cash payment can fund several months down a chain of referrals. Add `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed` on both endpoints to S16.
 
 **Test expectation:** none, because these are documentation only.
 

@@ -8,6 +8,22 @@ import { actionsForUser, type LoggedAction } from "./log";
 import { userPicks, type UserPick } from "./cora";
 import { loadOps, type OpsRow } from "./ops";
 import { listRuns, type RunListItem } from "./runs";
+import { creditBalance } from "@/lib/referrals/credit-balance";
+
+/** One referral credit ledger row, as the admin user page lists it (B2 Unit 4). */
+export type CreditLine = {
+  id: string;
+  kind: string;
+  status: string;
+  amountCents: number;
+  offsetCents: number;
+  uncollectedCents: number;
+  currency: Currency;
+  reason: string | null;
+  stripeTxn: string | null;
+  createdAt: string;
+  postedAt: string | null;
+};
 
 /** Everything about one person (spec B.12 Users): profile, plan, runs, ideas, emails and the admin log. */
 export type UserDetail = {
@@ -26,6 +42,9 @@ export type UserDetail = {
   log: LoggedAction[];
   contributor: { id: string; label: string } | null;
   contributors: { id: string; label: string; userId: string | null }[];
+  /** Their referral credit ledger rows, newest first, and the cached balance (read-only). */
+  credits: CreditLine[];
+  creditBalance: Awaited<ReturnType<typeof creditBalance>>;
 };
 
 type U = {
@@ -100,7 +119,7 @@ export async function userDetail(q: Query, userId: string, s: V3Settings, now: D
   const { week, rows } = await loadOps(q, { now, settings: s, userId });
   const row = rows[0];
   if (!row) return null;
-  const [runs, picks, emails, log, contributors] = await Promise.all([
+  const [runs, picks, emails, log, contributors, credits, balance] = await Promise.all([
     listRuns(q, { userId, limit: 30 }),
     userPicks(q, userId),
     q<{ kind: string; ref: string; status: string; at: string }>(
@@ -109,6 +128,13 @@ export async function userDetail(q: Query, userId: string, s: V3Settings, now: D
     ),
     actionsForUser(q, userId),
     q<{ id: string; label: string; userId: string | null }>(`select id, label, user_id as "userId" from seed_contributors order by label`),
+    q<CreditLine>(
+      `select id, kind, status, amount_cents as "amountCents", offset_cents as "offsetCents", uncollected_cents as "uncollectedCents", currency, reason,
+         stripe_txn as "stripeTxn", created_at::text as "createdAt", posted_at::text as "postedAt"
+       from credits where user_id = $1 order by created_at desc, id limit 100`,
+      [userId],
+    ),
+    creditBalance(q, userId),
   ]);
   const mine = contributors.find((c) => c.userId === userId);
   return {
@@ -127,5 +153,7 @@ export async function userDetail(q: Query, userId: string, s: V3Settings, now: D
     log,
     contributor: mine ? { id: mine.id, label: mine.label } : null,
     contributors,
+    credits,
+    creditBalance: balance,
   };
 }

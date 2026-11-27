@@ -11,6 +11,10 @@ import { normaliseEmail } from "@/lib/auth/tokens";
 import { isEmail } from "@/lib/form";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { voidDeletedReferrals } from "@/lib/referrals/stage";
+import { UNSETTLED_CREDIT_SQL } from "@/lib/referrals/credit";
+import { CLOSED_NO_CARD } from "@/lib/billing/no-card";
+import { longDate } from "@/lib/dates";
+import { NEEDS_LAPSE_SQL } from "@/lib/referrals/credit-reversal";
 import { addressChangedBySupportEmail, addressMovedAwayEmail, nudgeEmail, type Nudge } from "@/lib/mail/templates/admin-user";
 import { checkReport, storeReport, type Stored } from "@/lib/zack/receive";
 import { logAdminAction } from "./log";
@@ -216,11 +220,18 @@ const isAdminAddress = (email: string) => adminEmails().includes(email.toLowerCa
  * their anonymous form. The admin log keeps its rows, including the deleted
  * address (see the privacy note in the plan). Refused while a dropped
  * higher-rate item may still be in Stripe (its delete not yet confirmed):
- * deleting the account would lose the record the hourly retry needs.
+ * deleting the account would lose the record the hourly retry needs. Refused
+ * too while referral credit is still settling (pending, waiting for the
+ * switch, or frozen by a dispute; B2 Unit 4): the hourly lapse settles a
+ * closed account's credit first. The ledger itself outlives the account.
  */
 export async function deleteAccount(q: Query, by: string, userId: string, confirmEmail: string): Promise<Done> {
-  const [u] = await q<{ email: string; status: string; stripe_open: boolean }>(
-    `select email, status, exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced') as stripe_open
+  const [u] = await q<{ email: string; status: string; stripe_open: boolean; credit_open: boolean; reopen_until: string | null }>(
+    `select email, status, exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced') as stripe_open,
+       (${UNSETTLED_CREDIT_SQL("u")} or ${NEEDS_LAPSE_SQL("u")}) as credit_open,
+       -- A no-card close can still be reopened by its card for 7 days: its credit is only settled after that.
+       case when u.closed_reason = '${CLOSED_NO_CARD}' and u.trial_started_at is null and u.access_ends_at > now() - interval '7 days'
+         then ((u.access_ends_at + interval '7 days') at time zone 'America/Toronto')::date::text end as reopen_until
      from users u where id = $1`,
     [userId],
   );
@@ -229,9 +240,14 @@ export async function deleteAccount(q: Query, by: string, userId: string, confir
   if (u.status !== "closed") return no("Close the account first.");
   if (normaliseEmail(confirmEmail) !== u.email.toLowerCase()) return no("Type the account’s email address to confirm.");
   if (u.stripe_open) return no("A higher-rate item for this account may still be in Stripe. Wait for the hourly pass to remove it, then delete.");
+  if (u.credit_open && u.reopen_until) {
+    return no(`This account still has referral credit, settled once its card can no longer reopen it (after ${longDate(u.reopen_until)}). Delete it after that.`);
+  }
+  if (u.credit_open) return no("This account still has referral credit being settled. Wait for the hourly pass to settle it, then delete.");
   const gone = await q<{ email: string }>(
     `delete from users u where u.id = $1 and u.status = 'closed' and lower(u.email) <> all($2::text[])
        and not exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced')
+       and not ${UNSETTLED_CREDIT_SQL("u")} and not ${NEEDS_LAPSE_SQL("u")}
      returning u.email`,
     [userId, adminEmails()],
   );

@@ -1,4 +1,7 @@
 import type { Query } from "@/lib/db-query";
+import { adminAlert, alertAdmins, type MailDeps } from "@/lib/mail/send";
+import { CreditBusy } from "./credit-balance";
+import { adminUserUrl } from "./credit-post";
 import { referrerForCode } from "./code";
 import { readRefCookie, refKey, type RefPurpose } from "./cookie";
 
@@ -144,6 +147,9 @@ export async function applyReferralSafely(q: Query, o: Parameters<typeof applyRe
   }
 }
 
+/** Failed passes after which a pending referral is no longer retried (admins are told once). */
+export const REFERRAL_RETRY_ATTEMPTS = 5;
+
 /**
  * The hourly `referral_pending` task: attribution for every account whose
  * first attempt failed. Safe to overlap with itself or a sign-up: every write
@@ -151,21 +157,61 @@ export async function applyReferralSafely(q: Query, o: Parameters<typeof applyRe
  * its unique index), so a second run changes nothing. Bounded per pass.
  * The cookie's purpose is not kept, so a retried row with no invitation is a
  * `link` referral.
+ *
+ * A row that fails counts an attempt (`pending_referrer_attempts`); after
+ * REFERRAL_RETRY_ATTEMPTS it is no longer picked, so rows that keep failing
+ * cannot starve newer ones.
+ *
+ * `grant` (B2 Unit 4, late attribution): a referral recorded here may come
+ * after the member's first invoice was paid, so the grant is attempted for
+ * every account attributed (the same idempotent path as `invoice.paid`). A
+ * grant failure is logged and left to the hourly `referral_late_grants`
+ * sweep (which retries it, up to a cap); the attribution stands.
  */
-export async function retryPendingReferrals(q: Query, now: Date, limit = 200): Promise<{ done: number; failed: number }> {
+export async function retryPendingReferrals(
+  q: Query,
+  now: Date,
+  limit = 200,
+  o: { grant?: (userId: string) => Promise<unknown>; mail?: MailDeps } = {},
+): Promise<{ done: number; failed: number }> {
   const rows = await q<{ id: string; email: string; pending_referrer_id: string }>(
-    `select id, email, pending_referrer_id from users where pending_referrer_id is not null order by created_at limit $1`,
-    [limit],
+    `select id, email, pending_referrer_id from users
+     where pending_referrer_id is not null and pending_referrer_attempts < $2
+     order by created_at limit $1`,
+    [limit, REFERRAL_RETRY_ATTEMPTS],
   );
   let done = 0;
   let failed = 0;
   for (const u of rows) {
+    let outcome: ReferralOutcome;
     try {
-      await applyReferral(q, { userId: u.id, email: u.email, referrer: { id: u.pending_referrer_id, via: "link" }, now });
+      outcome = await applyReferral(q, { userId: u.id, email: u.email, referrer: { id: u.pending_referrer_id, via: "link" }, now });
       done++;
     } catch (e) {
       failed++;
       console.error("[referrals] pending attribution failed again", { userId: u.id, message: (e as Error)?.message });
+      // Busy is not a failure of this row: retried next pass without counting toward the cap.
+      if (e instanceof CreditBusy) continue;
+      const [a] = await q<{ attempts: number }>(
+        `update users set pending_referrer_attempts = pending_referrer_attempts + 1 where id = $1 returning pending_referrer_attempts as attempts`,
+        [u.id],
+      ).catch(() => []);
+      if (a && a.attempts >= REFERRAL_RETRY_ATTEMPTS) {
+        await alertAdmins(
+          "referral_pending_gave_up",
+          u.id,
+          adminAlert("A referral could not be recorded", [
+            `Member ${u.id} was referred by ${u.pending_referrer_id}, but recording it failed ${a.attempts} times. It is no longer retried.`,
+            `Last error: ${(e as Error)?.message ?? "unknown"}`,
+            adminUserUrl(u.id),
+          ]),
+          { ...o.mail, query: q },
+        ).catch(() => {});
+      }
+      continue;
+    }
+    if (outcome === "attributed" && o.grant) {
+      await o.grant(u.id).catch((e) => console.error("[referrals] grant after late attribution failed", { userId: u.id, message: (e as Error)?.message }));
     }
   }
   return { done, failed };

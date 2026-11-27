@@ -1,5 +1,6 @@
 import type { Query } from "@/lib/db-query";
 import { adminAlert, alertAdmins, type MailDeps } from "@/lib/mail/send";
+import { adminUserUrl } from "./credit-post";
 
 /**
  * Referral stages (B2 plan Unit 3): `invited` (a guest, Unit 9) → `trial`
@@ -46,6 +47,8 @@ export async function voidSameCardReferrals(q: Query, userId: string, now: Date,
       adminAlert("A paid referral shares a card with its referrer", [
         `Referral ${r.id}: member ${r.referred_user_id} was referred by ${r.referrer_id}, and both now have the same card saved.`,
         "It is already paying, so it was left as it is. Check whether the credit should stand.",
+        `Referrer: ${adminUserUrl(r.referrer_id)}`,
+        `Referred member: ${adminUserUrl(r.referred_user_id)}`,
       ]),
       { ...mail, query: q },
     ).catch((e) => console.error("[referrals] same-card alert not sent", (e as Error)?.message));

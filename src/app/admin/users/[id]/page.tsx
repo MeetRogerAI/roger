@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
 import { ATTENTION_LABELS, excuseDefaultWeek, statusKey, stripeCustomerUrl } from "@/lib/admin/ops";
 import { userDetail } from "@/lib/admin/user-detail";
+import { moneyCents } from "@/lib/billing/prices";
 import { stripeMode } from "@/lib/billing/stripe";
 import { query } from "@/lib/db-query";
 import { NUDGES } from "@/lib/mail/templates/admin-user";
@@ -147,6 +148,34 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
                 {p.dryRun ? " (dry run)" : ""}: <span className="font-[600]">{p.title}</span> · fit {p.fit} · score {p.personalScore} · {p.deliveredAt ? `sent ${when(p.deliveredAt)}` : "not sent"}
                 {p.setupMarkedAt ? ` · set up ${when(p.setupMarkedAt)}` : ""}
                 <p className="text-meta text-ink-2">{p.reason}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Referral credit" id="referral-credit">
+        <p className="mb-3 text-small text-ink-2">
+          {d.creditBalance
+            ? `Balance ${d.creditBalance.currency ? moneyCents(d.creditBalance.cents, d.creditBalance.currency) : `${d.creditBalance.cents} cents`}, as read from Stripe ${when(d.creditBalance.asOf.toISOString())}.`
+            : "No balance read from Stripe yet."}
+        </p>
+        {d.credits.length === 0 ? (
+          <p className="text-small text-ink-2">No referral credit.</p>
+        ) : (
+          <ul className="divide-y divide-rule text-small">
+            {d.credits.map((c) => (
+              <li key={c.id} className="py-2 [overflow-wrap:anywhere]">
+                {when(c.createdAt)} · {c.kind} · {c.status} · {moneyCents(c.amountCents, c.currency)}
+                {c.offsetCents ? ` · offset ${moneyCents(c.offsetCents, c.currency)}` : ""}
+                {c.uncollectedCents ? ` · uncollected ${moneyCents(c.uncollectedCents, c.currency)}` : ""}
+                {c.reason ? ` · ${c.reason}` : ""}
+                {c.postedAt ? ` · posted ${when(c.postedAt)}` : ""}
+                <span className="text-meta text-ink-2">
+                  {" "}
+                  · row {c.id}
+                  {c.stripeTxn ? ` · ${c.stripeTxn}` : ""}
+                </span>
               </li>
             ))}
           </ul>

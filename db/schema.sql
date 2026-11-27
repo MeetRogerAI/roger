@@ -971,3 +971,23 @@ alter table users add column if not exists pending_referrer_id uuid;
 create index if not exists users_pending_referrer on users (pending_referrer_id) where pending_referrer_id is not null;
 -- One line, so setup.mjs keeps it whole.
 do $$ begin if not exists (select 1 from pg_constraint where conname = 'users_pending_referrer_id_fkey') then alter table users add constraint users_pending_referrer_id_fkey foreign key (pending_referrer_id) references users (id) on delete set null; end if; end $$;
+
+-- 2026-11-27, B2 Unit 4. users.pending_referrer_attempts: failed passes of the
+-- hourly referral_pending retry. A row that has failed REFERRAL_RETRY_ATTEMPTS
+-- times is no longer picked (admins are told once), so rows that keep failing
+-- cannot starve newer ones.
+alter table users add column if not exists pending_referrer_attempts int not null default 0;
+-- 2026-11-27, B2 Unit 4 review. credits_unposted covers the rows waiting to
+-- post (pending_*); a frozen row is held by a dispute and is not waiting.
+-- credits_waiting orders the posting sweep by when a row was last tried
+-- (updated_at), so rows that cannot post never starve the rest.
+create index if not exists credits_waiting on credits (updated_at, id) where status in ('pending_customer', 'pending_switch');
+-- referrals.grant_checked_at / grant_attempts: the hourly late-grant sweep
+-- (a referral still in trial whose member has paid) stamps each look and counts
+-- failures, and gives up after a few.
+alter table referrals add column if not exists grant_checked_at timestamptz;
+alter table referrals add column if not exists grant_attempts int not null default 0;
+-- users.credit_lapse_tried_at: when the hourly credit lapse last tried this
+-- closed account without finishing; the lapse takes the least recently tried
+-- first, so an account that keeps failing never starves the rest.
+alter table users add column if not exists credit_lapse_tried_at timestamptz;

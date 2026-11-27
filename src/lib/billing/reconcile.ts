@@ -188,6 +188,10 @@ export const HANDLED_EVENT_TYPES = [
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "customer.updated",
+  // B2 Unit 4: referral credit clawback and dispute freeze.
+  "charge.refunded",
+  "charge.dispute.created",
+  "charge.dispute.closed",
 ];
 
 export type EventPage = { events: Stripe.Event[]; hasMore: boolean };

@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/access";
 import { cardSavePath, SAVE_PROBLEM } from "@/lib/billing/card-saved";
 import { finishCardSave } from "@/lib/billing/card-setup";
-import { stripeGateway } from "@/lib/billing/gateway";
+import { stripeCredits, stripeGateway } from "@/lib/billing/gateway";
 import { query } from "@/lib/db-query";
 import { readV3Settings } from "@/lib/v3-settings";
 
@@ -40,7 +40,7 @@ async function Done({ searchParams }: { searchParams: PageProps<"/start/payment/
 
   // finishCardSave reads the member first: a saved card lands on its week, and an id that is not the
   // member's stored session goes back to Payment, both without asking Stripe.
-  const r = await finishCardSave(query, gw, id, { expectUserId: session.userId, getSettings: readV3Settings });
+  const r = await finishCardSave(query, gw, id, { expectUserId: session.userId, getSettings: readV3Settings, credits: stripeCredits() ?? undefined });
   if (r.outcome !== "pending") redirect(cardSavePath(r));
 
   const n = Math.max(0, Math.min(MAX_CHECKS, Number(typeof check === "string" ? check : 0) || 0));
