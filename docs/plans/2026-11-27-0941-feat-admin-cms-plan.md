@@ -580,6 +580,7 @@ docs/site/content-release.md
 - Lowering a field's limit leaves longer stored text live (lenient read) but fails the strict read of `released.json` at the next snapshot.
 - U9: a link to a removed item's anchor must warn. Labels take the draft's order through `placesIn`.
 - U10: "Differs from the release" should count `pageStatus().relisted`, say that an item a release removed cannot be brought back by a site, and report a site's added items that a release pushed out of a full list (they are dropped without a message and the next save deletes them).
+- U11: `src/lib/auth/email-change.test.ts` "supersedes an earlier, already approved, confirm link" fails about one run in three, on this branch and unrelated to it (not changed here); likely two tokens issued in the same instant. Make it deterministic.
 - For Peter, not yet decided: the homepage shows every question ticked "Show on the homepage", with no limit.
 - Browser checks: build fresh per run (`next start` on an old build serves the last run's regenerated pages); wait for the list to redraw, not for the message.
 
