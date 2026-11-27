@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
 import { renderEmail } from "./layout";
-import { alertAdmins, claim, sendToUser, type Transport } from "./send";
+import { alertAdmins, claim, resendTransport, sendToUser, type Transport } from "./send";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -129,5 +129,36 @@ describe("one-shot emails (sign-in links)", () => {
     const alerts = calls.filter((c) => c.to.includes("peter@example.com"));
     expect(alerts).toHaveLength(1);
     expect(alerts[0].subject).toMatch(/signin_link/);
+  });
+});
+
+describe("extra mail headers (the stats email's List-Unsubscribe, B2 Unit 8)", () => {
+  it("are passed to Resend only when a message has them", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body));
+      return new Response("{}", { status: 200 });
+    });
+    try {
+      const h = { "List-Unsubscribe": "<https://example.com/api/unsubscribe/t>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
+      await resendTransport({ to: ["a@example.com"], subject: "s", html: "h", text: "t", idempotencyKey: "k1", headers: h });
+      await resendTransport({ to: ["a@example.com"], subject: "s", html: "h", text: "t", idempotencyKey: "k2" });
+      expect(bodies[0].headers).toEqual(h);
+      expect("headers" in bodies[1]).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("are handed to the transport by sendToUser", async () => {
+    const { t, calls } = recorder();
+    await sendToUser(user, "stats", "2026-12-16", { ...msg, headers: { "List-Unsubscribe": "<https://x/y>" } }, { query, transport: t, sleep: noSleep });
+    expect(calls[0].headers).toEqual({ "List-Unsubscribe": "<https://x/y>" });
+  });
+
+  it("the stats kind is skipped for a member who switched it off", async () => {
+    const { t, calls } = recorder();
+    expect(await sendToUser({ ...user, emailPrefs: { stats: false } }, "stats", "2026-12-16", msg, { query, transport: t, sleep: noSleep })).toBe("skipped");
+    expect(calls).toEqual([]);
   });
 });

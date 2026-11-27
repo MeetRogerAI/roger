@@ -10,6 +10,8 @@ import { requireUser } from "@/lib/auth/access";
 import { adminEmails } from "@/lib/auth/admin-emails";
 import { googleEnabled } from "@/lib/auth/google";
 import { query } from "@/lib/db-query";
+import { featureOn } from "@/lib/v3-features";
+import { getV3SettingsForDisplay } from "@/lib/v3-settings-display";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -33,6 +35,7 @@ async function SettingsPage({ searchParams }: { searchParams: PageProps<"/app/se
   if (!u || u.status === "signup") redirect("/start");
   const sp = await searchParams;
   const prefs = u.email_prefs ?? {};
+  const statsShown = featureOn(await getV3SettingsForDisplay(), "statsOn");
   return (
     <div className="space-y-16">
       <header>
@@ -54,8 +57,9 @@ async function SettingsPage({ searchParams }: { searchParams: PageProps<"/app/se
         </h2>
         <div className="mt-4 max-w-[32rem]">
           <ProfileForm
-            values={{ name: u.name, displayName: u.display_name, timezone: u.timezone, prefs: { monday: prefs.monday !== false, friday_prompt: prefs.friday_prompt !== false } }}
+            values={{ name: u.name, displayName: u.display_name, timezone: u.timezone, prefs: { monday: prefs.monday !== false, friday_prompt: prefs.friday_prompt !== false, stats: prefs.stats !== false } }}
             zones={COMMON_ZONES}
+            statsShown={statsShown}
           />
         </div>
       </section>

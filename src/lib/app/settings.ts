@@ -6,10 +6,11 @@ import type { Query } from "@/lib/db-query";
  *
  * Email preferences use the keys the mail layer reads (src/lib/mail/send.ts,
  * optionalKinds): "monday" for the Monday list, "friday_prompt" for the
- * one-at-a-time order prompt. A key set to false switches that email off;
- * billing emails have no key and always go.
+ * one-at-a-time order prompt, "stats" for the Wednesday stats email (B2 Unit
+ * 8; its unsubscribe link sets the same key). A key set to false switches
+ * that email off; billing emails have no key and always go.
  */
-export const EMAIL_PREF_KEYS = ["monday", "friday_prompt"] as const;
+export const EMAIL_PREF_KEYS = ["monday", "friday_prompt", "stats"] as const;
 export type EmailPrefKey = (typeof EMAIL_PREF_KEYS)[number];
 
 export const MAX_NAME = 80;
@@ -42,7 +43,8 @@ export function isTimeZone(tz: string): boolean {
   }
 }
 
-export type ProfileInput = { name: string; displayName: string; timezone: string; prefs: Record<EmailPrefKey, boolean> };
+/** `prefs`: only the keys to change; a key left out keeps its stored value. */
+export type ProfileInput = { name: string; displayName: string; timezone: string; prefs: Partial<Record<EmailPrefKey, boolean>> };
 export type ProfileErrors = Partial<Record<"name" | "displayName" | "timezone", string>>;
 
 /** Control characters out, whitespace collapsed. */

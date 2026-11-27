@@ -21,9 +21,9 @@ describe("the profile", () => {
 
   it("saves the Monday list switch under the key the mail layer reads, keeping other keys", async () => {
     await q(`update users set email_prefs = '{"other": 1}' where id = $1`, [ana.id]);
-    await saveProfile(q, ana.id, { name: "Ana", displayName: "A", timezone: "America/Toronto", prefs: { monday: false, friday_prompt: true } });
+    await saveProfile(q, ana.id, { name: "Ana", displayName: "A", timezone: "America/Toronto", prefs: { monday: false, friday_prompt: true, stats: true } });
     const [u] = await q<{ email_prefs: Record<string, unknown>; name: string }>(`select name, email_prefs from users where id = $1`, [ana.id]);
-    expect(u).toEqual({ name: "Ana", email_prefs: { other: 1, monday: false, friday_prompt: true } });
+    expect(u).toEqual({ name: "Ana", email_prefs: { other: 1, monday: false, friday_prompt: true, stats: true } });
     // The mail layer then skips the Monday list, and still sends a billing email.
     const msg = { subject: "s", html: "h", text: "t" };
     const me = { id: ana.id, email: ana.email, emailPrefs: u.email_prefs };

@@ -570,7 +570,7 @@ sequenceDiagram
 
 **Verification:** The page works on a phone, and is hidden when `v3.leaderboardOn` is off.
 
-- [ ] **Unit 8: Wednesday stats email and unsubscribe**
+- [x] **Unit 8: Wednesday stats email and unsubscribe**
 
 **Goal:** R10.
 

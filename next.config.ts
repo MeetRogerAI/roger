@@ -25,6 +25,14 @@ const nextConfig: NextConfig = {
     return [
       // Previews are public (no Vercel login, so sign-in works like production) but never indexed.
       ...(process.env.VERCEL_ENV === "preview" ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }] : []),
+      // Unsubscribe links carry a signed token: never indexed, never sent on in a Referer (B2 Unit 8).
+      ...["/u/:token", "/api/unsubscribe/:token"].map((source) => ({
+        source,
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      })),
       // The Payment step's CSP, on its routes only (enforced; see src/lib/payment-csp.ts).
       ...paymentCspHeaders(),
     ];

@@ -19,9 +19,10 @@ import type { Rendered } from "./layout";
 export const MAX_ATTEMPTS = 3;
 
 /** Which emails a user can switch off (spec B.10). Everything else, billing included, always goes. */
-export const optionalKinds: Record<string, "monday" | "friday_prompt"> = {
+export const optionalKinds: Record<string, "monday" | "friday_prompt" | "stats"> = {
   monday_list: "monday",
   order_prompt: "friday_prompt",
+  stats: "stats",
 };
 
 /** Emails sent once per request, with a fresh ref each time: a failure is never retried by a later trigger. */
@@ -30,24 +31,57 @@ export const oneShotKinds = new Set(["signin_link", "signin_no_account", "signup
 export type Recipient = { id: string; email: string; emailPrefs?: Record<string, unknown> | null };
 export type SendResult = "sent" | "already" | "skipped" | "failed";
 
-export type Transport = (msg: { to: string[]; subject: string; html: string; text: string; idempotencyKey: string }) => Promise<
+/**
+ * `headers`: extra mail headers, only the ones a kind needs (the stats email's
+ * List-Unsubscribe and List-Unsubscribe-Post, B2 plan Unit 8).
+ */
+export type Transport = (msg: { to: string[]; subject: string; html: string; text: string; idempotencyKey: string; headers?: Record<string, string> }) => Promise<
   { ok: true } | { ok: false; error: string; retryable: boolean }
 >;
 
 export type MailDeps = { query?: Query; transport?: Transport; sleep?: (ms: number) => Promise<void> };
 
+/**
+ * How a kind is retried after a failure: at most `maxAttempts` attempts, and a
+ * failed attempt is tried again only once `retryAfterMinutes` have passed since
+ * it (measured on the database clock, like the 15-minute takeover). Kinds not
+ * listed use MAX_ATTEMPTS with no wait.
+ *
+ * The stats email (B2 Unit 8) is retried every 10 minutes by its cron across a
+ * six-hour window: spaced out, an outage of under an hour no longer uses up
+ * its attempts before the window closes.
+ */
+export type RetryPolicy = { maxAttempts: number; retryAfterMinutes: number };
+export const kindRetry: Record<string, RetryPolicy> = {
+  stats: { maxAttempts: 6, retryAfterMinutes: 45 },
+};
+export const retryPolicy = (kind: string): RetryPolicy => kindRetry[kind] ?? { maxAttempts: MAX_ATTEMPTS, retryAfterMinutes: 0 };
+
 /** Claims (recipient, kind, ref). Returns the attempt number, or null if someone already has it. */
 export async function claim(q: Query, recipient: string, kind: string, ref: string): Promise<number | null> {
+  const p = retryPolicy(kind);
   const rows = await q<{ attempts: number }>(
     `insert into notifications (recipient, kind, ref) values ($1, $2, $3)
      on conflict (recipient, kind, ref) do update
        set status = 'sending', attempts = notifications.attempts + 1, claimed_at = now(), error = null
-       where (notifications.status = 'failed' and notifications.attempts < $4)
+       where (notifications.status = 'failed' and notifications.attempts < $4 and notifications.claimed_at <= now() - make_interval(mins => $5))
           or (notifications.status = 'sending' and notifications.claimed_at < now() - interval '15 minutes')
      returning attempts`,
-    [recipient, kind, ref, MAX_ATTEMPTS],
+    [recipient, kind, ref, p.maxAttempts, p.retryAfterMinutes],
   );
   return rows[0]?.attempts ?? null;
+}
+
+/**
+ * Records a send that failed before reaching the transport (the message could
+ * not be built), through the same claim, so it counts as an attempt, is capped
+ * like any other failure and shows in `notifications`. False when the claim is
+ * held or used up.
+ */
+export async function recordFailure(q: Query, recipient: string, kind: string, ref: string, error: string): Promise<boolean> {
+  if ((await claim(q, recipient, kind, ref)) === null) return false;
+  await record(q, recipient, kind, ref, "failed", error);
+  return true;
 }
 
 async function record(q: Query, recipient: string, kind: string, ref: string, status: "sent" | "failed" | "skipped", error?: string) {
@@ -59,7 +93,7 @@ async function record(q: Query, recipient: string, kind: string, ref: string, st
 }
 
 /** Resend's REST API, with an idempotency key. */
-export const resendTransport: Transport = async ({ to, subject, html, text, idempotencyKey }) => {
+export const resendTransport: Transport = async ({ to, subject, html, text, idempotencyKey, headers }) => {
   const key = await getSecret("RESEND_API_KEY");
   if (!key) return { ok: false, error: "RESEND_API_KEY is not set", retryable: false };
   const from = process.env.EMAIL_FROM_SUPPORT ?? process.env.EMAIL_FROM ?? "Roger support <support@meetroger.ai>";
@@ -68,7 +102,7 @@ export const resendTransport: Transport = async ({ to, subject, html, text, idem
     res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "idempotency-key": idempotencyKey },
-      body: JSON.stringify({ from, to, subject, html, text, reply_to: siteConfig.contactEmail }),
+      body: JSON.stringify({ from, to, subject, html, text, reply_to: siteConfig.contactEmail, ...(headers && Object.keys(headers).length ? { headers } : {}) }),
       // A stalled provider must not hold a visitor's form, or leave a claim stuck.
       signal: AbortSignal.timeout(8000),
     });
@@ -96,12 +130,12 @@ async function deliver(t: Transport, msg: Parameters<Transport>[0], sleep: (ms: 
   return last;
 }
 
-/** One automatic email to one user, at most once for (user, kind, ref). */
+/** One automatic email to one user, at most once for (user, kind, ref). `message.headers`: extra mail headers (see Transport). */
 export async function sendToUser(
   user: Recipient,
   kind: string,
   ref: string,
-  message: Rendered,
+  message: Rendered & { headers?: Record<string, string> },
   deps: MailDeps = {},
 ): Promise<SendResult> {
   const q = deps.query ?? defaultQuery;
@@ -116,7 +150,14 @@ export async function sendToUser(
 
   const result = await deliver(
     deps.transport ?? resendTransport,
-    { to: [user.email], subject: message.subject, html: message.html, text: message.text, idempotencyKey: `${kind}/${user.id}/${ref}`.slice(0, 256) },
+    {
+      to: [user.email],
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+      idempotencyKey: `${kind}/${user.id}/${ref}`.slice(0, 256),
+      ...(message.headers ? { headers: message.headers } : {}),
+    },
     deps.sleep ?? realSleep,
   );
   if (result.ok) {
@@ -127,7 +168,7 @@ export async function sendToUser(
   // Alert when nothing will try again: the last attempt, an error retrying cannot fix, or a
   // one-shot email (a sign-in link) whose next request makes a new row. One alert per kind
   // per hour, so an outage does not become one email per visitor.
-  if (attempt >= MAX_ATTEMPTS || !result.retryable || oneShotKinds.has(kind)) {
+  if (attempt >= retryPolicy(kind).maxAttempts || !result.retryable || oneShotKinds.has(kind)) {
     const hour = new Date().toISOString().slice(0, 13);
     await alertAdmins(`email_failed:${kind}`, hour, adminAlert(
       `Emails are failing: ${kind}`,

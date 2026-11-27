@@ -388,3 +388,86 @@ Clear display name   /   Clearing…
 Display name cleared and removed from the leaderboard.
 Display name cleared.
 ```
+
+## 11. Wednesday stats wording (Unit 8) — pending Peter's sign-off
+
+*Added on November 27, 2026 from the B2 branch (plan `docs/plans/2026-11-27-001-feat-roger-v3-b2-growth-plan.md`, Unit 8). Sample figures: Season 1, week 7, 4 points, 3rd, US$25.00. Nothing here is sent or shown until `statsOn` is switched on, except the `/u` page and the one-click answers, which work for any link already sent.*
+
+**The email** (`src/lib/mail/templates/stats.ts`). Subject, then the hidden preview line (the first body line), heading and body:
+
+```text
+Your week in numbers
+Season 1 · week 7 of 26 · 5 bricks this Season · 12 in all.   /   Your first Season starts with your first list.
+Your week in numbers
+Season 1 · week 7 of 26 · 5 bricks this Season · 12 in all.   /   Your first Season starts with your first list.
+4 contribution points. You rank 3rd among Roger members.   /   1 contribution point. You rank 1st among Roger members.
+No contribution points yet. You earn them when an idea you shared is picked for another member.
+Referral credit on your balance: US$25.00, as of Monday, December 14.   (only when there is credit a display may show)
+```
+
+Button, invitation line, and the unsubscribe line (plain text, then the HTML version, whose two links are underlined words):
+
+```text
+Invite someone to Roger
+Your invitation link: https://meetroger.ai/r/abcdefghij
+You get this email on Wednesdays. To stop it (your Monday list is not affected): https://meetroger.ai/u/…. Or choose your emails in Settings: https://meetroger.ai/app/settings
+You get this email on Wednesdays. [Stop the Wednesday email] (your Monday list is not affected), or choose your emails in [Settings].
+```
+
+The season line is `brickSummary` from `src/lib/app/week.ts`, the same words as under the graph on `/app/history`.
+
+**Settings, the emails list** (`src/components/app/settings-forms.tsx`), shown only while the email is on:
+
+```text
+Wednesday stats
+Your Season, bricks, points and rank, once a week.
+```
+
+**The unsubscribe page** `/u/{token}` (`src/app/u/[token]/unsubscribe-view.tsx`, `UNSUB_WORDS`). Asking, done, link not valid, a failed press, and loading:
+
+```text
+Stop the Wednesday stats email?
+Your Monday list email keeps coming. You can switch the stats email back on in your settings at any time.
+Stop the Wednesday email
+
+You won’t get the Wednesday stats email any more.
+Your Monday list email is not affected. You can switch the stats email back on in your settings.
+Open settings
+
+That link isn’t valid.
+Nothing has changed. You can choose which emails you get in your settings.
+Open settings
+
+That didn’t work. Try again.
+Checking your link…
+```
+
+Tab title: `Wednesday stats email`.
+
+**One-click answers** (`src/app/api/unsubscribe/[token]/route.ts`), plain text that mail apps rarely show:
+
+```text
+You won’t get the Wednesday stats email any more.
+This link isn’t valid.
+Something went wrong. Try again.
+Unavailable
+```
+
+**Admin alerts** (`src/lib/growth/stats-job.ts`), admins only:
+
+```text
+[Roger] The Wednesday stats email was not sent
+UNSUB_SECRET is not set, so no stats email can carry its unsubscribe link. Nothing was sent on 2026-12-16.
+Set UNSUB_SECRET in Vercel (Production and Preview) and redeploy; the next run in the window sends.
+
+[Roger] Wednesday stats emails were not all sent
+2 members did not get the stats email on 2026-12-16, and the sending window has closed.
+The last run failed: …   (only when it did)
+Failed sends are in the notifications table (kind stats).
+```
+
+**Flags from review, for Peter:**
+
+- **"Season" and "bricks"** are Roger's own words. A member who hasn't opened `/app/history` may not know them. Should the first line explain them, or link to the graph?
+- **The invitation link shows twice:** as the button, and again as a line with the full address, so it can be copied. Keep both, or only the button?
+- **"Contribution points" and the leaderboard:** the email says "contribution points" and "You rank 3rd among Roger members". The leaderboard page (section 10) says "Points" and "Rank" for the same figures, worked out by the same rule (every member with points, whether or not they joined the board). The email doesn't say "on the leaderboard", because most members won't have joined it. Should the two use the same words?

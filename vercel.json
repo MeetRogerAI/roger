@@ -32,6 +32,14 @@
     {
       "path": "/api/cron/send",
       "schedule": "*/10 5-17 * * 1"
+    },
+    {
+      "path": "/api/cron/stats",
+      "schedule": "*/10 12-17 * * 3"
+    },
+    {
+      "path": "/api/cron/stats-check",
+      "schedule": "0 18 * * 3"
     }
   ]
 }

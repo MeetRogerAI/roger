@@ -14,8 +14,12 @@ function Message({ ok, text }: { ok: boolean; text?: string }) {
   );
 }
 
-/** Name, display name, time zone and which emails to receive. */
-export function ProfileForm({ values, zones }: { values: ProfileValues; zones: readonly string[] }) {
+/**
+ * Name, display name, time zone and which emails to receive. `statsShown`: the
+ * Wednesday stats email is switched on (v3.statsOn, B2 Unit 8); until then its
+ * stored choice rides along in a hidden field, so a save never changes it.
+ */
+export function ProfileForm({ values, zones, statsShown = false }: { values: ProfileValues; zones: readonly string[]; statsShown?: boolean }) {
   const [state, action, pending] = useActionState<ProfileState, FormData>(saveProfileAction, { status: "idle" });
   // The saved values after a save, what was typed after an error, so a form reset never brings back old ones.
   const shown = state.values ?? values;
@@ -60,6 +64,19 @@ export function ProfileForm({ values, zones }: { values: ProfileValues; zones: r
               <span className="block text-ink-2">Switched off, your ideas still arrive on this site each Monday.</span>
             </span>
           </label>
+          {/* What the stats choice was when the form loaded: a save changes it only if the member did (B2 Unit 8). */}
+          <input type="hidden" name="stats_was" value={shown.prefs.stats ? "on" : ""} />
+          {statsShown ? (
+            <label className="flex gap-3">
+              <input type="checkbox" name="pref_stats" defaultChecked={shown.prefs.stats} className="mt-1 size-4 accent-accent" />
+              <span>
+                Wednesday stats
+                <span className="block text-ink-2">Your Season, bricks, points and rank, once a week.</span>
+              </span>
+            </label>
+          ) : (
+            <input type="hidden" name="pref_stats" value={shown.prefs.stats ? "on" : ""} />
+          )}
           {/* The Friday order reminder is no longer sent to anyone (whole-branch review W2), so there is no checkbox; the stored choice is kept as it was. */}
           <input type="hidden" name="pref_friday_prompt" value={shown.prefs.friday_prompt ? "on" : ""} />
           <p className="text-ink-2">Billing emails (receipts, charges, card problems) and security emails always go: they can’t be switched off.</p>

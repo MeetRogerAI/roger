@@ -15,6 +15,13 @@ export type EmailParts = {
   button?: { label: string; url: string };
   /** Lines after the button, e.g. the status line or the monthly line. */
   after?: string[];
+  /**
+   * A block after the `after` lines that needs its own markup (links), given
+   * as both forms: `html` is inserted as is, so the caller escapes what goes
+   * in it; `text` is the plain-text version. Used by the stats email's
+   * unsubscribe line (B2 Unit 8).
+   */
+  raw?: { html: string; text: string };
   /** Footer note, e.g. how to change email settings. */
   footer?: string;
 };
@@ -38,6 +45,7 @@ export function renderEmail(e: EmailParts): Rendered {
       ? `<p style="margin:24px 0"><a href="${esc(e.button.url)}" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">${esc(e.button.label)}</a></p>`
       : "",
     ...(e.after ?? []).map(p),
+    e.raw?.html ?? "",
     `<p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">${esc(e.footer ?? "Roger support")}<br>${esc(siteConfig.contactEmail)}</p>`,
     `</div></body></html>`,
   ].join("");
@@ -47,6 +55,7 @@ export function renderEmail(e: EmailParts): Rendered {
     ...e.paragraphs,
     e.button ? `${e.button.label}: ${e.button.url}` : undefined,
     ...(e.after ?? []),
+    e.raw?.text,
     "--",
     e.footer ?? "Roger support",
     siteConfig.contactEmail,

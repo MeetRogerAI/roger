@@ -59,14 +59,35 @@ beforeEach(async () => {
 
 describe("settings actions", () => {
   it("save only the signed-in user's own row", async () => {
-    const r = await outcome(() => saveProfileAction({ status: "idle" }, form({ name: "Ana L", displayName: "Ana", timezone: "America/Vancouver", pref_friday_prompt: "on", id: other })));
+    const r = await outcome(() => saveProfileAction({ status: "idle" }, form({ name: "Ana L", displayName: "Ana", timezone: "America/Vancouver", pref_friday_prompt: "on", pref_stats: "on", id: other })));
     expect(r).toMatchObject({ value: { status: "saved" } });
     const rows = await current<{ email: string; name: string; timezone: string; email_prefs: object }>("select email, name, timezone, email_prefs from users order by email");
     expect(rows).toEqual([
-      { email: "ana@example.com", name: "Ana L", timezone: "America/Vancouver", email_prefs: { monday: false, friday_prompt: true } },
+      { email: "ana@example.com", name: "Ana L", timezone: "America/Vancouver", email_prefs: { monday: false, friday_prompt: true, stats: true } },
       { email: "bo@example.com", name: "Bo", timezone: "America/Toronto", email_prefs: {} },
     ]);
     expect(refreshed).toBe(1);
+  });
+
+  it("a stale form never re-enables the stats email an email link turned off after it loaded (B2 Unit 8)", async () => {
+    const save = (o: Record<string, string>) => saveProfileAction({ status: "idle" }, form({ name: "Ana", displayName: "", timezone: "America/Toronto", pref_monday: "on", ...o }));
+    const stats = async () => (await current<{ email_prefs: Record<string, unknown> }>("select email_prefs from users where id = $1", [signedIn]))[0].email_prefs.stats;
+    // The form loaded with stats on; then /u switched it off; then the form is saved unchanged.
+    await current(`update users set email_prefs = '{"stats": false}' where id = $1`, [signedIn]);
+    expect(await save({ pref_stats: "on", stats_was: "on" })).toMatchObject({ status: "saved", values: { prefs: { stats: false } } });
+    expect(await stats()).toBe(false);
+    // The member ticks it on themselves: it changes.
+    expect(await save({ pref_stats: "on", stats_was: "" })).toMatchObject({ status: "saved", values: { prefs: { stats: true } } });
+    expect(await stats()).toBe(true);
+    // And unticks it.
+    await save({ stats_was: "on" });
+    expect(await stats()).toBe(false);
+  });
+
+  it("the hidden stats field (email switched off for everyone) keeps a stored stats:false", async () => {
+    await current(`update users set email_prefs = '{"stats": false}' where id = $1`, [signedIn]);
+    await saveProfileAction({ status: "idle" }, form({ name: "Ana", displayName: "", timezone: "America/Toronto", pref_stats: "", stats_was: "" }));
+    expect((await current<{ email_prefs: Record<string, unknown> }>("select email_prefs from users where id = $1", [signedIn]))[0].email_prefs).toEqual({ stats: false, monday: false, friday_prompt: false });
   });
 
   it("applies the leaderboard's name rules to a member on the board, and answers a taken name with a message (B2 Unit 7)", async () => {

@@ -40,8 +40,15 @@ export async function saveProfileAction(_prev: ProfileState, fd: FormData): Prom
     if (r.ok) displayName = r.name;
     else if (r.reason !== "not_on_board") return fail(r.message);
   }
-  const saved = { ...v.value, displayName, prefs };
-  await saveProfile(query, u.id, saved);
+  // The stats email can be switched off from an email link while this form sits open (B2 Unit 8): its
+  // choice is written only when the member changed it here, never re-enabled by a stale form.
+  const change: Partial<Record<EmailPrefKey, boolean>> = { ...prefs };
+  const statsWas = fd.get("stats_was");
+  if (typeof statsWas === "string" && (statsWas === "on") === prefs.stats) delete change.stats;
+  await saveProfile(query, u.id, { ...v.value, displayName, prefs: change });
+  const [after] = await query<{ email_prefs: Record<string, unknown> | null }>(`select email_prefs from users where id = $1`, [u.id]);
+  const stored = after?.email_prefs ?? {};
+  const saved: ProfileValues = { ...v.value, displayName, prefs: { ...prefs, stats: stored.stats !== false } };
   refresh();
   return { status: "saved", message: "Saved.", values: saved, at: Date.now() };
 }
