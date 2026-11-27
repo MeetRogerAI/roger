@@ -39,40 +39,50 @@ export function PriceBox({
   // A discount that ends: the total shown is the first month's, and the regular monthly amount follows it.
   const then = thenLine(promo, price);
   const totalLabel = then ? "First month" : "Total per month";
+  // The currency toggle sits on the same line as the price, on every width, so people see at once that they can switch.
+  const toggle = (
+    <div role="group" aria-label="Currency" className="inline-flex shrink-0 rounded-full border border-rule bg-ground-2 p-1">
+      {(["USD", "CAD"] as const).map((value) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={currency === value}
+          disabled={currencyBusy}
+          onClick={() => value !== currency && onCurrency?.(value)}
+          className={`min-h-11 min-w-14 cursor-pointer rounded-full px-3 text-meta font-semibold disabled:cursor-wait ${currency === value ? "bg-ink text-ground" : "text-ink-2 hover:text-ink"}`}
+        >
+          {value}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <aside aria-labelledby={`${id}-title`} className="rounded-[8px] border border-rule bg-surface">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={`${id}-details`}
-        onClick={() => setOpen((v) => !v)}
-        className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left md:hidden"
-      >
-        <span className="font-semibold tabular-nums">{then ? `${total} first month` : `${total} / month`}</span>
-        <span className="text-small text-ink-2">· {open ? "Hide details" : "Details"}</span>
-      </button>
+      <h2 id={`${id}-title`} className="sr-only">
+        Summary
+      </h2>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-5 md:pt-5 md:pb-0">
+        {/* Phone: the total opens the details. */}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={`${id}-details`}
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-h-11 min-w-0 cursor-pointer flex-col items-start text-left md:hidden"
+        >
+          <span className="font-semibold tabular-nums">{then ? `${total} first month` : `${total} / month`}</span>
+          <span className="text-small text-ink-2">{open ? "Hide details" : "Details"}</span>
+        </button>
+        {/* Desktop: the monthly price, always shown. */}
+        <p className="hidden min-w-0 md:block">
+          <span className="block text-meta text-ink-2">Roger monthly</span>
+          <span className="text-title font-semibold tabular-nums">{moneyCents(price.subtotalCents, currency)}</span>
+          <span className="text-small text-ink-2"> / month</span>
+        </p>
+        {toggle}
+      </div>
       <div id={`${id}-details`} className={`${open ? "block" : "hidden"} border-t border-rule px-4 py-5 md:block md:border-t-0 md:px-5`}>
-        <div className="flex items-center justify-between gap-3">
-          <h2 id={`${id}-title`} className="text-title">
-            Summary
-          </h2>
-          <div role="group" aria-label="Currency" className="inline-flex rounded-full border border-rule bg-ground-2 p-1">
-            {(["USD", "CAD"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={currency === value}
-                disabled={currencyBusy}
-                onClick={() => value !== currency && onCurrency?.(value)}
-                className={`min-h-11 min-w-14 cursor-pointer rounded-full px-3 text-meta font-semibold disabled:cursor-wait ${currency === value ? "bg-ink text-ground" : "text-ink-2 hover:text-ink"}`}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <dl className="mt-5 space-y-3 text-small">
+        <dl className="space-y-3 text-small">
           <div className="flex justify-between gap-4">
             <dt>Roger monthly</dt>
             <dd className="tabular-nums">{moneyCents(price.subtotalCents, currency)}</dd>

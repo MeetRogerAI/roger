@@ -41,7 +41,7 @@ describe("PriceBox", () => {
     expect(t).toMatch(/Launch 20% CA\$56 off your first month\s*−\s*CA\$56/);
     expect(t).toContain("First month CA$253.12");
     expect(t).toContain("Then CA$316.40 a month");
-    expect(t).toContain("CA$253.12 first month · Details");
+    expect(t).toContain("CA$253.12 first month Details");
     expect(html).toMatch(/aria-live="polite"[^>]*>First month CA\$253.12. Then CA\$316.40 a month/);
   });
 
@@ -63,9 +63,21 @@ describe("PriceBox", () => {
     expect(html).toMatch(/aria-pressed="false"[^>]*>USD</);
   });
 
-  it("on a phone: a '{total} / month · Details' bar that opens the box in place; the total is announced politely", () => {
+  it("the toggle sits on the same line as the price, on a phone and on a desktop (it is never inside the collapsible details)", () => {
     const html = renderToStaticMarkup(<PriceBox price={ontario} promo={null} />);
-    expect(text(html)).toContain("CA$316.40 / month · Details");
+    const panel = html.search(/id="[^"]*-details"/);
+    expect(panel).toBeGreaterThan(-1);
+    const top = html.slice(0, panel);
+    // The top row holds the phone total, the desktop monthly price and the toggle, before the details panel starts.
+    expect(top).toContain("CA$316.40 / month");
+    expect(top).toMatch(/Roger monthly<\/span><span[^>]*>CA\$280<\/span>/);
+    expect(top).toContain('role="group" aria-label="Currency"');
+    expect(html.slice(panel)).not.toContain('aria-label="Currency"');
+  });
+
+  it("on a phone: a '{total} / month' bar with Details that opens the box in place; the total is announced politely", () => {
+    const html = renderToStaticMarkup(<PriceBox price={ontario} promo={null} />);
+    expect(text(html)).toContain("CA$316.40 / month Details");
     expect(html).toMatch(/aria-expanded="false"[^>]*md:hidden/);
     expect(html).toMatch(/class="hidden [^"]*md:block/);
     expect(html).toMatch(/aria-live="polite"[^>]*>Total per month CA\$316.40/);
