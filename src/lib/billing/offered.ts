@@ -5,9 +5,12 @@ import { plans } from "@/data/config";
  * `plans.oneAtATimeOffered` in src/data/config.ts, off at launch.
  *
  * While it is off:
- * - sign-up stores monthly and refuses any other plan (start/billing-actions.ts);
- * - nobody can switch to one at a time, by click or by a switch booked earlier
- *   (billing/switch.ts), and the billing page offers no such switch;
+ * - sign-up stores monthly and refuses any other plan (start/billing-actions.ts),
+ *   and a card step finished on one at a time starts no trial (billing/card-setup.ts);
+ * - nobody can ask to switch to one at a time (billing/switch.ts `switchPlan`),
+ *   and the billing page offers no such switch. A switch asked for while the
+ *   plan was offered is not undone: `applySwitch`, the hourly pass for booked
+ *   switches and the subscription-ended webhook do not read this switch;
  * - no new order can be placed (billing/orders.ts), the order box is not
  *   shown, and the Friday order reminder is not sent;
  * - no page or email names the option or its price to a monthly member.

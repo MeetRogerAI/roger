@@ -1,6 +1,16 @@
+import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered } from "@/lib/billing/offered";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
 import { longDate } from "./welcome";
+
+/**
+ * The closing line of an email about an order that ended without a Cora Curation (no report, no ideas, a failed
+ * week): "order again" only while there is something to order (billing/offered.ts). It lives here, not in
+ * offered.ts, so that a test's mock of that module reaches it.
+ */
+export function orderAgainLine(): string {
+  return oneAtATimeOffered() ? "Order again for any Monday you want one." : `${ONE_AT_A_TIME_NOT_OFFERED} You can switch to monthly on the billing page.`;
+}
 
 /** Spec B.13: the first charge succeeded and the subscription started. */
 export function subscribedEmail(o: { amountCents: number | null; currency: Currency; /** A one-at-a-time member's first monthly charge: not a third Cora Curation. */ switched?: boolean }): Rendered {
@@ -95,7 +105,7 @@ export function orderNoListEmail(o: { week: string; reason: "no_run" | "no_plays
       o.reason === "no_run"
         ? `Zack’s report for ${longDate(o.week)} didn’t arrive by Sunday night, and your Cora Curation is built from it, so nothing was charged.`
         : `There weren’t enough new ideas for you this week, so nothing was charged.`,
-      "Your order doesn’t carry over. Order again for any Monday you want one.",
+      `Your order doesn’t carry over. ${orderAgainLine()}`,
     ],
     button: { label: "Open Roger", url: appUrl("/app") },
   });
@@ -107,7 +117,10 @@ export function orderFailedEmail(o: { week: string }): Rendered {
     subject: "Your card didn’t go through",
     preview: `No Cora Curation for ${longDate(o.week)}.`,
     heading: "Your card didn’t go through.",
-    paragraphs: [`We couldn’t charge your card for the Cora Curation on ${longDate(o.week)}, so it wasn’t sent and nothing is owed.`, "Update your card before ordering again."],
+    paragraphs: [`We couldn’t charge your card for the Cora Curation on ${longDate(o.week)}, so it wasn’t sent and nothing is owed.`,
+      // "Ordering again" is named only while there is something to order (billing/offered.ts).
+      oneAtATimeOffered() ? "Update your card before ordering again." : `${ONE_AT_A_TIME_NOT_OFFERED} To switch to monthly, update your card on the billing page first.`,
+    ],
     button: { label: "Update your card", url: appUrl("/app/billing") },
   });
 }

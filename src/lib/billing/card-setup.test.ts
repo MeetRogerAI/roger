@@ -8,6 +8,9 @@ import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { claimEvent, handleStripeEvent } from "./webhook";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (./offered): off here, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("./offered", async (orig) => ({ ...(await orig<typeof import("./offered")>()), oneAtATimeOffered: () => offer.on }));
 
 const settings = mergeV3([]);
 const getSettings = async () => settings;
@@ -23,6 +26,7 @@ let userId: string;
 const urls = { successUrl: "https://x/start/done?session_id={CHECKOUT_SESSION_ID}", cancelUrl: "https://x/start/card" };
 
 beforeEach(async () => {
+  offer.on = false;
   ({ query } = await testDb());
   sent = [];
   [{ id: userId }] = await query<{ id: string }>(
@@ -116,7 +120,41 @@ describe("completeCardSetup", () => {
     expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("done");
   });
 
+  it("starts no trial on one at a time while it is not offered, from the browser or the webhook: no card set, no email, and monthly then goes through", async () => {
+    // The card page was opened while the plan was offered; it is finished after the plan was withdrawn.
+    await query("update users set plan = 'per_run', currency = 'USD'");
+    const gw = fakeGateway();
+    const id = await opened(gw);
+    gw.complete(id, "US");
+    expect(await completeCardSetup(query, gw, id, { expectUserId: userId, getSettings, query, transport })).toBe("plan_not_offered");
+    // Stripe's webhook for the same session is answered (no retry), and changes nothing either.
+    const event = { id: "evt_withdrawn", type: "checkout.session.completed", data: { object: { id, mode: "setup" } } } as never;
+    expect(await handleStripeEvent(query, gw, event, { getSettings, query, transport })).toBe("handled");
+    expect(await query("select status, error from stripe_events where id = 'evt_withdrawn'")).toEqual([{ status: "done", error: "plan_not_offered" }]);
+    expect(await query("select status, plan, signup_step, trial_started_at from users")).toEqual([{ status: "signup", plan: "per_run", signup_step: "card", trial_started_at: null }]);
+    expect(gw.defaults.size).toBe(0);
+    expect(sent).toEqual([]);
+
+    // The plan step stores monthly (savePlan); the same finished card page then starts the monthly trial.
+    await query("update users set plan = 'monthly'");
+    expect(await completeCardSetup(query, gw, id, { expectUserId: userId, getSettings, query, transport })).toBe("done");
+    expect(await query("select status, plan from users")).toEqual([{ status: "trial", plan: "monthly" }]);
+    expect(sent.map((m) => m.subject)).toEqual(["Welcome to Roger"]);
+    expect(sent[0].text).toMatch(/US\$200 a month/);
+  });
+
+  it("an account already in the trial on one at a time is left as it is while the plan is not offered", async () => {
+    await query("update users set plan = 'per_run', currency = 'USD'");
+    const gw = fakeGateway();
+    const id = await opened(gw);
+    gw.complete(id, "US");
+    await query("update users set status = 'trial', signup_step = 'done', trial_started_at = now()");
+    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("done");
+    expect(await query("select status, plan from users")).toEqual([{ status: "trial", plan: "per_run" }]);
+  });
+
   it("tells one-at-a-time users they pay only when they order", async () => {
+    offer.on = true;
     await query("update users set plan = 'per_run', currency = 'USD'");
     const gw = fakeGateway();
     await startCardSetup(query, gw, { userId, currency: "USD", ...urls });

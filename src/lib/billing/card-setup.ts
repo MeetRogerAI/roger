@@ -5,6 +5,7 @@ import { welcomeEmail } from "@/lib/mail/templates/welcome";
 import { claimFreeRun } from "@/lib/zack/receive";
 import type { V3Settings } from "@/lib/v3-settings";
 import type { CardGateway } from "./gateway";
+import { oneAtATimeOffered } from "./offered";
 import type { Currency, Plan } from "./prices";
 
 /**
@@ -62,7 +63,7 @@ export async function startCardSetup(
   return { ok: true, url: session.url };
 }
 
-export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer" | "not_consented";
+export type CompleteOutcome = "done" | "pending" | "address_invalid" | "not_yours" | "unknown_customer" | "not_consented" | "plan_not_offered";
 
 export type CompleteOptions = {
   expectUserId?: string;
@@ -97,6 +98,10 @@ export async function completeCardSetup(q: Query, gw: CardGateway, sessionId: st
   const now = o.now ?? new Date();
   if (u.status === "signup") {
     if (!u.consent_at) return "not_consented";
+    // A card page opened on one at a time before that plan was withdrawn (offered.ts) and finished after: no trial
+    // starts on a plan that is not offered, and the plan is not changed to monthly either, because the consent was
+    // given to "charged only when you order". Nothing is written here or in Stripe; the plan step is done again.
+    if (u.plan === "per_run" && !oneAtATimeOffered()) return "plan_not_offered";
     await gw.setDefaultCard(s.customer, s.paymentMethod);
     const tax = await gw.checkTaxLocation(s.customer);
     if (tax === "invalid") return "address_invalid";

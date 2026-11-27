@@ -1,3 +1,4 @@
+import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered } from "@/lib/billing/offered";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 
 /**
@@ -25,7 +26,10 @@ export function backToPerRunEmail(): Rendered {
     heading: "You’re back on one Cora Curation at a time.",
     paragraphs: [
       "We couldn’t charge your card for your first monthly payment, so monthly didn’t start and nothing was charged. That week’s Cora Curation isn’t sent.",
-      "You can still order a Cora Curation for any Monday you want one. Update your card first on the billing page.",
+      // Ordering is named only while it is offered (billing/offered.ts); otherwise the way on is monthly again, with a card that works.
+      oneAtATimeOffered()
+        ? "You can still order a Cora Curation for any Monday you want one. Update your card first on the billing page."
+        : `${ONE_AT_A_TIME_NOT_OFFERED} To start monthly, update your card on the billing page, then switch to monthly again.`,
     ],
     button: { label: "Billing", url: appUrl("/app/billing") },
   });

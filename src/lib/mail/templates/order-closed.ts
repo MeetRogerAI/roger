@@ -1,4 +1,5 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
+import { orderAgainLine } from "./charges";
 import { longDate } from "./welcome";
 
 /** An order closed because Roger's week failed (closeFailedWeekOrders): nothing charged. */
@@ -9,7 +10,7 @@ export function orderClosedRogerFailedEmail(o: { week: string }): Rendered {
     heading: "No Cora Curation this week, and no charge.",
     paragraphs: [
       `Something went wrong on our side and we couldn’t make the Cora Curations for ${longDate(o.week)}, so your order wasn’t charged. We’re sorry.`,
-      "Your order doesn’t carry over. Order again for any Monday you want one.",
+      `Your order doesn’t carry over. ${orderAgainLine()}`,
     ],
     button: { label: "Open Roger", url: appUrl("/app") },
   });
