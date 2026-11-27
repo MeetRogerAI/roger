@@ -42,6 +42,11 @@ Planning the embedded Payment page from memory and older docs produced several w
 - Elements-mode sessions can return an empty `customer_details.address.country`; read the country from the expanded `setup_intent.payment_method.billing_details.address` as a fallback.
 - Tax-error detection narrowed to Stripe invalid-request errors with codes `failed_tax_calculation`, `customer_tax_location_invalid`, `taxes_calculation_failed`; other failures return an "unavailable" quote and refund the rate-limit hit.
 
+### Setting up live mode from a script (2026-11-27, `scripts/stripe-live-setup.ts`)
+- **Find before you create, and not by search.** `products.search` lags a create by up to a minute, so a quick second run would make a duplicate product. List the products and filter on our own metadata marker instead. Find prices by `lookup_key`, and include archived prices: an archived price keeps its lookup key, so a create with the same key fails partway through a run.
+- **A webhook's signing secret is returned once, on create.** If it isn't saved, the only fix is "Roll secret" in the dashboard. Check the Vercel link and which variables already exist (`vercel env add` refuses to overwrite) *before* the first Stripe write, then save the secret first.
+- **The test prices are `tax_behavior: unspecified`** and rely on the account default (exclusive). The live prices are created explicitly `exclusive`. Print the account id, its default tax code and behaviour, and its registrations in the dry run, so the operator can see which account the key opens.
+
 ## Why This Works
 The spike exercised the exact pinned API version with the sandbox key before any UI was built, so every parameter name, response shape and error code in `src/lib/billing/gateway.ts` comes from observed behaviour rather than from memory.
 
