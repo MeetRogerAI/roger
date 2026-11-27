@@ -76,14 +76,17 @@ export function PriceBox({
         {/* Desktop: the monthly price, always shown. */}
         <p className="hidden min-w-0 md:block">
           <span className="block text-meta text-ink-2">Roger monthly</span>
-          <span className="text-title font-semibold tabular-nums">{moneyCents(price.subtotalCents, currency)}</span>
-          <span className="text-small text-ink-2"> / month</span>
+          <span className="whitespace-nowrap">
+            <span className="text-title font-semibold tabular-nums">{moneyCents(price.subtotalCents, currency)}</span>
+            <span className="text-small text-ink-2"> / month</span>
+          </span>
         </p>
         {toggle}
       </div>
       <div id={`${id}-details`} className={`${open ? "block" : "hidden"} border-t border-rule px-4 py-5 md:block md:border-t-0 md:px-5`}>
         <dl className="space-y-3 text-small">
-          <div className="flex justify-between gap-4">
+          {/* On desktop the monthly price is already in the top row beside the toggle. */}
+          <div className="flex justify-between gap-4 md:hidden">
             <dt>Roger monthly</dt>
             <dd className="tabular-nums">{moneyCents(price.subtotalCents, currency)}</dd>
           </div>
