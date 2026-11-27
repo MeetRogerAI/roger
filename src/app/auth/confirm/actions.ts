@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { setSessionCookies } from "@/lib/auth/cookies";
 import { approveEmailChange, confirmEmailChange, noticeEmailChanged, syncCustomerEmail } from "@/lib/auth/email-change";
 import { consumeToken, userForToken, type UsedToken } from "@/lib/auth/login-link";
+import { afterSignupPath } from "@/lib/sponsors/sponsors";
 import { createSession, findSession, revokeUserSessions, SESSION_COOKIE } from "@/lib/auth/session";
 import { stripe } from "@/lib/billing/stripe";
 import { hasDb } from "@/lib/db";
@@ -85,7 +86,8 @@ export async function confirmSignIn(fd: FormData) {
       } else {
         const { token } = await createSession(query, user.id, used.purpose === "pilot" ? "pilot" : "email");
         await setSessionCookies(token);
-        target = used.nextPath;
+        // A sponsor code that got no seat: the uniform message on Step 3 (B2 Unit 10).
+        target = user.sponsor === "refused" ? afterSignupPath(used.nextPath, { kind: "refused" }) : used.nextPath;
       }
     }
   } catch (e) {

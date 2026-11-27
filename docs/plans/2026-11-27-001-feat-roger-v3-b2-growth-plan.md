@@ -647,7 +647,7 @@ sequenceDiagram
 
 **Verification:** The card and the guest flow work on a phone.
 
-- [ ] **Unit 10: Sponsors**
+- [x] **Unit 10: Sponsors**
 
 **Goal:** R14, acceptance #48.
 
@@ -693,6 +693,8 @@ sequenceDiagram
 - Edge case: preparing the same month twice gives one draft.
 - Error path: a non-admin calling the actions is refused.
 
+**Agent surface:** none. The sponsor admin (create, revoke, seats, release, prepare, send) is UI-only by design, like the rest of `/admin`; members have nothing new to do.
+
 **Verification:** The admin flow works in test mode, and #48 passes.
 
 - [ ] **Unit 11: Docs write-back and launch list**
@@ -710,6 +712,12 @@ sequenceDiagram
   - `UNSUB_SECRET` and `REF_SECRET`;
   - **apply `db/schema.sql` (setup.mjs) to roger-db before merging B2**, because nothing applies it on deploy, and the hourly referral tasks read new columns;
   - **a separate B2 item for the Stripe webhook events B2 needs**: `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed` and `invoice.finalized`, on both endpoints, before B2 merges. It's kept separate from S16, which the launch close-out plan (`docs/plans/2026-11-27-002-feat-v3-launch-close-out-plan.md`) closes with B1's seven events. That session also edits `launch-list.html`, so add the B2 items as their own block and rebase before pushing;
+  - **a sandbox check of the sponsor invoice calls (Unit 10)** before sponsors are switched on, on the pinned endive version, recording what is observed and updating `src/test-helpers/fake-sponsors.ts` to match:
+    - finding a sponsor's draft by its metadata (`sponsor_id`, `month`) through `invoices.list({ customer })`;
+    - `invoices.sendInvoice` on a draft finalizing and emailing it in one call;
+    - the invoice item fields on endive (`quantity`, `unit_amount_decimal`, `amount`, `metadata`, `tax_behavior`; `pricing` replacing `price`);
+    - the error code Stripe returns when a draft's tax can't be calculated at finalization (assumed `customer_tax_location_invalid`), and `automatic_tax.status` on the draft;
+    - idempotency replay of errors: a refused `sendInvoice` replayed under the same key (why the send key carries a refusal count), and a replayed `invoices.create` answer whose invoice was since voided (why the create key carries the replaced draft's id);
   - one launch caution: **referral credit paid from earned credit chains**. Peter chose invoice value, so one cash payment can fund several months down a chain of referrals. Add `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed` on both endpoints to S16.
 
 **Test expectation:** none, because these are documentation only.

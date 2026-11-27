@@ -6,6 +6,7 @@ import { googleLinkedEmail } from "@/lib/mail/templates/sign-in";
 import { counterFor, hit, limits } from "@/lib/rate-limit";
 import { applyReferralSafely } from "@/lib/referrals/attribution";
 import { sendSignupLink, stepPaths } from "@/lib/signup/account";
+import { afterSignupPath, claimSponsorSeatSafely, type SeatClaim } from "@/lib/sponsors/sponsors";
 import { adminEmails } from "./admin-emails";
 import type { NewAccount } from "./login-link";
 import { createSession } from "./session";
@@ -251,9 +252,9 @@ export async function completeGoogle(
   const signup = row.payload;
   const at = now.toISOString();
   const nextFor = (u: Found) => (signup ? (stepPaths[u.signup_step] ?? "/app") : safeNext(row.next_path));
-  const signIn = async (u: Found, linked: boolean, created: boolean): Promise<GoogleOutcome> => {
+  const signIn = async (u: Found, linked: boolean, created: boolean, sponsor: SeatClaim | null = null): Promise<GoogleOutcome> => {
     const { token } = await createSession(q, u.id, "google", now);
-    return { kind: "signed_in", userId: u.id, token, next: created ? "/start/plan" : nextFor(u), linked, created };
+    return { kind: "signed_in", userId: u.id, token, next: created ? afterSignupPath("/start/plan", sponsor) : nextFor(u), linked, created };
   };
 
   // 1. Matched by Google's id, whatever the account's email is now.
@@ -302,7 +303,9 @@ export async function completeGoogle(
   if (created) {
     // Only this insert's own row (on conflict do nothing returns none otherwise) gets a referral.
     await applyReferralSafely(q, { userId: created.id, email: created.email, referrer: account.referrer, now });
-    return signIn(created, false, true);
+    // A sponsor code travels in its own field (B2 Unit 10); this insert's own row claims the seat.
+    const sponsor = account.sponsorHash ? await claimSponsorSeatSafely(q, created.id, account.sponsorHash, { ...deps, now }) : null;
+    return signIn(created, false, true, sponsor);
   }
   // Made by someone else at the same moment: the same rules as an existing account.
   return (await linkExisting()) ?? refused("token");

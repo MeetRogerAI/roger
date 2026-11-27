@@ -15,6 +15,7 @@ import { parseQuiz, routeFor } from "@/lib/signup/quiz";
 import { rememberEmail } from "@/lib/signup/known-email";
 import { resolveReferrer, type Referrer } from "@/lib/referrals/attribution";
 import { REF_COOKIE } from "@/lib/referrals/cookie";
+import { cleanSponsorCode, SPONSOR_COOKIE } from "@/lib/sponsors/code";
 import { readV3Settings } from "@/lib/v3-settings";
 
 export type StartFormState = { status: "idle" | "ok" | "error"; message?: string; errors?: Record<string, string>; email?: string };
@@ -100,7 +101,11 @@ export async function submitQuiz(_prev: StartFormState, fd: FormData): Promise<S
     utm: field(fd, "utm", 200),
   });
   const path = routeFor(parsed.answers);
-  await saveDraft({ answers: parsed.answers, path, continuedAnyway: false, source: p.path, cur: p.cur ?? "USD", ref: p.ref, zack: p.zack, utm: p.utm });
+  // A sponsor code the proxy put in its cookie moves into the draft (B2 Unit 10); one already in the draft is kept.
+  const jar = await cookies();
+  const sponsor = cleanSponsorCode(jar.get(SPONSOR_COOKIE)?.value) ?? (await readDraft())?.sponsor ?? null;
+  await saveDraft({ answers: parsed.answers, path, continuedAnyway: false, source: p.path, cur: p.cur ?? "USD", ref: p.ref, zack: p.zack, utm: p.utm, sponsor });
+  if (jar.get(SPONSOR_COOKIE)) jar.delete({ name: SPONSOR_COOKIE, path: "/start" });
   redirect(path === "not_ready" ? "/start/not-ready" : "/start/account");
 }
 

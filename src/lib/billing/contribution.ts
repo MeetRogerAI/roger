@@ -38,6 +38,33 @@ import { amount, money, type Currency } from "./prices";
  * email is tried again by the next pass.
  */
 
+/**
+ * The weekly "contributed?" test (spec B.9), shared by recordWeek and the
+ * sponsor invoice (B2 Unit 10), which applies the rule per seat to sponsored
+ * members without recording their weeks. Sharing is read as it stood at the
+ * cutoff: the last change before it; none, but some after, means "share".
+ */
+export const SHARING_AT_CUTOFF_SQL = (u: string, cutoff: string) => `coalesce(
+         (select h.sharing from zack_settings_history h where h.user_id = ${u}.id and h.changed_at < ${cutoff} order by h.changed_at desc, h.id desc limit 1),
+         case when exists (select 1 from zack_settings_history h where h.user_id = ${u}.id and h.changed_at >= ${cutoff}) then 'share' else ${u}.sharing end
+       )`;
+
+/** SQL: the member `u` sent an accepted or flagged run for `week`, while sharing. */
+export const CONTRIBUTED_SQL = (u: string, week: string) =>
+  `exists (select 1 from runs r where r.user_id = ${u}.id and r.week_of = ${week} and not r.is_test and r.sharing = 'share' and r.status in ('accepted', 'flagged'))`;
+
+export type WeekResult = "by_choice" | "contributed" | "missed";
+
+/** One week's result before any excuse: not sharing at the cutoff is "by choice"; sharing, a contributing run or a miss. */
+export function weekResult(w: { sharing: string; contributed: boolean }): WeekResult {
+  return w.sharing !== "share" ? "by_choice" : w.contributed ? "contributed" : "missed";
+}
+
+/** SQL: Roger caused the member `user`'s miss of `week` (the week failed, or nothing in the pool fit them), so it is excused. */
+export const ROGER_EXCUSED_SQL = (user: string, week: string) =>
+  `(exists (select 1 from cora_weeks w where w.week_of = ${week} and not w.dry_run and w.status = 'failed')
+              or exists (select 1 from cora_user_weeks c where c.user_id = ${user} and c.week_of = ${week} and not c.dry_run and c.outcome = 'none'))`;
+
 /** Which of the user's weeks to look at again on each pass. */
 const LOOK_BACK_DAYS = 21;
 
@@ -50,12 +77,7 @@ export async function recordWeek(q: Query, week: string, s: V3Settings): Promise
   const cutoff = cutoffInstant(week, s.runCutoff);
   // Sharing at the cutoff, as the charge reads it (first-charge.ts sharingAtCutoff): the last change before it; none, but some after, means "share".
   const users = await q<{ id: string; anchor: string | null; sharing: string; contributed: boolean }>(
-    `select u.id, ${ISO(ANCHOR())} as anchor,
-       coalesce(
-         (select h.sharing from zack_settings_history h where h.user_id = u.id and h.changed_at < $2 order by h.changed_at desc, h.id desc limit 1),
-         case when exists (select 1 from zack_settings_history h where h.user_id = u.id and h.changed_at >= $2) then 'share' else u.sharing end
-       ) as sharing,
-       exists (select 1 from runs r where r.user_id = u.id and r.week_of = $1 and not r.is_test and r.sharing = 'share' and r.status in ('accepted', 'flagged')) as contributed
+    `select u.id, ${ISO(ANCHOR())} as anchor, ${SHARING_AT_CUTOFF_SQL("u", "$2")} as sharing, ${CONTRIBUTED_SQL("u", "$1")} as contributed
      -- A sponsored member pays nothing, so the contributor rule never applies to them.
      from users u where u.status = 'active' and u.plan = 'monthly' and u.sponsor_id is null`,
     [week, cutoff.toISOString()],
@@ -63,7 +85,7 @@ export async function recordWeek(q: Query, week: string, s: V3Settings): Promise
   if (!users.length) return 0;
   const rows = users.map((u) => ({
     user_id: u.id,
-    result: u.sharing !== "share" ? "by_choice" : u.contributed ? "contributed" : "missed",
+    result: weekResult(u),
     period_start: periodAt(u.anchor, cutoff)?.startDate ?? null,
   }));
   // A week an admin excused before it was recorded (for this member, or for everyone): a miss is recorded as
@@ -174,8 +196,7 @@ export async function processContributions(q: Query, d: AdjustDeps): Promise<Rec
     const excused = await q<{ user_id: string }>(
       `update contribution_weeks cw set result = 'excused', excused_by = 'roger'
        where cw.result = 'missed' and cw.week_of = any($1::date[])
-         and (exists (select 1 from cora_weeks w where w.week_of = cw.week_of and not w.dry_run and w.status = 'failed')
-              or exists (select 1 from cora_user_weeks c where c.user_id = cw.user_id and c.week_of = cw.week_of and not c.dry_run and c.outcome = 'none'))
+         and ${ROGER_EXCUSED_SQL("cw.user_id", "cw.week_of")}
        returning cw.user_id`,
       [weeks],
     );
@@ -262,8 +283,7 @@ export async function excuseWeek(q: Query, d: AdjustDeps, o: { week: string; use
 export async function undoExcuseForEveryone(q: Query, d: AdjustDeps, o: { week: string; by: string }): Promise<number | null> {
   const gone = await q(`delete from week_excuses where week_of = $1 and user_id is null returning id`, [o.week]);
   if (!gone.length) return null;
-  const roger = `(exists (select 1 from cora_weeks w where w.week_of = cw.week_of and not w.dry_run and w.status = 'failed')
-                  or exists (select 1 from cora_user_weeks c where c.user_id = cw.user_id and c.week_of = cw.week_of and not c.dry_run and c.outcome = 'none'))`;
+  const roger = ROGER_EXCUSED_SQL("cw.user_id", "cw.week_of");
   const rows = await q<{ user_id: string; period_start: string | null }>(
     `update contribution_weeks cw set result = case when ${roger} then 'excused' else 'missed' end, excused_by = case when ${roger} then 'roger' end
      where cw.week_of = $1 and cw.result = 'excused' and cw.excused_by like '% (everyone)'

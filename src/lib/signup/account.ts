@@ -6,6 +6,7 @@ import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { signInLinkEmail, startConfirmEmail } from "@/lib/mail/templates/sign-in";
 import { hit, limits, type Counter } from "@/lib/rate-limit";
 import type { Referrer } from "@/lib/referrals/attribution";
+import { sponsorHashFor } from "@/lib/sponsors/sponsors";
 import { accountPath, type SignupDraft } from "./draft";
 import { primaryAgent } from "./quiz";
 
@@ -55,6 +56,8 @@ export function newAccountFrom(d: SignupDraft, name: string, referrer: Referrer 
     utm: d.utm,
     zack: d.zack,
     referrer,
+    // Only the code's hash travels on the link (B2 Unit 10): the plaintext code is never stored.
+    sponsorHash: d.sponsor ? sponsorHashFor(d.sponsor) : null,
   };
 }
 

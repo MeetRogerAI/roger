@@ -1,3 +1,4 @@
+import { endSeatOnClose, UNBILLED_SEAT_SQL } from "@/lib/sponsors/sponsors";
 import { adjustmentOnAccountClosed, type AdjustDeps } from "@/lib/billing/adjustment";
 import { retireSessionForGood } from "@/lib/billing/card-setup";
 import type { CardGateway } from "@/lib/billing/gateway";
@@ -221,6 +222,8 @@ export type CloseDeps = AdjustDeps & { gw?: BillingGateway | null; card?: CardGa
 /** Ends what a closed account still has open. Every step is safe to run again. */
 async function cleanUpClosed(q: Query, d: CloseDeps, userId: string): Promise<number> {
   await revokeUserSessions(q, userId);
+  // A sponsored seat's history ends with the account (B2 Unit 10): its sponsor isn't billed after that month.
+  await endSeatOnClose(q, userId);
   await q(`update login_tokens set revoked_at = now() where user_id = $1 and used_at is null and revoked_at is null`, [userId]);
   await q(`update orders set status = 'cancelled', updated_at = now() where user_id = $1 and status = 'ordered'`, [userId]);
   // Whole-branch review W3 (the closing lesson, as cancel and the no-card close do): the stored Payment session is
@@ -249,9 +252,9 @@ const isAdminAddress = (email: string) => adminEmails().includes(email.toLowerCa
  * closed account's credit first. The ledger itself outlives the account.
  */
 export async function deleteAccount(q: Query, by: string, userId: string, confirmEmail: string): Promise<Done> {
-  const [u] = await q<{ email: string; status: string; stripe_open: boolean; credit_open: boolean; reopen_until: string | null }>(
+  const [u] = await q<{ email: string; status: string; stripe_open: boolean; credit_open: boolean; seat_unbilled: boolean; reopen_until: string | null }>(
     `select email, status, exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced') as stripe_open,
-       (${UNSETTLED_CREDIT_SQL("u")} or ${NEEDS_LAPSE_SQL("u")}) as credit_open,
+       (${UNSETTLED_CREDIT_SQL("u")} or ${NEEDS_LAPSE_SQL("u")}) as credit_open, ${UNBILLED_SEAT_SQL("u")} as seat_unbilled,
        -- A no-card close can still be reopened by its card for 7 days: its credit is only settled after that.
        case when u.closed_reason = '${CLOSED_NO_CARD}' and u.trial_started_at is null and u.access_ends_at > now() - interval '7 days'
          then ((u.access_ends_at + interval '7 days') at time zone 'America/Toronto')::date::text end as reopen_until
@@ -267,10 +270,13 @@ export async function deleteAccount(q: Query, by: string, userId: string, confir
     return no(`This account still has referral credit, settled once its card can no longer reopen it (after ${longDate(u.reopen_until)}). Delete it after that.`);
   }
   if (u.credit_open) return no("This account still has referral credit being settled. Wait for the hourly pass to settle it, then delete.");
+  if (u.seat_unbilled) {
+    return no("This member held a sponsored seat in a month whose sponsor invoice isn’t sent yet. Send that invoice on the Sponsors page, then delete.");
+  }
   const gone = await q<{ email: string }>(
     `delete from users u where u.id = $1 and u.status = 'closed' and lower(u.email) <> all($2::text[])
        and not exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced')
-       and not ${UNSETTLED_CREDIT_SQL("u")} and not ${NEEDS_LAPSE_SQL("u")}
+       and not ${UNSETTLED_CREDIT_SQL("u")} and not ${NEEDS_LAPSE_SQL("u")} and not ${UNBILLED_SEAT_SQL("u")}
      returning u.email`,
     [userId, adminEmails()],
   );

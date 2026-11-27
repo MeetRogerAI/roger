@@ -62,8 +62,8 @@ export type WelcomeDeps = { settings: V3Settings; now?: Date } & MailDeps;
  */
 export async function sendSignupWelcome(q: Query, userId: string, d: WelcomeDeps): Promise<SendResult | "not_found"> {
   await claimFreeRun(q, userId, d.settings.runCutoff, d.now).catch((e) => console.error("[signup] free-tool run not claimed", e instanceof Error ? e.message : e));
-  const [u] = await q<{ id: string; email: string; name: string; currency: Currency | null; path: string }>(
-    `select id, email, name, currency, path from users where id = $1`,
+  const [u] = await q<{ id: string; email: string; name: string; currency: Currency | null; path: string; sponsor: string | null }>(
+    `select u.id, u.email, u.name, u.currency, u.path, sp.name as sponsor from users u left join sponsors sp on sp.id = u.sponsor_id where u.id = $1`,
     [userId],
   );
   if (!u) return "not_found";
@@ -71,7 +71,7 @@ export async function sendSignupWelcome(q: Query, userId: string, d: WelcomeDeps
     { id: u.id, email: u.email },
     "welcome",
     "signup",
-    welcomeEmail({ name: u.name, currency: u.currency ?? "USD", path: u.path, settings: d.settings }),
+    welcomeEmail({ name: u.name, currency: u.currency ?? "USD", path: u.path, settings: d.settings, sponsor: u.sponsor }),
     d,
   );
 }

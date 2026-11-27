@@ -34,6 +34,8 @@ export const limits = {
   leadPerIp: { limit: 5, windowSeconds: 60 * 60 },
   // Group-session guest invitations (B2 Unit 9): one per session is the real limit; this stops a script retrying.
   sessionInvitePerUser: { limit: 10, windowSeconds: 60 * 60 },
+  // Sponsor codes checked at /start (B2 Unit 10): wrong codes only; a correct code is never counted or refused.
+  sponsorBadCodePerIp: { limit: 10, windowSeconds: 60 * 60 },
 } satisfies Record<string, Limit>;
 
 /** The start of the window that `now` falls in, in whole seconds. */

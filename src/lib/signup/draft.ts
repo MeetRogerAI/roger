@@ -19,6 +19,8 @@ const draftSchema = z.object({
   ref: z.string().max(40).nullable(),
   zack: z.string().max(128).nullable(),
   utm: z.string().max(200),
+  /** A sponsor code brought to /start (B2 Unit 10), moved here from the `roger-sponsor` cookie by the quiz. Checked again when the account is made. */
+  sponsor: z.string().max(40).nullable().optional(),
 });
 
 /** One shape, from the schema, so the type and the check cannot drift apart. */

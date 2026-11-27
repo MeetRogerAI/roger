@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 const req = (path: string, init: { cookie?: string; method?: string; headers?: Record<string, string> } = {}) =>
   new NextRequest(`https://meetroger.ai${path}`, {
@@ -32,5 +32,34 @@ describe("proxy", () => {
   it("does not renew on a form post or server action, which may be signing out", () => {
     expect(proxy(req("/admin", { cookie: "roger-session=abc", method: "POST" })).headers.getSetCookie()).toEqual([]);
     expect(proxy(req("/admin", { cookie: "roger-session=abc", headers: { "next-action": "x" } })).headers.getSetCookie()).toEqual([]);
+  });
+
+  it("/start?sponsor= keeps the code in a /start cookie and redirects to the clean URL, other parameters kept (B2 Unit 10)", () => {
+    const res = proxy(req("/start?path=re&sponsor=abcd-efgh-2345&cur=CAD"));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("https://meetroger.ai/start?path=re&cur=CAD");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const c = res.headers.getSetCookie().find((l) => l.startsWith("roger-sponsor="))!;
+    expect(c).toMatch(/^roger-sponsor=ABCDEFGH2345;/);
+    expect(c).toMatch(/HttpOnly/i);
+    expect(c).toMatch(/Path=\/start/);
+  });
+
+  it("drops a malformed sponsor code from the URL without a cookie, and leaves /start alone otherwise", () => {
+    const res = proxy(req("/start?sponsor=%3Cscript%3E"));
+    expect(res.headers.get("location")).toBe("https://meetroger.ai/start");
+    expect(res.headers.getSetCookie().some((l) => l.startsWith("roger-sponsor="))).toBe(false);
+    expect(proxy(req("/start?path=re")).headers.get("location")).toBeNull();
+  });
+
+  it("does nothing else on /start: no session renewal there, even with a session cookie", () => {
+    const res = proxy(req("/start?path=re", { cookie: "roger-session=abc" }));
+    expect(res.headers.get("location")).toBeNull();
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("runs on /start itself but not on the other sign-up steps", () => {
+    expect(config.matcher).toContain("/start");
+    expect(config.matcher.some((m) => m === "/start/:path*" || m.startsWith("/start/"))).toBe(false);
   });
 });

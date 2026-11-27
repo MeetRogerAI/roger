@@ -11,6 +11,9 @@ import { getSession } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { stepPaths } from "@/lib/signup/account";
 import { parseStartParams } from "@/lib/signup/params";
+import { clientIp } from "@/lib/rate-limit";
+import { SPONSOR_COOKIE, SPONSOR_INVALID } from "@/lib/sponsors/code";
+import { sponsorRefusedAtStart } from "@/lib/sponsors/sponsors";
 import { readV3Settings } from "@/lib/v3-settings";
 
 /**
@@ -58,9 +61,21 @@ async function Start({ searchParams }: { searchParams: PageProps<"/start">["sear
   // The currency showing when they clicked, else a guess from their country (changeable at Payment).
   const country = (await headers()).get("x-vercel-ip-country")?.toUpperCase();
   const withCur = { ...kept, cur: kept.cur ?? (country === "CA" ? "CAD" : "USD") };
+  // A sponsor code brought here (B2 Unit 10) that won't give a seat: the uniform message; sign-up goes on as a trial.
+  const sponsorRefused = await sponsorRefusedAtStart(query, {
+    cookie: (await cookies()).get(SPONSOR_COOKIE)?.value,
+    draft: draft?.sponsor,
+    ip: clientIp(await headers()),
+    now: new Date(),
+  });
   return (
     <>
       <SignupSteps current={1} />
+      {sponsorRefused && (
+        <p role="status" className="mb-6 max-w-[40rem] rounded-md border border-rule p-4 text-small">
+          {SPONSOR_INVALID}
+        </p>
+      )}
       <h1 className="text-h2">A few questions first.</h1>
       <p className="mt-6 max-w-[40rem] text-lead text-ink-2">
         Your answers tell Cora what kind of work you do, so the ideas she picks fit you. Nobody is turned away.

@@ -934,6 +934,11 @@ create table if not exists sponsors (
 create index if not exists users_sponsor on users (sponsor_id) where sponsor_id is not null;
 -- One line, so setup.mjs keeps it whole. No code wrote users.sponsor_id before B2.
 do $$ begin if not exists (select 1 from pg_constraint where conname = 'users_sponsor_id_fkey') then alter table users add constraint users_sponsor_id_fkey foreign key (sponsor_id) references sponsors (id) on delete restrict; end if; end $$;
+-- users.sponsor_seat (B2 Unit 10): which of the sponsor's seats (1..seats) the member holds.
+-- Unique per sponsor, so two sign-ups racing for the last seat cannot both take it: the
+-- loser's claim fails on this index and is tried again, and then finds no seat free.
+alter table users add column if not exists sponsor_seat int;
+create unique index if not exists users_sponsor_seat on users (sponsor_id, sponsor_seat) where sponsor_seat is not null;
 
 -- sponsor_invoices: one invoice per sponsor per calendar month (month is its
 -- first day). Prepare makes the Stripe draft once, Send finalizes it.
@@ -947,6 +952,34 @@ create table if not exists sponsor_invoices (
   sent_at timestamptz,
   unique (sponsor_id, month)
 );
+-- sponsor_invoices claim (B2 Unit 10 review): "Prepare" takes the month with a random
+-- claim_token and claimed_at, renewed before each Stripe write; another attempt may take it
+-- over only once the hold has lapsed, and a stale attempt can neither write nor release it.
+-- sending_at holds "Send" the same way; sent_at is set only once Stripe confirms.
+alter table sponsor_invoices add column if not exists claim_token text;
+alter table sponsor_invoices add column if not exists claimed_at timestamptz;
+alter table sponsor_invoices add column if not exists sending_at timestamptz;
+-- How many times Stripe definitely refused to send this invoice: part of the send's idempotency
+-- key, so a send after a fix isn't answered with Stripe's cached refusal.
+alter table sponsor_invoices add column if not exists send_refusals int not null default 0;
+
+-- sponsor_seat_history (B2 Unit 10 review): who held which of a sponsor's seats, and when.
+-- A seat is billed for every calendar month in which it was held, even briefly, by a member
+-- past their third list. Written when a seat is claimed; held_to is set when the seat is
+-- released or the account closed. One open row per member.
+create table if not exists sponsor_seat_history (
+  id bigserial primary key,
+  sponsor_id uuid not null references sponsors (id) on delete restrict,
+  user_id uuid not null references users (id) on delete cascade,
+  seat int,
+  held_from timestamptz not null,
+  held_to timestamptz,
+  check (held_to is null or held_to >= held_from)
+);
+create unique index if not exists sponsor_seat_history_open on sponsor_seat_history (user_id) where held_to is null;
+create index if not exists sponsor_seat_history_sponsor on sponsor_seat_history (sponsor_id, held_from);
+-- A member sponsored before the history existed gets an open row from their account's creation (once).
+insert into sponsor_seat_history (sponsor_id, user_id, seat, held_from) select u.sponsor_id, u.id, u.sponsor_seat, u.created_at from users u where u.sponsor_id is not null and not exists (select 1 from sponsor_seat_history h where h.user_id = u.id);
 
 -- users: when the member joined the leaderboard (set only from its prompt,
 -- their display_name is unique, ignoring case, among opted-in members), and

@@ -573,3 +573,41 @@ Try again in a minute.
 - **The guest's name rule:** letters, spaces and . ' - only, so nobody can put a link or a message in someone else's inbox through the name.
 - **No unsubscribe link in the guest email.** The guest isn't a member, and the email goes to a third party, at most once a week per person whoever invites. It has no unsubscribe link of its own; an address that unsubscribed from Roger's watch alerts gets none. Is that acceptable, or should the invitation carry a "don't invite me again" link?
 - **"That person was already invited to a session this week"** tells a member that someone else invited the same person. Acceptable, or should it read like the daily-cap message?
+
+## 13. Sponsor wording (Unit 10) — pending Peter's sign-off
+
+**Member, sign-up** (`src/lib/sponsors/code.ts`, `SPONSOR_INVALID`): one message for every sponsor link that won't give a seat (unknown, revoked or full), shown above the quiz at `/start` and on Step 3; sign-up goes on as an ordinary trial:
+
+```
+This sponsor link isn’t valid. Write to us at hello@meetroger.ai.
+```
+
+**Step 3, Product and Pricing, for a sponsored member** (`src/components/app/plan-form.tsx`): the Pricing section shows no prices and no card copy, only:
+
+```
+Harbour Realty pays for your Roger membership, so you won’t be asked for a card.
+```
+
+**Welcome email, sponsored** (`src/lib/mail/templates/welcome.ts`): preview `Harbour Realty pays for your Roger membership.`; the free-lists and price paragraphs are replaced by `Harbour Realty pays for your Roger membership, so you won’t be asked for a card.` The next-step line and button are unchanged.
+
+**Admin alert at 80% of the seats** (`src/lib/sponsors/sponsors.ts`, once per seat count): subject `[Roger] Harbour Realty has used 8 of 10 sponsored seats`; body `Harbour Realty has 8 of its 10 seats taken. When every seat is taken, new sign-ups with its link become ordinary trials.` and `Add seats on the Sponsors page in the admin if they asked for more.`
+
+**Sponsor's Stripe invoice** (`src/lib/sponsors/invoice.ts`): memo `Roger for Harbour Realty, November 2026`; lines `Roger seats, November 2026, standard price` and `Roger seats, November 2026, higher price (contributor rule)`, each quantity × the sponsor's price, plus tax.
+
+**Admin, `/admin/sponsors`** (`src/app/admin/sponsors/*`, `src/components/admin-sponsors.tsx`, `src/lib/sponsors/*`), admins only:
+
+- Page: tab `Sponsors`; heading `Sponsors`; `Sponsor sign-up is on: a person who signs up with a sponsor’s link takes a seat and is never asked for a card.` / `Sponsor sign-up is off (v3.sponsorsOn, with sign-up open and the cycle live). Links work as ordinary sign-ups until it is on.`; `No sponsors yet.`; month chips in a list named `Invoice month`; per sponsor `(code revoked)`, `8 of 10 seats taken · standard CA$200, higher CA$400 a seat a month · invoices to … · no Stripe customer yet`; `Members`, `Seat 1: …`, `No members yet.`; `Invoice for November 2026`, `2 at standard, 1 at higher: CA$800 before tax.`, each seat's `standard`/`higher`, third list and weeks; `Not prepared yet.`, `Draft in_… prepared by …. Check it in Stripe, then send it.`, `Sent … (in_…).`; `The v3 settings can’t be read, so the seats can’t be worked out.`
+- New sponsor form: Name, Currency, Standard price per seat per month, Higher price per seat per month, Seats, Billing email, Billing country (United States / Canada), Billing postal or ZIP code; button `Create sponsor` / `Creating…`; after it, `The sponsor’s sign-up link. Copy it now: it isn’t shown again.` and `Code: …`; `Sponsor created.` or `Sponsor created. Its Stripe customer wasn’t made; preparing its first invoice will make it.`
+- Form checks: `Enter the sponsor’s name.`, `Choose USD or CAD.`, `Enter the standard price per seat.`, `Enter the higher price per seat, at least the standard price.`, `Enter a whole number of seats.` (also on the seat edit), `Enter the billing email.`, `Choose Canada or the United States.`, `Enter a Canadian postal code, like M5V 2T6.`, `Enter a US ZIP code, like 10001.`
+- Buttons: `Save seats` / `Saving…`, `Revoke code`, `Release seat`, `Prepare invoice` (`Prepare again` once a draft exists), `Send invoice`, each `Working…` while pressed. Confirms: `Revoke Harbour Realty’s code? Nobody new can take a seat with it.`, `Release Ana Lima’s seat? They become an ordinary trial.`, `Send the November 2026 invoice to ap@harbour.example?`
+- Results: `Seats set to 12; 8 taken.`; `Code revoked. Members keep their seats.` / `Already revoked.`; `Seat released. They are now an ordinary trial.` / `That member doesn’t hold one of this sponsor’s seats.`; `No such sponsor.`; `No such member.`; `Stripe isn’t set up here (STRIPE_SECRET_KEY).`; `Choose a month.`
+- Prepare: `Draft in_… prepared: 2 at standard and 1 at higher, CA$904 with tax.`; when Stripe can't work out the tax, `Draft in_… prepared: 2 at standard and 1 at higher, CA$800 before tax. Tax can’t be calculated: check the billing postal code.`; `November 2026 hasn’t ended yet.`; `No seats to bill for November 2026.`; `Someone is preparing this invoice now. Try again in a few minutes.`; `This invoice is being sent now.`; `The November 2026 invoice was already sent.`; `The November 2026 invoice (in_…) was already sent in Stripe.`; `Another attempt took this invoice over. Reload to see where it stands.`; `Stripe didn’t make the draft. Try again in a minute.`
+- Send: `Invoice in_… sent: CA$904 with tax.`; `The November 2026 invoice was already sent.`; `Prepare the draft first.`; `The seats or prices changed since the draft was prepared. Prepare the invoice again, then send it.`; `Tax can’t be calculated: check the billing postal code. The invoice wasn’t sent.`; `Stripe refused to send it (customer_tax_location_invalid). Tax can’t be calculated: check the billing postal code.`; `The draft is gone from Stripe. Prepare the invoice again.`; `This invoice is being sent now.`; `Stripe didn’t send the invoice. Try again in a minute.`
+
+**Flags from review, for Peter:**
+
+- **Seat billing policy (decided in review, November 27, for your confirmation):** a seat is billed for every calendar month in which it was held, even briefly, by a member past their third list. A seat released on December 2 is billed for December too; a seat handed to a new member mid-month is billed for each member who qualifies. Closing the account ends the hold the same way.
+- **A seat is held until an admin releases it**, also by a member who closed their account (billing stops after the month it closed in, but the seat isn't free for a new sign-up). Should closing an account free the seat automatically?
+- **Releasing a seat makes the member an ordinary trial:** they will be asked for a card before their next list. Right, or should a released member be told first?
+- **A week belongs to the month its Monday is in** for the sponsor invoice (B1's monthly members use the month containing the Sunday cutoff). Only weeks from the member's third list on, while they held the seat, count toward the contributor rule.
+- **The sponsor's name is shown to its members** on Step 3 and in the welcome email. Acceptable?

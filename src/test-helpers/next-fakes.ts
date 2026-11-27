@@ -26,7 +26,7 @@ export const nextHeaders = {
   cookies: async () => ({
     get: (name: string) => (jar.has(name) ? { name, value: jar.get(name)! } : undefined),
     set: (name: string, value: string) => void jar.set(name, value),
-    delete: (name: string) => void jar.delete(name),
+    delete: (name: string | { name: string }) => void jar.delete(typeof name === "string" ? name : name.name),
   }),
   headers: async () => new Headers(Object.fromEntries(headerValues)),
 };
