@@ -190,6 +190,29 @@ describe("runCoraJob", () => {
   });
 });
 
+describe("the merge step and the job clock (B2 Unit 6)", () => {
+  it("stamps contributors and set-up confirmations with the job's clock, not the database's", async () => {
+    const [pp] = await query<{ id: string }>(
+      "insert into pool_plays (title, category, description, playbook_md, paste_to_install, job, first_seen, last_seen) values ('Old inbox', 'Email and calendar', 'd', 'p', 'i', 'inbox old', '2026-11-16', '2026-11-16') returning id",
+    );
+    await query("insert into pool_play_contributors (pool_play_id, contributor) values ($1, 'someone')", [pp.id]);
+    await query(
+      "insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, delivered_at) values ($1, '2026-11-23', 1, $2, 80, 4, 'fits', '2026-11-23T14:00:00Z')",
+      [c, pp.id],
+    );
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    const stamps = await query<{ at: string; week: string }>(
+      "select distinct to_char(contributed_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI') as at, to_char(contributed_week, 'YYYY-MM-DD') as week from pool_play_contributors where contributor <> 'someone'",
+    );
+    expect(stamps).toEqual([{ at: "2026-11-30T06:05", week: WEEK }]);
+    const [k] = await query<{ at: string | null }>(
+      "select to_char(setup_confirmed_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI') as at from picks where user_id = $1 and week_of = '2026-11-23'",
+      [c],
+    );
+    expect(k.at).toBe("2026-11-30T06:05");
+  });
+});
+
 describe("review follow-ups (11c)", () => {
   it("a real run waits while a dry run still holds the week, and never lets the dry worker finish the real week", async () => {
     await query("insert into cora_weeks (week_of, dry_run, lease_until, holder) values ($1, true, now() + interval '5 minutes', 'dry-worker')", [WEEK]);

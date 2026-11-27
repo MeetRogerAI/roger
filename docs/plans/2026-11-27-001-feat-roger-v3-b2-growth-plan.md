@@ -506,7 +506,7 @@ sequenceDiagram
 
 **Verification:** The B1 billing tests still pass, and the new cases pass.
 
-- [ ] **Unit 6: Set-up confirmation and points**
+- [x] **Unit 6: Set-up confirmation and points**
 
 **Goal:** A data source for both leaderboard points.
 

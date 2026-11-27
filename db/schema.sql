@@ -991,3 +991,9 @@ alter table referrals add column if not exists grant_attempts int not null defau
 -- closed account without finishing; the lapse takes the least recently tried
 -- first, so an account that keeps failing never starves the rest.
 alter table users add column if not exists credit_lapse_tried_at timestamptz;
+-- 2026-11-27, B2 Unit 6 review. pool_play_contributors.contributed_week: the
+-- list week (runs.week_of) of the run that made this contributor. Points use
+-- it, not contributed_at, so the rule never compares stamps from two clocks: a
+-- pick counts for a contributor only if contributed_week is null (from before
+-- B2) or earlier than the pick's week_of. contributed_at stays as an audit stamp.
+alter table pool_play_contributors add column if not exists contributed_week date;

@@ -64,6 +64,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["runJob", () => actions.runJobAction(idle, form({ job: "dry" }))],
     ["chargeAndSend", () => actions.chargeAndSendAction(idle, form({}))],
     ["closeFailedOrders", () => actions.closeFailedOrdersAction()],
+    ["rebuildPoints", () => actions.rebuildPointsAction()],
     ["seedImport", () => actions.seedImportAction(idle, form({ label: "Rob", agent: "hark", ranOn: "2026-11-12", text: "x" }))],
   ];
 

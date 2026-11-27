@@ -9,6 +9,7 @@ import type { V3Settings } from "@/lib/v3-settings";
 import { bestContent, installable, loadPool, loadUsers, couldUse, type CoraUser, type PoolRow } from "./context";
 import { eligiblePlays } from "./eligible";
 import { boundFit, codeFit, needsLine, reasonFor, type FitModel, type FitResult } from "./fit";
+import { owePointsRebuildFor } from "@/lib/growth/points";
 import { mergePending, type MergeModel } from "./merge";
 import { pickThree, type Fitted } from "./pick";
 import { scorePool, WEIGHTS, type Figures, type Scored } from "./score";
@@ -153,8 +154,10 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
   }
 
   if (phase === "intake_closed") {
-    const t = await mergePending(q, deps.merge, { until: o.until, holder: o.holder, limit: 200, week: o.week });
+    const t = await mergePending(q, deps.merge, { until: o.until, holder: o.holder, limit: 200, week: o.week, now: o.now });
     if (t.busy) return phase;
+    // A contributor added before the newest closed points week: the next hourly pass rebuilds points (B2 Unit 6).
+    await owePointsRebuildFor(q, t.earliestContribution);
     await q(`update cora_weeks set plays_merged = plays_merged + $3 where week_of = $1 and holder = $2`, [o.week, o.holder, t.joined + t.created]);
     const [left] = await q<{ n: number | string }>(
       `select count(*) as n from plays p join runs r on r.id = p.run_id

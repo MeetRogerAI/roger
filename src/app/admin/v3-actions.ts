@@ -28,6 +28,7 @@ import { field } from "@/lib/form";
 import { runHourly } from "@/lib/housekeeping/job";
 import { processArrived } from "@/lib/intake/arrival";
 import { gatewayModel } from "@/lib/intake/model";
+import { rebuildPoints } from "@/lib/growth/points";
 import { isNudge } from "@/lib/mail/templates/admin-user";
 import { hit } from "@/lib/rate-limit";
 import { createPilotLink } from "@/lib/signup/pilot";
@@ -350,6 +351,17 @@ export async function closeFailedOrdersAction(): Promise<V3State> {
   await logAdminAction(query, { by, action: "close_failed_week_orders", detail: { closed: n } });
   refresh();
   return { status: "ok", message: n ? `${n} order${n === 1 ? "" : "s"} closed with no charge.` : "No open orders in a failed week.", at: Date.now() };
+}
+
+/** B2 Unit 6: recompute every week of the points cache from scratch, closed weeks included. */
+export async function rebuildPointsAction(): Promise<V3State> {
+  const by = await requireAdmin();
+  if (await limited(by)) return bad("Too many in a minute. Wait a moment.");
+  const r = await rebuildPoints(query, { now: new Date() });
+  await logAdminAction(query, { by, action: "rebuild_points", detail: { result: "busy" in r ? "busy" : `${r.written} written, ${r.removed} removed` } });
+  refresh();
+  if ("busy" in r) return bad("Points are being refreshed right now. Try again in a minute.");
+  return { status: "ok", message: `Points rebuilt: ${r.written} member-weeks written, ${r.removed} removed.`, at: Date.now() };
 }
 
 /** The seed-import tool (R23): one run file under a hidden contributor. */

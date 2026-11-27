@@ -17,6 +17,7 @@ import { longDate } from "@/lib/dates";
 import { NEEDS_LAPSE_SQL } from "@/lib/referrals/credit-reversal";
 import { addressChangedBySupportEmail, addressMovedAwayEmail, nudgeEmail, type Nudge } from "@/lib/mail/templates/admin-user";
 import { checkReport, storeReport, type Stored } from "@/lib/zack/receive";
+import { owePointsRebuild, rebuildPoints } from "@/lib/growth/points";
 import { logAdminAction } from "./log";
 
 /**
@@ -127,7 +128,7 @@ export function isMonday(s: string): boolean {
  * an unlink is logged against that user, and a move from one user to another
  * is logged against both.
  */
-export async function linkContributor(q: Query, by: string, contributorId: string, userId: string | null): Promise<Done> {
+export async function linkContributor(q: Query, by: string, contributorId: string, userId: string | null, now: Date = new Date()): Promise<Done> {
   try {
     const rows = await q<{ label: string; previous: string | null }>(
       `update seed_contributors s set user_id = $2 from (select id, user_id from seed_contributors where id = $1) old
@@ -138,7 +139,12 @@ export async function linkContributor(q: Query, by: string, contributorId: strin
     const { label, previous } = rows[0];
     if (previous && previous !== userId) await logAdminAction(q, { by, userId: previous, action: "unlink_contributor", detail: { contributorId, label, movedTo: userId } });
     if (userId && previous !== userId) await logAdminAction(q, { by, userId, action: "link_contributor", detail: { contributorId, label, movedFrom: previous } });
-    return ok(userId ? `Linked ${label}. Cora leaves their seed plays out of this user’s lists.` : `Unlinked ${label}.`);
+    // A seed record scores for the account it is linked to (B2 Unit 6), in every week: closed weeks included.
+    const points = previous !== userId ? await rebuildPoints(q, { now }) : null;
+    // Lease busy: the next hourly pass rebuilds instead.
+    if (points && "busy" in points) await owePointsRebuild(q, "seed contributor link changed while points were busy");
+    const later = points && "busy" in points ? " Points will be rebuilt in the next hourly pass." : "";
+    return ok((userId ? `Linked ${label}. Cora leaves their seed plays out of this user’s lists.` : `Unlinked ${label}.`) + later);
   } catch (e) {
     if (/unique|duplicate/i.test((e as Error).message)) return no("That user is already linked to another contributor.");
     if (/foreign key/i.test((e as Error).message)) return no("No such user.");

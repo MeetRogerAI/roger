@@ -36,6 +36,7 @@ import { applyDueSwitches } from "@/lib/billing/switch";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
 import { deliverLate, sendUnsentTeasers } from "@/lib/cora/send-job";
 import { sendPendingUnlocks } from "@/lib/cora/unlock";
+import { runPointsTask } from "@/lib/growth/points";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -162,6 +163,11 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // Plan 2026-11-26-001, Unit 5. A card saved after a held list whose unlock did not finish (the list undelivered, or
   // delivered without its email): delivered and emailed now, whatever the list's age (deliver_late stops at 8 days).
   { name: "unlock_pending", run: (q, d, c) => sendPendingUnlocks(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
+  // B2 Unit 6. The points cache (leaderboard rank, stats email): the current week recomputed, past weeks closed once
+  // and then left alone. Hourly rather than after the Cora merge, because points also come from lists delivered by
+  // the hourly tasks above (deliver_late, unlock_pending) and a failure here must never hold up a Cora week. Leased.
+  // A full rebuild instead while one is owed (a late seed link, a late contributor, a seed import).
+  { name: "points", run: (q, d, c) => runPointsTask(q, { now: d.now, realNow: c.realNow }) },
   // The contributor rule: misses settled (forgiven, or the adjustment), then any Stripe items due (a carried one after its renewal).
   { name: "contributions", run: (q, d) => processContributions(q, d) },
   // Stripe deletes of dropped adjustment items that failed, until Stripe confirms them.
