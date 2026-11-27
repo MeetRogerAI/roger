@@ -75,6 +75,8 @@ export type Field = {
   section: string;
   /** What the admin reads beside it. For an item of a list it names the item: "Step “use”: Headline". */
   label: string;
+  /** What the field is, without the item it belongs to: "Headline". The Pages screens name the item by its place on the page, never by its id. */
+  name: string;
   kind: FieldKind;
   /** The most characters an admin may save. */
   max: number;
@@ -82,8 +84,8 @@ export type Field = {
   placeholders: readonly string[];
   /** Where the wording rules check it: the page's address and the zones it is printed in (src/lib/site/claims.ts). */
   claims: { path: string; zones: readonly Zone[] };
-  /** The array it is an item of, by that array's id, and the item's id. Absent for a field outside any array. */
-  item?: { array: string; id: string };
+  /** The array it is an item of, by that array's id, the item's id, and what one item is called ("Step"; null where an item has no name of its own). Absent for a field outside any array. */
+  item?: { array: string; id: string; noun: string | null };
 };
 
 export type Section = {
@@ -528,11 +530,12 @@ export function buildRegistry(copy: unknown, spec: RegistrySpec): Registry {
           page: hit.page.id,
           section: hit.section.id,
           label: array?.noun ? `${array.noun} “${array.item}”: ${hit.field.label}` : hit.field.label,
+          name: hit.field.label,
           kind: hit.field.kind ?? "line",
           max: hit.field.max,
           placeholders: hit.field.placeholders ?? amountPlaceholderNames,
           claims: { path: hit.page.path, zones: hit.field.zones ?? hit.section.zones ?? [] },
-          ...(array ? { item: { array: array.id, id: array.item } } : {}),
+          ...(array ? { item: { array: array.id, id: array.item, noun: array.noun } } : {}),
         },
       });
       return;

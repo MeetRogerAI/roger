@@ -1,7 +1,7 @@
 /**
  * What stored site text goes through before it is kept: the tidy, the names
  * in braces, and the address of a link (plan KTD10, KTD12). The one-line tidy
- * is also held by src/lib/site/questions.test.ts, through a save.
+ * is also held by ./check.test.ts, as a save applies it.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

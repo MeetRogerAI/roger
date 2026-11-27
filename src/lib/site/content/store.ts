@@ -62,7 +62,7 @@ const TRIES = 6;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** A value as text in which the order of an object's keys does not matter, so two overlays that say the same compare equal. */
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, part: unknown) => (isRecord(part) ? Object.fromEntries(Object.entries(part).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : part));
 }
 
@@ -228,14 +228,21 @@ export type PublishResult =
  *
  * A draft equal to what is published publishes nothing, and leaves `previous` alone: `changed` is false.
  * `note` is added to the admin log row, which names what changed and not the text.
+ *
+ * `over` is what was on the site when the admin read the list of changes. When it is given and something else is
+ * published now (an undo, or a publish, from another tab), nothing changes either, and the answer is the same
+ * "draft-changed": the list the admin read is no longer what this publish would change.
  */
-export async function publish(q: Query, by: string, checked: Overlay, o: { base?: unknown; note?: Record<string, unknown> } = {}): Promise<PublishResult> {
+export async function publish(q: Query, by: string, checked: Overlay, o: { base?: unknown; note?: Record<string, unknown>; over?: Overlay } = {}): Promise<PublishResult> {
   const base = o.base ?? baseline;
   const want = normaliseOverlay(base, checked);
+  const over = o.over ? normaliseOverlay(base, o.over) : null;
   let moved = false;
   const done = await transition(q, base, (now) => {
-    moved = !sameOverlay(now.draft, want);
-    if (moved || sameOverlay(now.draft, now.published)) return null;
+    const live = sameOverlay(now.draft, now.published);
+    // A draft that is live already is nothing to publish, whoever published it: that is not "changed", it is done.
+    moved = !sameOverlay(now.draft, want) || (over !== null && !live && !sameOverlay(now.published, over));
+    if (moved || live) return null;
     return { draft: now.draft, published: now.draft, previous: now.published };
   });
   if (done === "busy") return { ok: false, reason: "busy" };

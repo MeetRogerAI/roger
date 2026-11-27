@@ -58,8 +58,13 @@ describe("the list of admin screens", () => {
     const admin = path.join(SRC, "app", "admin");
     const addresses = pagesUnder(admin).map((dir) => ["/admin", ...path.relative(admin, dir).split(path.sep).filter(Boolean)].join("/"));
     expect(addresses.length).toBeGreaterThanOrEqual(screens.length);
+    // The one page file that is no screen: the retired Edit Questions address, which only sends its visitor on into Pages.
+    const retired = "/admin/questions";
+    expect(addresses).toContain(retired);
+    expect(adminScreenAt(retired)).toBeNull();
+    expect(readFileSync(path.join(admin, "questions", "page.tsx"), "utf8")).toMatch(/\bredirect\(editorAddress\("faq"\)\)/);
     // A page with a parameter in its address (/admin/users/[id]) is reached from its screen, and marks it.
-    for (const address of addresses) expect(adminScreenAt(address.replace(/\[[^\]]+\]/g, "x")), address).not.toBeNull();
+    for (const address of addresses.filter((entry) => entry !== retired)) expect(adminScreenAt(address.replace(/\[[^\]]+\]/g, "x")), address).not.toBeNull();
   });
 
   it("matches an address to its screen whatever follows the path", () => {
@@ -88,7 +93,9 @@ describe("the sidebar as rendered", () => {
     expect(marked(sidebar("/admin/users/abc"))).toEqual(["Users"]);
     expect(marked(sidebar("/admin/users"))).toEqual(["Users"]);
     expect(marked(sidebar("/admin/use-cases"))).toEqual(["Use cases"]);
-    expect(marked(sidebar("/admin/questions"))).toEqual(["Pages"]);
+    // Every screen of Pages marks Pages: the list, a page's editing screen, and the review.
+    expect(marked(sidebar("/admin/pages/faq"))).toEqual(["Pages"]);
+    expect(marked(sidebar("/admin/pages/review"))).toEqual(["Pages"]);
     for (const screen of screens) expect(marked(sidebar(screen.href)), screen.href).toEqual([screen.label]);
     // An address that only starts with a screen's letters is not that screen, and an unknown one marks nothing.
     expect(adminScreenAt("/admin/users-old")).toBeNull();
