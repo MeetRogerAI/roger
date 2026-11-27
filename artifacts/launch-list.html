@@ -459,7 +459,7 @@
             <td><span class="ver">B1</span></td>
             <td>Build as read (plan Unit 11b, "Decisions taken by reading the drafts literally").</td>
             <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build. The six readings: a play the user cannot install ranks below every play they can; an idea that could not be installed may be sent again once their setup has what it needs; changes 6 and 7 are on with no switch; a missing figure scores 1; in a pool under ten plays the lowest decile is above 1; a runner-up counts 1 toward Surprise. Not built: matching "Also runs" and profile Setup (change 8), upgrades (change 11), adoption counts (change 15). (The R15 alert question raised here is settled: since the seams review both admins are alerted for every member with no eligible plays.)</td>
+            <td class="notes">Added 2026-11-23 from the B1 build. The six readings: a play the user cannot install ranks below every play they can; an idea that could not be installed may be sent again once their setup has what it needs; changes 6 and 7 are on with no switch; a missing figure scores 1; in a pool under ten plays the lowest decile is above 1; a runner-up counts 1 toward Surprise. Not built: matching "Also runs" and profile Setup (change 8), upgrades (change 11), adoption counts (change 15). Change 8 must be built before B4 (levels) starts. (The R15 alert question raised here is settled: since the seams review both admins are alerted for every member with no eligible plays.)</td>
           </tr>
           <tr data-id="S21" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S21</td>
@@ -480,6 +480,26 @@
             <td>Build the defaults in the plan's "Needs a Decision From Peter".</td>
             <td class="statuscell"><span class="st open">Open</span></td>
             <td class="notes">Added 2026-11-23 from the B1 build. A deleted member's email stays in the admin log row that records the deletion (and email-change rows); admins reading runs and picks is not logged; retention erases runs 90 days after access ends but not for long-idle one-at-a-time or held members; pooled plays stay after a run is deleted; whether a contributor can have pooled plays withdrawn; how long sign-up interest, notification and Stripe event records are kept.</td>
+          </tr>
+          <tr data-id="S23" data-status="open" data-blocks="B4" data-done-on="">
+            <td class="id">S23</td>
+            <th scope="row">Roger AI Levels files, approved</th>
+            <td><code>artifacts/Roger AI Agent Levels and Check Charts v1.1.md</code> and <code>artifacts/Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md</code></td>
+            <td>Peter has approved both files and settled their open questions.</td>
+            <td><span class="ver">B4</span></td>
+            <td>Build B1 to B3 as written. Nothing in B1 changes for levels (T1 in the build spec).</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-26. Two small pieces go into B2: the Season rename and quiz question 5 offering Levels 0 to 9 with symptoms (spec 1.5).</td>
+          </tr>
+          <tr data-id="S24" data-status="open" data-blocks="B4" data-done-on="">
+            <td class="id">S24</td>
+            <th scope="row">Zack version 2.1, for Claude, Duet, Grok Bot and Hark</th>
+            <td><code>content/zack/{claude,duet,grok-bot,hark}.md</code></td>
+            <td>Each file adds the private <code>roger-level</code> block (build spec section 1, Z1 to Z9), its header says version 2.1, and a test run from each agent ends with valid <code>roger-run</code> and <code>roger-level</code> blocks.</td>
+            <td><span class="ver">B4</span></td>
+            <td>Zack 2.0 runs. The Roger team places users by hand from quiz answers and existing runs.</td>
+            <td class="statuscell"><span class="st open">Open</span></td>
+            <td class="notes">Added 2026-11-26. Ships as content once B1 is live and the intake check is done: B1's intake must ignore a fenced block it does not recognise (build spec T3).</td>
           </tr>
         </tbody>
       </table>
@@ -644,7 +664,7 @@
     </div>
     <p class="sub" style="margin-top:20px"><b>Sign-up changes, November 25 and 26 (PRs #51 to #55, all merged; 967 tests pass).</b> Question 3 takes several agents, with a star for the primary agent and "Make primary". A new question 5 asks for the AI agent level, 0 to 8 (<code>src/data/agent-levels.ts</code>); help with is 6 and new software is 7. The quiz shows one question per screen with a progress bar, Next and Back, and keeps every answer when one is missing. Typing a role picks "Something else". Step 2 asks for first and last name and does not ask again for an email this browser already typed into Roger. Sign-up, sign-in and the app show no Circles header button. Spec 1.3 records all of this.</p>
     <p class="sub" style="margin-top:20px"><b>Payment at the first list, November 26 (branch <code>feat/payment-at-first-curation</code>, plan <code>docs/plans/2026-11-26-001-feat-payment-at-first-curation-plan.md</code>; spec 1.4).</b> Sign-up ends at Step 3 (Product and Pricing, with the Zack consent) as a trial with no card. A no-card member's Monday list is held: a titles-only teaser by email and on <code>/app</code>, linking to Payment, an embedded Stripe card form with a Price Box (USD/CAD, live tax, a promo code, "Due today: CA$0"). Saving the card delivers the held list as free list 1 of 2; the first charge still comes with the third list, now with the locked-in promo. A newer held list replaces the older one; reminders on days 2 and 7; the no-card close at 14 days after the first teaser (21 after consent with no teaser), with a 7-day reopen for a card confirmed around it. Monthly is the only plan. The admin has a "First list held, no card" state and a sign-up funnel. The scenario tests cover the new order end to end (<code>tests/scenarios/</code>, including <code>held-and-closed.test.ts</code>).</p>
-    <p class="sub"><b>Schema for this change</b> (appended to <code>db/schema.sql</code>, idempotent; run <code>db/setup.mjs</code> on the <b>preview</b>, <b>production</b> and <b>scenario-test</b> databases before deploying the branch): on <code>users</code>, <code>first_teaser_at</code>, <code>setup_session</code>, <code>promo_code</code>, <code>promo_coupon</code>, <code>promo_label</code>, <code>promo_refused_at</code>, <code>unlock_attempted_at</code>, <code>promo_ended_label</code>, <code>promo_duration</code>, <code>promo_duration_months</code>; <code>cora_user_weeks.superseded_at</code>; the new table <code>promo_reservations</code> (with <code>slot</code>, the unique index <code>promo_reservations_slot</code> and the index <code>promo_reservations_fingerprint</code>); <code>charge_attempts.coupon</code>.</p>
+    <p class="sub"><b>Schema for this change</b> (appended to <code>db/schema.sql</code>, idempotent; run <code>db/setup.mjs</code> on the <b>preview</b>, <b>production</b> and <b>scenario-test</b> databases <b>before</b> each environment gets the new code; the new code fails without these columns): on <code>users</code>, <code>first_teaser_at</code>, <code>setup_session</code>, <code>promo_code</code>, <code>promo_coupon</code>, <code>promo_label</code>, <code>promo_refused_at</code>, <code>unlock_attempted_at</code>, <code>promo_ended_label</code>, <code>promo_duration</code>, <code>promo_duration_months</code>, <code>signup_finished_at</code>, <code>card_fingerprint</code> (with the index <code>users_card_fingerprint</code>); <code>cora_user_weeks.superseded_at</code>; the new table <code>promo_reservations</code> (with <code>slot</code>, the unique index <code>promo_reservations_slot</code> and the index <code>promo_reservations_fingerprint</code>); <code>charge_attempts.coupon</code>.</p>
     <p class="sub" style="margin-top:20px"><b>The go-live gate, in order.</b></p>
     <ol class="sub">
       <li>S1, S2, S3 approved; S13, S15, S16 in place on Preview; the scenario tests run once against the sandbox (S17) and the checks marked "needs the live environment" in the first-pass record are walked on preview.</li>
