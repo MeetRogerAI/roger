@@ -237,6 +237,7 @@ describe("every caller of v1Copy", () => {
     expect([...new Set(calls.map((c) => c.file))].sort()).toEqual([
       "src/app/library/page.tsx",
       "src/app/site-preview/blocks/page.tsx",
+      "src/app/site-preview/hero/[n]/page.tsx",
       "src/components/site/v1/about.tsx",
       "src/components/site/v1/faq.tsx",
       "src/components/site/v1/home.tsx",
@@ -247,7 +248,7 @@ describe("every caller of v1Copy", () => {
       const passes = /^amounts, content\)/.test(call) || /getSiteContent\(\)/.test(call);
       expect(passes, `${file}: v1Copy(${call}`).toBe(!codeCopyOnPurpose.includes(file));
     }
-    expect(calls).toHaveLength(9);
+    expect(calls).toHaveLength(10);
   });
 
   it("is under a server component that reads the content, in every file that prints a covered page", () => {

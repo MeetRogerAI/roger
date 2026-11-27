@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { heroSketch, heroSketches } from "@/components/site/v2/sketches";
+import { getSiteContent } from "@/lib/site/content/read";
 import { v1Copy } from "@/lib/site/content/model";
 import { getAmounts } from "@/lib/site/amounts";
 import { isKnownNonProduction } from "@/lib/site/version";
@@ -31,7 +32,7 @@ export default async function HeroSketchPage({ params }: PageProps<"/site-previe
   const { n } = await params;
   const sketch = heroSketch(n);
   if (!sketch) notFound();
-  const amounts = await getAmounts();
-  const { copy } = v1Copy(amounts);
+  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
+  const { copy } = v1Copy(amounts, content);
   return <sketch.Component copy={copy} amounts={amounts} />;
 }
