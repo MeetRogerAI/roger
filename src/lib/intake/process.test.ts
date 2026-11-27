@@ -37,10 +37,11 @@ const report = (plays: unknown[], extra = "") => `# Zack The Collector (for Clau
 type Read = () => Promise<{ plays: ModelPlay[]; also_runs: [] }>;
 /** A model stand-in: returns what it is given, and records calls. */
 function fakeModel(o: { findings?: ReviewFinding[]; read?: Read; reviewFail?: boolean } = {}) {
-  const calls = { read: [] as number[], review: 0, texts: [] as string[] };
+  const calls = { read: [] as number[], review: 0, texts: [] as string[], reports: [] as string[] };
   const m: IntakeModel = {
-    async readRun(_r, { maxPlays }) {
+    async readRun(r, { maxPlays }) {
       calls.read.push(maxPlays);
+      calls.reports.push(r);
       if (!o.read) throw new Error("no reader");
       return o.read();
     },
@@ -110,6 +111,52 @@ describe("parsing and validation", () => {
     expect(p.body.playbook_md).toBe("1. Read new mail each morning and sort it into folders.\n2. Draft replies for approval before anything goes out.");
     expect(p.body.minutes_saved_each).toBe(25);
     expect(p.body.runs_week).toBeNull(); // 9 is not in the report: not invented
+  });
+
+  it("accepts a block run that also carries a roger-level block, with the same plays and no model read (build spec T3)", async () => {
+    const level = "```roger-level\nroger-level:\n  zack_version: 2.1\n  scripts: 3\n```";
+    const { m, calls } = fakeModel();
+    const id = await addRun(report([play()], level));
+    expect(await processRun(query, id, deps(m))).toBe("accepted");
+    expect(await runRow(id)).toMatchObject({ status: "accepted", parsed_by: "block" });
+    expect((await playsOf(id)).map((p) => p.title)).toEqual(["Morning inbox triage"]);
+    expect(calls.read).toEqual([]);
+  });
+
+  it("never shows the model a roger-level block, and a figure only that block states is not counted as stated", async () => {
+    const text =
+      "# Zack The Collector (for Hark) v1.9\n\n## Play 1: Inbox triage\nSaves 25 minutes each time.\n\n### Steps\n1. Read new mail each morning and sort it into folders.\n2. Draft replies for approval before anything goes out.\n\n```roger-level\nroger-level:\n  agents: private-agent-name\n  longest_chat_size: 9\n```\n";
+    const read: Read = async () => ({
+      plays: [
+        {
+          ...(play({ title: "Inbox triage", runs_week: 9 }) as unknown as ModelPlay),
+          sensitive: false,
+          outline_only: false,
+          playbook_first_words: "1. Read new mail each morning",
+          playbook_last_words: "before anything goes out.",
+        },
+      ],
+      also_runs: [],
+    });
+    const { m, calls } = fakeModel({ read });
+    const id = await addRun(text);
+    expect(await processRun(query, id, deps(m))).toBe("accepted");
+    expect(calls.reports).toHaveLength(1);
+    expect(calls.reports[0]).not.toContain("roger-level");
+    expect(calls.reports[0]).not.toContain("private-agent-name");
+    const [p] = await playsOf(id);
+    expect(p.body.minutes_saved_each).toBe(25);
+    expect(p.body.runs_week).toBeNull(); // 9 appears only inside the private block
+  });
+
+  it("gives the model the plays text when a private block comes before it, with CRLF line endings", async () => {
+    const text =
+      "# Zack The Collector (for Hark) v2.1\r\n\r\n~~~Roger-Level\r\nroger-level:\r\n  agents: private-agent-name\r\n~~~\r\n\r\n## Play 1: Inbox triage\r\nSaves 25 minutes each time.\r\n";
+    const read: Read = async () => ({ plays: [], also_runs: [] });
+    const { m, calls } = fakeModel({ read });
+    await processRun(query, await addRun(text), deps(m));
+    expect(calls.reports[0]).toContain("## Play 1: Inbox triage");
+    expect(calls.reports[0]).not.toContain("private-agent-name");
   });
 
   it("flags a model-path play whose playbook cannot be found, and one the report marks sensitive", async () => {
@@ -348,6 +395,14 @@ describe("processProfile and processPending", () => {
     expect(await processPending(query, deps())).toMatchObject({ accepted: 2 });
     const [p] = await query<{ status: string; parsed: unknown }>("select status, parsed from zack_profiles");
     expect(p).toEqual({ status: "accepted", parsed: { matching_only: true } });
+  });
+
+  it("accepts a profile that carries a roger-level block beside it, unchanged (build spec T3)", async () => {
+    const raw = '```roger-level\nroger-level:\n  zack_version: 2.1\n```\n\n```roger-profile\n{"matching_only":true}\n```';
+    const [p] = await query<{ id: string }>("insert into zack_profiles (user_id, week_of, route, raw_text) values ($1, '2026-11-30', 'connector', $2) returning id", [userId, raw]);
+    expect(await processProfile(query, p.id)).toBe("accepted");
+    const [row] = await query<{ parsed: unknown }>("select parsed from zack_profiles where id = $1", [p.id]);
+    expect(row.parsed).toEqual({ matching_only: true });
   });
 
   it("rejects a profile with no readable block", async () => {
