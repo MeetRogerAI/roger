@@ -579,7 +579,7 @@ Every `/app/*` and `/admin/*` page carries noindex and requires a session.
 | 2 | Do you use AI agents for work today? | Not yet / Most weeks / Every day |
 | 3 | Which AI agents do you use, or plan to? | Choose any *(1.3)*: the list in `src/data/zack.ts`, "Another one" (with a text field), "Not sure yet". A star marks the primary agent: the first one ticked, or another the user picks with "Make primary". The account is set up first for the primary agent; members can switch on `/app/zack`. |
 | 4 | How many agents, bots or scheduled routines do you run? | None / 1–2 / 3–5 / 6 or more |
-| 5 | Which level sounds most like you today? *(1.3)* | One of the AI agent levels. *(1.5, B2)* Levels 0 to 9 (Non-user to Multiplier), each shown with its "you need it when…" symptom, what the system does and the user's role (`src/data/agent-levels.ts`, from "Roger AI Agent Levels and Check Charts v1.1"). B1 shipped Levels 0 to 8 from v1.0. |
+| 5 | Which level sounds most like you today? *(1.3)* | One of the AI agent levels. *(1.5, B2)* Levels 0 to 9 (Non-user to Multiplier) (`src/data/roger-levels.ts`, from "Roger AI Agent Levels and Check Charts v1.1"). *(1.6, Peter, November 27)* Each option shows "Level N · Name", what the system does at that level, and a smaller line "Next: Level N+1 when…" with the next level's symptom, because a level's own symptom describes someone one level below it. The answer is stored with `levelQuiz: "1.1"`; a draft saved before v1.1 leaves the question unselected. B1 shipped Levels 0 to 8 from v1.0. |
 | 6 | What do you most want help with? | Choose any, from the fixed category list (B.5) |
 | 7 | How do you feel about trying new software for work? | I avoid it / I'll try it if someone shows me / I try new tools often |
 

@@ -4,7 +4,7 @@ import { startTransition, useActionState, useEffect, useId, useRef, useState, ty
 import type { QuizAnswers } from "@/lib/signup/quiz";
 import { submitQuiz, type StartFormState } from "@/app/start/actions";
 import type { StartParams } from "@/lib/signup/params";
-import { agentLevels } from "@/data/agent-levels";
+import { LEVEL_QUIZ_VERSION, rogerLevels } from "@/data/roger-levels";
 
 const idle: StartFormState = { status: "idle" };
 
@@ -28,6 +28,9 @@ export function QuizForm({ params, agents, categories, initial }: { params: Star
   const toggle = (v: string, on: boolean) => setTicked((t) => (on ? [...t.filter((x) => x !== v), v] : t.filter((x) => x !== v)));
   const agentOptions = [...agents, { value: "other", label: "Another one" }, { value: "not_sure", label: "Not sure yet" }];
   const id = useId();
+  // Question 5 is pre-selected only for an answer given on this levels list; an older
+  // answer (levels v1.0, no marker) is asked again.
+  const levelAnswer = initial?.levelQuiz === LEVEL_QUIZ_VERSION ? initial.level : undefined;
   const formRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -220,18 +223,37 @@ export function QuizForm({ params, agents, categories, initial }: { params: Star
 
       <Question n={5} at={step} legend="Which level sounds most like you today?" hint="Pick the one that matches how you work most weeks." error={e.level}>
         <div className="grid gap-2">
-          {agentLevels.map((l) => (
-            <label key={l.level} className={`${choice} items-start py-3`}>
-              <input type="radio" name="level" value={l.level} defaultChecked={initial?.level === l.level} className="mt-1 size-4 shrink-0 accent-accent" />
-              <span>
-                <span className="block font-[560] text-ink">
-                  <span className="tabular">Level {l.level}</span> · {l.name}
+          {rogerLevels.map((l) => {
+            const up = rogerLevels.find((x) => x.level === l.level + 1);
+            const lid = `${id}-level-${l.level}`;
+            return (
+              <label key={l.level} className={`${choice} items-start py-3`}>
+                <input
+                  type="radio"
+                  name="level"
+                  value={l.level}
+                  defaultChecked={levelAnswer === l.level}
+                  aria-labelledby={`${lid}-name`}
+                  aria-describedby={up?.symptom ? `${lid}-does ${lid}-next` : `${lid}-does`}
+                  className="mt-1 size-4 shrink-0 accent-accent"
+                />
+                <span>
+                  <span id={`${lid}-name`} className="block font-[560] text-ink">
+                    <span className="tabular">Level {l.level}</span> · {l.name}
+                  </span>
+                  <span id={`${lid}-does`} className="block text-ink-2">
+                    {l.does}
+                  </span>
+                  {/* The next level's symptom ("you need it when…"): what would move them up. */}
+                  {up?.symptom && (
+                    <span id={`${lid}-next`} className="mt-1 block text-meta text-ink-2">
+                      Next: <span className="tabular">Level {up.level}</span> when {lowerFirst(up.symptom)}
+                    </span>
+                  )}
                 </span>
-                <span className="block text-ink-2">{l.does}</span>
-                <span className="mt-1 block text-ink-2">Your role: {l.role}</span>
-              </span>
-            </label>
-          ))}
+              </label>
+            );
+          })}
         </div>
       </Question>
 
@@ -282,6 +304,9 @@ export function QuizForm({ params, agents, categories, initial }: { params: Star
     </form>
   );
 }
+
+/** "You re-explain…" reads as "when you re-explain…". Every v1.1 symptom starts with an ordinary word. */
+const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
 
 const field = "mt-2 w-full rounded-[8px] border border-rule-strong bg-surface px-4 py-3 text-body";
 const choice =

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { categories } from "@/data/categories";
+import { LEVEL_QUIZ_VERSION, rogerLevels } from "@/data/roger-levels";
 import { isZackAgent } from "@/lib/zack/agents";
 
 /**
@@ -23,8 +24,12 @@ export const quizSchema = z
     // The one ticked agent marked primary: the first ticked unless the person picks another.
     primary: z.string().trim().max(40).default(""),
     count: z.enum(agentCounts),
-    // Question 5: their AI agent level, 0 to 8 (src/data/agent-levels.ts).
-    level: z.coerce.number().int().min(0).max(8),
+    // Question 5: their AI agent level, 0 to 9 (src/data/roger-levels.ts, levels v1.1).
+    level: z.coerce.number().int().min(rogerLevels[0].level).max(rogerLevels[rogerLevels.length - 1].level),
+    // Which levels list the answer was given on. Answers saved before v1.1 have no
+    // marker: their level is on the v1.0 list, 0 to 8 ("artifacts/Roger AI Agent
+    // Levels and Check Charts v1.0.md"), where 8 meant "8 or above". No backfill.
+    levelQuiz: z.literal(LEVEL_QUIZ_VERSION).optional(),
     help: z.array(z.enum(categories)).max(categories.length).default([]),
     software: z.enum(newSoftware),
   })
@@ -78,7 +83,7 @@ export function parseQuiz(fd: FormData, agentSlugs: readonly string[]):
   const agents = named.length ? named : ["not_sure"];
   // A primary that isn't ticked (or is "Not sure yet") is ignored, and the default applies.
   const primary = r.data.primary !== "not_sure" && agents.includes(r.data.primary) ? r.data.primary : "";
-  return { ok: true, answers: { ...r.data, agents, primary } };
+  return { ok: true, answers: { ...r.data, agents, primary, levelQuiz: LEVEL_QUIZ_VERSION } };
 }
 
 /**

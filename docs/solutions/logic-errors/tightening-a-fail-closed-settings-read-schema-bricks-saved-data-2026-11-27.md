@@ -42,6 +42,16 @@ Fail-closed is meant to catch **corruption**, not **policy changes**. A tighter 
 - Before narrowing any validator on a fail-closed read path, ask: "what happens to rows saved under the old rule?" Add a test that loads an old-rule value.
 - The same applies to `zod` schemas over JSON columns and to `check` constraints added to existing tables.
 
+## The same trap elsewhere: re-labelling saved answers (B2 Unit 1b)
+Quiz question 5 moved from the v1.0 list (0–8, where 8 meant "8 or above") to v1.1 (0–9, new descriptions). The old answers still parse, so nothing failed loudly. The silent failure was in the **form**: a sign-up draft saved before the change pre-selected the same number on the new list, where it now means something else. On submit it was stamped `levelQuiz: "1.1"`, which made an ambiguous old answer look like a deliberate new one.
+
+What fixed it:
+- Stamp a version marker on every stored answer.
+- Read unmarked answers as the old version.
+- **Never pre-fill** an answer from an older version into a form whose options now mean something else. Leave the question blank so the person answers again.
+
+Test both directions: an old draft renders nothing checked, and a new draft renders exactly its own choice.
+
 ## Secondary: NULLs are distinct in Postgres unique indexes
 `credits_one_clawback` was unique on `(referral_id, source_object_id)`, but `source_object_id` was nullable. Postgres treats NULLs as distinct, so a clawback inserted without a source id could be inserted any number of times, and each one would become a real Stripe balance debit. The fix is a check that requires `source_object_id` for `clawback` and `lapse` rows. The alternatives are `NULLS NOT DISTINCT` or a `not null` column. Any idempotency index over a nullable column needs the same question asked.
 
