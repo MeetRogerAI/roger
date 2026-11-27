@@ -108,17 +108,21 @@ function AccountLinks({ cta, account }: { cta: NonNullable<NavSet["cta"]>; accou
   const signedIn = useSignedInHint();
   return (
     <span className="grid items-center justify-items-end">
-      <span className={`col-start-1 row-start-1 flex items-center gap-4 sm:gap-5 ${signedIn ? "invisible" : ""}`} aria-hidden={signedIn || undefined}>
+      {/* The pair stretches to one height: on a phone the start button's words take two lines, and "Sign in" grows to match. */}
+      <span className={`col-start-1 row-start-1 flex items-stretch gap-2 sm:gap-3 ${signedIn ? "invisible" : ""}`} aria-hidden={signedIn || undefined}>
         {/*
           Under 375 pixels there is no room beside the button: the menu carries it there. At 360, a common
           phone width, the button's words took three lines beside it and the button filled the header's height.
+          At 375 both fit, with about 10 pixels to spare before the button's words need a third line (measured
+          with these labels). "Sign in" never shrinks, because a button's words may wrap on a phone and these
+          two would: the start button gives way first.
         */}
-        <Link href={account.signIn.href} className="whitespace-nowrap rounded px-0.5 py-1 text-small text-ink-2 transition-colors duration-[180ms] hover:text-ink max-[374px]:hidden">
+        <Link href={account.signIn.href} className="btn btn-m btn-outline shrink-0 max-sm:px-2.5 max-sm:text-[0.8125rem] max-[374px]:hidden">
           {account.signIn.label}
         </Link>
-        <span className="header-cta">
+        <span className="header-cta flex">
           {/* The same words at every width (Peter, November 26, 2026). On a phone they take two lines, in a smaller size, so the row still fits. */}
-          <StartLink className="btn btn-m max-sm:max-w-[8.5rem] max-sm:px-3.5 max-sm:text-[0.8125rem] max-sm:leading-[1.15]">{cta.label}</StartLink>
+          <StartLink className="btn btn-m max-sm:max-w-[8.5rem] max-sm:px-3 max-sm:text-[0.8125rem] max-sm:leading-[1.15]">{cta.label}</StartLink>
         </span>
       </span>
       {signedIn && (
@@ -191,7 +195,8 @@ export function SiteHeader({ site, chrome, sketches = false }: { site: ServedSit
       <a href="#main" className="sr-only-focusable absolute left-4 top-2 z-50 rounded-full bg-ink px-4 py-2 text-small text-ground">
         Skip to content
       </a>
-      <div className="wrap flex h-[60px] items-center gap-6">
+      {/* The narrower gap on a phone is what lets "Sign in" sit beside the start button at 375 pixels. */}
+      <div className="wrap flex h-[60px] items-center gap-4 sm:gap-6">
         <Link href="/" className="-ml-1 flex items-center gap-2 rounded-md px-1 py-1 text-[1.0625rem] font-[620] tracking-[-0.015em]">
           <Toque className="size-[22px] text-accent" />
           Roger
@@ -237,7 +242,7 @@ export function SiteHeader({ site, chrome, sketches = false }: { site: ServedSit
             <button
               ref={buttonRef}
               type="button"
-              className="-mr-2 grid size-11 place-items-center rounded-full text-ink lg:hidden"
+              className="-mr-2 grid size-11 shrink-0 place-items-center rounded-full text-ink lg:hidden"
               aria-expanded={open}
               aria-controls="mobile-menu"
               onClick={() => setOpen(!open)}

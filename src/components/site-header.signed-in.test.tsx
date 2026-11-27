@@ -1,8 +1,10 @@
 /**
- * The header of a site version for a signed-in visitor (spec A.3). The page is
+ * The header of a site version for a signed-in visitor (spec A.3), and its outlined "Sign in" for a signed-out one. The page is
  * prerendered signed out and the browser swaps "Open Roger" in, so the hint is
  * set here by hand and the header rendered with it.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { v3Defaults } from "@/data/config";
 import { amountsFrom } from "@/lib/site/amounts";
@@ -57,7 +59,7 @@ describe("a site version's header for a signed-in visitor", () => {
     expect(hrefs(inside)).toEqual(["/signin", "/start"]);
     expect(inside).toContain(">Sign in</a>");
     // Under 375 pixels Sign in leaves the row (the menu lists it), so the button's two lines have room: at 360 they took three beside it.
-    expect(inside).toMatch(/<a class="[^"]*max-\[374px\]:hidden[^"]*" href="\/signin">Sign in<\/a>/);
+    expect(inside).toMatch(/<a class="btn btn-m btn-outline [^"]*max-\[374px\]:hidden[^"]*" href="\/signin">Sign in<\/a>/);
     // Nothing before the wrapper is hidden with it.
     expect(hrefs(markup.slice(0, wrapper.index))).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about"]);
   });
@@ -71,6 +73,62 @@ describe("a site version's header for a signed-in visitor", () => {
     expect(signed).toContain(hiddenPair);
     // Take the two additions away and the signed-in header is the signed-out one, character for character.
     expect(signed.replace(openApp, "").replace(hiddenPair, ' ">')).toBe(out);
+  });
+});
+
+describe("a site version's header for a signed-out visitor (R23, R24)", () => {
+  const anchors = (markup: string) => [...markup.matchAll(/<a class="([^"]*)" href="([^"]*)">([^<]*)<\/a>/g)].map((m) => ({ classes: m[1].split(" "), href: m[2], label: m[3] }));
+
+  it("shows Sign in as an outlined button, to /signin, directly before the filled start button", async () => {
+    const markup = await header("out");
+    const all = anchors(markup);
+    expect(all.filter((a) => a.label === "Sign in")).toHaveLength(1);
+    const signIn = all.findIndex((a) => a.label === "Sign in");
+    expect(all[signIn].href).toBe("/signin");
+    expect(all[signIn].classes).toEqual(expect.arrayContaining(["btn", "btn-m", "btn-outline"]));
+    // The next link is the start button, and it is the filled one: no variant takes its ground away.
+    const start = all[signIn + 1];
+    expect(start).toMatchObject({ href: "/start", label: "Get two free Cora Curations" });
+    expect(start.classes).toEqual(expect.arrayContaining(["btn", "btn-m"]));
+    expect(start.classes.filter((c) => /^btn-(outline|ink|light)$/.test(c))).toEqual([]);
+    expect(all.filter((a) => a.classes.includes("btn-outline"))).toHaveLength(1);
+    expect(markup).toContain('href="/signin">Sign in</a><span class="header-cta flex"><a ');
+  });
+
+  it("hides Sign in under 375 pixels, and never lets it shrink beside the start button", async () => {
+    const signIn = anchors(await header("out")).find((a) => a.label === "Sign in")!;
+    expect(signIn.classes).toContain("max-[374px]:hidden");
+    // A button's words may wrap on a phone (globals.css), so nowrap would not hold: not shrinking is what keeps "Sign in" on one line.
+    expect(signIn.classes).toContain("shrink-0");
+  });
+
+  it("stretches the pair to one height, so Sign in matches a start button whose words take two lines", async () => {
+    const markup = await header("out");
+    const pair = markup.match(/<span class="(col-start-1 row-start-1 [^"]*)"><a class="[^"]*" href="\/signin">/)!;
+    expect(pair).not.toBeNull();
+    expect(pair[1].split(" ")).toContain("items-stretch");
+    expect(pair[1]).not.toContain("items-center");
+    // The start button sits in a wrapper (the sticky bar hides it by that class), which has to pass the height on.
+    expect(markup).toContain('<span class="header-cta flex">');
+  });
+
+  it("has an outlined variant in the stylesheet: no fill, a border, and a hover that is not the accent's", () => {
+    const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8")
+      .replace(/\r\n/g, "\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = (selector: string) => {
+      const found = css.split(`\n  ${selector} {\n`);
+      expect(found, selector).toHaveLength(2);
+      return found[1].slice(0, found[1].indexOf("}"));
+    };
+    expect(rule(".btn-outline")).toContain("background: transparent;");
+    expect(rule(".btn-outline")).toContain("border-color: var(--color-ink);");
+    expect(rule(".btn-outline")).toContain("color: var(--color-ink);");
+    expect(rule(".btn-outline:hover")).toContain("background: var(--color-ground-2);");
+    // Same weight as .btn:hover, so it has to come later to win.
+    expect(css.indexOf(".btn-outline:hover {")).toBeGreaterThan(css.indexOf(".btn:hover {"));
+    // The pressed movement stays the one rule on .btn: the variant adds none of its own.
+    expect(css).not.toContain(".btn-outline:active");
   });
 });
 
