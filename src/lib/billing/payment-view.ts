@@ -1,7 +1,7 @@
 import { discountEnds, discountWords, thenWords, type DiscountTerms } from "./discount-words";
 import type { BillingCountry, MonthlyPreview } from "./gateway";
 import { checkBillingLocation, OUTSIDE_COVERAGE } from "./location";
-import { money, moneyCents, type Currency } from "./prices";
+import { moneyCents, type Currency } from "./prices";
 
 /**
  * The Payment page's words and sums (plan 2026-11-26-001, Unit 6), shared by
@@ -80,9 +80,12 @@ export function totalText(p: MonthlyPreview): string {
   return p.tax === "pending" ? `${moneyCents(p.totalCents, p.currency)} + tax` : moneyCents(p.totalCents, p.currency);
 }
 
-/** The last line (origin R16). The currency is always named (spec A.16 check 5), so "$0" reads "CA$0" or "US$0". */
-export function dueToday(currency: Currency): { lead: string; rest: string } {
-  return { lead: `Due today: ${money(0, currency)}.`, rest: "Your first charge comes with your third list." };
+/**
+ * The last line (origin R16). A plain "$0" in both currencies (Peter, 2026-11-26): nothing is
+ * charged, so naming the currency adds nothing here. Every other amount still names it (spec A.16 check 5).
+ */
+export function dueToday(): { lead: string; rest: string } {
+  return { lead: "Due today: $0.", rest: "Your first charge comes with your third list." };
 }
 
 /** The country picker: Canada and the US (Peter, 2026-11-26), plus "Another country", which only explains. */

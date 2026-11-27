@@ -77,8 +77,8 @@ describe("price lines", () => {
     });
   });
 
-  it("Due today names the currency (never a bare $)", () => {
-    expect(dueToday("CAD")).toEqual({ lead: "Due today: CA$0.", rest: "Your first charge comes with your third list." });
-    expect(dueToday("USD").lead).toBe("Due today: US$0.");
+  it("Due today is a plain $0 in both currencies", () => {
+    expect(dueToday()).toEqual({ lead: "Due today: $0.", rest: "Your first charge comes with your third list." });
+
   });
 });

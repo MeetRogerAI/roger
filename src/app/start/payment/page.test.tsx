@@ -90,7 +90,7 @@ describe("/start/payment", () => {
     expect(text).toContain("Roger monthly CA$280");
     expect(text).toContain("Calculated from your billing address");
     expect(text).toContain("Total per month CA$280 + tax");
-    expect(text).toContain("Due today: CA$0. Your first charge comes with your third list.");
+    expect(text).toContain("Due today: $0. Your first charge comes with your third list.");
     expect(text).toContain("Start free trial");
     expect(text).toContain("Secured by Stripe");
     expect(text).toContain("Payments are processed by Stripe, a PCI DSS Level 1 certified provider. Roger never sees your card number.");
