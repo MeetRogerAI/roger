@@ -227,7 +227,12 @@ export function stripeGateway(s: Stripe | null = stripe()): CardGateway | null {
         paymentMethod: typeof pm === "string" ? pm : (pm?.id ?? null),
         userId: session.metadata?.user_id ?? null,
         currency: cur === "USD" || cur === "CAD" ? cur : null,
-        country: session.customer_details?.address?.country ?? null,
+        // Elements-mode sessions can report an empty customer_details country (seen on preview, 2026-11-26);
+        // the card's own billing details carry the country sent with updateBillingAddress.
+        country:
+          session.customer_details?.address?.country ||
+          (pm && typeof pm !== "string" ? pm.billing_details?.address?.country : null) ||
+          null,
         purpose: session.metadata?.purpose ?? null,
         clientSecret: session.client_secret ?? null,
         cardFingerprint: pm && typeof pm !== "string" ? (pm.card?.fingerprint ?? null) : null,

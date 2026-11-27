@@ -71,6 +71,13 @@ describe("stripeGateway", () => {
     expect(await stripeGateway(asIds.s)!.getSetupSession("cs_1")).toMatchObject({ paymentMethod: null, userId: null, currency: null, country: null });
   });
 
+  it("takes the country from the card's billing details when the elements-mode session reports an empty one (seen on preview)", async () => {
+    const { s } = stubStripe({
+      session: { customer_details: { address: { country: "" } }, setup_intent: { id: "seti", payment_method: { id: "pm_9", billing_details: { address: { country: "CA" } } } } },
+    });
+    expect(await stripeGateway(s)!.getSetupSession("cs_1")).toMatchObject({ country: "CA" });
+  });
+
   it("reads the saved card's fingerprint from the expanded payment method (Unit 5, first-time-only codes)", async () => {
     let expand: unknown;
     const { s } = stubStripe({ session: { setup_intent: { id: "seti", payment_method: { id: "pm_9", card: { fingerprint: "fp_abc" } } } } });
