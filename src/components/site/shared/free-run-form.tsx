@@ -98,14 +98,26 @@ const idleStart: StartRunState = { status: "idle" };
 const runHref = (agent: string, state: StartRunState) => (state.status === "ok" && state.token ? `/zack/${agent}?run=${state.token}` : null);
 
 /** Step 2: the email that starts a run for this agent. On success the page address takes the run's token. */
-export function FreeRunEmailForm({ agent, copy, notice }: { agent: string; copy: EmailCopy; /** Shown above the field: why the visitor is back at this step. */ notice?: EmailNotice }) {
+export function FreeRunEmailForm({
+  agent,
+  copy,
+  notice,
+  shownAbove,
+}: {
+  agent: string;
+  copy: EmailCopy;
+  /** Shown above the field: why the visitor is back at this step. */
+  notice?: EmailNotice;
+  /** A message the page already shows above this form. When the action answers with the same words, they are not printed a second time. */
+  shownAbove?: string;
+}) {
   const [state, action, pending] = useActionState(startFreeRun, idleStart);
   const router = useRouter();
   const href = runHref(agent, state);
   useEffect(() => {
     if (href) router.replace(href, { scroll: false });
   }, [href, router]);
-  return <FreeRunEmailView agent={agent} copy={copy} notice={notice} state={state} pending={pending} action={action} />;
+  return <FreeRunEmailView agent={agent} copy={copy} notice={notice} shownAbove={shownAbove} state={state} pending={pending} action={action} />;
 }
 
 /**
@@ -116,6 +128,7 @@ export function FreeRunEmailView({
   agent,
   copy,
   notice,
+  shownAbove,
   state,
   pending = false,
   action,
@@ -123,6 +136,7 @@ export function FreeRunEmailView({
   agent: string;
   copy: EmailCopy;
   notice?: EmailNotice;
+  shownAbove?: string;
   /** The action's last answer. */
   state: StartRunState;
   pending?: boolean;
@@ -178,7 +192,7 @@ export function FreeRunEmailView({
           {error}
         </p>
       )}
-      {state.status === "error" && state.message && (
+      {state.status === "error" && state.message && state.message !== shownAbove && (
         <p role="alert" className="mt-4 text-small text-error">
           {state.message}
         </p>

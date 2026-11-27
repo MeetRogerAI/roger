@@ -367,6 +367,28 @@ describe("the compounding scroll story, with no script", () => {
   });
 });
 
+describe("the shared button and link movements", () => {
+  const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8")
+    .replace(/\r\n/g, "\n")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("shrink a pressed button and nudge a link's chevron only where motion is allowed (U10 acceptance, open defect 2)", () => {
+    const allowed = "@media (prefers-reduced-motion: no-preference) {\n";
+    for (const [selector, movement] of [
+      [".btn:active", "transform: scale(0.98);"],
+      [".chev:hover::after", "transform: translateX(2px);"],
+    ]) {
+      const rule = new RegExp(`\\n( *)${selector.replace(/[.:]/g, "\\$&")} \\{\\n\\s*${movement.replace(/[().]/g, "\\$&")}\\n\\s*\\}`);
+      const found = [...css.matchAll(new RegExp(rule, "g"))];
+      expect(found, selector).toHaveLength(1);
+      // The rule is the first thing inside a no-preference block, and is nowhere else.
+      const before = css.slice(0, found[0].index! + 1);
+      expect(before.endsWith(allowed), selector).toBe(true);
+      expect(css.split(`${selector} {`), selector).toHaveLength(2);
+    }
+  });
+});
+
 describe("the motion rules for the bricks", () => {
   const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8").replace(/\r\n/g, "\n");
   // The rules without their comments, which name the same classes.

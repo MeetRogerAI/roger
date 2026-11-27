@@ -540,6 +540,16 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.map((s) => s.text).join(" ")).toMatch(/\$\d/);
   });
+
+  it("leaves the watch sentence’s two fields their focus ring: no class switches the outline off (U10 acceptance, open defect 3)", () => {
+    const library = bare.find((page) => page.path === "/library")!;
+    const fields = [...library.markup.matchAll(/<input\b[^>]*\bname="(email|query)"[^>]*>/g)].filter((m) => m[0].includes("bg-ground-2"));
+    expect(fields.map((m) => m[1]).sort()).toEqual(["email", "query"]);
+    for (const [field] of fields) {
+      expect(field).not.toMatch(/\boutline-(none|hidden|0)\b/);
+      expect(field).not.toContain("focus:outline-none");
+    }
+  });
 });
 
 describe("the free Zack run’s later steps", () => {

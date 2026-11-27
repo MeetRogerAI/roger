@@ -4,6 +4,8 @@
  * pages keep (the warning word for word, one start button carrying the token,
  * a label on every field, no figure of time).
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReportState, StartRunState } from "@/app/zack/actions";
 import type { ReportCopy } from "@/components/site/shared/free-run-form";
@@ -320,6 +322,24 @@ describe("/zack/[agent] on v1: after an answer from the server", () => {
   const email = (state: StartRunState, pending = false) => pageMarkup(<FreeRunEmailView agent="claude" copy={emailCopy} state={state} pending={pending} />);
   const startLinks = (markup: string) => hrefs(markup).filter((h) => h.startsWith("/start"));
   const START = `/start?path=agents&zack=${TOKEN}`;
+
+  it("does not print the action's message a second time when the page already shows the same words above the form (U10 acceptance, open defect 8)", async () => {
+    const answer: StartRunState = { status: "error", message: zack.noDatabase, values: { email: "ana@example.com" } };
+    // On its own the form prints what the action said.
+    expect(text(await email(answer))).toContain(zack.noDatabase);
+    // Under the standing line, which says the same thing, it does not: the page then says it once.
+    const under = await pageMarkup(<FreeRunEmailView agent="claude" copy={emailCopy} shownAbove={zack.noDatabase} state={answer} />);
+    expect(text(under)).not.toContain(zack.noDatabase);
+    expect(under).not.toContain('role="alert"');
+    expect(under).toContain('value="ana@example.com"');
+    // Any other message still shows.
+    const other = await pageMarkup(<FreeRunEmailView agent="claude" copy={emailCopy} shownAbove={zack.noDatabase} state={{ status: "error", message: zack.ourSide }} />);
+    expect(text(other)).toContain(zack.ourSide);
+    // The page with no database hands the form its standing line.
+    const page = readFileSync(path.join(process.cwd(), "src/components/site/v1/zack.tsx"), "utf8");
+    expect(page).toContain("shownAbove={db ? undefined : zack.noDatabase}");
+    expect((await flow("claude", { db: false })).split(zack.noDatabase)).toHaveLength(2);
+  });
 
   it("lists the play titles in the report's order, then the one start button carrying the token", async () => {
     const titles = ["Client email in two tones", "Zoning lookup in plain words", "Listing sheet from rough notes"];

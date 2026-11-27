@@ -1,7 +1,7 @@
 /**
- * Privacy and terms for a built site version (plan U9, spec A.13). Both are
- * drafts until Peter has them read: the pages render them with the "Draft,
- * under review." note.
+ * Privacy and terms for a built site version (plan U9, spec A.13). Peter
+ * reviewed and confirmed both on November 26, 2026, so the pages render them
+ * without the "Draft, under review." note.
  *
  * Each sentence states something the spec, the plan or the code says, and
  * nothing else. What was left out because no source states it is listed in
@@ -22,10 +22,10 @@ import { fillCopy, type Amounts } from "@/lib/site/amounts";
 const email = siteConfig.contactEmail;
 
 /**
- * TODO(Peter): the model provider's position on training is not confirmed.
- * Spec A.13 says to state it once Peter confirms it. Until then this sentence
+ * The model provider's position on training is not known yet, so this sentence
  * says only that it is being confirmed. Replace it with the confirmed position
- * before a version goes live. It must not state or imply a position before then.
+ * once the provider's position is known (spec A.13). Until then it must not
+ * state or imply a position.
  */
 export const trainingPosition = "We are confirming the model provider’s position on training its models, and will state it here.";
 
@@ -110,7 +110,7 @@ export const sitePrivacy: LegalDoc = {
         "We keep your runs while you have access to Roger, and for {retentionDays} days after your access ends. Cancelling does not delete your account.",
         "After that period the text of each run and its matching profile are erased, and plays that were never shared are deleted. An empty record of each run stays until your account is deleted: its week, how it arrived, the AI agent it came from and when it arrived.",
         "You can delete any run from your dashboard.",
-        "Plays already shared stay in the pool. Other users see nothing that identifies you. Roger keeps your own copy of each shared play until your account is deleted, and a private record of which account a shared play came from, so that Cora does not send it back to you.",
+        "Plays already shared stay in the pool. Other users see nothing that identifies you. Roger keeps your own copy of each shared play until your account is deleted, and a private record of which account a shared play came from, so that Cora does not send it back to you. When your account is deleted, that record is changed to say “unknown author”.",
       ],
     },
     {

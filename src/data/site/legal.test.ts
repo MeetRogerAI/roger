@@ -180,6 +180,16 @@ describe("privacy says each point in the spec's list", () => {
     expect(kept).not.toContain("stay in the pool, without anything that identifies you");
   });
 
+  it("retention: the record of which account a play came from says 'unknown author' once the account is deleted, in the words the code writes", async () => {
+    const kept = section(privacy, "retention");
+    const { UNKNOWN_AUTHOR } = await import("@/lib/cora/contributors");
+    expect(UNKNOWN_AUTHOR).toBe("unknown author");
+    expect(kept).toContain(`so that Cora does not send it back to you. When your account is deleted, that record is changed to say “${UNKNOWN_AUTHOR}”.`);
+    // The relabel is part of deleting the account, and the hourly task that catches anything left runs before the paid cycle is live.
+    const { HOURLY_TASKS } = await import("@/lib/housekeeping/job");
+    expect(HOURLY_TASKS.find((t) => t.name === "unknown_authors")!.always).toBe(true);
+  });
+
   it("names the services that hold the data, each as its own item of the list, and that some store it outside Canada", () => {
     const [list, abroad, ...rest] = privacy.sections.find((s) => s.id === "services")!.body;
     expect(rest).toEqual([]);

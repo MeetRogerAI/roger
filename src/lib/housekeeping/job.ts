@@ -22,6 +22,7 @@ import { stripeGateway } from "@/lib/billing/gateway";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { purgeFreeRuns } from "@/lib/site/free-run";
+import { relabelOrphanContributors } from "@/lib/cora/contributors";
 import { applyRetention, cleanUpExpired } from "./retention";
 import { closeTrialsWithNoList, sendTrialNudges, sendUploadReminders } from "./trial";
 import { finishCancellations } from "@/lib/billing/cancel";
@@ -69,6 +70,10 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // ones whose account is gone deleted. Never ahead of the real clock. The site can be live before the paid cycle is, so
   // this one runs always.
   { name: "free_run_purge", always: true, run: (q, d) => purgeFreeRuns(q, { now: new Date(Math.min(d.now.getTime(), Date.now())), retentionDays: d.settings.retentionDays }) },
+  // The private record of which account a shared play came from: a row whose account no longer exists is changed to
+  // say "unknown author". Deleting an account does this itself, so this pass is the backfill for accounts deleted
+  // before that and the safety net after. It reads no setting and needs neither the paid cycle nor Stripe: always.
+  { name: "unknown_authors", always: true, run: (q) => relabelOrphanContributors(q) },
   // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
   { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.

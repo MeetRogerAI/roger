@@ -1,5 +1,6 @@
 import { adjustmentOnAccountClosed, type AdjustDeps } from "@/lib/billing/adjustment";
 import { isLive, type BillingGateway } from "@/lib/billing/subscriptions";
+import { UNKNOWN_AUTHOR } from "@/lib/cora/contributors";
 import { isRealDate, wallParts } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { adminEmails } from "@/lib/auth/admin-emails";
@@ -191,6 +192,19 @@ const isAdminAddress = (email: string) => adminEmails().includes(email.toLowerCa
  * address (see the privacy note in the plan). Refused while a dropped
  * higher-rate item may still be in Stripe (its delete not yet confirmed):
  * deleting the account would lose the record the hourly retry needs.
+ *
+ * The private record of which account each shared play came from
+ * (`pool_play_contributors`) holds the account's id as text, with no link to
+ * `users`, so nothing cascades to it. The statement that deletes the account
+ * also changes those rows to say "unknown author" (Peter's decision,
+ * November 26, 2026), so the id kept in the admin log beside the address can
+ * no longer be tied to a play. It is one statement because there are no
+ * transactions over Neon HTTP: both steps read the deleted row from `gone`,
+ * so they do nothing unless the delete happened, and they commit with it.
+ * The table's key is (pool_play_id, contributor): where the play already has
+ * an "unknown author" row from an earlier deleted account, this account's row
+ * is deleted instead, so a play never has more than one. The hourly
+ * `unknown_authors` task (relabelOrphanContributors) is the safety net.
  */
 export async function deleteAccount(q: Query, by: string, userId: string, confirmEmail: string): Promise<Done> {
   const [u] = await q<{ email: string; status: string; stripe_open: boolean }>(
@@ -203,12 +217,33 @@ export async function deleteAccount(q: Query, by: string, userId: string, confir
   if (u.status !== "closed") return no("Close the account first.");
   if (normaliseEmail(confirmEmail) !== u.email.toLowerCase()) return no("Type the account’s email address to confirm.");
   if (u.stripe_open) return no("A higher-rate item for this account may still be in Stripe. Wait for the hourly pass to remove it, then delete.");
-  const gone = await q<{ email: string }>(
-    `delete from users u where u.id = $1 and u.status = 'closed' and lower(u.email) <> all($2::text[])
-       and not exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced')
-     returning u.email`,
-    [userId, adminEmails()],
-  );
+  const remove = () =>
+    q<{ email: string }>(
+      `with gone as (
+         delete from users u where u.id = $1 and u.status = 'closed' and lower(u.email) <> all($2::text[])
+           and not exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced')
+         returning u.id, u.email
+       ),
+       dropped as (
+         delete from pool_play_contributors c
+         where c.contributor = (select id::text from gone)
+           and exists (select 1 from pool_play_contributors k where k.pool_play_id = c.pool_play_id and k.contributor = '${UNKNOWN_AUTHOR}')
+       ),
+       relabelled as (
+         update pool_play_contributors c set contributor = '${UNKNOWN_AUTHOR}'
+         where c.contributor = (select id::text from gone)
+           and not exists (select 1 from pool_play_contributors k where k.pool_play_id = c.pool_play_id and k.contributor = '${UNKNOWN_AUTHOR}')
+       )
+       select email from gone`,
+      [userId, adminEmails()],
+    );
+  // Two accounts that contributed the same play, deleted at the same moment, can both try to become its one
+  // "unknown author" row. The loser's whole statement fails on the table's key, so nothing of it is kept, and
+  // a second try finds the row there and deletes its own instead.
+  const gone = await remove().catch((e: unknown) => {
+    if (!/unique|duplicate/i.test(e instanceof Error ? e.message : String(e))) throw e;
+    return remove();
+  });
   if (!gone.length) return no("The account changed meanwhile. Reload and try again.");
   await logAdminAction(q, { by, userId, action: "delete_account", detail: { email: gone[0].email } });
   return ok("Account deleted.");

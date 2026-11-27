@@ -65,14 +65,15 @@ describe("a site version before its pages are built", () => {
     expect(zackMetadata.robots).toBeUndefined();
   });
 
-  it("serves the version's own privacy and terms drafts, with the draft note and no Circles text (U9)", async () => {
+  it("serves the version's own privacy and terms as reviewed, with no draft note and no Circles text (U9; reviewed by Peter, November 26, 2026)", async () => {
     for (const page of [<Privacy key="p" />, <Terms key="t" />]) {
       const markup = await pageMarkup(page);
       expect(markup).not.toContain("not built yet");
       expect(markup).not.toContain("Circle");
       expect(markup).toContain('data-site="v1"');
-      expect(markup).toContain('<p role="note"');
-      expect(markup).toContain("Draft, under review.");
+      expect(markup).not.toContain('role="note"');
+      expect(markup).not.toContain("Draft, under review.");
+      expect(markup).not.toMatch(/\bdraft\b/i);
       expect(markup).toContain("Last updated <!-- -->November 2026");
       expect(markup).not.toMatch(/\{\w+\}/);
     }

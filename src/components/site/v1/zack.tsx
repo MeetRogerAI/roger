@@ -268,6 +268,8 @@ export function FlowView({ agent, file, zack, warning, start, cardLine, db, toke
           // A fresh form for each address, so one that has just answered does not stay on screen when its token opens nothing.
           key={token || "new"}
           agent={agent.slug}
+          // With no database the line above already says saving is off, and the action answers with the same words: once is enough.
+          shownAbove={db ? undefined : zack.noDatabase}
           notice={db && token ? { text: zack.email.expired, signInLead: zack.email.expiredSignInLead, signIn: zack.email.expiredSignIn } : undefined}
           copy={{ label: zack.email.label, submit: zack.email.submit, pending: zack.email.pending, started: zack.email.started, continue: zack.email.continue }}
         />

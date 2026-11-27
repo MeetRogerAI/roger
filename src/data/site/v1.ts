@@ -37,6 +37,18 @@ export type QuestionPage = "home" | "agents";
 export type V1Question = Question & { on: QuestionPage[] };
 export type V1QuestionGroup = Omit<QuestionGroup, "items"> & { items: V1Question[] };
 
+/**
+ * What Zack reads, skips and removes, as the Zack 2.0 instructions in
+ * content/zack state it for all four AI agents (approved by Peter on
+ * November 26, 2026: the site's wording follows the Zack 2.0 instructions).
+ * The question "What does Zack read?" and "Zack, in detail" on /how-it-works
+ * share these sentences. A test compares them with the four instruction files.
+ */
+const zackReads =
+  "The past seven days of activity across your AI agent account, including work finished in that time. He also reads the list of what the account has set up, such as its skills, scheduled tasks and connected services, and the notes your AI agent keeps about the Roger ideas it has installed.";
+const zackSkips = "He skips email, calendar and Drive, chats and projects shared with other people, and other people’s messages. He reads no other account.";
+const zackRemoves = "Zack is instructed to replace names, clients, addresses, amounts and other private details with placeholders, and Roger checks again when the report arrives.";
+
 const questions: V1QuestionGroup[] = [
   {
     id: "getting-started",
@@ -65,12 +77,12 @@ const questions: V1QuestionGroup[] = [
     items: [
       {
         q: "What does Zack read?",
-        a: "Only your own activity inside your AI agent account, from the past seven days. He does not read your email, calendar or files.",
+        a: `${zackReads} ${zackSkips}`,
         on: ["home"],
       },
       {
         q: "What leaves my account?",
-        a: "Zack’s weekly report: a write-up of your most useful plays with names, clients, addresses, amounts and other private details replaced by placeholders. You agree to this when you sign up, and you can turn it off.",
+        a: "Two files each week. Zack’s report is a write-up of your most useful plays, which he is instructed to write with names, clients, addresses, amounts and other private details replaced by placeholders. A private matching profile describes your work and your setup in general words, and is not shared with other users. You agree to this when you sign up, and you can turn it off.",
         on: ["agents"],
       },
       {
@@ -350,9 +362,9 @@ export const v1 = {
       id: "zack",
       title: "Zack, in detail",
       points: [
-        { title: "What he reads", body: "Only your own activity inside your AI agent account, from the past seven days." },
-        { title: "What he never reads", body: "He does not read your email, calendar or files." },
-        { title: "What he removes", body: "Names, clients, addresses, amounts and other private details are replaced by placeholders." },
+        { title: "What he reads", body: zackReads },
+        { title: "What he never reads", body: zackSkips },
+        { title: "What he removes", body: zackRemoves },
         { title: "What you can change", body: "Your dashboard shows the exact instructions your Zack runs. You can tell him to skip whole subjects, block specific words and names, share an outline only, or follow rules you write yourself." },
       ],
       filesLink: { label: "Read the Zack files before you sign up" },

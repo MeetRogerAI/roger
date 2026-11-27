@@ -5,8 +5,9 @@ import { saveWatch, type ActionState } from "@/app/library-actions";
 import { trackEvent } from "@/lib/session";
 
 const idle: ActionState = { status: "idle" };
-const blank =
-  "inline-block h-[1.3em] rounded-[6px] border border-transparent bg-ground-2 px-[0.3em] align-baseline text-ink outline-none placeholder:text-ink-2/70 focus:bg-[#e9e9ec] focus-visible:outline-2 focus-visible:outline-accent";
+// No outline class here: `outline-none` switched the outline off even on focus, so the fields showed only a faint
+// change of background. Without it they take the site's own focus ring (the base `:focus-visible` rule in globals.css).
+const blank = "inline-block h-[1.3em] rounded-[6px] border border-transparent bg-ground-2 px-[0.3em] align-baseline text-ink placeholder:text-ink-2/70 focus:bg-[#e9e9ec]";
 
 /**
  * The closing sentence has two gaps, and the gaps are the form.

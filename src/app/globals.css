@@ -209,8 +209,11 @@
   .btn:hover {
     background: var(--color-accent-hover);
   }
-  .btn:active {
-    transform: scale(0.98);
+  /* A pressed button shrinks a little: movement, so only where motion is allowed. */
+  @media (prefers-reduced-motion: no-preference) {
+    .btn:active {
+      transform: scale(0.98);
+    }
   }
   .btn-l {
     min-height: 52px;
@@ -277,8 +280,11 @@
     display: inline-block;
     transition: transform 160ms var(--ease-out);
   }
-  .chev:hover::after {
-    transform: translateX(2px);
+  /* The chevron's nudge on hover: movement, so only where motion is allowed. */
+  @media (prefers-reduced-motion: no-preference) {
+    .chev:hover::after {
+      transform: translateX(2px);
+    }
   }
 
   /* Horizontal shelves line their first card up with the page column. */
