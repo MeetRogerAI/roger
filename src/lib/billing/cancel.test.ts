@@ -136,7 +136,7 @@ describe("cancelling a monthly plan (spec check 27)", () => {
     expect(await user(id)).toMatchObject({ status: "active", access_ends_at: "2027-01-03T11:05Z", cards_removed_at: null, stripe_subscription: "sub_a" });
     expect((await user(id)).cancel_requested_at).not.toBeNull();
     expect(subjects()).toEqual(["Your Roger plan is cancelled"]);
-    expect(sent[0].text).toContain("Your lists continue until Sunday, January 3");
+    expect(sent[0].text).toContain("Your Cora Curations continue until Sunday, January 3");
 
     // A Monday inside the paid month still gets its list; the first Monday after it does not.
     await picks(id, "2026-12-14");

@@ -92,7 +92,7 @@ async function BillingPage({ searchParams }: { searchParams: PageProps<"/app/bil
       {home.order && (
         <section aria-labelledby="order-h">
           <h2 id="order-h" className="text-h3">
-            Get next Monday’s list
+            {home.order.ordered ? "Your order for next Monday" : "Get next Monday’s Cora Curation"}
           </h2>
           <div className="mt-4">
             <OrderBox week={home.order.week} weekLabel={longDate(home.order.week)} ordered={home.order.ordered} price={home.order.price} />

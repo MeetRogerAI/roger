@@ -56,14 +56,14 @@ export function ProfileForm({ values, zones, perRun }: { values: ProfileValues; 
           <label className="flex gap-3">
             <input type="checkbox" name="pref_monday" defaultChecked={shown.prefs.monday} className="mt-1 size-4 accent-accent" />
             <span>
-              The Monday list email
+              The Monday email with your Cora Curation
               <span className="block text-ink-2">Switched off, your ideas still arrive on this site each Monday.</span>
             </span>
           </label>
           {perRun ? (
             <label className="flex gap-3">
               <input type="checkbox" name="pref_friday_prompt" defaultChecked={shown.prefs.friday_prompt} className="mt-1 size-4 accent-accent" />
-              <span>The reminder to order next Monday’s list</span>
+              <span>The reminder to order next Monday’s Cora Curation</span>
             </label>
           ) : (
             <input type="hidden" name="pref_friday_prompt" value={shown.prefs.friday_prompt ? "on" : ""} />

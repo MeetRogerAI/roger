@@ -5,7 +5,7 @@ import type { CompoundingStep } from "@/data/site/compounding";
 import type { BrickWords } from "@/data/site/copy-types";
 import { compoundingCaption } from "@/lib/site/compounding";
 import { BrickStack } from "./brick-stack";
-import { useLoopPlay } from "./use-loop-play";
+import { stepAfter, useLoopPlay } from "./use-loop-play";
 
 /**
  * The moving half of "It compounds" (plan R10, KTD11; Peter's homepage review,
@@ -18,8 +18,9 @@ import { useLoopPlay } from "./use-loop-play";
  *
  * Once script is running and motion is allowed, the loop waits on the last
  * state, goes back to the first and steps through them all again, for ever.
- * It stops while a mouse is over it, while the keyboard's focus is in it,
- * while the tab is hidden and when "Pause" is pressed (use-loop-play.ts). The line of the current state is marked. Nothing
+ * It stops while the keyboard's focus is in it, while the tab is hidden and
+ * when "Pause" is pressed, and not for a pointer resting on it
+ * (use-loop-play.ts). The line of the current state is marked. Nothing
  * announces a change to a screen reader: the lines under the stack already say
  * every state.
  *
@@ -27,9 +28,13 @@ import { useLoopPlay } from "./use-loop-play";
  * anything moves at all, is in globals.css ("Bricks in motion").
  */
 
-/** How long a state stays up, and how long the last one does before the loop starts again. */
+/**
+ * How long a state stays up, and how long the last one does before the loop
+ * starts again: a little longer, so the full stack can be read, and no more,
+ * so the loop keeps an even pace (Peter, November 26, 2026).
+ */
 export const LOOP_STATE_MS = 1700;
-export const LOOP_LAST_MS = 3400;
+export const LOOP_LAST_MS = 2400;
 
 /** The state after `current`, coming back to the first after the last. */
 export function nextState(current: number, count: number): number {
@@ -63,8 +68,8 @@ export function CompoundingLoop({ steps, words, copy, className = "" }: { steps:
     if (!playing || steps.length < 2) return;
     // With reduced motion the last state stays up, as it does with no script.
     if (!window.matchMedia("(prefers-reduced-motion: no-preference)").matches) return;
-    const timer = window.setTimeout(() => setCurrent((c) => nextState(c, steps.length)), dwellFor(current, steps.length));
-    return () => window.clearTimeout(timer);
+    // One wait for each state, started again when the state changes: the last state schedules the first, so it never ends.
+    return stepAfter(dwellFor(current, steps.length), () => setCurrent((c) => nextState(c, steps.length)));
   }, [playing, current, steps.length]);
 
   const state = steps[current];

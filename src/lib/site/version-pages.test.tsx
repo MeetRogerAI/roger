@@ -93,9 +93,10 @@ describe("a site version before its pages are built", () => {
   it("terms state the no-refund line and no amount that differs from the defaults (U9)", async () => {
     const markup = await pageMarkup(<Terms />);
     expect(markup).toContain("There are no refunds.");
-    const allowed = [v3Defaults.priceUsd, v3Defaults.priceRunUsd, v3Defaults.priceHigherUsd].map((n) => `US$${n}`).concat([v3Defaults.priceCad, v3Defaults.priceRunCad, v3Defaults.priceHigherCad].map((n) => `CA$${n}`));
+    // The monthly price and the higher rate. The terms describe monthly only, so the price of one at a time is not among them.
+    const allowed = [v3Defaults.priceUsd, v3Defaults.priceHigherUsd].map((n) => `US$${n}`).concat([v3Defaults.priceCad, v3Defaults.priceHigherCad].map((n) => `CA$${n}`));
     const shown = markup.match(/(?:US|CA)\$[\d,]+/g) ?? [];
-    expect(shown.length).toBeGreaterThanOrEqual(8);
+    expect(shown.length).toBeGreaterThanOrEqual(6);
     for (const amount of shown) expect(allowed, amount).toContain(amount);
     // No "$" without its country.
     expect(markup).not.toMatch(/(?<!US|CA)\$/);
@@ -120,7 +121,7 @@ describe("a site version before its pages are built", () => {
 
   it("carries the v1 headline and sub-line in the root metadata, home title, JSON-LD and social card, and no Circles wording", async () => {
     const title = "Roger: Your AI agents, smarter every Monday.";
-    const description = "Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.";
+    const description = "Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network.";
     expect(rootMetadata.title).toEqual({ default: title, template: "%s · Roger" });
     expect(rootMetadata.description).toBe(description);
     expect(homeMetadata.title).toEqual({ absolute: title });

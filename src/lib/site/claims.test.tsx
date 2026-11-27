@@ -581,10 +581,13 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     for (const page of withLetter) expect(words(page)).toContain("I made my first real estate investment at 17");
   });
 
-  it("the terms still describe both ways to pay, which is what billing does today: the one place a list is still named", () => {
-    const terms = bare.find((page) => page.path === "/terms")!;
-    expect(words(terms)).toMatch(/One list at a time costs/);
-    // Recorded as a difference between the marketing pages and the product in docs/site/v1-copy-changes.md, section 7.
+  it("the terms describe monthly only, in terms of Cora Curations, as the marketing pages do (copy changes, section 8)", () => {
+    for (const pages of [bare, full]) {
+      const terms = pages.find((page) => page.path === "/terms")!;
+      expect(words(terms)).toContain("Roger has one plan, monthly.");
+      expect(words(terms)).toContain("Your card is charged with your third Cora Curation, and once a month after that.");
+      expect(words(terms)).not.toMatch(/monday lists?\b|one list at a time|one at a time|one-at-a-time|\blists\b/i);
+    }
   });
 
   it("gives every start link, on every page and in the header, exactly the words “Get two free Cora Curations”", () => {
@@ -606,9 +609,9 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     expect(count("/faq")).toBe(2);
   });
 
-  it("passes Peter’s two lines with no exception: the hero’s “battle tested” line and the line under the price", () => {
+  it("passes Peter’s two lines with no exception: the hero’s “battle-tested” line and the line under the price", () => {
     const lines = [
-      "Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.",
+      "Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network.",
       "Get two Cora Curations for free and pay only after you have tried the product for two full weeks.",
     ];
     const home = bare.find((page) => page.path === "/")!;

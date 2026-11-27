@@ -33,7 +33,7 @@ export function UpdateCardButton() {
  */
 export function SwitchForm({ to, effect, allowed, why }: { to: "monthly" | "per_run"; effect: string; allowed: boolean; why?: string }) {
   const [state, action, pending] = useActionState(switchAction, idle);
-  const label = to === "monthly" ? "Switch to monthly" : "Switch to one list at a time";
+  const label = to === "monthly" ? "Switch to monthly" : "Switch to one Cora Curation at a time";
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="to" value={to} />
@@ -52,7 +52,8 @@ export function SwitchForm({ to, effect, allowed, why }: { to: "monthly" | "per_
 
 /**
  * Cancel in one click with one optional question and no retention screen
- * (spec B.9, check 27). Under the button, one plain link to switch instead.
+ * (spec B.9, check 27). Under the button, one plain link to switch instead:
+ * `switchLink` is false while one at a time is not offered (lib/app/billing.ts).
  */
 export function CancelForm({ label, switchLink }: { label: string; switchLink: boolean }) {
   const [state, action, pending] = useActionState(cancelAction, idle);
@@ -76,7 +77,7 @@ export function CancelForm({ label, switchLink }: { label: string; switchLink: b
       {switchLink && (
         <p className="text-small">
           <a href="#switch" className="tlink">
-            Or switch to one list at a time.
+            Or switch to one Cora Curation at a time.
           </a>
         </p>
       )}

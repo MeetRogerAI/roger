@@ -7,6 +7,7 @@ import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnSwitchScheduled, ANCHOR, carryToFirstCharge, ISO } from "./adjustment";
 import { BUSY, isCancelling, loadPlanUser, undoCancel, unixIso, UNREACHABLE, type PlanDeps, type PlanResult, type PlanUser } from "./cancel";
 import { chargeInFlight } from "./claims";
+import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered } from "./offered";
 import { periodAt } from "./period";
 import { amount, money, moneyCents, taxPhrase, type Currency } from "./prices";
 import { tellFirstCharge } from "./quote";
@@ -81,7 +82,7 @@ export function switchEffect(
   const run = `${money(amount(s, "per_run", cur), cur)} ${tax}`;
   const monthly = `${money(amount(s, "monthly", cur), cur)} ${tax}`;
   const lock = switchLockedUntil(now, s);
-  const lead = lock ? `Monday’s list stays on your current plan; this applies from ${longDate(torontoDate(lock))}. ` : "";
+  const lead = lock ? `Monday’s Cora Curation stays on your current plan; this applies from ${longDate(torontoDate(lock))}. ` : "";
   if (u.plan === "monthly") {
     if (u.stripe_subscription) {
       // Booked in the lock with the paid month ending before the lock lifts (a renewal on that Sunday night or Monday):
@@ -92,15 +93,15 @@ export function switchEffect(
       const end = periodEnd ?? (across ?? current)?.endDate ?? null;
       const until = end ? `until ${longDate(end)}` : "until the end of the month you paid for";
       if (across && current) {
-        return `${lead}Your monthly plan renews on ${longDate(current.endDate)} as usual, with Monday’s list. It then continues ${until}, with a list every Monday, and is not renewed again. After that nothing is charged unless you order a list, ${run} each.`;
+        return `${lead}Your monthly plan renews on ${longDate(current.endDate)} as usual, with Monday’s Cora Curation. It then continues ${until}, with a Cora Curation every Monday, and is not renewed again. After that nothing is charged unless you order one, ${run} each.`;
       }
-      return `${lead}Your monthly plan continues ${until}, with a list every Monday, and is not renewed. After that nothing is charged unless you order a list, ${run} each.`;
+      return `${lead}Your monthly plan continues ${until}, with a Cora Curation every Monday, and is not renewed. After that nothing is charged unless you order one, ${run} each.`;
     }
-    return `${lead}Nothing is charged automatically after your free lists. You order a list for any Monday you want one, ${run} each.`;
+    return `${lead}Nothing is charged automatically after your free Cora Curations. You order one for any Monday you want it, ${run} each.`;
   }
-  if (u.free_lists_used < s.freeRuns) return `${lead}Your free lists stay free. After them, monthly starts with your next list: ${monthly}, charged the Monday it is ready, then every month.`;
+  if (u.free_lists_used < s.freeRuns) return `${lead}Your free Cora Curations stay free. After them, monthly starts with your next one: ${monthly}, charged the Monday it is ready, then every month.`;
   const replaced = u.ordered_week && !lock ? ` Your order for ${longDate(u.ordered_week)} is replaced by it, so that Monday is charged once.` : "";
-  return `${lead}Monthly starts with your next list: ${monthly}, charged the Monday it is ready, then every month.${replaced}`;
+  return `${lead}Monthly starts with your next Cora Curation: ${monthly}, charged the Monday it is ready, then every month.${replaced}`;
 }
 
 /** What the billing page offers: the one switch that applies to this account, with its effect. */
@@ -111,12 +112,15 @@ export async function switchOffer(q: Query, s: V3Settings, now: Date, userId: st
   if (u.plan_change_to === "per_run" && u.cancel_requested_at) return { to: "monthly", effect: "You stay on monthly, and it renews as before.", allowed: true };
   // A switch booked for after Monday: the offer is to keep the plan as it is.
   if (u.plan_change_to && u.plan_change_at) {
-    const name = u.plan_change_to === "monthly" ? "monthly" : "one list at a time";
+    const name = u.plan_change_to === "monthly" ? "monthly" : "one Cora Curation at a time";
     return { to: u.plan, effect: `Your switch to ${name} is booked for ${longDate(torontoDate(new Date(u.plan_change_at)))}. You can keep your current plan instead.`, allowed: true };
   }
   // Cancelling: undo the cancellation first (the page offers the undo instead).
   if (isCancelling(u)) return null;
   const to: Target = u.plan === "monthly" ? "per_run" : "monthly";
+  // One at a time is not offered (offered.ts): a monthly member is shown no switch at all. An account already on one
+  // at a time is still offered monthly.
+  if (to === "per_run" && !oneAtATimeOffered()) return null;
   const effect = switchEffect(u, s, now);
   if (u.status === "held") return { to, effect, allowed: false, why: heldWhy(u) };
   if (to === "per_run" && u.renewal_invoice) return { to, effect, allowed: false, why: OPEN_INVOICE };
@@ -136,9 +140,11 @@ export async function switchPlan(q: Query, d: PlanDeps, o: { userId: string; to:
   // A switch booked for after Monday, taken back before it happened.
   if (u.plan === o.to && u.plan_change_to && !u.cancel_requested_at) {
     await q(`update users set plan_change_to = null, plan_change_at = null where id = $1 and cancel_requested_at is null`, [u.id]);
-    return { ok: true, message: `Your plan stays ${o.to === "monthly" ? "monthly" : "one list at a time"}.` };
+    return { ok: true, message: `Your plan stays ${o.to === "monthly" ? "monthly" : "one Cora Curation at a time"}.` };
   }
   if (u.plan === o.to) return { ok: false, message: "That’s already your plan." };
+  // The server refuses a move to one at a time while it is not offered, whatever the page showed (offered.ts).
+  if (o.to === "per_run" && !oneAtATimeOffered()) return { ok: false, message: ONE_AT_A_TIME_NOT_OFFERED };
   if (await chargeInFlight(q, u.id)) return { ok: false, message: BUSY, busy: true };
 
   const lock = switchLockedUntil(d.now, d.settings);
@@ -156,7 +162,7 @@ export async function switchPlan(q: Query, d: PlanDeps, o: { userId: string; to:
       planChangedEmail({ to: o.to, later: true, effect: switchEffect(offer!, d.settings, d.now) }),
       d,
     ).catch(() => {});
-    return { ok: true, message: `Booked. Monday’s list stays on your current plan; the switch happens on ${longDate(torontoDate(lock))}.` };
+    return { ok: true, message: `Booked. Monday’s Cora Curation stays on your current plan; the switch happens on ${longDate(torontoDate(lock))}.` };
   }
   return applySwitch(q, d, u.id, o.to);
 }
@@ -167,6 +173,8 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
   const u = await loadOfferUser(q, userId, week);
   if (!u || !["trial", "active"].includes(u.status) || u.cancel_requested_at) return { ok: false, message: "That switch isn’t available on this account." };
   if (u.plan === to) return { ok: false, message: "That’s already your plan." };
+  // Not gated on offered.ts: this also finishes a switch a member booked while one at a time was offered, and a
+  // switch already made in Stripe must still be read as a switch. New requests are refused in switchPlan.
   if (to === "per_run" && u.renewal_invoice) return { ok: false, message: OPEN_INVOICE };
   if (await chargeInFlight(q, u.id)) return { ok: false, message: BUSY, busy: true };
   const cur = u.currency ?? "USD";
@@ -221,7 +229,7 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
       planChangedEmail({ to, later: true, effect: switchEffect(u, d.settings, d.now, end), monthlyLine }),
       d,
     ).catch(() => {});
-    return { ok: true, message: `Switched. Monthly continues until ${longDate(end)}; after that you order lists one at a time.` };
+    return { ok: true, message: `Switched. Monthly continues until ${longDate(end)}; after that you order Cora Curations one at a time.` };
   }
 
   if (to === "per_run") {
@@ -240,7 +248,7 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
       planChangedEmail({ to, effect: switchEffect(u, d.settings, d.now), monthlyLine }),
       d,
     ).catch(() => {});
-    return { ok: true, message: "Switched. You now order lists one at a time." };
+    return { ok: true, message: "Switched. You now order Cora Curations one at a time." };
   }
 
   // One at a time to monthly: back to the first-charge path, and any open order for the coming Monday is cancelled with it.
@@ -266,7 +274,7 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
     const told = await tellFirstCharge(q, { gw: d.gw, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }, u.id, "plan_changed", ref, (quote) =>
       planChangedEmail({
         to,
-        effect: `Monthly starts with your next list. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${moneyCents(quote.totalCents, quote.currency)}, tax included, for your first month${carried ? `, with the higher-rate difference of ${moneyCents(carried, quote.currency)} still owed for the month you switched away from` : ""}, then the monthly price every month.`,
+        effect: `Monthly starts with your next Cora Curation. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${moneyCents(quote.totalCents, quote.currency)}, tax included, for your first month${carried ? `, with the higher-rate difference of ${moneyCents(carried, quote.currency)} still owed for the month you switched away from` : ""}, then the monthly price every month.`,
       }),
     ).catch((e) => {
       console.error("[billing] switch quote", u.id, e instanceof Error ? e.message : e);
@@ -276,7 +284,7 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
   } else {
     await plain().catch(() => {});
   }
-  return { ok: true, message: "Switched. Monthly starts with your next list." };
+  return { ok: true, message: "Switched. Monthly starts with your next Cora Curation." };
 }
 
 /** Hourly: switches booked after a Monday cutoff whose time has come. A busy account waits for the next pass. */

@@ -9,6 +9,10 @@ import { cancelOrder, placeOrder } from "./orders";
 import type { BillingGateway, ChargeResult, FoundInvoice, OrderGateway } from "./subscriptions";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (`plans.oneAtATimeOffered`, read through ./offered). Orders and their charges
+// stay in place and are tested here with the option on; "while one at a time is not offered" turns it off.
+const offer = vi.hoisted(() => ({ on: true }));
+vi.mock("./offered", async (orig) => ({ ...(await orig<typeof import("./offered")>()), oneAtATimeOffered: () => offer.on }));
 
 let query: Query;
 let sent: Parameters<Transport>[0][];
@@ -96,6 +100,7 @@ async function arrive(o: { run?: boolean; picked?: boolean } = {}) {
 beforeEach(async () => {
   ({ query } = await testDb());
   sent = [];
+  offer.on = true;
   vi.stubEnv("ADMIN_EMAILS", "admin@example.com");
   vi.stubEnv("STRIPE_PRICE_RUN_USD", "price_run_usd");
   orders = fakeInvoices();
@@ -109,7 +114,7 @@ describe("placing and cancelling", () => {
   it("orders the coming Monday and confirms by email; refuses after the Sunday cutoff", async () => {
     expect(await placeOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings, query, transport })).toEqual({ ok: true });
     expect(await order()).toBe("ordered");
-    expect(sent.map((m) => m.subject)).toEqual(["Your list is ordered"]);
+    expect(sent.map((m) => m.subject)).toEqual(["Your Cora Curation is ordered"]);
     expect(await placeOrder(query, { userId: uid, week: WEEK, now: SIX_AM, settings })).toMatchObject({ ok: false });
   });
 
@@ -148,7 +153,7 @@ describe("charging orders on Monday", () => {
     await runChargeJob(query, deps(), { week: WEEK });
     expect(await order()).toBe("no_run");
     expect(orders.steps).toEqual([]);
-    expect(sent.map((m) => m.subject)).toEqual(["No list this week, and no charge"]);
+    expect(sent.map((m) => m.subject)).toEqual(["No Cora Curation this week, and no charge"]);
     await runChargeJob(query, deps(), { week: WEEK });
     expect(sent).toHaveLength(1);
   });
@@ -263,5 +268,45 @@ describe("review follow-ups (12b)", () => {
   it("reports when there is nothing to cancel", async () => {
     await query("delete from orders");
     expect(await cancelOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings })).toMatchObject({ ok: false });
+  });
+});
+
+describe("while one at a time is not offered (the switch off, as at launch)", () => {
+  const REFUSAL = "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday. You can switch to monthly on the billing page.";
+
+  it("refuses a new order from an account on the plan, in the action itself: nothing stored, nothing sent, nothing charged on Monday", async () => {
+    offer.on = false;
+    expect(await placeOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings, query, transport })).toEqual({ ok: false, message: REFUSAL });
+    expect(await order()).toBeUndefined();
+    expect(sent).toEqual([]);
+    await arrive();
+    await runChargeJob(query, deps(), { week: WEEK });
+    expect(orders.steps).toEqual([]);
+    expect(orders.invoices.size).toBe(0);
+  });
+
+  it("refuses to bring a cancelled order back", async () => {
+    await placeOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings, query, transport });
+    await cancelOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings });
+    offer.on = false;
+    expect(await placeOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings, query, transport })).toEqual({ ok: false, message: REFUSAL });
+    expect(await order()).toBe("cancelled");
+  });
+
+  it("leaves an order placed before untouched: it can still be cancelled, and otherwise is charged once and marked as before", async () => {
+    await placeOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings, query, transport });
+    offer.on = false;
+    await arrive();
+    await runChargeJob(query, deps(), { week: WEEK });
+    expect(await order()).toBe("charged");
+    expect([...orders.invoices.values()].map((i) => i.status)).toEqual(["paid"]);
+    expect(orders.steps.filter((s) => s.startsWith("pay:"))).toHaveLength(1);
+  });
+
+  it("still lets an order placed before be cancelled", async () => {
+    await placeOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings, query, transport });
+    offer.on = false;
+    expect(await cancelOrder(query, { userId: uid, week: WEEK, now: SATURDAY, settings })).toEqual({ ok: true });
+    expect(await order()).toBe("cancelled");
   });
 });

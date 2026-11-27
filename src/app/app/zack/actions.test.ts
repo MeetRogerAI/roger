@@ -30,6 +30,9 @@ vi.mock("@/lib/mail/send", async (orig) => ({
     return "sent";
   },
 }));
+// The one-at-a-time switch (src/lib/billing/offered.ts): off, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
 // Any Stripe call from a sharing change would fail the test: under the contributor rule only cutoffs count.
 vi.mock("@/lib/billing/subscriptions", async (orig) => ({
   ...(await orig<typeof import("@/lib/billing/subscriptions")>()),
@@ -52,6 +55,7 @@ beforeEach(async () => {
   mailed.length = 0;
   refreshed = 0;
   allowed = true;
+  offer.on = false;
   [{ id: signedIn }] = await current<{ id: string }>(
     "insert into users (email, status, plan, currency, sharing, agent) values ('ana@example.com', 'trial', 'monthly', 'CAD', 'share', 'hark') returning id",
   );
@@ -104,9 +108,10 @@ describe("changeSharing", () => {
     expect(mailed).toEqual([]);
   });
 
-  it("tells a one-at-a-time user that lists can't be ordered with Zack off", async () => {
+  it("tells a one-at-a-time user that Cora Curations can't be ordered with Zack off, while that plan is offered", async () => {
+    offer.on = true;
     await current("update users set plan = 'per_run'");
-    expect(await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "off" })))).toMatchObject({ value: { effect: expect.stringContaining("can’t be ordered") } });
+    expect(await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "off" })))).toMatchObject({ value: { effect: expect.stringContaining("Cora Curations can’t be ordered") } });
   });
 });
 

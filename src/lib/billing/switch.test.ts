@@ -19,6 +19,10 @@ import { switchLockedUntil, switchOffer, switchPlan } from "./switch";
 import { handleStripeEvent } from "./webhook";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (`plans.oneAtATimeOffered`, read through ./offered). Its machinery stays, and
+// is tested here with the option on; "while one at a time is not offered" at the end turns it off.
+const offer = vi.hoisted(() => ({ on: true }));
+vi.mock("./offered", async (orig) => ({ ...(await orig<typeof import("./offered")>()), oneAtATimeOffered: () => offer.on }));
 
 let query: Query;
 let sent: Parameters<Transport>[0][];
@@ -118,6 +122,7 @@ async function ready(userId: string, week = WEEK) {
 beforeEach(async () => {
   ({ query } = await testDb());
   sent = [];
+  offer.on = true;
   plans = fakePlans();
   billing = fakeBilling();
   orders = fakeOrders();
@@ -151,7 +156,7 @@ describe("monthly to one list at a time", () => {
     expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "per_run" })).toMatchObject({ ok: true });
     expect(plans.calls).toEqual(["cancel_at_end:sub_a"]);
     expect(await user(id)).toMatchObject({ status: "active", plan: "monthly", plan_change_to: "per_run", stripe_subscription: "sub_a" });
-    expect(subjects()).toEqual(["Your switch to one list at a time is booked"]);
+    expect(subjects()).toEqual(["Your switch to one Cora Curation at a time is booked"]);
     expect(sent[0].text).toContain("Monthly is US$200 for every Monday.");
     // The month's difference will never be invoiced (no renewal): deleted.
     expect(await query("select status from pending_adjustments")).toEqual([{ status: "deleted" }]);
@@ -202,7 +207,7 @@ describe("monthly to one list at a time", () => {
 describe("one list at a time to monthly", () => {
   it("starts the subscription with the next ready list, told first and charged once", async () => {
     const id = await member({ status: "trial", plan: "per_run" });
-    expect(await switchOffer(query, settings, SATURDAY, id)).toMatchObject({ to: "monthly", effect: expect.stringContaining("Monthly starts with your next list") });
+    expect(await switchOffer(query, settings, SATURDAY, id)).toMatchObject({ to: "monthly", effect: expect.stringContaining("Monthly starts with your next Cora Curation") });
     expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "monthly" })).toMatchObject({ ok: true });
     expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly", quote: { totalCents: 22600 } });
     expect(subjects()).toEqual(["Your plan is now monthly"]);
@@ -244,7 +249,7 @@ describe("one list at a time to monthly", () => {
     expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly", plan_change_to: null });
     expect(charges()).toBe(1);
     // The hourly pass also delivered the paid order's list.
-    expect(subjects()).toEqual(["Your list is ordered", "Your switch to monthly is booked", "Your list, and your receipt", "Your plan is now monthly"]);
+    expect(subjects()).toEqual(["Your Cora Curation is ordered", "Your switch to monthly is booked", "Your Cora Curation, and your receipt", "Your plan is now monthly"]);
   });
 
   it("a booked switch can be taken back before it happens", async () => {
@@ -290,7 +295,7 @@ describe("the Friday order prompt (spec B.13 email 23)", () => {
     expect(await sendOrderPrompts(query, { settings, now: new Date("2026-12-10T16:00:00Z"), query, transport })).toBe(0);
     expect(await sendOrderPrompts(query, { settings, now: FRIDAY, query, transport })).toBe(1);
     expect(await sendOrderPrompts(query, { settings, now: new Date("2026-12-11T17:00:00Z"), query, transport })).toBe(0);
-    expect(sent.map((m) => m.subject)).toEqual(["Want a list this Monday?"]);
+    expect(sent.map((m) => m.subject)).toEqual(["Want a Cora Curation this Monday?"]);
     expect(sent[0].text).toContain("Monthly is US$200 for every Monday.");
     expect(await query("select recipient, status from notifications where kind = 'order_prompt' order by status")).toEqual([
       { recipient: plain, status: "sent" },
@@ -344,7 +349,7 @@ describe("after review", () => {
     await query("update users set renewal_invoice = 'in_r1' where id = $1", [id]);
     await runHourly(query, chargeDeps(TUESDAY));
     expect(await row(id)).toEqual({ plan_change_to: null, plan_change_at: null, cancel: false });
-    expect(subjects()).toContain("Your switch to one list at a time didn’t happen");
+    expect(subjects()).toContain("Your switch to one Cora Curation at a time didn’t happen");
   });
 
   it("a paying one-at-a-time member whose first monthly charge fails for good goes back to one at a time, never 'trial closed'", async () => {
@@ -357,7 +362,7 @@ describe("after review", () => {
     expect(await user(id)).toMatchObject({ status: "held", plan: "monthly" });
     await runHourly(query, chargeDeps(new Date("2026-12-21T11:10:00Z")));
     expect(await user(id)).toMatchObject({ status: "active", plan: "per_run", quote: null });
-    expect(subjects()).toContain("You’re back on one list at a time");
+    expect(subjects()).toContain("You’re back on one Cora Curation at a time");
     expect(subjects()).not.toContain("Your Roger trial has closed");
     expect((await query<{ s: boolean }>("select switched_from_per_run_at is not null as s from users where id = $1", [id]))[0].s).toBe(false);
   });
@@ -478,5 +483,63 @@ describe("after the re-review", () => {
     await hook(endEvent("sub_a"));
     expect(await user(id)).toMatchObject({ status: "active", plan: "per_run", stripe_subscription: null });
     expect(sent.map((m) => m.subject)).toContain("[Roger] A switch to one at a time ended with a renewal unpaid");
+  });
+});
+
+describe("while one at a time is not offered (the switch off, as at launch)", () => {
+  beforeEach(() => {
+    offer.on = false;
+  });
+  const REFUSAL = "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday.";
+
+  it("offers a monthly subscriber no switch, and refuses one posted anyway: no Stripe call, nothing stored, nothing sent", async () => {
+    const id = await member({ status: "active", plan: "monthly", sub: "sub_a", first: FIRST });
+    expect(await switchOffer(query, settings, SATURDAY, id)).toBeNull();
+    expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "per_run" })).toEqual({ ok: false, message: REFUSAL });
+    expect(plans.calls).toEqual([]);
+    expect(await user(id)).toMatchObject({ status: "active", plan: "monthly", plan_change_to: null, cancel_requested_at: null, stripe_subscription: "sub_a" });
+    expect(sent).toEqual([]);
+  });
+
+  it("refuses a member in the trial too, and inside the Monday window books nothing", async () => {
+    const id = await member({ status: "trial", plan: "monthly", free: 1 });
+    expect(await switchOffer(query, settings, SATURDAY, id)).toBeNull();
+    expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "per_run" })).toEqual({ ok: false, message: REFUSAL });
+    expect(await switchPlan(query, deps(MONDAY_3AM), { userId: id, to: "per_run" })).toEqual({ ok: false, message: REFUSAL });
+    expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly", plan_change_to: null });
+    await runHourly(query, chargeDeps(TUESDAY));
+    expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly", plan_change_to: null });
+    expect(sent).toEqual([]);
+  });
+
+  it("still offers monthly to an account already on one at a time, and makes that switch", async () => {
+    const id = await member({ status: "active", plan: "per_run" });
+    expect(await switchOffer(query, settings, SATURDAY, id)).toMatchObject({ to: "monthly", allowed: true, effect: expect.stringContaining("Monthly starts with your next Cora Curation") });
+    expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "monthly" })).toMatchObject({ ok: true });
+    expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly" });
+    expect(subjects()).toEqual(["Your plan is now monthly"]);
+    // And there is no way back while the option is off.
+    expect(await switchOffer(query, settings, SATURDAY, id)).toBeNull();
+    expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "per_run" })).toEqual({ ok: false, message: REFUSAL });
+    expect(await user(id)).toMatchObject({ plan: "monthly" });
+  });
+
+  it("a monthly member who is switching, from when it was offered, can still stay on monthly", async () => {
+    offer.on = true;
+    const id = await member({ status: "active", plan: "monthly", sub: "sub_a", first: FIRST });
+    await switchPlan(query, deps(SATURDAY), { userId: id, to: "per_run" });
+    offer.on = false;
+    expect(await switchOffer(query, settings, SATURDAY, id)).toMatchObject({ to: "monthly", allowed: true });
+    expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "monthly" })).toMatchObject({ ok: true });
+    expect(await user(id)).toMatchObject({ status: "active", plan: "monthly", plan_change_to: null, cancel_requested_at: null });
+  });
+
+  it("sends no Friday order prompt, and takes no new order from an account on the plan", async () => {
+    const id = await member({ status: "active", plan: "per_run" });
+    expect(await sendOrderPrompts(query, { settings, now: new Date("2026-12-11T16:00:00Z"), query, transport })).toBe(0);
+    expect(await placeOrder(query, { userId: id, week: WEEK, now: SATURDAY, settings, query, transport })).toEqual({ ok: false, message: `${REFUSAL} You can switch to monthly on the billing page.` });
+    expect(await query("select 1 from orders")).toEqual([]);
+    expect(await query("select 1 from notifications where kind = 'order_prompt'")).toEqual([]);
+    expect(sent).toEqual([]);
   });
 });

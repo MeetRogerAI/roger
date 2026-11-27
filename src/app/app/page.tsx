@@ -7,6 +7,7 @@ import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { OrderBox, WeekIdeas } from "@/components/app/week-ideas";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { query } from "@/lib/db-query";
 import { longDate } from "@/lib/mail/templates/welcome";
 import { readV3Settings } from "@/lib/v3-settings";
@@ -24,7 +25,7 @@ async function Home() {
   return (
     <div className="space-y-10">
       <header>
-        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : "Your first list is on its way"}</h1>
+        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : "Your first Cora Curation is on its way"}</h1>
         {home.statusLine !== home.missBanner && <p className="mt-3 text-small text-ink-2">{home.statusLine}</p>}
       </header>
 
@@ -35,11 +36,17 @@ async function Home() {
             To fix it, check that Zack still runs each week and can reach Roger.{" "}
             <Link href="/app/zack" className="tlink">
               Check Zack
-            </Link>{" "}
-            or{" "}
-            <Link href="/app/billing" className="tlink">
-              switch to one list at a time
             </Link>
+            {/* The other way out is named only while one at a time is offered (src/lib/billing/offered.ts). */}
+            {oneAtATimeOffered() && (
+              <>
+                {" "}
+                or{" "}
+                <Link href="/app/billing" className="tlink">
+                  switch to one Cora Curation at a time
+                </Link>
+              </>
+            )}
             .
           </p>
         </div>

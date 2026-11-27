@@ -39,6 +39,9 @@ import { switchOffer, switchPlan } from "./switch";
  */
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (`plans.oneAtATimeOffered`, read through ./offered). The seams with it are
+// still tested, with the option on.
+vi.mock("./offered", async (orig) => ({ ...(await orig<typeof import("./offered")>()), oneAtATimeOffered: () => true }));
 
 let query: Query;
 let sent: Parameters<Transport>[0][];
@@ -280,7 +283,7 @@ describe("4 (P2): a first charge held because its amount changed", () => {
     script.push({ kind: "declined", code: "stolen_card", hard: true });
     await runHourly(query, deps(new Date("2026-12-22T11:15:00Z")));
     expect(await row(m.id)).toMatchObject({ status: "active", plan: "per_run" });
-    expect(subjects()).toEqual(["You’re back on one list at a time"]);
+    expect(subjects()).toEqual(["You’re back on one Cora Curation at a time"]);
   });
 
   it("after a refusal a new card fixed, a changed amount is still charged 24 hours later (not left waiting for an admin)", async () => {
@@ -339,7 +342,7 @@ describe("7 (P2, decision): no restart path yet", () => {
 describe("8 (P3): a renewal that failed, not yet held", () => {
   it("the status line says when lists pause", () => {
     const f: StatusFacts = { status: "active", plan: "monthly", sponsored: false, sharing: "share", currency: "USD", freeListsUsed: 2, freeRuns: 2, quote: null, firstChargeAt: "2026-12-03T11:05:00Z", orderCents: null, renewalFailedAt: "2027-01-03T12:00:00Z", now: new Date("2027-01-05T12:00:00Z") };
-    expect(statusLine(f, settings)).toBe("Your payment didn’t go through; lists pause on Sunday, January 10 unless it’s paid.");
+    expect(statusLine(f, settings)).toBe("Your payment didn’t go through; Cora Curations pause on Sunday, January 10 unless it’s paid.");
   });
 });
 
@@ -383,7 +386,7 @@ describe("10 (P3): members who switched from one at a time, and switches to it",
     const i = await loadInterest(query);
     expect(i.plans).toMatchObject({ monthly: 2, trial: 0 });
     expect(i.cancelReasons).toEqual([]);
-    expect(subscribedEmail({ amountCents: 22600, currency: "USD", switched: true }).text).toContain("This week’s list is ready now");
+    expect(subscribedEmail({ amountCents: 22600, currency: "USD", switched: true }).text).toContain("This week’s Cora Curation is ready now");
     const effect = sharingEffect({ settings, plan: "monthly", currency: "USD", from: "share", to: "off", trialStartedAt: "2026-01-05T12:00:00Z", status: "trial", switchedFromPerRun: true });
     expect(effect).toContain("before your first monthly charge,");
     expect(effect).not.toContain("no earlier than");
