@@ -13,6 +13,12 @@ export const PILOT_LINK_DAYS = 7;
 export type LinkPurpose = "signin" | "pilot" | "email_change" | "email_approve";
 
 /**
+ * Links whose confirm page presses its own button once it is on screen, so the reader goes straight in.
+ * Only links that sign someone in. A change of email address always waits for the reader's own press.
+ */
+export const pressesItself = (purpose: LinkPurpose): boolean => purpose === "signin" || purpose === "pilot";
+
+/**
  * A new account's details, carried on the sign-up link and applied only when
  * the address is confirmed. Until then no account exists, so typing someone
  * else's address changes nothing of theirs.
