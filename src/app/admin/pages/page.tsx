@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
 import { recentActions } from "@/lib/admin/log";
 import { query } from "@/lib/db-query";
-import { draftChanges, pageStatus, sectionChanges } from "@/lib/site/content/check";
+import { draftCount, pageStatus } from "@/lib/site/content/check";
 import { REVIEW_ADDRESS, editorAddress, pageCovers } from "@/lib/site/content/labels";
 import { siteRegistry } from "@/lib/site/content/registry";
 import { readStored } from "@/lib/site/content/store";
@@ -36,13 +36,13 @@ export default async function PagesScreen() {
     return <Unreadable />;
   }
   const status = pageStatus(stored);
-  const waiting = draftChanges(stored).length + sectionChanges(stored).length;
+  const waiting = draftCount(stored);
 
   return (
     <section className="max-w-[56rem] space-y-8">
       <header>
         <h1 className="text-h3">Pages</h1>
-        <p className="mt-2 text-small text-ink-2">Change the words on the website, and switch a page’s sections off or move them. What you save is kept as a draft: visitors do not see it until you publish.</p>
+        <p className="mt-2 text-small text-ink-2">Change the words on the website, switch a page’s sections off or move them, and add to, remove from and reorder its lists. What you save is kept as a draft: visitors do not see it until you publish.</p>
       </header>
 
       <LaunchListNote />
@@ -73,7 +73,7 @@ export default async function PagesScreen() {
         <h2 className="text-title">The pages</h2>
         <ul className="mt-4 space-y-3">
           {siteRegistry.pages.map((page) => {
-            const s = status.get(page.id) ?? { drafts: 0, edits: 0, rearranged: false };
+            const s = status.get(page.id) ?? { drafts: 0, edits: 0, ticks: 0, rearranged: false, relisted: false };
             return (
               <li key={page.id} data-page={page.id} className="rounded-[8px] border border-rule bg-surface p-5">
                 <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -97,9 +97,19 @@ export default async function PagesScreen() {
                     ) : (
                       <span className={`${mark} border-rule text-ink-2`}>Original wording</span>
                     )}
+                    {s.ticks > 0 && (
+                      <span data-ticks className={`${mark} border-rule-strong text-ink`}>
+                        {count(s.ticks, "tick box", "tick boxes")} changed from the original
+                      </span>
+                    )}
                     {s.rearranged && (
                       <span data-rearranged className={`${mark} border-rule-strong text-ink`}>
                         Sections changed from the original
+                      </span>
+                    )}
+                    {s.relisted && (
+                      <span data-relisted className={`${mark} border-rule-strong text-ink`}>
+                        Lists changed from the original
                       </span>
                     )}
                   </p>

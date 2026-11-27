@@ -212,7 +212,14 @@ describe("the lenient reading", () => {
 describe("the strict reading", () => {
   const good: Overlay = {
     format: 1,
-    text: { "home.hero.headline": "Smarter every Monday.", "questions.price-and-billing.items.cost.a": "{monthlyUsd} a month, {monthlyCad} in Canada.", "bricks.caption.week": "Week {week}" },
+    text: {
+      "home.hero.headline": "Smarter every Monday.",
+      "questions.price-and-billing.items.cost.a": "{monthlyUsd} a month, {monthlyCad} in Canada.",
+      "bricks.caption.week": "Week {week}",
+      // The texts of the item the list entry below adds (plan U7).
+      "control.points.x-7c.title": "Start small.",
+      "control.points.x-7c.body": "Share an outline only, for {monthlyUsd} a month all the same.",
+    },
     sections: { home: { order: ["hero", "questions", "price"], off: ["compounds"] }, faq: { order: [], off: ["cora-and-the-ideas"] } },
     lists: { "control.points": { order: ["off", "x-7c", "read"], removed: ["rules"], added: ["x-7c"] } },
   };
@@ -246,7 +253,8 @@ describe("the strict reading", () => {
   it("rejects more than 30 items in a list, in a page's order, or an id written twice", () => {
     expect(LIST_MAX).toBe(30);
     const list = (entry: Partial<Record<"order" | "removed" | "added", string[]>>) => problems({ ...empty, lists: { "control.points": { order: [], removed: [], added: [], ...entry } } });
-    expect(list({ order: ids(30) })).toEqual([]);
+    // Thirty ids are within the shape's bound. (That none of them is an item of the list is another refusal: see the list rules below.)
+    expect(list({ order: ids(30) }).filter((problem) => /^lists\.control\.points\.(order|removed|added)/.test(problem))).toEqual([]);
     expect(list({ order: ids(31) })).toEqual([expect.stringMatching(/^lists\.control\.points\.order/)]);
     expect(list({ removed: ids(31) })).toEqual([expect.stringMatching(/^lists\.control\.points\.removed/)]);
     expect(list({ added: ids(31, "x-") })).toEqual([expect.stringMatching(/^lists\.control\.points\.added/)]);

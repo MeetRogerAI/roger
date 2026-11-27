@@ -14,7 +14,8 @@
  * src/lib/site/amounts.ts.
  */
 
-export type Question = { q: string; a: string };
+/** `id` is the question's name in the copy, where it has one: the accordion keys its rows by it, so a row keeps its place in the page when the questions are reordered. */
+export type Question = { id?: string; q: string; a: string };
 
 /**
  * One line of a list a page prints, such as a problem statement. `id` is the item's name in the copy: it never

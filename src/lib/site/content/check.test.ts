@@ -114,13 +114,13 @@ describe("what a publish would change", () => {
     const status = pageStatus({ draft: edits({ [HEADLINE]: "A new headline", [REFUND_A]: "No.", [COST_A]: "{monthlyUsd} a month." }), published: edits({ [COST_A]: "{monthlyUsd} a month.", [HERO_SUB]: "A published line." }) });
     expect(Object.fromEntries(status)).toEqual({
       // The headline is a new draft, and the line under it goes back to the original: two drafts, one text that differs.
-      home: { drafts: 2, edits: 1, rearranged: false },
-      howItWorks: { drafts: 0, edits: 0, rearranged: false },
-      library: { drafts: 0, edits: 0, rearranged: false },
+      home: { drafts: 2, edits: 1, ticks: 0, rearranged: false, relisted: false },
+      howItWorks: { drafts: 0, edits: 0, ticks: 0, rearranged: false, relisted: false },
+      library: { drafts: 0, edits: 0, ticks: 0, rearranged: false, relisted: false },
       // One answer is drafted, one was published earlier: both differ from the original, one is waiting.
-      faq: { drafts: 1, edits: 2, rearranged: false },
-      about: { drafts: 0, edits: 0, rearranged: false },
-      shared: { drafts: 0, edits: 0, rearranged: false },
+      faq: { drafts: 1, edits: 2, ticks: 0, rearranged: false, relisted: false },
+      about: { drafts: 0, edits: 0, ticks: 0, rearranged: false, relisted: false },
+      shared: { drafts: 0, edits: 0, ticks: 0, rearranged: false, relisted: false },
     });
   });
 });
@@ -168,11 +168,11 @@ describe("what a publish would change about a page's sections (plan U6, R7)", ()
 
   it("is counted on the page, and the page is marked as rearranged until its sections are the original's again", () => {
     const status = pageStatus({ draft: { ...edits({ [HEADLINE]: "A new headline" }), sections: { home: { order: [], off: ["compounds", "price"] } } }, published: newOverlay() });
-    expect(status.get("home")).toEqual({ drafts: 3, edits: 1, rearranged: true });
-    expect(status.get("faq")).toEqual({ drafts: 0, edits: 0, rearranged: false });
+    expect(status.get("home")).toEqual({ drafts: 3, edits: 1, ticks: 0, rearranged: true, relisted: false });
+    expect(status.get("faq")).toEqual({ drafts: 0, edits: 0, ticks: 0, rearranged: false, relisted: false });
     // Published: nothing waits, and the page still differs from the original.
     const live = sections({ home: { order: [], off: ["price"] } });
-    expect(pageStatus({ draft: live, published: live }).get("home")).toEqual({ drafts: 0, edits: 0, rearranged: true });
+    expect(pageStatus({ draft: live, published: live }).get("home")).toEqual({ drafts: 0, edits: 0, ticks: 0, rearranged: true, relisted: false });
   });
 
   it("is part of the fingerprint a publish carries: another order is another review", () => {
@@ -299,7 +299,7 @@ describe("the wording warnings", () => {
   });
 
   it("find nothing in the original wording of any field, read one field at a time", () => {
-    const all: Change[] = [...siteRegistry.fields.values()].map((entry) => ({ field: entry, from: "", to: original(entry.id), toOriginal: false }));
+    const all: Change[] = [...siteRegistry.fields.values()].map((entry) => ({ field: entry, from: "", to: original(entry.id), toOriginal: false, fresh: false }));
     expect(wordingWarnings(all, amounts).map((warning) => `${warning.field.id} [${warning.rule}] ${warning.found.map((found) => found.words).join(", ")}`)).toEqual([]);
   });
 });

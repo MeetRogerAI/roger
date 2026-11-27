@@ -12,9 +12,17 @@
  * overlay. With the two, any stack of layers can be written as one overlay on
  * the code model, which is what a page's view is handed.
  *
- * TEXT AND SECTIONS ARE APPLIED. An overlay's `lists` are parsed and carried,
- * and not yet applied: they arrive in U7 and U8, behind these same functions.
- * mergeOrder is the one rule sections and lists are ordered by (plan KTD4).
+ * TEXT, SECTIONS AND LISTS ARE APPLIED, each merged by id (plan KTD4).
+ * mergeOrder is the one rule sections and lists are ordered by.
+ *
+ * WHERE A LIST IS KEPT. In the model itself: a list is an array of the copy,
+ * each item with its `id`, so "which items, in which order" is what the array
+ * holds. An overlay's entry for a list removes items, adds items (whose ids
+ * start with "x-", and whose texts are in the overlay's `text` under
+ * `<list>.<item>.<key>`), and orders them (applyListEdit). An item a layer
+ * removes is gone for every layer above it, like an item taken out of the
+ * code. diffListEdit writes the entry between two arrays, the one way it is
+ * ever stored.
  *
  * WHERE A PAGE'S SECTIONS ARE KEPT. A model is the copy's shape, and the copy
  * has no place for "which sections, in which order". So each model has its
@@ -29,10 +37,12 @@
 import releasedFile from "@/data/site/released.json";
 import { v1Zack, type V1Copy, type V1ZackCopy } from "@/data/site/v1";
 import { fillCopy, type Amounts } from "../amounts";
-import { emptyOverlay, isEmptyOverlay, newOverlay, parseOverlay, type Overlay, type SectionEdit } from "./format";
-import { codeModel, siteRegistry, type Registry, type SiteCopy } from "./registry";
+import { emptyOverlay, isEmptyOverlay, newOverlay, parseOverlay, type ListEdit, type Overlay, type SectionEdit } from "./format";
+import { TOGGLE_OFF, TOGGLE_ON, codeModel, fieldsOfItem, isAddedId, resolveField, siteRegistry, type Field, type List, type Registry, type SiteCopy } from "./registry";
 
 export { codeModel, type SiteCopy };
+
+const isItem = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** What is at a field's path in a model: an object's key, or the item of a list that has that id. Undefined when the model has no such place. */
 function valueAt(model: unknown, path: readonly string[]): unknown {
@@ -45,32 +55,89 @@ function valueAt(model: unknown, path: readonly string[]): unknown {
   return node;
 }
 
-/** A field's wording in a model, by the field's id. Undefined for an id the registry does not have, or where the model has no text there. */
+/**
+ * What a field holds in a model: its text, or for a toggle "yes" or "no" (an item's switch is kept in the copy as a
+ * list that holds a value or does not: Field.toggle). Undefined where the model has no such place: an item that is
+ * not in its list, a key the copy does not have.
+ */
+export function readField(model: unknown, field: Field): string | undefined {
+  if (!field.toggle) {
+    const text = valueAt(model, field.path);
+    return typeof text === "string" ? text : undefined;
+  }
+  const item = valueAt(model, field.path.slice(0, -1));
+  if (!isItem(item)) return undefined;
+  const held = Object.hasOwn(item, field.toggle.key) ? item[field.toggle.key] : undefined;
+  return Array.isArray(held) && held.includes(field.toggle.value) ? TOGGLE_ON : TOGGLE_OFF;
+}
+
+/** A field's wording in a model, by the field's id: a built-in field's, or an added item's. Undefined for an id that is no field's, or where the model has no text there. */
 export function textAt(model: unknown, fieldId: string, registry: Registry = siteRegistry): string | undefined {
-  const field = registry.fields.get(fieldId);
-  const text = field ? valueAt(model, field.path) : undefined;
-  return typeof text === "string" ? text : undefined;
+  const field = resolveField(fieldId, registry);
+  return field ? readField(model, field) : undefined;
 }
 
 /**
- * The model with `text` at the path, sharing everything off the path with the model it came from. Only a string
- * is ever replaced: where the model has no such place, or holds something else there, the model comes back as it is.
+ * The model with what is at the path changed by `change`, sharing everything off the path with the model it came
+ * from. Where the model has no such place, or `change` gives back what it was handed, the model comes back as it is.
  */
-function withTextAt<T>(node: T, path: readonly string[], text: string): T {
-  if (path.length === 0) return (typeof node === "string" ? text : node) as T;
+function withAt<T>(node: T, path: readonly string[], change: (value: unknown) => unknown): T {
+  if (path.length === 0) return change(node) as T;
   const [part, ...rest] = path;
   if (Array.isArray(node)) {
     const at = node.findIndex((item: unknown) => typeof item === "object" && item !== null && (item as { id?: unknown }).id === part);
     if (at === -1) return node;
-    const next = withTextAt(node[at], rest, text);
+    const next = withAt(node[at], rest, change);
     return next === node[at] ? node : (node.map((item: unknown, i: number) => (i === at ? next : item)) as T);
   }
   if (typeof node === "object" && node !== null && Object.hasOwn(node, part)) {
     const current = (node as Record<string, unknown>)[part];
-    const next = withTextAt(current, rest, text);
+    const next = withAt(current, rest, change);
     return next === current ? node : ({ ...node, [part]: next } as T);
   }
   return node;
+}
+
+/** The model with a field holding `text`. Only a string is ever replaced by a string, and only an item's own list is switched. */
+function writeField<T>(model: T, field: Field, text: string): T {
+  const { toggle } = field;
+  if (!toggle) return withAt(model, field.path, (value) => (typeof value === "string" ? text : value));
+  return withAt(model, field.path.slice(0, -1), (item) => (isItem(item) ? switched(item, toggle, text) : item));
+}
+
+/** An item with one of its switches set: the same item when it already is. */
+function switched(item: Record<string, unknown>, toggle: { key: string; value: string }, text: string): Record<string, unknown> {
+  const held: unknown[] = Object.hasOwn(item, toggle.key) && Array.isArray(item[toggle.key]) ? (item[toggle.key] as unknown[]) : [];
+  const on = text === TOGGLE_ON;
+  if (held.includes(toggle.value) === on) return item;
+  return { ...item, [toggle.key]: on ? [...held, toggle.value] : held.filter((value) => value !== toggle.value) };
+}
+
+/** The ids of an array of the copy, in its order. Empty for anything that is not one. */
+const idsIn = (array: unknown): string[] => (Array.isArray(array) ? array.flatMap((item: unknown) => (isItem(item) && typeof item.id === "string" ? [item.id] : [])) : []);
+
+/** The items of a list in a model, as ids, in the order the model has them. Empty for a list the model does not have. */
+export function listItems(model: unknown, listId: string, registry: Registry = siteRegistry): string[] {
+  const list = registry.lists.get(listId);
+  return list ? idsIn(valueAt(model, list.path)) : [];
+}
+
+/**
+ * An item added in the admin, from the texts an overlay holds for it: its id, each text of the list's items, and
+ * whatever else an item of the list has (a question's `on`). Null when one of its texts is missing, since the page
+ * would have nothing to print there: such an item is not shown at all.
+ */
+function addedItem(list: List, id: string, text: Record<string, string>, registry: Registry): Record<string, unknown> | null {
+  const fields = fieldsOfItem(list, id, registry);
+  let item: Record<string, unknown> = { id };
+  for (const field of fields) {
+    if (field.toggle) continue;
+    if (!Object.hasOwn(text, field.id)) return null;
+    item[field.path.at(-1)!] = text[field.id];
+  }
+  item = { ...item, ...structuredClone(list.blank) };
+  for (const field of fields) if (field.toggle && Object.hasOwn(text, field.id)) item = switched(item, field.toggle, text[field.id]);
+  return item;
 }
 
 /**
@@ -83,7 +150,26 @@ function withTextAt<T>(node: T, path: readonly string[], text: string): T {
 export function applyOverlay<M>(model: M, overlay: Overlay, registry: Registry = siteRegistry): M {
   const read = parseOverlay(overlay, registry);
   let out = model;
-  for (const [id, text] of Object.entries(read.text)) out = withTextAt(out, registry.fields.get(id)!.path, text);
+
+  // The lists first (plan KTD4): each entry removes, adds and orders the items the model has. An item it adds is
+  // made from the overlay's own texts. Then the texts, which reach every item the lists have left, whichever layer
+  // added it: a text for an item that is not there changes nothing.
+  for (const [listId, edit] of Object.entries(read.lists)) {
+    const list = registry.lists.get(listId)!;
+    const array: unknown = valueAt(out, list.path);
+    if (!Array.isArray(array)) continue;
+    const below = idsIn(array);
+    const made = new Map<string, unknown>();
+    for (const id of edit.added) {
+      const item = below.includes(id) ? null : addedItem(list, id, read.text, registry);
+      if (item) made.set(id, item);
+    }
+    const ids = applyListEdit(below, { ...edit, added: [...made.keys()] }, list);
+    if (sameIds(ids, below)) continue;
+    const items = ids.map((id) => made.get(id) ?? (array as unknown[]).find((item) => isItem(item) && item.id === id));
+    out = withAt(out, list.path, () => items);
+  }
+  for (const [id, text] of Object.entries(read.text)) out = writeField(out, resolveField(id, registry)!, text);
 
   // The sections of each page (plan KTD4): the model's own layouts are carried, with the overlay's entries on them.
   const below = isModel(model) ? layouts.get(model) : undefined;
@@ -104,14 +190,37 @@ export function applyOverlay<M>(model: M, overlay: Overlay, registry: Registry =
 }
 
 /**
- * What `model` changes in `base`, as an overlay on `base`: every registered field whose text differs. Applied to
- * `base` again it gives `model`'s wording, wherever that wording is something its field can print.
+ * What `model` changes in `base`, as an overlay on `base`: every registered field whose text differs, each page's
+ * sections, and each list's items with the texts of the ones added in the admin. Applied to `base` again it gives
+ * `model`'s wording, sections and lists, wherever the wording is something its field can print.
+ *
+ * Only what `model` SHOWS is in it: the wording of an item `model` does not have is not (see normaliseOverlay for
+ * the one place such wording is kept).
  */
 export function diffToOverlay(base: unknown, model: unknown, registry: Registry = siteRegistry): Overlay {
   const out = newOverlay();
   for (const field of registry.fields.values()) {
-    const text = valueAt(model, field.path);
-    if (typeof text === "string" && text !== valueAt(base, field.path)) out.text[field.id] = text;
+    const text = readField(model, field);
+    if (text !== undefined && text !== readField(base, field)) out.text[field.id] = text;
+  }
+  for (const list of registry.lists.values()) {
+    const [from, to]: unknown[] = [valueAt(base, list.path), valueAt(model, list.path)];
+    if (!Array.isArray(from) || !Array.isArray(to)) continue;
+    const below = idsIn(from);
+    const ids = idsIn(to);
+    const edit = diffListEdit(below, ids);
+    if (edit) out.lists[list.id] = edit;
+    // The texts of the items added in the admin, which are in no table of built-in fields. A new item's every text
+    // is written; one the layer below already has, only where it differs.
+    for (const id of ids) {
+      if (!isAddedId(id)) continue;
+      const isNew = !below.includes(id);
+      for (const field of fieldsOfItem(list, id, registry)) {
+        const text = readField(model, field);
+        const was = isNew ? (field.toggle ? TOGGLE_OFF : undefined) : readField(base, field);
+        if (text !== undefined && text !== was) out.text[field.id] = text;
+      }
+    }
   }
   for (const page of registry.pages) {
     const edit = diffSectionEdit(sectionLayout(base, page.id, registry), sectionLayout(model, page.id, registry));
@@ -125,21 +234,36 @@ export function diffToOverlay(base: unknown, model: unknown, registry: Registry 
  * `base` already says. An entry equal to the base is not an edit, so once a release makes a site's edit the
  * built-in wording, the entry stops counting and is gone the next time anything is saved.
  *
- * The same as diffToOverlay(base, applyOverlay(base, overlay)) for text and for sections: a page's entry is
- * written the one way diffSectionEdit writes it, and an entry that leaves the page's sections as `base` has them
- * is gone, so no empty entry is ever stored. List entries are carried as they were read: comparing them with the
- * base arrives with U7.
+ * It is diffToOverlay(base, applyOverlay(base, overlay)): what the overlay amounts to on `base`, written the one
+ * way it is ever written. So a page's sections and a list's items are each one minimal entry, an entry that
+ * changes nothing is gone (no empty entry is ever stored), and so is whatever `base` gives no place to: a text for
+ * a field that does not exist, for an item that is in no list, or for an added item missing one of its texts.
+ *
+ * ONE THING MORE IS KEPT: the wording of an item this overlay itself removes. A removed item is not shown, but
+ * "Put back" in the editor should bring it back as it was edited, so its texts stay in the draft while it is
+ * removed. shownOverlay is the same without them, which is what a publish makes live (./store.ts); the draft
+ * keeps them through the publish.
  */
 export function normaliseOverlay(base: unknown, overlay: unknown, registry: Registry = siteRegistry): Overlay {
   const read = parseOverlay(overlay, registry);
-  const out: Overlay = { ...read, text: {}, sections: {} };
-  for (const [id, text] of Object.entries(read.text)) if (text !== valueAt(base, registry.fields.get(id)!.path)) out.text[id] = text;
-  for (const [pageId, stored] of Object.entries(read.sections)) {
-    const below = sectionLayout(base, pageId, registry);
-    const edit = diffSectionEdit(below, applySectionEdit(below, stored));
-    if (edit) out.sections[pageId] = edit;
+  const out = diffToOverlay(base, applyOverlay(base, read, registry), registry);
+  for (const [listId, edit] of Object.entries(out.lists)) {
+    const list = registry.lists.get(listId)!;
+    for (const id of edit.removed) {
+      for (const field of fieldsOfItem(list, id, registry)) {
+        if (Object.hasOwn(read.text, field.id) && read.text[field.id] !== readField(base, field)) out.text[field.id] = read.text[field.id];
+      }
+    }
   }
   return out;
+}
+
+/**
+ * An overlay with only what it SHOWS on `base`: normaliseOverlay without the wording kept for removed items. What a
+ * publish makes live, and what "is anything waiting to be published" compares.
+ */
+export function shownOverlay(base: unknown, overlay: unknown, registry: Registry = siteRegistry): Overlay {
+  return diffToOverlay(base, applyOverlay(base, parseOverlay(overlay, registry), registry), registry);
 }
 
 /**
@@ -156,6 +280,62 @@ export function mergeOrder(base: readonly string[], order: readonly string[]): s
     out.splice(i === 0 ? 0 : out.indexOf(base[i - 1]) + 1, 0, id);
   });
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// A list's items (plan R8, KTD4)
+// ---------------------------------------------------------------------------
+
+/**
+ * A list's items with one layer's entry on them, MERGED BY ID (plan KTD4). `below` is the list as the layer below
+ * has it, as ids in order. The entry:
+ *
+ * - removed: an item of `below` it names is gone. A name that is no item of `below` is ignored.
+ * - added: an id that starts with "x-" and is not in `below` joins the list, after everything else, in the
+ *   entry's order. (An id `below` already has is not added twice.)
+ * - order: the entry's order for the ids it names; every other item stays directly after the item it follows
+ *   (mergeOrder), so an item added in code later appears in its code position, and added items stay last.
+ *
+ * WHAT THE PAGE CAN DRAW WINS. The list never ends up with more items than `max` (the items added last are left
+ * out) or fewer than `min` (the first of the removed ones stay). A list whose `min` is its `max` can only be
+ * reordered: nothing is added or removed.
+ */
+export function applyListEdit(below: readonly string[], edit: ListEdit | undefined, bounds: { min: number; max: number } = { min: 0, max: Infinity }): string[] {
+  if (!edit) return [...below];
+  const fixed = bounds.min === bounds.max;
+  const removed = fixed ? [] : below.filter((id) => edit.removed.includes(id));
+  // Never fewer than the page can draw: the first of the removed ones stay.
+  const stay = removed.slice(0, Math.max(0, bounds.min - (below.length - removed.length)));
+  const kept = below.filter((id) => !removed.includes(id) || stay.includes(id));
+  const room = Math.max(0, bounds.max - kept.length);
+  const added = fixed ? [] : [...new Set(edit.added)].filter((id) => isAddedId(id) && !below.includes(id) && !edit.removed.includes(id)).slice(0, room);
+  return mergeOrder([...kept, ...added], edit.order);
+}
+
+/**
+ * The entry that turns the list `below` into `items`, written the one way it is ever stored, or null when the two
+ * are the same: an entry that changes nothing is never written.
+ *
+ * The entry names as little as it can, so that a later change in the layer below still shows through: `removed`
+ * and `added` are what differs, and `order` is empty unless the items are in another order than "what is left of
+ * the layer below, then the added ones", in which case it is the whole order.
+ */
+export function diffListEdit(below: readonly string[], items: readonly string[]): ListEdit | null {
+  const removed = below.filter((id) => !items.includes(id));
+  const added = [...new Set(items)].filter((id) => !below.includes(id) && isAddedId(id));
+  const natural = [...below.filter((id) => items.includes(id)), ...added];
+  const order = mergeOrder(natural, items);
+  const named = sameIds(order, natural) ? [] : order;
+  return removed.length + added.length + named.length === 0 ? null : { order: named, removed, added };
+}
+
+/**
+ * A list's items under an overlay on `base`, as ids in the order shown. For the Pages screens, the overlay is a
+ * site's draft or what it has published, and `base` is the baseline.
+ */
+export function itemsOn(overlay: Overlay, listId: string, base: unknown = baseline, registry: Registry = siteRegistry): string[] {
+  if (!Object.hasOwn(overlay.lists, listId)) return listItems(base, listId, registry);
+  return listItems(applyOverlay(base, overlay, registry), listId, registry);
 }
 
 // ---------------------------------------------------------------------------
@@ -235,18 +415,16 @@ export const baseline: SiteCopy = applyOverlay(codeModel, releasedOverlay);
  * together. Where both hold a field, the site's edit wins. With no edits of the site's own, the result is the
  * release file alone, which is the baseline a page shows when the database cannot be read (plan R18).
  *
- * Text and sections are resolved through the models, so an entry either layer cannot print is not in the result,
- * and a page's sections are the release's with the site's own changes merged in by id (applySectionEdit). List
- * entries are not applied by anything yet (U7): they are carried, the site's entry for a list in place of the
- * release's.
+ * Everything is resolved through the models, so an entry either layer cannot print is not in the result. A page's
+ * sections are the release's with the site's own changes merged in by id (applySectionEdit), and so are a list's
+ * items (applyListEdit): the code's items, less what the release removes and plus what it adds, then the same for
+ * the site, each item once. The wording of an item that is not shown is not in the result.
  */
 export function composeOverlays(released: Overlay, own: Overlay, registry: Registry = siteRegistry): Overlay {
   if (isEmptyOverlay(released) && isEmptyOverlay(own)) return emptyOverlay;
   const below = parseOverlay(released, registry);
   const above = parseOverlay(own, registry);
-  const out = diffToOverlay(codeModel, applyOverlay(applyOverlay(codeModel, below, registry), above, registry), registry);
-  out.lists = { ...below.lists, ...above.lists };
-  return out;
+  return diffToOverlay(codeModel, applyOverlay(applyOverlay(codeModel, below, registry), above, registry), registry);
 }
 
 /**

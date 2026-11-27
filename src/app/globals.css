@@ -589,6 +589,20 @@ h2 {
   .js .hero-steps [data-step-tabs] {
     display: grid;
   }
+  /*
+   * A label an admin made longer than its button has room for (five steps on a phone) breaks inside it, never out
+   * of it: hyphenated where the language allows, anywhere where it does not. The buttons and their row keep the pill
+   * shape on one line (each radius is half of one line's height, which is what rounded-full gives there) and are
+   * rounded boxes on two, so no wrapped word sits over a curved edge.
+   */
+  .js .hero-steps [data-step-tabs] {
+    border-radius: 27px;
+  }
+  .js .hero-steps [data-step-tabs] > button {
+    overflow-wrap: anywhere;
+    hyphens: auto;
+    border-radius: 22px;
+  }
   .js .hero-steps [data-step-controls] {
     display: flex;
   }

@@ -345,6 +345,8 @@ export const v1 = {
        */
       graphic: {
         name: "How Roger works, in four parts",
+        /** The same name for when the list does not have four steps (an admin may add or remove one in Pages). */
+        nameAny: "How Roger works, step by step",
         steps: [
           { id: "use", label: "Use", title: "Set up your AI agents", body: "Set up your AI agents. If you don’t have any, our starter team takes about half an hour to install." },
           { id: "collect", label: "Collect", title: "Zack reviews your week", body: "Each Sunday, an AI agent called Zack reviews your week and writes up what worked, with private details removed." },
@@ -603,6 +605,6 @@ export function closingBandCopy(copy: Pick<V1Copy, "trialLine" | "buttons" | "cl
 }
 
 /** The questions a page shows: its own subset in the order of /faq. */
-export function questionsOn(copy: Pick<V1Copy, "questions">, page: QuestionPage): Question[] {
+export function questionsOn(copy: Pick<V1Copy, "questions">, page: QuestionPage): (Question & { id: string })[] {
   return copy.questions.flatMap((group) => group.items.filter((item) => item.on.includes(page)));
 }

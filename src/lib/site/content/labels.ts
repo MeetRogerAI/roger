@@ -6,9 +6,11 @@
  * The owner never reads an id. A field of a list item is named by the item's
  * place on the page and its current wording, "Step 2 — “Collect” · Headline"
  * (fieldLabelWith, ./caption.ts), and never by the item's id, so he never
- * has to count. The place is the built-in order; once lists can be reordered
- * (U7) it should follow the order the draft has. The admin log keeps the
- * place alone, "Step 2: Headline": it holds no wording.
+ * has to count. The place is the item's place in the list AS THE SCREEN SHOWS
+ * IT: hand the functions the order (`Places`, from placesIn on the draft) and
+ * an item is numbered by it, an added item included. Without one, an item is
+ * numbered by the built-in order. The admin log keeps the place alone,
+ * "Step 2: Headline": it holds no wording.
  *
  * Pure. A client component must not import this file (it reaches the
  * registry, and through it the settings reader): a server component works
@@ -16,7 +18,8 @@
  */
 import type { AmountName } from "../amounts";
 import { fullName, itemTitle } from "./caption";
-import { siteRegistry, type Field, type Page, type Registry } from "./registry";
+import { listItems } from "./model";
+import { fieldsOfItem, siteRegistry, type Field, type List, type Page, type Registry } from "./registry";
 
 /** Where the Pages screens live. */
 export const PAGES_ADDRESS = "/admin/pages";
@@ -74,6 +77,39 @@ export function sectionNotes(pageId: string, sectionId: string, registry: Regist
  */
 export const sectionAnchor = (pageId: string, sectionId: string): string => `section-${pageSlug(pageId)}-${sectionId}`;
 export const sectionsAnchor = (pageId: string): string => `sections-${pageSlug(pageId)}`;
+/** The id of a list's block on its page's editing screen, which the review links to. A list belongs to one page, and its id says which, so it is the page's own. */
+export const listAnchor = (listId: string): string => `list-${listId}`;
+
+/**
+ * A list as the owner reads about it: the name of the list on its screen, what one item is called in a sentence,
+ * and how many it may hold with the reason, where the page limits it.
+ */
+export function listWords(list: List): { title: string; one: string; many: string; limits: string } {
+  const one = list.item.toLowerCase();
+  const many = `${one}s`;
+  const titles: Record<string, string> = {
+    "home.hero.graphic.steps": "The steps beside the headline",
+    "home.problem.statements": "The statements",
+    "control.points": "The points",
+    "howItWorks.week.days": "The days",
+    "howItWorks.firstWeeks.steps": "The steps",
+  };
+  const why: Record<string, string> = {
+    "home.hero.graphic.steps": "the picture beside the headline shows one step at a time, with a button for each, and it has room for that many",
+    "home.problem.statements": "the page sets them three in a row, in up to two rows",
+    "control.points": "the page sets them three in a row, in up to two rows",
+    "howItWorks.week.days": "a week has seven days",
+  };
+  const title = Object.hasOwn(titles, list.id) ? titles[list.id] : `The ${many}${list.id.startsWith("questions.") ? " of this group" : ""}`;
+  const because = Object.hasOwn(why, list.id) ? `: ${why[list.id]}` : "";
+  const limits =
+    list.min === list.max
+      ? `This list always has ${list.max} ${many}${because}. They can be moved, not added or removed.`
+      : list.min > 0
+        ? `It can hold ${list.min} to ${list.max} ${many}${because}.`
+        : `It can hold up to ${list.max} ${many}${because}.`;
+  return { title, one, many, limits };
+}
 
 /** The id a field's box has in the editing screen's markup, so that a link can land on it. */
 export const fieldAnchor = (fieldId: string): string => `field-${fieldId}`;
@@ -107,10 +143,38 @@ export function fieldLabels(registry: Registry = siteRegistry): Map<string, Fiel
 
 const siteLabels = fieldLabels();
 
-/** One field's name as the owner reads it. */
-export function fieldLabel(field: Field, registry: Registry = siteRegistry): FieldLabel {
+/** What a switch of an item does, in a sentence, for the line under it. Null for one that needs no saying. */
+export function toggleHint(field: { item?: { array: string }; path: readonly string[] }): string | null {
+  if (field.item?.array.startsWith("questions.") && field.path.at(-1) === "home") {
+    return "Ticked, the homepage’s Questions section shows this question too, in the order of this page. Not ticked, it is on the FAQ page only.";
+  }
+  return null;
+}
+
+/** The items of a list in the order a screen shows them, by the list's id. */
+export type Places = (listId: string) => readonly string[];
+
+/** The order each list has in a model: hand it the draft applied to the baseline, and items are numbered as the editing screen shows them. */
+export const placesIn = (model: unknown, registry: Registry = siteRegistry): Places => {
+  const seen = new Map<string, string[]>();
+  return (listId) => {
+    if (!seen.has(listId)) seen.set(listId, listItems(model, listId, registry));
+    return seen.get(listId)!;
+  };
+};
+
+/**
+ * One field's name as the owner reads it. With `places`, an item of a list is numbered by its place there (an item
+ * that is not in the list, because it was removed, has its noun alone: "Question"). Without, by the built-in order.
+ */
+export function fieldLabel(field: Field, registry: Registry = siteRegistry, places?: Places): FieldLabel {
+  if (places && field.item?.noun && registry.lists.has(field.item.array)) {
+    const at = places(field.item.array).indexOf(field.item.id);
+    const group = at === -1 ? field.item.noun : `${field.item.noun} ${at + 1}`;
+    return { group, name: field.name, full: `${group}: ${field.name}` };
+  }
   const labels = registry === siteRegistry ? siteLabels : fieldLabels(registry);
-  return labels.get(field.id) ?? { group: null, name: field.name, full: field.name };
+  return labels.get(field.id) ?? (field.item?.noun ? { group: field.item.noun, name: field.name, full: `${field.item.noun}: ${field.name}` } : { group: null, name: field.name, full: field.name });
 }
 
 /**
@@ -120,6 +184,9 @@ export function fieldLabel(field: Field, registry: Registry = siteRegistry): Fie
  */
 export function captionField(field: Field, registry: Registry = siteRegistry): Field | null {
   if (!field.item?.noun) return null;
+  // An item of a list, which may be one added in the admin and so in no table: the first of the list's item fields.
+  const list = registry.lists.get(field.item.array);
+  if (list) return fieldsOfItem(list, field.item.id, registry)[0] ?? null;
   for (const entry of registry.fields.values()) {
     if (entry.item && entry.item.array === field.item.array && entry.item.id === field.item.id) return entry;
   }
@@ -131,8 +198,8 @@ export function captionField(field: Field, registry: Registry = siteRegistry): F
  * "Question 3 — “What do I have to do each week?” · Answer". `wordingOf` gives a field's wording as the screen
  * shows it (the draft, with or without its amounts filled in). `item` is the item alone, null outside one.
  */
-export function fieldLabelWith(field: Field, wordingOf: (fieldId: string) => string, registry: Registry = siteRegistry): FieldLabel & { item: string | null } {
-  const label = fieldLabel(field, registry);
+export function fieldLabelWith(field: Field, wordingOf: (fieldId: string) => string, registry: Registry = siteRegistry, places?: Places): FieldLabel & { item: string | null } {
+  const label = fieldLabel(field, registry, places);
   const caption = captionField(field, registry);
   if (label.group === null || !caption) return { ...label, item: null };
   const wording = wordingOf(caption.id);
