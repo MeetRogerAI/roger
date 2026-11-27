@@ -1,3 +1,4 @@
+import { crossSite } from "@/lib/api-origin";
 import { lookupSession } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { leaveLeaderboard, myBoardStanding } from "@/lib/growth/leaderboard";
@@ -25,16 +26,6 @@ async function me(): Promise<Me> {
   const [u] = await query<{ status: string }>(`select status from users where id = $1`, [l.session.userId]);
   if (!u || u.status === "signup") return Response.json({ error: "Finish signing up first." }, { status: 403 });
   return { userId: l.session.userId };
-}
-
-function crossSite(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== new URL(request.url).host;
-  } catch {
-    return true;
-  }
 }
 
 async function standing(userId: string, status = 200): Promise<Response> {

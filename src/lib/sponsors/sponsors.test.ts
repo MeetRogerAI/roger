@@ -25,6 +25,9 @@ import {
   sponsorHashFor,
   type SponsorInput,
 } from "./sponsors";
+import { cancelPlan } from "@/lib/billing/cancel";
+import { mergeV3 } from "@/lib/v3-settings";
+import { fakePlans } from "@/test-helpers/fake-plans";
 import { cleanSponsorCode } from "./code";
 
 /**
@@ -338,6 +341,24 @@ describe("seat history", () => {
       { user_id: a, seat: 1, held_from: "2026-11-03 15:00:00+00", held_to: "2026-12-02 15:00:00+00" },
       { user_id: b, seat: 2, held_from: "2026-11-04 15:00:00+00", held_to: "2026-12-05 15:00:00+00" },
     ]);
+  });
+
+  it("is ended by a cancellation too, through cancel's own path (whole-branch review), at the moment access ended", async () => {
+    const { code } = await newSponsor();
+    const a = await bareUser("a@example.com");
+    await claimSponsorSeat(query, a, sponsorHashFor(code), { now: new Date("2026-11-03T15:00:00Z") });
+    await query(`update users set status = 'trial' where id = $1`, [a]);
+    const at = new Date("2026-11-20T15:00:00Z");
+    expect(await cancelPlan(query, { plans: fakePlans(), settings: mergeV3([]), now: at, query, ...mail() }, { userId: a })).toMatchObject({ ok: true });
+    expect(await query(`select held_to::text from sponsor_seat_history where user_id = $1`, [a])).toEqual([{ held_to: "2026-11-20 15:00:00+00" }]);
+  });
+
+  it("a seat release starts the member's no-card clock afresh: released_at, the job clock", async () => {
+    const { code, id } = await newSponsor();
+    const a = await bareUser("a@example.com");
+    await claimSponsorSeat(query, a, sponsorHashFor(code), { now: new Date("2026-10-01T15:00:00Z") });
+    await releaseSeat(query, BY, id, a, new Date("2026-12-02T15:00:00Z"));
+    expect(await query(`select released_at::text from users where id = $1`, [a])).toEqual([{ released_at: "2026-12-02 15:00:00+00" }]);
   });
 
   it("an open account's history is left alone by the close step", async () => {

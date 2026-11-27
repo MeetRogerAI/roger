@@ -5,6 +5,7 @@ import { checkLeaderboardName } from "@/lib/growth/leaderboard-name";
 import { retryPolicy, sendClaimed, sendToUser, type MailDeps, type SendResult } from "@/lib/mail/send";
 import { isAddressSuppressed } from "@/lib/mail/suppression";
 import { guestInviteEmail } from "@/lib/mail/templates/guest-invite";
+import { guestOptOutToken } from "@/lib/mail/unsubscribe";
 import { recordInvitedReferral, referralEmailKey } from "@/lib/referrals/attribution";
 import { counterFor, hit, limits, windowStart } from "@/lib/rate-limit";
 import { INVITE_WORDS } from "./session-words";
@@ -28,7 +29,10 @@ import type { V3Settings } from "@/lib/v3-settings";
  * (normalised address) a week, whoever invites; GUEST_EMAILS_PER_DAY across
  * Roger per day. The two counters are atomic (`rate_events`), so concurrent
  * invitations can't pass them together. No invitation goes to an address
- * that unsubscribed (`isAddressSuppressed`).
+ * that opted out or unsubscribed (`isAddressSuppressed`). Every invitation
+ * carries the guest's signed opt-out link and List-Unsubscribe headers
+ * (B2 whole-branch review; CASL and CAN-SPAM); without UNSUB_SECRET there is
+ * no opt-out link, so no invitation is sent (answered as "closed").
  *
  * A step that fails after the guest row exists leaves the invitation
  * unsent; the member's "Send it again" finishes it (referral and email),
@@ -144,8 +148,15 @@ async function linkReferral(q: Query, guestId: string, inviterId: string, email:
   if (referral) await q(`update session_guests set referral_id = $2 where id = $1 and referral_id is null`, [guestId, referral]);
 }
 
-function inviteMessage(g: { name: string; token: string }, inviterName: string, when: string, tag: string) {
-  return { ...guestInviteEmail({ guestName: g.name, inviterName, when, token: g.token }), idempotencyTag: tag };
+function inviteMessage(g: { name: string; token: string; optOutToken: string }, inviterName: string, when: string, tag: string) {
+  return { ...guestInviteEmail({ guestName: g.name, inviterName, when, token: g.token, optOutToken: g.optOutToken }), idempotencyTag: tag };
+}
+
+/** The guest's opt-out token, or null (logged) when UNSUB_SECRET is not set: then no invitation may be sent. */
+function optOutFor(emailKey: string): string | null {
+  const t = guestOptOutToken(emailKey);
+  if (!t) console.error("[sessions] UNSUB_SECRET is not set: guest invitations need their opt-out link, so none is sent");
+  return t;
 }
 
 /** Invite a guest to the next session. `now` is the job clock (created_at and the counters use it). */
@@ -163,6 +174,8 @@ export async function inviteGuest(
   const key = referralEmailKey(email);
   if (key === referralEmailKey(u.email)) return fail("self");
   if (await isAddressSuppressed(q, email)) return fail("blocked");
+  const optOutToken = optOutFor(key);
+  if (!optOutToken) return fail("closed");
 
   const session = nextSession(o.plan, o.now);
   const at = o.now.toISOString();
@@ -213,7 +226,7 @@ export async function inviteGuest(
     { id: guestRecipient(g.id), email },
     GUEST_INVITE_KIND,
     session.date,
-    inviteMessage({ name, token }, inviterLabel(u.display_name), sessionWhen(session), hash.slice(0, 12)),
+    inviteMessage({ name, token, optOutToken }, inviterLabel(u.display_name), sessionWhen(session), hash.slice(0, 12)),
     { ...o.mail, query: o.mail?.query ?? q },
   );
   return { ok: true, sent, message: sent === "sent" || sent === "already" ? INVITE_WORDS.sent(name) : INVITE_WORDS.failed };
@@ -275,6 +288,8 @@ export async function resendGuestInvite(q: Query, o: { inviterId: string; plan: 
   if (state === "notYet") return fail("notYet");
   if (state === "exhausted") return fail("exhausted");
   if (await isAddressSuppressed(q, g.email)) return fail("blocked");
+  const optOutToken = optOutFor(referralEmailKey(g.email));
+  if (!optOutToken) return fail("closed");
   if (!g.referral_id) await linkReferral(q, g.id, u.id, g.email, o.now);
 
   const token = newGuestToken();
@@ -303,7 +318,7 @@ export async function resendGuestInvite(q: Query, o: { inviterId: string; plan: 
     GUEST_INVITE_KIND,
     session.date,
     c.attempts,
-    inviteMessage({ name: g.name, token }, inviterLabel(u.display_name), sessionWhen(session), hash.slice(0, 12)),
+    inviteMessage({ name: g.name, token, optOutToken }, inviterLabel(u.display_name), sessionWhen(session), hash.slice(0, 12)),
     { ...o.mail, query: o.mail?.query ?? q },
   );
   return sent === "sent" ? { ok: true, sent, message: INVITE_WORDS.resent(g.name) } : { ok: false, reason: "failed", message: INVITE_WORDS.failed };

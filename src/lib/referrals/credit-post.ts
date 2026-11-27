@@ -5,7 +5,7 @@ import { appUrl } from "@/lib/mail/layout";
 import { adminAlert, alertAdmins, MAX_ATTEMPTS, sendToUser } from "@/lib/mail/send";
 import { creditEarnedEmail } from "@/lib/mail/templates/credit-earned";
 import { CreditBusy, guardLease, refreshStaleBalances, takeableCredit, withBalanceLease, writeBalanceCache } from "./credit-balance";
-import { convertGrant, loadCredit, sqlList, WAITING, type CreditDeps, type CreditRow, type CreditStatus } from "./credit-money";
+import { ACCESS_ENDED_SQL, convertGrant, loadCredit, pastDeadline, sqlList, WAITING, type CreditDeps, type CreditRow, type CreditStatus } from "./credit-money";
 
 /**
  * Posting ledger rows to the Stripe customer balance (B2 plan Unit 4), and
@@ -13,12 +13,17 @@ import { convertGrant, loadCredit, sqlList, WAITING, type CreditDeps, type Credi
  * its Stripe call; the call uses the row id as idempotency key and as
  * `metadata.credit_ledger_id`, so a lost answer is adopted instead of posted
  * twice (Stripe forgets keys after 24 hours; the reconcile looks back 7 days).
+ *
+ * The switch: posting reads the raw `v3.referralsOn` (`pending_switch` while it
+ * is off), not `featureOn` as every B2 surface does. This is deliberate (see
+ * the note at the top of src/lib/v3-features.ts): credit is owed money, so it
+ * follows the credit switch alone, not sign-up or the cycle.
  */
 
 /** Where an admin looks at a member's credit (every credit alert links it). */
 export const adminUserUrl = (userId: string | null) => (userId ? appUrl(`/admin/users/${userId}`) : "(the member was deleted)");
 
-type Member = { customer: string | null; currency: Currency | null; status: string; card: boolean; sponsored: boolean };
+type Member = { customer: string | null; currency: Currency | null; status: string; card: boolean; sponsored: boolean; ended: boolean };
 
 /**
  * Posts one waiting row, safe to repeat, under the member's balance lease:
@@ -50,13 +55,16 @@ async function postLocked(q: Query, d: CreditDeps, id: string): Promise<CreditSt
   if (!(WAITING as readonly string[]).includes(row.status)) return row.status;
   const [u] = row.user_id
     ? await q<Member>(
-        `select u.stripe_customer as customer, u.currency, u.status, ${HAS_CARD_SQL("u")} as card, u.sponsor_id is not null as sponsored from users u where u.id = $1`,
-        [row.user_id],
+        `select u.stripe_customer as customer, u.currency, u.status, ${HAS_CARD_SQL("u")} as card, u.sponsor_id is not null as sponsored,
+           ${ACCESS_ENDED_SQL("u", "$2::timestamptz")} as ended
+         from users u where u.id = $1`,
+        [row.user_id, d.now.toISOString()],
       )
     : [];
   const at = d.now.toISOString();
   if (row.kind === "grant") {
-    if (!u || u.status === "closed") return row.status;
+    // Closed, or cancelled with access over: the lapse takes it (lapseClosedCredits).
+    if (!u || u.ended) return row.status;
     if (u.sponsored) {
       await q(`update credits set status = 'lapsed', reason = 'sponsored', updated_at = $2 where id = $1 and status in (${sqlList(WAITING)})`, [id, at]);
       return "lapsed";
@@ -199,6 +207,9 @@ export type SweepResult = { posted: number; waiting: number; failed: number; bus
  *    `updated_at` moved on, so rows that keep failing never starve the rest.
  * 3. "You earned a credit" emails still unsent, under their attempt cap.
  * 4. Cached balances older than the member's last posted row are refreshed.
+ *
+ * Each loop stops at the caller's deadline (`d.deadline`, the hourly pass's);
+ * what is left waits for the next pass.
  */
 export async function postPendingCredits(q: Query, d: CreditDeps, o: { userId?: string; limit?: number } = {}): Promise<SweepResult> {
   const out: SweepResult = { posted: 0, waiting: 0, failed: 0, busy: 0, emails: 0, refreshed: 0 };
@@ -213,12 +224,13 @@ export async function postPendingCredits(q: Query, d: CreditDeps, o: { userId?: 
     `select c.id from credits c left join users u on u.id = c.user_id
      where c.status in (${sqlList(WAITING)}) and ($1::uuid is null or c.user_id = $1::uuid)
        and (c.kind <> 'grant'
-         or ($3::boolean and u.status <> 'closed'
+         or ($3::boolean and not ${ACCESS_ENDED_SQL("u", "$4::timestamptz")}
              and (u.sponsor_id is not null or (u.stripe_customer is not null and u.currency is not null and ${HAS_CARD_SQL("u")}))))
      order by c.updated_at, c.id limit $2`,
-    [user, o.limit ?? 200, on],
+    [user, o.limit ?? 200, on, at],
   );
   for (const r of rows) {
+    if (pastDeadline(d)) break;
     let s: CreditStatus | "none" | "error" = "error";
     try {
       s = await postCredit(q, d, r.id);
@@ -245,7 +257,7 @@ export async function postPendingCredits(q: Query, d: CreditDeps, o: { userId?: 
      order by c.posted_at limit 100`,
     [at, user, MAX_ATTEMPTS],
   );
-  for (const r of unsent) if ((await notifyGrant(q, d, r.id).catch(() => "failed")) === "sent") out.emails++;
+  for (const r of unsent) if (!pastDeadline(d) && (await notifyGrant(q, d, r.id).catch(() => "failed")) === "sent") out.emails++;
   if (!user) out.refreshed = await refreshStaleBalances(q, d);
   return out;
 }

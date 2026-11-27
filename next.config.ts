@@ -25,8 +25,8 @@ const nextConfig: NextConfig = {
     return [
       // Previews are public (no Vercel login, so sign-in works like production) but never indexed.
       ...(process.env.VERCEL_ENV === "preview" ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }] : []),
-      // Unsubscribe links (B2 Unit 8) and guest invitations (B2 Unit 9) carry a token: never indexed, never sent on in a Referer.
-      ...["/u/:token", "/api/unsubscribe/:token", "/g/:token", "/g/:token/calendar.ics"].map((source) => ({
+      // Unsubscribe links (B2 Unit 8), guest invitations (B2 Unit 9) and a guest's opt-out carry a token: never indexed, never sent on in a Referer.
+      ...["/u/:token", "/api/unsubscribe/:token", "/g/:token", "/g/:token/calendar.ics", "/o/:token", "/api/opt-out/:token"].map((source) => ({
         source,
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },

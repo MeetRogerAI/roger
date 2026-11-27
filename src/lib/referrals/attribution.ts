@@ -220,7 +220,7 @@ export async function retryPendingReferrals(
   q: Query,
   now: Date,
   limit = 200,
-  o: { grant?: (userId: string) => Promise<unknown>; mail?: MailDeps } = {},
+  o: { grant?: (userId: string) => Promise<unknown>; mail?: MailDeps; deadline?: number; clock?: () => number } = {},
 ): Promise<{ done: number; failed: number }> {
   const rows = await q<{ id: string; email: string; pending_referrer_id: string }>(
     `select id, email, pending_referrer_id from users
@@ -231,6 +231,8 @@ export async function retryPendingReferrals(
   let done = 0;
   let failed = 0;
   for (const u of rows) {
+    // The hourly pass's deadline (each row may call Stripe for a late grant): what is left waits for the next pass.
+    if (o.deadline != null && (o.clock ?? Date.now)() >= o.deadline) break;
     let outcome: ReferralOutcome;
     try {
       outcome = await applyReferral(q, { userId: u.id, email: u.email, referrer: { id: u.pending_referrer_id, via: "link" }, now });

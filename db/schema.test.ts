@@ -52,8 +52,15 @@ describe("schema.sql", () => {
 
   it("creates every B2 table, and never a second sessions table", () => {
     const tables = statements.map((s) => /^create table if not exists (\w+)/i.exec(s)?.[1]).filter(Boolean);
-    for (const t of ["referrals", "credits", "points", "session_guests", "session_attendance", "sponsors", "sponsor_invoices"]) expect(tables).toContain(t);
+    for (const t of ["referrals", "credits", "points", "session_guests", "session_attendance", "sponsors", "sponsor_invoices", "email_suppressions"]) expect(tables).toContain(t);
     expect(tables.filter((t) => t === "sessions")).toHaveLength(1);
+  });
+
+  it("never creates the superseded lower(display_name) board index (only drops it), and adds the sponsor key NOT VALID", () => {
+    expect(statements.some((s) => /^create unique index if not exists users_leaderboard_name(?!_key)/i.test(s))).toBe(false);
+    expect(statements).toContain("drop index if exists users_leaderboard_name");
+    const fk = statements.find((s) => s.includes("users_sponsor_id_fkey"));
+    expect(fk).toMatch(/references sponsors \(id\) on delete restrict not valid;/);
   });
 });
 

@@ -7,6 +7,7 @@ import { invoiceCreditCents } from "./credit-lines";
 import { settleFromInvoice } from "./first-charge";
 import type { CardGateway, CreditGateway } from "./gateway";
 import { grantForInvoice } from "@/lib/referrals/credit";
+import { CreditBusy } from "@/lib/referrals/credit-balance";
 import type { CreditDeps } from "@/lib/referrals/credit-money";
 import { clawbackForRefunds, creditsForDispute } from "@/lib/referrals/credit-reversal";
 import { adjustmentOnSubscriptionEnded, markInvoiced } from "./adjustment";
@@ -44,7 +45,19 @@ export async function handleStripeEvent(
   q: Query,
   gw: CardGateway,
   event: Stripe.Event,
-  o: Omit<CompleteOptions, "expectUserId"> & { adjust?: AdjustmentGateway; plans?: PlanGateway; billing?: BillingGateway; orders?: OrderGateway; credits?: CreditGateway; creditsNow?: Date },
+  o: Omit<CompleteOptions, "expectUserId"> & {
+    adjust?: AdjustmentGateway;
+    plans?: PlanGateway;
+    billing?: BillingGateway;
+    orders?: OrderGateway;
+    credits?: CreditGateway;
+    /** The credit ledger's clock: never ahead of the real one (the reconcile's "as of" replay passes it). */
+    creditsNow?: Date;
+    /** The credit lease and its work budget (the webhook route passes WEBHOOK_LEASE: it runs for at most 60 seconds). */
+    creditLease?: CreditDeps["leaseBudget"];
+    /** The caller's deadline for credit work (the reconcile passes its pass's). */
+    creditDeadline?: number;
+  },
 ): Promise<EventOutcome> {
   if (!(await claimEvent(q, event.id, event.type))) return "duplicate";
   // Unit 15's handlers: settings are read only when one of them runs.
@@ -178,17 +191,42 @@ export async function handleStripeEvent(
     }
     // Referral credit (B2 Unit 4): the grant on a paid invoice, a clawback on a refund or a lost dispute, a freeze while one
     // is open. Each handler re-reads Stripe and is safe to run again; a failure (a Stripe call, the email) answers 500.
+    // Its ledger stamps use the job clock, never ahead of the real one (creditsNow), as every other credit write does.
+    //
+    // CreditBusy (B2 whole-branch review: another change holds the member's credit lease, or this webhook's shorter
+    // budget ran out) is decided per event:
+    // - invoice.paid: answered 200 with a note. The event's other work (the first charge, a renewal) is done, and the
+    //   hourly sweep already finishes the grant: referral_late_grants grants a paid trial referral with no grant, and
+    //   referral_credits posts an unposted one and sends its email. A 500 would only replay the whole event.
+    // - charge.refunded and charge.dispute.*: credit is all these events do, and nothing hourly looks for a reversal
+    //   (only this event, or the reconcile's replay of a failed one, does), so CreditBusy still answers 500 and
+    //   Stripe sends it again.
     if (o.credits) {
       const credits = o.credits;
-      const cd = async (): Promise<CreditDeps> => ({ credits, settings: await o.getSettings(), now: o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep });
+      const cd = async (): Promise<CreditDeps> => ({
+        credits,
+        settings: await o.getSettings(),
+        now: o.creditsNow ?? o.now ?? new Date(),
+        query: o.query,
+        transport: o.transport,
+        sleep: o.sleep,
+        leaseBudget: o.creditLease,
+        deadline: o.creditDeadline,
+      });
       switch (event.type) {
         case "invoice.paid": {
           const inv = event.data.object;
           if (!inv.id) break;
-          const r = await grantForInvoice(q, await cd(), inv.id, typeof inv.customer === "string" ? inv.customer : (inv.customer?.id ?? null));
-          if (r !== "none") {
-            outcome = "handled";
-            note ??= `referral credit: ${r}`;
+          try {
+            const r = await grantForInvoice(q, await cd(), inv.id, typeof inv.customer === "string" ? inv.customer : (inv.customer?.id ?? null));
+            if (r !== "none") {
+              outcome = "handled";
+              note ??= `referral credit: ${r}`;
+            }
+          } catch (e) {
+            if (!(e instanceof CreditBusy)) throw e;
+            note ??= "referral credit busy: left to the hourly sweep";
+            console.warn(`[stripe] ${event.id}: ${e.message}; the hourly credit sweep finishes the grant`);
           }
           break;
         }

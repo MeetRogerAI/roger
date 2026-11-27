@@ -48,6 +48,8 @@ const { POST: guestApi } = await import("@/app/api/sessions/guest/route");
 let mails: { to: string[]; subject: string; text: string }[];
 let mailFails = false;
 beforeEach(async () => {
+  // Guest invitations carry an opt-out link signed with UNSUB_SECRET; without it none is sent.
+  vi.stubEnv("UNSUB_SECRET", "sessions-test-secret");
   ({ query: db.query } = await testDb());
   resetNextFakes();
   refreshed = 0;
@@ -60,7 +62,10 @@ beforeEach(async () => {
     return new Response("{}", { status: 200 });
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 async function user(email: string, status = "active", sponsored = false) {
   let sponsor: string | null = null;

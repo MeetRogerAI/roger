@@ -4,7 +4,7 @@ import { CLOSED_NO_CARD } from "@/lib/billing/no-card";
 import { moneyCents } from "@/lib/billing/prices";
 import { adminAlert, alertAdmins } from "@/lib/mail/send";
 import { takeableCredit, withBalanceLease } from "./credit-balance";
-import { CLOSE_KEY_SQL, clawCents, grantForPayment, loadCredit, sqlList, UNPOSTED, WAITING, type CreditDeps } from "./credit-money";
+import { ACCESS_ENDED_SQL, CLOSE_KEY_SQL, clawCents, grantForPayment, loadCredit, pastDeadline, sqlList, UNPOSTED, WAITING, type CreditDeps } from "./credit-money";
 import { adminUserUrl, notifyGrant, postCredit } from "./credit-post";
 
 /**
@@ -186,20 +186,22 @@ export async function creditsForDispute(q: Query, d: CreditDeps, disputeId: stri
   return out;
 }
 
-/** SQL: a closed account `alias` with posted referral credit and no lapse row for its current close yet. */
+/** SQL: an ended account `alias` (closed, or cancelled with access over) with posted referral credit and no lapse row for its current close yet. */
 export const NEEDS_LAPSE_SQL = (alias = "u") =>
   `(exists (select 1 from credits c where c.user_id = ${alias}.id and c.kind = 'grant' and c.status = 'posted')
     and not exists (select 1 from credits c where c.user_id = ${alias}.id and c.kind = 'lapse' and c.source_object_id = ${CLOSE_KEY_SQL(alias)}))`;
 
 /**
  * Lapse on close (origin R9), hourly: a closed account's unposted credits
- * lapse and never post, and the referral credit still on its balance
+ * lapse and never post (a cancelled account whose access has ended counts as
+ * closed: ACCESS_ENDED_SQL), and the referral credit still on its balance
  * (`takeableCredit`) is taken back with one `lapse` row per close (keyed by
  * the close: its access end). A no-card close is left alone while the
  * account can still be reopened by its card (REOPEN_DAYS in card-setup.ts).
  * A lapse row that fails to post is retried by the posting sweep. Accounts
  * are taken least recently tried first (`credit_lapse_tried_at`, stamped on
- * a failure), so one that keeps failing never starves the rest.
+ * a failure), so one that keeps failing never starves the rest. Stops at
+ * the caller's deadline (`d.deadline`).
  */
 export async function lapseClosedCredits(q: Query, d: CreditDeps, limit = 100): Promise<{ lapsed: number; zeroed: number; failed: number }> {
   const out = { lapsed: 0, zeroed: 0, failed: 0 };
@@ -207,7 +209,7 @@ export async function lapseClosedCredits(q: Query, d: CreditDeps, limit = 100): 
   const users = await q<{ id: string; customer: string | null; currency: string | null; close_key: string; needs_lapse: boolean }>(
     `select u.id, u.stripe_customer as customer, u.currency, ${CLOSE_KEY_SQL("u")} as close_key, ${NEEDS_LAPSE_SQL("u")} as needs_lapse
      from users u
-     where u.status = 'closed'
+     where ${ACCESS_ENDED_SQL("u", "$1::timestamptz")}
        and not (u.closed_reason = '${CLOSED_NO_CARD}' and u.trial_started_at is null and u.access_ends_at > $1::timestamptz - interval '7 days')
        and (exists (select 1 from credits c where c.user_id = u.id and c.kind <> 'lapse' and c.status in (${sqlList(UNPOSTED)}))
          or ${NEEDS_LAPSE_SQL("u")})
@@ -215,6 +217,7 @@ export async function lapseClosedCredits(q: Query, d: CreditDeps, limit = 100): 
     [at, limit],
   );
   for (const u of users) {
+    if (pastDeadline(d)) break;
     try {
       await withBalanceLease(q, d, u.id, async (ld) => {
         const l = await q(

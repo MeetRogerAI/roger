@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { testDb } from "@/test-helpers/pglite-db";
+import { optOutGuest } from "@/lib/mail/suppression";
+import { guestOptOutToken, optOutOneClickUrl } from "@/lib/mail/unsubscribe";
 import { GUEST_EMAILS_PER_DAY, guestForToken, hashGuestToken, inviteGuest, myGuest, resendGuestInvite, rsvpGuest } from "./session-guests";
 
 /**
@@ -15,14 +17,14 @@ import { GUEST_EMAILS_PER_DAY, guestForToken, hashGuestToken, inviteGuest, myGue
 let q: Query;
 let failReferral = false;
 let failGuestInsert = 0;
-let sent: { to: string[]; subject: string; text: string }[];
+let sent: { to: string[]; subject: string; text: string; html: string; headers?: Record<string, string> }[];
 let failNext = 0;
 const transport: Transport = async (m) => {
   if (failNext > 0) {
     failNext--;
     return { ok: false, error: "down", retryable: false };
   }
-  sent.push({ to: m.to, subject: m.subject, text: m.text });
+  sent.push({ to: m.to, subject: m.subject, text: m.text, html: m.html, headers: m.headers });
   return { ok: true };
 };
 const mail = () => ({ transport, sleep: async () => {}, query: q });
@@ -45,7 +47,10 @@ const invite = (inviterId: string, name: string, email: string, now = NOW) => in
 const resend = (inviterId: string, now = NOW, p: typeof plan | null = plan) => resendGuestInvite(q, { inviterId, plan: p, now, mail: mail() });
 const tokenIn = (text: string) => /\/g\/([A-Za-z0-9_-]{22})/.exec(text)?.[1] ?? "";
 
+afterEach(() => vi.unstubAllEnvs());
+
 beforeEach(async () => {
+  vi.stubEnv("UNSUB_SECRET", "guest-test-secret");
   const db = await testDb();
   failReferral = false;
   failGuestInsert = 0;
@@ -118,6 +123,39 @@ describe("inviting a guest", () => {
     const ken = await user("ken@example.com");
     await q(`insert into watches (email, query, token, unsubscribed_at) values ('A.N.A+watch@Gmail.com', 'x', 't1', now())`);
     expect(await invite(ken, "Ana", "ana@googlemail.com")).toMatchObject({ ok: false, reason: "blocked" });
+    expect(sent).toHaveLength(0);
+    expect(await q("select 1 from session_guests")).toHaveLength(0);
+  });
+
+  it("carries the guest's signed opt-out link and one-click List-Unsubscribe headers (whole-branch review; CASL and CAN-SPAM)", async () => {
+    const ken = await user("ken@example.com");
+    await invite(ken, "Ana", "Ana.Silva+x@Gmail.com");
+    const t = guestOptOutToken("anasilva@gmail.com")!;
+    expect(sent[0].text).toContain(`/o/${t}`);
+    expect(sent[0].html).toContain(`/o/${t}`);
+    expect(sent[0].headers).toEqual({ "List-Unsubscribe": `<${optOutOneClickUrl(t)}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+  });
+
+  it("an address that opted out gets no further invitation from any member, however it is written; a tampered token suppresses nothing", async () => {
+    const ken = await user("ken@example.com");
+    const mia = await user("mia@example.com");
+    await invite(ken, "Ana", "ana.silva@gmail.com");
+    const t = /[/]o[/]([A-Za-z0-9_-]+)/.exec(sent[0].text)![1];
+    const tampered = `${t.slice(0, 10)}${t[10] === "A" ? "B" : "A"}${t.slice(11)}`;
+    expect(await optOutGuest(q, tampered)).toBeNull();
+    expect(await q("select 1 from email_suppressions")).toHaveLength(0);
+    expect(await optOutGuest(q, t)).toEqual({ emailKey: "anasilva@gmail.com" });
+    expect(await optOutGuest(q, t)).toEqual({ emailKey: "anasilva@gmail.com" });
+    const later = new Date(NOW.getTime() + 8 * 86_400_000);
+    expect(await invite(mia, "Ana", "AnaSilva+again@googlemail.com", later)).toMatchObject({ ok: false, reason: "blocked" });
+    expect(await invite(ken, "Ana", "ana.silva@gmail.com", later)).toMatchObject({ ok: false, reason: "blocked" });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("without UNSUB_SECRET there is no opt-out link, so nothing is sent", async () => {
+    vi.stubEnv("UNSUB_SECRET", "");
+    const ken = await user("ken@example.com");
+    expect(await invite(ken, "Ana", "ana@example.com")).toMatchObject({ ok: false, reason: "closed" });
     expect(sent).toHaveLength(0);
     expect(await q("select 1 from session_guests")).toHaveLength(0);
   });

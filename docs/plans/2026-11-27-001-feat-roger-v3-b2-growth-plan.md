@@ -228,6 +228,8 @@ sequenceDiagram
 
 - [ ] **Unit 0: Intake ignores unknown fenced blocks (separate PR off `main`)**
 
+**Status (November 27):** ships as PR #60 (`fix/intake-ignore-unknown-blocks`), still open, separate from `feat/v3-b2-growth`; nothing of it is on the B2 branch. It must merge before Zack 2.1 ships, whatever B2's state (launch list `b2-pr60`).
+
 **Goal:** Prove, and harden, that a run or profile carrying a ` ```roger-level ` (or any unknown) fence is accepted unchanged, and that the unknown block never reaches the model or the FIGURES check.
 
 **Requirements:** R4, build spec T3.
@@ -756,10 +758,21 @@ sequenceDiagram
 
 ## Documentation / Operational Notes
 
-- New environment variables: `UNSUB_SECRET` (required for the stats email; no fallback) and `REF_SECRET` (falls back to the draft-cookie key).
+- New environment variables: `UNSUB_SECRET` (required for the stats email and for guest invitations, whose opt-out link it signs; no fallback) and `REF_SECRET` (falls back to a key derived from `ADMIN_SECRET`, or `CRON_SECRET`, as in the README).
 - New Stripe webhook events to enable on both endpoints: `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed`. Add them to launch list S16.
 - New cron: `/api/cron/stats` in `vercel.json`.
 - Switches to turn on after go-live: `v3.referralsOn`, `v3.leaderboardOn`, `v3.statsOn` and `v3.sponsorsOn`.
+
+## Whole-branch review fixes (November 27)
+
+- **Hourly pass:** the Stripe-calling credit tasks (`referral_pending`, `referral_credits`, `referral_late_grants`, `referral_credit_lapse`, and the balance refresh in the sweep) run after the charge tasks and stop at the pass's deadline (`CreditDeps.deadline`, checked per row and in `guardLease`). The database-only purges stay first.
+- **Webhook credit:** the route passes `WEBHOOK_LEASE` (a 90-second lease, no Stripe credit write after 40 seconds, inside `maxDuration` 60). `CreditBusy` on `invoice.paid` answers 200 with a note, because `referral_late_grants` and `referral_credits` finish the grant hourly; on `charge.refunded` and `charge.dispute.*` it still answers 500, because nothing hourly looks for a reversal. Credit ledger stamps in the webhook use `creditsNow ?? now`.
+- **Cancelled is ended, like closed:** for a sponsor's seat (`SEAT_ENDED_SQL`, one helper `endSeatOnClose` called by the admin close, `finishCancellation` and a subscription ending; the invoice and `UNBILLED_SEAT_SQL` read the same end) and for referral credit (`ACCESS_ENDED_SQL`: a cancelled account whose access has ended lapses, and no grant posts to it).
+- **Released seat:** `users.released_at` restarts the no-card clock (`noCardClocks` starts no earlier than it), so a released member gets the full card window.
+- **Guest opt-out:** email 22 carries a signed `/o/{token}` link (key from `UNSUB_SECRET`, HKDF info `guest:v1`, keyed by the normalised address) and List-Unsubscribe one-click headers (`/api/opt-out/{token}`); `email_suppressions` holds opted-out addresses and `isAddressSuppressed` reads it. No `UNSUB_SECRET`: no invitation is sent.
+- **Schema:** the superseded `users_leaderboard_name` index is no longer created (only dropped), and `users_sponsor_id_fkey` is added `NOT VALID` (validated by hand after the production check, launch list `b2-schema`).
+- **Agent surface:** `GET /api/referrals` returns the caller's link and code, the people they referred with each stage, and their credit (`creditBalance` and a ledger summary). The admin features (sponsors, sessions attendance, leaderboard name clearing, invoices) are UI-only by design, like the rest of `/admin`. The Wednesday stats preference has its toggle on `/app/settings` (and `/u`), so it needs no API of its own.
+- **Feature switch:** credit posting reads the raw `v3.referralsOn` (`pending_switch`), deliberately, not `featureOn` (noted in `src/lib/v3-features.ts` and `credit-post.ts`).
 
 ## Sources & References
 

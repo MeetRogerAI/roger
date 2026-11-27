@@ -4,6 +4,7 @@ import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/s
 import { cancelledEmail, cancelUndoneEmail } from "@/lib/mail/templates/cancelled";
 import { planChangedEmail } from "@/lib/mail/templates/plan-changed";
 import { longDate } from "@/lib/dates";
+import { endSeatOnClose } from "@/lib/sponsors/sponsors";
 import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentOnCancelScheduled, adjustmentOnCancelUndone, ANCHOR, ISO, placeAdjustments } from "./adjustment";
 import { completeStoredSession, retireSessionForGood } from "./card-setup";
@@ -268,11 +269,14 @@ const CHARGED_SQL = (u: string) => `(${u}.first_charge_at is not null or exists 
 
 /**
  * What follows a cancellation, on every pass until done (the action, then the
- * hourly pass): an account that ended at once and was never charged has its
+ * hourly pass): a sponsored seat's history ends; an account that ended at once and was never charged has its
  * saved cards removed; the confirmation email goes once (keyed by the
  * cancellation's time).
  */
 export async function finishCancellation(q: Query, d: PlanDeps, userId: string): Promise<void> {
+  // A sponsored member's seat history ends with a cancellation as with a close (B2 whole-branch review): its
+  // sponsor is billed for the month it ended in, and not after. Nothing for an account still cancelling.
+  await endSeatOnClose(q, userId).catch((e) => console.error("[billing] sponsor seat end", userId, e instanceof Error ? e.message : e));
   const [u] = await q<Cancelled>(
     `select id, email, stripe_customer, cards_removed_at::text, ${ISO("cancel_requested_at")} as cancel_requested_at, ${ISO("access_ends_at")} as access_ends_at,
             (access_ends_at is not null and access_ends_at <= cancel_requested_at + interval '1 minute') as at_once, ${CHARGED_SQL("users")} as charged,

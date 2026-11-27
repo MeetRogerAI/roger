@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Query } from "@/lib/db-query";
 import type { Currency } from "@/lib/billing/prices";
-import type { CreditDeps } from "./credit-money";
+import { pastDeadline, type CreditDeps } from "./credit-money";
 
 /**
  * A member's referral credit balance (B2 plan Unit 4): the one lease that
@@ -9,13 +9,21 @@ import type { CreditDeps } from "./credit-money";
  * cached figure pages show.
  */
 
-/** Someone else is changing this member's credit right now: try again shortly (the webhook answers 500, a sweep moves on). */
+/**
+ * Someone else is changing this member's credit right now, or the caller ran out of time: try again shortly (a
+ * sweep moves on; the webhook leaves a grant to the hourly sweep and answers 500 for a reversal: see webhook.ts).
+ */
 export class CreditBusy extends Error {}
 
 /** Longer than any function runs (Vercel's 300 seconds), so a live holder's lease cannot expire under it. */
 export const LEASE_SECONDS = 360;
 /** No Stripe write starts after this long holding the lease: with Stripe's own timeouts it ends well inside LEASE_SECONDS. */
 export const LEASE_WORK_MS = 240_000;
+/**
+ * The Stripe webhook's budget (its route runs for at most 60 seconds): a lease of 90 seconds, so a webhook
+ * killed at its limit frees the member's credit within half a minute, and no Stripe write after 40 seconds.
+ */
+export const WEBHOOK_LEASE = { seconds: 90, workMs: 40_000 } as const;
 
 /**
  * Runs `fn` holding the member's balance lease (`leases` row
@@ -35,16 +43,18 @@ export async function withBalanceLease<T>(q: Query, d: CreditDeps, userId: strin
   if (!userId || d.lease?.userId === userId) return fn(d);
   const holder = randomUUID();
   const name = `credit:${userId}`;
+  const seconds = d.leaseBudget?.seconds ?? LEASE_SECONDS;
+  const workMs = d.leaseBudget?.workMs ?? LEASE_WORK_MS;
   const got = await q(
     `insert into leases (name, holder, until) values ($1, $2, now() + make_interval(secs => $3))
      on conflict (name) do update set holder = excluded.holder, until = excluded.until
      where leases.until < now()
      returning name`,
-    [name, holder, LEASE_SECONDS],
+    [name, holder, seconds],
   );
   if (!got.length) throw new CreditBusy(`Referral credit for ${userId} is being changed; try again shortly`);
   try {
-    return await fn({ ...d, lease: { userId, holder, startedAt: (d.clock ?? Date.now)() } });
+    return await fn({ ...d, lease: { userId, holder, startedAt: (d.clock ?? Date.now)(), seconds, workMs } });
   } finally {
     await q(`delete from leases where name = $1 and holder = $2`, [name, holder]).catch(() => {});
   }
@@ -52,16 +62,18 @@ export async function withBalanceLease<T>(q: Query, d: CreditDeps, userId: strin
 
 /**
  * Before a Stripe write inside the lease: renews it (only while this holder
- * still has it) and checks the time spent. Throws CreditBusy to stop with
- * nothing half-written. Outside a lease (a deleted member) it does nothing.
+ * still has it) and checks the time spent, and the caller's deadline. Throws
+ * CreditBusy to stop with nothing half-written. Outside a lease (a deleted
+ * member) only the deadline is checked.
  */
 export async function guardLease(q: Query, d: CreditDeps): Promise<void> {
+  if (pastDeadline(d)) throw new CreditBusy("Out of time for this pass; the next one goes on");
   if (!d.lease) return;
-  if ((d.clock ?? Date.now)() - d.lease.startedAt > LEASE_WORK_MS) throw new CreditBusy(`Out of time holding the credit lease for ${d.lease.userId}; the next pass goes on`);
+  if ((d.clock ?? Date.now)() - d.lease.startedAt > d.lease.workMs) throw new CreditBusy(`Out of time holding the credit lease for ${d.lease.userId}; the next pass goes on`);
   const renewed = await q(`update leases set until = now() + make_interval(secs => $3) where name = $1 and holder = $2 returning name`, [
     `credit:${d.lease.userId}`,
     d.lease.holder,
-    LEASE_SECONDS,
+    d.lease.seconds,
   ]);
   if (!renewed.length) throw new CreditBusy(`The credit lease for ${d.lease.userId} was lost`);
 }
@@ -136,6 +148,7 @@ export async function refreshStaleBalances(q: Query, d: CreditDeps, limit = 50):
   );
   let n = 0;
   for (const u of rows) {
+    if (pastDeadline(d)) break;
     try {
       await writeBalanceCache(q, u.id, Math.max(0, -(await d.credits.balance(u.customer))), d.now);
       n++;
@@ -163,4 +176,35 @@ export async function creditBalance(q: Query, userId: string): Promise<{ cents: 
   );
   if (!u || u.cents == null || !u.at) return null;
   return { cents: Math.max(0, u.cents), currency: u.currency, asOf: new Date(u.at) };
+}
+
+export type CreditLedgerSummary = {
+  /** Referral credit posted to the member's balance, in cents. */
+  earnedCents: number;
+  /** Grants not posted yet: waiting for a card or the switch, or held by an open dispute. */
+  waitingCents: number;
+  /** Taken back from the balance: clawbacks (refunds, lost disputes) and a lapse on close. */
+  takenBackCents: number;
+  /** The ledger's currency (a referrer's is fixed by their card); null with no rows. */
+  currency: Currency | null;
+};
+
+/**
+ * The member's credit ledger in three figures, for the agent surface
+ * (GET /api/referrals, B2 whole-branch review). The money figure to show is
+ * `creditBalance` (Stripe's balance, as of when it was read); this is the
+ * record of how it came to be. A clawback that only reduced a grant before it
+ * posted moved no money and is not counted.
+ */
+export async function creditLedgerSummary(q: Query, userId: string): Promise<CreditLedgerSummary> {
+  const [r] = await q<{ earned: number; waiting: number; taken: number; currency: Currency | null }>(
+    `select coalesce(sum(amount_cents) filter (where kind = 'grant' and status = 'posted'), 0)::int as earned,
+       coalesce(sum(amount_cents) filter (where kind = 'grant' and status in ('pending_customer', 'pending_switch', 'frozen')), 0)::int as waiting,
+       coalesce(sum(amount_cents - uncollected_cents) filter (where kind in ('clawback', 'lapse') and status = 'posted'
+         and (reason is null or reason not like 'unposted_grant%')), 0)::int as taken,
+       (array_agg(currency order by created_at desc))[1] as currency
+     from credits where user_id = $1`,
+    [userId],
+  );
+  return { earnedCents: r?.earned ?? 0, waitingCents: r?.waiting ?? 0, takenBackCents: r?.taken ?? 0, currency: r?.currency ?? null };
 }

@@ -5,7 +5,7 @@ import nextConfig from "../../next.config";
 afterEach(() => vi.unstubAllEnvs());
 
 /** The header rules other than the Payment page's CSP (tested in src/lib/payment-csp.test.ts) and the token links' (below). */
-const UNSUB_SOURCES = ["/u/:token", "/api/unsubscribe/:token", "/g/:token", "/g/:token/calendar.ics"];
+const UNSUB_SOURCES = ["/u/:token", "/api/unsubscribe/:token", "/g/:token", "/g/:token/calendar.ics", "/o/:token", "/api/opt-out/:token"];
 const robotsHeaders = async () => (await nextConfig.headers!()).filter((r) => !r.source.startsWith("/start/payment") && !UNSUB_SOURCES.includes(r.source));
 
 describe("indexing", () => {

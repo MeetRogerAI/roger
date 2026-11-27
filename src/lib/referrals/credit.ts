@@ -3,7 +3,7 @@ import { OPEN_DISPUTE_STATUSES, type PaidInvoice } from "@/lib/billing/gateway";
 import type { Currency } from "@/lib/billing/prices";
 import { adminAlert, alertAdmins } from "@/lib/mail/send";
 import { CreditBusy, withBalanceLease } from "./credit-balance";
-import { grantCents, sqlList, UNPOSTED, type CreditDeps, type CreditStatus } from "./credit-money";
+import { grantCents, pastDeadline, sqlList, UNPOSTED, type CreditDeps, type CreditStatus } from "./credit-money";
 import { adminUserUrl, notifyGrant, postCredit } from "./credit-post";
 import { syncReversals } from "./credit-reversal";
 
@@ -181,7 +181,7 @@ export const LATE_GRANT_ATTEMPTS = 5;
  * grant, because its `invoice.paid` came before the referral was recorded or
  * the grant attempted then failed. Each look is stamped; one that found
  * nothing waits a day, one that failed is tried again next hour, up to
- * LATE_GRANT_ATTEMPTS.
+ * LATE_GRANT_ATTEMPTS. Stops at the caller's deadline (`d.deadline`).
  */
 export async function grantLateReferrals(q: Query, d: CreditDeps, limit = 50): Promise<{ granted: number; none: number; failed: number; busy: number }> {
   const out = { granted: 0, none: 0, failed: 0, busy: 0 };
@@ -198,6 +198,7 @@ export async function grantLateReferrals(q: Query, d: CreditDeps, limit = 50): P
     [at, LATE_GRANT_ATTEMPTS, limit],
   );
   for (const r of rows) {
+    if (pastDeadline(d)) break;
     try {
       const o = await grantForReferredUser(q, d, r.user_id);
       if (o === "granted" || o === "replayed") out.granted++;

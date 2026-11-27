@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { unsubConfigured, unsubHeaders, unsubToken, verifyUnsubToken } from "./unsubscribe";
+import { guestOptOutToken, optOutHeaders, optOutOneClickUrl, unsubConfigured, unsubHeaders, unsubToken, verifyGuestOptOut, verifyUnsubToken } from "./unsubscribe";
 
 const ID = "3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e";
 const env = { UNSUB_SECRET: "secret-one" };
@@ -49,5 +49,34 @@ describe("unsubscribe tokens", () => {
 
   it("gives the one-click headers (RFC 8058)", () => {
     expect(unsubHeaders("tok")).toEqual({ "List-Unsubscribe": "<http://localhost:3000/api/unsubscribe/tok>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+  });
+});
+
+describe("guest opt-out tokens (B2 whole-branch review)", () => {
+  it("round-trip the normalised address, and are refused when tampered, truncated, or signed for a member's stats email", () => {
+    const t = guestOptOutToken("anasilva@gmail.com", env)!;
+    expect(Buffer.from(t, "base64url")[0]).toBe(1);
+    expect(verifyGuestOptOut(t, env)).toBe("anasilva@gmail.com");
+    const raw = Buffer.from(t, "base64url");
+    const flip = (i: number) => {
+      const b = Buffer.from(raw);
+      b[i] ^= 1;
+      return b.toString("base64url");
+    };
+    expect(verifyGuestOptOut(flip(3), env)).toBeNull(); // another address
+    expect(verifyGuestOptOut(flip(raw.length - 2), env)).toBeNull(); // the signature
+    expect(verifyGuestOptOut(flip(0), env)).toBeNull(); // an unknown key version
+    expect(verifyGuestOptOut(raw.subarray(0, raw.length - 1).toString("base64url"), env)).toBeNull();
+    expect(verifyGuestOptOut(t, { UNSUB_SECRET: "another" })).toBeNull();
+    // Each purpose has its own key: a stats token is never a guest's, nor the reverse.
+    expect(verifyGuestOptOut(unsubToken(ID, "stats", env), env)).toBeNull();
+    expect(verifyUnsubToken(t, "stats", env)).toBeNull();
+  });
+
+  it("are not made without UNSUB_SECRET, and give one-click headers", () => {
+    expect(guestOptOutToken("a@example.com", {})).toBeNull();
+    const t = guestOptOutToken("a@example.com", env)!;
+    expect(optOutHeaders(t)).toEqual({ "List-Unsubscribe": `<${optOutOneClickUrl(t)}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+    expect(optOutOneClickUrl(t)).toContain(`/api/opt-out/${t}`);
   });
 });

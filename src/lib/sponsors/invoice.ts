@@ -7,7 +7,7 @@ import { CONTRIBUTED_SQL, ROGER_EXCUSED_SQL, SHARING_AT_CUTOFF_SQL, weekResult }
 import { countMisses } from "@/lib/billing/period";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
-import { ensureSponsorCustomer } from "./sponsors";
+import { ensureSponsorCustomer, SEAT_ENDED_SQL } from "./sponsors";
 
 /**
  * The sponsor's monthly invoice (spec B.15; B2 plan Unit 10, Key Technical
@@ -18,7 +18,7 @@ import { ensureSponsorCustomer } from "./sponsors";
  * - Seats are billed from `sponsor_seat_history`: a seat is billed for every
  *   month in which it was held, even briefly, by a member whose third
  *   delivered, non-dry-run list week is before the month ends. A release, or
- *   the account closing, ends the hold; the month it ends in is still billed.
+ *   the account closing or being cancelled, ends the hold; the month it ends in is still billed.
  *   A seat reused by a new member in the same month is billed for each member
  *   who qualifies.
  * - The contributor rule applies per seat (Peter, November 27): B1's weekly
@@ -103,7 +103,7 @@ export async function sponsorBill(q: Query, sponsorId: string, month: string, s:
         where dw.user_id = u.id and not dw.dry_run and dw.delivered_at is not null order by dw.week_of offset 2 limit 1) as third,
        to_char(e.ends at time zone 'America/Toronto', 'YYYY-MM-DD') as until
      from sponsor_seat_history h join users u on u.id = h.user_id
-     cross join lateral (select least(h.held_to, case when u.status = 'closed' then coalesce(u.access_ends_at, h.held_from) end) as ends) e
+     cross join lateral (select least(h.held_to, case when ${SEAT_ENDED_SQL("u")} then coalesce(u.access_ends_at, h.held_from) end) as ends) e
      where h.sponsor_id = $1 and h.held_from < $3::timestamptz and (e.ends is null or e.ends >= $2::timestamptz)
      order by u.name, u.id`,
     [sponsorId, wallToInstant(first, "00:00").toISOString(), wallToInstant(end, "00:00").toISOString()],

@@ -93,7 +93,7 @@ export function closeMoment(start: Date, days: number, rogerWeeks: string[], sen
  *   replaced) never restarts it: `first_teaser_at` is stamped once.
  * - **Never teasered**: closes `trialCloseDays` (21) after Step 3 finished
  *   (`signup_finished_at`; consent for older rows; or the first go-live, if
- *   later), closed_reason `no_first_list`, the reason the
+ *   later; never before a seat release), closed_reason `no_first_list`, the reason the
  *   card-saved 21-day close uses. Never while a run for this week or a later
  *   one waits on Cora (it may bring the first teaser, and with it the 14-day
  *   clock).
@@ -109,7 +109,10 @@ export function closeMoment(start: Date, days: number, rogerWeeks: string[], sen
  * account open for ever.
  *
  * Saving a card (or a sponsor) takes the account off these clocks at once: no
- * more reminders, nudges or close.
+ * more reminders, nudges or close. A member released from a sponsor's seat
+ * comes back on them with a fresh start (`users.released_at`, the release):
+ * the clock never starts before it, so a member sponsored for months is not
+ * closed by the next pass, and gets the whole window to add a card.
  */
 export const HELD_CLOSE_DAYS = 14;
 export const HELD_REMINDER_DAYS = [2, 7] as const;
@@ -162,7 +165,9 @@ export async function noCardClocks(q: Query, s: V3Settings, now: Date, onlyIds?:
     `with ${LIVE_SINCE_CTE},
      t as (
        select u.id, u.email, u.consent_at, u.first_teaser_at, coalesce(u.signup_finished_at, u.consent_at) as finished_at,
-         coalesce(u.first_teaser_at, greatest(coalesce(u.signup_finished_at, u.consent_at), ${LIVE_SINCE})) as start
+         -- B2 whole-branch review: a member released from a sponsor's seat (users.released_at) starts afresh then,
+         -- so they get the full card window; greatest() ignores a null released_at.
+         greatest(coalesce(u.first_teaser_at, greatest(coalesce(u.signup_finished_at, u.consent_at), ${LIVE_SINCE})), u.released_at) as start
        from users u
        where ${NO_CARD_TRIAL_SQL("u")} and u.consent_at is not null and ($1::uuid[] is null or u.id = any($1::uuid[]))
      )

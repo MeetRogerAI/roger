@@ -932,8 +932,12 @@ create table if not exists sponsors (
   created_at timestamptz not null default now()
 );
 create index if not exists users_sponsor on users (sponsor_id) where sponsor_id is not null;
--- One line, so setup.mjs keeps it whole. No code wrote users.sponsor_id before B2.
-do $$ begin if not exists (select 1 from pg_constraint where conname = 'users_sponsor_id_fkey') then alter table users add constraint users_sponsor_id_fkey foreign key (sponsor_id) references sponsors (id) on delete restrict; end if; end $$;
+-- One line, so setup.mjs keeps it whole. No code wrote users.sponsor_id before B2, but the column
+-- existed: the constraint is added NOT VALID, so applying this to production cannot fail on a stray
+-- old value, while every new or changed row is checked. Validate it once production is checked
+-- (launch list, b2-schema): if "select count(*) from users where sponsor_id is not null" is 0,
+-- run "alter table users validate constraint users_sponsor_id_fkey" (by hand, once)
+do $$ begin if not exists (select 1 from pg_constraint where conname = 'users_sponsor_id_fkey') then alter table users add constraint users_sponsor_id_fkey foreign key (sponsor_id) references sponsors (id) on delete restrict not valid; end if; end $$;
 -- users.sponsor_seat (B2 Unit 10): which of the sponsor's seats (1..seats) the member holds.
 -- Unique per sponsor, so two sign-ups racing for the last seat cannot both take it: the
 -- loser's claim fails on this index and is tried again, and then finds no seat free.
@@ -979,16 +983,15 @@ create table if not exists sponsor_seat_history (
 create unique index if not exists sponsor_seat_history_open on sponsor_seat_history (user_id) where held_to is null;
 create index if not exists sponsor_seat_history_sponsor on sponsor_seat_history (sponsor_id, held_from);
 -- A member sponsored before the history existed gets an open row from their account's creation (once).
-insert into sponsor_seat_history (sponsor_id, user_id, seat, held_from) select u.sponsor_id, u.id, u.sponsor_seat, u.created_at from users u where u.sponsor_id is not null and not exists (select 1 from sponsor_seat_history h where h.user_id = u.id);
+insert into sponsor_seat_history (sponsor_id, user_id, seat, held_from) select u.sponsor_id, u.id, u.sponsor_seat, u.created_at from users u where u.sponsor_id is not null and exists (select 1 from sponsors s where s.id = u.sponsor_id) and not exists (select 1 from sponsor_seat_history h where h.user_id = u.id);
 
--- users: when the member joined the leaderboard (set only from its prompt,
--- their display_name is unique, ignoring case, among opted-in members), and
+-- users: when the member joined the leaderboard (set only from its prompt;
+-- the board name's uniqueness is users_leaderboard_name_key, below), and
 -- a cache of their Stripe customer balance as credit in cents (positive is
 -- credit they can spend) with when it was read.
 alter table users add column if not exists leaderboard_opt_in_at timestamptz;
 alter table users add column if not exists credit_balance_cents int;
 alter table users add column if not exists credit_balance_at timestamptz;
-create unique index if not exists users_leaderboard_name on users (lower(display_name)) where leaderboard_opt_in_at is not null;
 
 -- pool_play_contributors: when the contributor was added (job clock). A pick
 -- counts toward a contributor's points only if they contributed before it
@@ -1053,3 +1056,19 @@ update users set leaderboard_opt_in_at = null where leaderboard_opt_in_at is not
 -- Cleared with name and email by the 90-day retention.
 alter table session_guests add column if not exists email_key text;
 create index if not exists session_guests_email_key on session_guests (email_key, created_at) where email_key is not null;
+-- 2026-11-27, B2 whole-branch review. users.released_at: when an admin last
+-- released the member's sponsored seat (job clock). The no-card clock
+-- (src/lib/housekeeping/clocks.ts noCardClocks) never starts before it, so a
+-- released member gets the full window to add a card.
+alter table users add column if not exists released_at timestamptz;
+-- email_suppressions: addresses that asked Roger never to email them again
+-- (the guest invitation's opt-out, /o/{token}; CASL and CAN-SPAM). Keyed by
+-- the normalised address (referralEmailKey), so a plus-tag or Gmail dots
+-- don't get around it. Checked before every guest invitation
+-- (src/lib/mail/suppression.ts isAddressSuppressed). Kept with no expiry: it
+-- holds only the key, and forgetting it would email someone who said no.
+create table if not exists email_suppressions (
+  email_key text primary key,
+  created_at timestamptz not null default now(),
+  source text not null
+);

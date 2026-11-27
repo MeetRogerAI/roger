@@ -36,10 +36,24 @@ export type CreditDeps = {
   credits: CreditGateway;
   settings: V3Settings;
   now: Date;
-  lease?: { userId: string; holder: string; startedAt: number };
+  lease?: { userId: string; holder: string; startedAt: number; seconds: number; workMs: number };
   /** The real clock (epoch ms) the lease's time limit is measured on; tests pass their own. */
   clock?: () => number;
+  /**
+   * The caller's own time limit (epoch ms, on `clock`): the hourly pass's deadline (PassContext). Sweeps stop
+   * taking new rows once it has passed, and no Stripe write starts after it (`guardLease`), so a slow Stripe
+   * can never use up the pass the charge tasks need.
+   */
+  deadline?: number;
+  /**
+   * The lease and its work budget, when shorter than the defaults (credit-balance.ts LEASE_SECONDS and
+   * LEASE_WORK_MS): the Stripe webhook runs for at most 60 seconds, so it passes WEBHOOK_LEASE.
+   */
+  leaseBudget?: { seconds: number; workMs: number };
 } & MailDeps;
+
+/** True once the caller's deadline (if any) has passed: a sweep takes no new row. */
+export const pastDeadline = (d: Pick<CreditDeps, "deadline" | "clock">) => d.deadline != null && (d.clock ?? Date.now)() >= d.deadline;
 
 export type CreditRow = {
   id: string;
@@ -114,6 +128,14 @@ export function clawCents(o: { gross: number; taken: number; reversed: number; p
   const target = Math.round((o.gross * Math.min(o.reversed, o.paid)) / o.paid);
   return Math.max(0, Math.min(target, o.gross) - o.taken);
 }
+
+/**
+ * SQL: the account `alias` has ended for referral credit at `at` (a timestamptz expression): closed, or
+ * cancelled with its access over (B2 whole-branch review: a cancelled account whose paid month or trial has
+ * ended is treated like a closed one, so its credit lapses and no new grant posts to it).
+ */
+export const ACCESS_ENDED_SQL = (alias: string, at: string) =>
+  `(${alias}.status = 'closed' or (${alias}.status = 'cancelled' and ${alias}.access_ends_at is not null and ${alias}.access_ends_at <= ${at}))`;
 
 /** SQL: the key of a closed account's current close (its access end), for its one lapse row. */
 export const CLOSE_KEY_SQL = (alias = "u") => `('close:' || coalesce(extract(epoch from ${alias}.access_ends_at)::bigint::text, 'legacy'))`;

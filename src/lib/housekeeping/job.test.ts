@@ -4,7 +4,13 @@ import type { BillingGateway } from "@/lib/billing/subscriptions";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakePlans } from "@/test-helpers/fake-plans";
-import { testDb } from "@/test-helpers/pglite-db";
+import { testDb, testSponsor } from "@/test-helpers/pglite-db";
+import { isNoCardTrialUser } from "@/lib/billing/has-card";
+import { paymentAccount } from "@/lib/billing/payment-page";
+import { releaseSeat } from "@/lib/sponsors/sponsors";
+import { deliverWeek } from "@/lib/cora/deliver";
+import { heldTeaser } from "@/lib/app/held";
+import { noCardClocks } from "./clocks";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { stripeGateway } from "@/lib/billing/gateway";
 import { HOURLY_TASKS, reconcileStripe, runHourly, type HourlyTask } from "./job";
@@ -234,5 +240,62 @@ describe("no_card_close's card gateway (review fixes Unit 10, T1)", () => {
     expect(await status(id)).toBe("closed");
     expect(stripeGateway).not.toHaveBeenCalled();
     expect(gw.expired).toEqual([]);
+  });
+});
+
+describe("a member released from a sponsor's seat (B2 whole-branch review, seam P2)", () => {
+  const tasks = HOURLY_TASKS.filter((t) => ["trial_nudges", "held_reminders", "no_card_close"].includes(t.name));
+
+  it("sponsored for 60 days, then released: the next pass doesn't close them; they get the full card window from the release", async () => {
+    const sponsor = await testSponsor(query);
+    const long = new Date(NOW.getTime() - 60 * 86_400_000).toISOString();
+    const [{ id }] = await query<{ id: string }>(
+      `insert into users (email, status, plan, currency, signup_step, consent_at, signup_finished_at, sponsor_id, sponsor_seat)
+       values ('ana@example.com', 'trial', 'monthly', 'CAD', 'done', $1, $1, $2, 1) returning id`,
+      [long, sponsor],
+    );
+    await query(`insert into sponsor_seat_history (sponsor_id, user_id, seat, held_from) values ($1, $2, 1, $3)`, [sponsor, id, long]);
+    const released = new Date(NOW.getTime() - 86_400_000);
+    expect(await releaseSeat(query, "peter@meetroger.ai", sponsor, id, released)).toBe(true);
+
+    await runHourly(query, { gw: {} as BillingGateway, settings, now: NOW, query, transport, sleep: async () => {}, card: null }, tasks, { deadline: Date.now() + 60_000 });
+    expect((await query<{ status: string }>("select status from users where id = $1", [id]))[0].status).toBe("trial");
+    // Back on the no-card flow, on a clock that starts at the release: the next Monday's list is held, and a card
+    // is asked for (the Payment page) as for any no-card trial.
+    expect(await isNoCardTrialUser(query, id)).toBe(true);
+    const WEEK = "2026-12-21";
+    const [play] = await query<{ id: string }>(
+      `insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen, figures, score, f_hours, f_reach, f_ease, f_proof, f_surprise)
+       values ('Inbox triage', 'Sales', 'd', 'p', 'i', $1, $1, '{}'::jsonb, 70, 7, 7, 7, 7, 7) returning id`,
+      [WEEK],
+    );
+    await query(`insert into cora_weeks (week_of, status, phase) values ($1, 'ready', 'ready')`, [WEEK]);
+    await query(`insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, $2, 'short', 1)`, [id, WEEK]);
+    await query(`insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason) values ($1, $2, 1, $3, 70, 3, 'Fits.')`, [id, WEEK, play.id]);
+    expect(await deliverWeek(query, id, WEEK, 2, new Date("2026-12-21T12:05:00Z"))).toMatchObject({ delivered: 0 });
+    expect(await heldTeaser(query, id)).not.toBeNull();
+    expect(await paymentAccount(query, id)).not.toBeNull();
+    const [clock] = await noCardClocks(query, settings, NOW, [id]);
+    expect(clock.start).toEqual(released);
+    expect(clock.closesAt.getTime()).toBeGreaterThan(released.getTime() + 20 * 86_400_000);
+
+    // 22 days after the release, with no card and no list: closed as any no-card trial is.
+    const later = new Date(released.getTime() + 22 * 86_400_000);
+    await runHourly(query, { gw: {} as BillingGateway, settings, now: later, query, transport, sleep: async () => {}, card: null }, tasks, { deadline: Date.now() + 60_000 });
+    expect((await query<{ status: string }>("select status from users where id = $1", [id]))[0].status).toBe("closed");
+  });
+});
+
+describe("credit task budget (B2 whole-branch re-review)", () => {
+  it("is shared by every credit task in a pass, and never later than the pass's deadline", async () => {
+    const { creditDeadline, CREDIT_BUDGET_MS } = await import("./job");
+    const far = { deadline: Date.now() + 240_000, shared: new Map() };
+    const first = creditDeadline(far);
+    expect(first).toBeLessThanOrEqual(Date.now() + CREDIT_BUDGET_MS);
+    expect(first).toBeLessThan(far.deadline);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(creditDeadline(far)).toBe(first);
+    const near = { deadline: Date.now() + 1_000, shared: new Map() };
+    expect(creditDeadline(near)).toBe(near.deadline);
   });
 });

@@ -534,7 +534,25 @@ Ken R. invited you to Roger’s weekly group session, Tuesday, December 1 at 12:
 Open your invitation to say you’re coming and get the link to join.
 [Open your invitation]
 This invitation is for you only and works until the session ends. If you weren’t expecting it, you can ignore this email.
+You got this because a Roger member entered your address. Stop all invitations from Roger to this address   (a link to /o/{token})
 ```
+
+**A guest's opt-out page, `/o/{token}`** (`OPT_OUT_WORDS`, `src/app/o/[token]/opt-out-view.tsx`; the last line of email 22, `GUEST_OPT_OUT_WORDS` in `guest-invite.ts`, links here, and the mail app's one-click unsubscribe posts to `/api/opt-out/{token}`). Tab title `Roger invitations`. Opening it changes nothing; one button does it:
+
+```text
+Stop invitations from Roger?
+A Roger member invited you to a group session. This stops every invitation from Roger to this address, whoever sends it.
+[Stop invitations]
+That didn’t work. Try again.                     (if the button failed)
+Checking your link…                              (while loading)
+
+Done:     You won’t get any more invitations from Roger.
+          No Roger member can send an invitation to this address again.
+Bad link: That link isn’t valid.
+          Nothing has changed.
+```
+
+One-click answers (`/api/opt-out/{token}`, plain text, seen only by mail apps): `You won’t get any more invitations from Roger.`; `This link isn’t valid.`; `Something went wrong. Try again.`
 
 **The guest page, `/g/{token}`** (`GUEST_WORDS`). Tab title `Your invitation`.
 
@@ -571,7 +589,7 @@ Try again in a minute.
 - **The card's description** ("Bring your questions about setting up your ideas") and the guest email's ("about getting more out of your AI agent") are drafts: what is the session about, in your words?
 - **Who can invite:** paying (active) and sponsored members. A member whose renewal failed (held) or who cancelled sees the card greyed out. Right?
 - **The guest's name rule:** letters, spaces and . ' - only, so nobody can put a link or a message in someone else's inbox through the name.
-- **No unsubscribe link in the guest email.** The guest isn't a member, and the email goes to a third party, at most once a week per person whoever invites. It has no unsubscribe link of its own; an address that unsubscribed from Roger's watch alerts gets none. Is that acceptable, or should the invitation carry a "don't invite me again" link?
+- **The guest's opt-out** (resolved in the whole-branch review; was "No unsubscribe link in the guest email"). The invitation now ends with a signed "Stop all invitations from Roger to this address" link, and carries List-Unsubscribe one-click headers (CASL and CAN-SPAM). Opting out stops every further invitation to that address, from any member, for good; an address that unsubscribed from Roger's watch alerts is still never invited. Without `UNSUB_SECRET` no invitation is sent. Are the new strings above right?
 - **"That person was already invited to a session this week"** tells a member that someone else invited the same person. Acceptable, or should it read like the daily-cap message?
 
 ## 13. Sponsor wording (Unit 10) — pending Peter's sign-off

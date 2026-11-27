@@ -333,11 +333,13 @@ export async function setSponsorSeats(q: Query, by: string, sponsorId: string, s
  * Releases one member's seat: they are no longer sponsored, so they become
  * an ordinary trial (a card is asked for before their next list). The seat's
  * history row ends now, in the same statement: the month it ends in is still
- * billed (invoice.ts).
+ * billed (invoice.ts). `released_at` (job clock) restarts their no-card clock
+ * (housekeeping/clocks.ts noCardClocks), so they get the full card window
+ * from the release rather than from sign-up.
  */
 export async function releaseSeat(q: Query, by: string, sponsorId: string, userId: string, now: Date = new Date()): Promise<boolean> {
   const rows = await q(
-    `with r as (update users set sponsor_id = null, sponsor_seat = null where id = $1 and sponsor_id = $2 returning id),
+    `with r as (update users set sponsor_id = null, sponsor_seat = null, released_at = $3::timestamptz where id = $1 and sponsor_id = $2 returning id),
      h as (update sponsor_seat_history set held_to = greatest(held_from, $3::timestamptz) where user_id in (select id from r) and sponsor_id = $2 and held_to is null returning 1)
      select id from r`,
     [userId, sponsorId, now.toISOString()],
@@ -349,7 +351,8 @@ export async function releaseSeat(q: Query, by: string, sponsorId: string, userI
 /**
  * SQL: the member `u` held a sponsor's seat, past their third list, in a
  * calendar month (Toronto) whose sponsor invoice isn't sent yet, the current
- * month included. Deleting the member would take that billable seat-month
+ * month included. A hold ends with its release, or with the account's
+ * access once it is closed or cancelled (as in invoice.ts). Deleting the member would take that billable seat-month
  * (their seat history and delivered weeks) with it, so it waits.
  */
 export const UNBILLED_SEAT_SQL = (u: string) => `exists (
@@ -357,19 +360,28 @@ export const UNBILLED_SEAT_SQL = (u: string) => `exists (
   cross join lateral (select (select dw.week_of from cora_user_weeks dw where dw.user_id = h.user_id and not dw.dry_run and dw.delivered_at is not null
                               order by dw.week_of offset 2 limit 1) as third) t
   cross join lateral generate_series(date_trunc('month', h.held_from at time zone 'America/Toronto'),
-                                     date_trunc('month', coalesce(h.held_to, now()) at time zone 'America/Toronto'), interval '1 month') m(start)
+                                     date_trunc('month', least(coalesce(h.held_to, now()),
+                                       case when ${SEAT_ENDED_SQL(u)} then coalesce(${u}.access_ends_at, h.held_from) end) at time zone 'America/Toronto'),
+                                     interval '1 month') m(start)
   where h.user_id = ${u}.id and t.third is not null and t.third < (m.start + interval '1 month')::date
     and not exists (select 1 from sponsor_invoices si where si.sponsor_id = h.sponsor_id and si.month = m.start::date and si.sent_at is not null))`;
 
+/** SQL: the member `u` has left Roger, for a sponsor's seat: closed, or cancelled (B2 whole-branch review). */
+export const SEAT_ENDED_SQL = (u: string) => `${u}.status in ('closed', 'cancelled')`;
+
 /**
- * A closed account's seat history ends when its access ended (or now). The
- * member keeps `sponsor_id` (an admin releases the seat); billing stops after
- * the month the account closed in. Called by the admin close; safe to repeat.
+ * The one place a closed or cancelled account's seat history ends: when its
+ * access ended (or now). The member keeps `sponsor_id` (an admin releases the
+ * seat); billing stops after the month the account ended in. Called by every
+ * path that closes or cancels an account (the admin close, cancel.ts
+ * `finishCancellation`, a subscription ending); does nothing for an open
+ * account; safe to repeat. The invoice and UNBILLED_SEAT_SQL read the same
+ * end from the account itself, so a call that failed bills nothing extra.
  */
 export async function endSeatOnClose(q: Query, userId: string): Promise<void> {
   await q(
-    `update sponsor_seat_history h set held_to = greatest(h.held_from, coalesce((select u.access_ends_at from users u where u.id = h.user_id and u.status = 'closed'), now()))
-     where h.user_id = $1 and h.held_to is null and exists (select 1 from users u where u.id = $1 and u.status = 'closed')`,
+    `update sponsor_seat_history h set held_to = greatest(h.held_from, coalesce((select u.access_ends_at from users u where u.id = h.user_id and ${SEAT_ENDED_SQL("u")}), now()))
+     where h.user_id = $1 and h.held_to is null and exists (select 1 from users u where u.id = $1 and ${SEAT_ENDED_SQL("u")})`,
     [userId],
   );
 }

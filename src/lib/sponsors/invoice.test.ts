@@ -4,7 +4,7 @@ import { mergeV3 } from "@/lib/v3-settings";
 import { fakeSponsors } from "@/test-helpers/fake-sponsors";
 import { testDb } from "@/test-helpers/pglite-db";
 import { HOLD_MINUTES, lastMonth, monthStart, prepareSponsorInvoice, REPREPARE, sendSponsorInvoice, sponsorBill, TAX_INCOMPLETE } from "./invoice";
-import { createSponsor, releaseSeat } from "./sponsors";
+import { createSponsor, releaseSeat, UNBILLED_SEAT_SQL } from "./sponsors";
 
 /**
  * B2 plan Unit 10 and its review: the sponsor's calendar-month invoice. A
@@ -126,6 +126,21 @@ describe("which seats, at which price", () => {
     await member("nov@example.com", { delivered: THREE, ran: NOV_WEEKS, status: "closed", closedAt: "2026-11-15T12:00:00Z" });
     expect((await sponsorBill(query, sponsorId, NOV, settings))!.seats.map((s) => s.email)).toEqual(["nov@example.com"]);
     expect((await sponsorBill(query, sponsorId, "2026-12-01", settings))!.seats).toHaveLength(0);
+  });
+
+  it("a cancelled account is treated like a closed one: billed for the month it was cancelled in, never after (whole-branch review)", async () => {
+    await member("oct@example.com", { delivered: THREE, ran: NOV_WEEKS, status: "cancelled", closedAt: "2026-10-20T12:00:00Z" });
+    await member("nov@example.com", { delivered: THREE, ran: NOV_WEEKS, status: "cancelled", closedAt: "2026-11-15T12:00:00Z" });
+    expect((await sponsorBill(query, sponsorId, NOV, settings))!.seats.map((s) => s.email)).toEqual(["nov@example.com"]);
+    expect((await sponsorBill(query, sponsorId, "2026-12-01", settings))!.seats).toHaveLength(0);
+  });
+
+  it("UNBILLED_SEAT_SQL ends an open hold with a closed or cancelled account's access, as the invoice does", async () => {
+    const unbilled = async (id: string) => (await query<{ x: boolean }>(`select ${UNBILLED_SEAT_SQL("u")} as x from users u where u.id = $1`, [id]))[0].x;
+    // Third list on November 2; access ended October 20: no billable month, though the history row was never ended.
+    expect(await unbilled(await member("oct@example.com", { delivered: THREE, status: "cancelled", closedAt: "2026-10-20T12:00:00Z" }))).toBe(false);
+    expect(await unbilled(await member("octc@example.com", { delivered: THREE, status: "closed", closedAt: "2026-10-20T12:00:00Z" }))).toBe(false);
+    expect(await unbilled(await member("nov@example.com", { delivered: THREE, status: "cancelled", closedAt: "2026-11-15T12:00:00Z" }))).toBe(true);
   });
 
   it("weeks before the member's third list don't count against the seat", async () => {

@@ -320,11 +320,12 @@ describe("the grant", () => {
       `insert into credits (user_id, kind, amount_cents, uncollected_cents, currency, status, source_object_id) values ($1, 'clawback', 20000, 20000, 'CAD', 'posted', 're_old')`,
       [a.id],
     );
-    const b = await t.referred("ben@example.com", a.id);
-    const c = await t.referred("cat@example.com", a.id);
+    const b = await t.referred("ben@example.com", a.id, { status: "active" });
+    const c = await t.referred("cat@example.com", a.id, { status: "active" });
     const events = [b, c].map((m) => t.event("invoice.paid", { id: t.pay(m.customer!).id, object: "invoice", customer: m.customer }));
-    const first = await Promise.allSettled(events.map((e) => t.handle(e)));
-    for (const [i, r] of first.entries()) if (r.status === "rejected") await t.handle(events[i]);
+    // The one that finds Ana's credit busy answers 200 and leaves its grant to the hourly late-grant sweep (whole-branch review).
+    await Promise.all(events.map((e) => t.handle(e)));
+    await grantLateReferrals(t.query, t.deps());
     const grants = (await t.ledger()).filter((r) => r.kind === "grant");
     expect(grants).toHaveLength(2);
     expect(grants.reduce((n, g) => n + g.offset_cents, 0)).toBe(20000);
