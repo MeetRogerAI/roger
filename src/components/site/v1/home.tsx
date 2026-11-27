@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import { CountryDefault } from "@/components/site/shared/country-default";
 import { StartLink } from "@/components/site/shared/start-link";
 import { examples } from "@/data/site/examples";
 import { priceBlockCopy, questionsOn } from "@/data/site/v1";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import type { Overlay } from "@/lib/site/content/format";
-import { v1Copy } from "@/lib/site/content/model";
+import { questionGroupsShown, sectionsShown, v1Copy } from "@/lib/site/content/model";
 import { getSiteContent } from "@/lib/site/content/read";
 import { exampleViews, getPlaybookPreface, type ExampleView } from "@/lib/site/sample";
 import { getTestimonials, type Testimonial } from "@/lib/site/testimonials";
@@ -15,7 +16,7 @@ import { ControlBlock } from "./blocks/control-block";
 import { HeroSteps } from "./blocks/hero-steps";
 import { PriceBlock } from "./blocks/price-block";
 import { Questions } from "./blocks/questions";
-import { ExamplesSection, Hairline, Problem } from "./blocks/sections";
+import { ExamplesSection, InOrder, Problem, pageParts } from "./blocks/sections";
 import { Testimonials } from "./blocks/testimonials";
 
 /**
@@ -38,6 +39,14 @@ import { Testimonials } from "./blocks/testimonials";
  *
  * No two night chapters are neighbours, with or without testimonials. Where
  * two ground sections are neighbours, a hairline keeps them apart.
+ *
+ * That is the BUILT-IN order. An admin may switch a section off or move it
+ * (Pages, plan U6): the page prints the sections that are on, in the stored
+ * order, and the line between neighbours follows one rule whatever the order
+ * (InOrder in blocks/sections.tsx): two neighbours on the same background get
+ * a line in that background's rule colour, and two on different backgrounds
+ * get none. A section that prints nothing (no testimonial is cleared) is no
+ * neighbour. With nothing stored, the markup is what it was before the rule.
  *
  * Every start button carries the audience "re", which is the name sign-up
  * knows this page by, not a word any visitor reads. Nothing here links to /zack.
@@ -70,9 +79,13 @@ export function V1HomeView({
   const home = copy.home;
   const priceCopy = priceBlockCopy(copy);
 
-  return (
-    <div data-site={version}>
-      {/* 1. Hero: the headline and one button, and beside them how Roger works, in four steps */}
+  // The homepage's questions are /faq's: a group switched off there is off here too, and the order is /faq's.
+  const questions = questionsOn({ questions: questionGroupsShown(copy.questions, content) }, "home");
+
+  // Each section by its id in the registry (src/lib/site/content/registry.ts), numbered as the built-in order has them.
+  const nodes: Record<string, ReactNode> = {
+    // 1. Hero: the headline and one button, and beside them how Roger works, in four steps
+    hero: (
       <section aria-labelledby="hero-title" className="on-night bg-night text-night-ink">
         <div className="wrap grid items-center gap-14 pb-20 pt-16 md:pt-24 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-16 lg:pb-28 lg:pt-24 xl:gap-24">
           <div>
@@ -93,32 +106,28 @@ export function V1HomeView({
           <HeroSteps copy={home.hero.graphic} words={copy.bricks} className="after-lines justify-self-start lg:justify-self-end" />
         </div>
       </section>
+    ),
+    // 2. The problem
+    problem: <Problem copy={home.problem} />,
+    // 3. Cora Curation examples: nothing at all with no example
+    examples: shown.length > 0 ? <ExamplesSection examples={shown} copy={copy.sample} /> : null,
+    // 4. It compounds
+    compounds: <Compounding copy={home.compounds} words={copy.bricks} />,
+    // 5. What people say: nothing at all when no quote is cleared
+    testimonials: testimonials.length > 0 ? <Testimonials title={copy.testimonials.title} items={testimonials} /> : null,
+    // 6. You decide what Zack shares
+    control: <ControlBlock copy={copy.control} />,
+    // 7. Price, with the currency for the visitor's country
+    price: <CountryDefault>{(currency) => <PriceBlock amounts={amounts} copy={priceCopy} initialCurrency={currency} audience="re" />}</CountryDefault>,
+    // 8. Questions: nothing at all when every group that has one for this page is switched off
+    questions: questions.length > 0 ? <Questions title={copy.questionsBlock.title} items={questions} more={copy.questionsBlock.more} /> : null,
+    // 9. Closing band: the line and the button, with nothing under either
+    closing: <ClosingBand copy={{ line: home.closing.line, start: home.closing.start }} audience="re" />,
+  };
 
-      {/* 2. The problem */}
-      <Problem copy={home.problem} />
-
-      {/* 3. Cora Curation examples */}
-      <Hairline />
-      <ExamplesSection examples={shown} copy={copy.sample} />
-
-      {/* 4. It compounds */}
-      <Compounding copy={home.compounds} words={copy.bricks} />
-
-      {/* 5. What people say: nothing at all when no quote is cleared */}
-      <Testimonials title={copy.testimonials.title} items={testimonials} />
-
-      {/* 6. You decide what Zack shares */}
-      {testimonials.length > 0 && <Hairline />}
-      <ControlBlock copy={copy.control} />
-
-      {/* 7. Price, with the currency for the visitor's country */}
-      <CountryDefault>{(currency) => <PriceBlock amounts={amounts} copy={priceCopy} initialCurrency={currency} audience="re" />}</CountryDefault>
-
-      {/* 8. Questions */}
-      <Questions title={copy.questionsBlock.title} items={questionsOn(copy, "home")} more={copy.questionsBlock.more} />
-
-      {/* 9. Closing band: the line and the button, with nothing under either */}
-      <ClosingBand copy={{ line: home.closing.line, start: home.closing.start }} audience="re" />
+  return (
+    <div data-site={version}>
+      <InOrder parts={pageParts("home", sectionsShown("home", content), nodes)} />
     </div>
   );
 }

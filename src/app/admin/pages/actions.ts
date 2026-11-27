@@ -9,7 +9,7 @@ import { TYPED_MAX, draftChanges, reviewKey, saveRefusal, tidyFor, tooLongToRead
 import { fieldLabel, fieldPlace } from "@/lib/site/content/labels";
 import { CONTENT_TAG } from "@/lib/site/content/read";
 import { siteRegistry } from "@/lib/site/content/registry";
-import { publish, readStored, sameOverlay, saveDraft, undoPublish, type DraftChange } from "@/lib/site/content/store";
+import { publish, readStored, sameOverlay, saveDraft, saveSections, undoPublish, type DraftChange } from "@/lib/site/content/store";
 
 /**
  * The actions of the Pages screens (plan U5). Server actions are public
@@ -20,6 +20,9 @@ import { publish, readStored, sameOverlay, saveDraft, undoPublish, type DraftCha
  *   savePageAction      stores typed wording as a DRAFT, or takes one field's
  *                       draft out. No visitor sees a draft, so nothing public
  *                       is expired.
+ *   sectionsAction      one press on a page’s section controls: a section
+ *                       switched off or on, moved up or down, or all of the
+ *                       page’s put back. A draft too.
  *   publishAction       makes every draft on the site live, for the review the
  *                       owner read (KTD11), and logs each wording warning that
  *                       was published over.
@@ -104,6 +107,50 @@ export async function savePageAction(fd: FormData): Promise<SaveState> {
   };
 }
 
+export type SectionsState = { status: "idle" | "ok" | "error"; message?: string; at?: number };
+
+const DRAFT = "Saved as a draft: visitors see no change until you publish.";
+const SECTIONS_BUSY = "Someone else saved at the same moment, so this was not changed. Press again.";
+
+/**
+ * One press on a page's section controls (plan U6, R7): `op` is "off", "on", "up", "down" or "reset", and
+ * `section` the section it is for. Stored in the draft, so no visitor sees it and nothing public is expired.
+ *
+ * The page and the section are looked up in the registry: a page with no sections to move (Shared), a fixed
+ * section (a page's title) and an id the page does not have are refused, whatever the form says.
+ */
+export async function sectionsAction(fd: FormData): Promise<SectionsState> {
+  await requireAdmin();
+  const failed = (message: string): SectionsState => ({ status: "error", message, at: Date.now() });
+  const done = (message: string): SectionsState => ({ status: "ok", message, at: Date.now() });
+  const page = siteRegistry.pages.find((entry) => entry.id === sent(fd, "page"));
+  const op = sent(fd, "op");
+  if (!page || !page.sections.some((entry) => !entry.fixed)) return failed(STALE);
+
+  if (op === "reset") {
+    const saved = await saveSections(query, { page: page.id, op });
+    if (!saved.ok) return failed(saved.reason === "busy" ? SECTIONS_BUSY : STALE);
+    refresh();
+    return done(saved.changed ? `The sections of this page are back as they were originally. ${DRAFT}` : "The sections of this page are already as they were originally.");
+  }
+
+  const section = page.sections.find((entry) => entry.id === sent(fd, "section") && !entry.fixed);
+  if (!section || (op !== "off" && op !== "on" && op !== "up" && op !== "down")) return failed(STALE);
+  const saved = await saveSections(query, { page: page.id, op, section: section.id });
+  if (!saved.ok) return failed(saved.reason === "busy" ? SECTIONS_BUSY : STALE);
+  refresh();
+  const name = (id: string) => `“${page.sections.find((entry) => entry.id === id)?.label ?? ""}”`;
+  const at = saved.layout.order.indexOf(section.id);
+  if (!saved.changed) {
+    if (op === "up") return done(`${name(section.id)} is already the first section.`);
+    if (op === "down") return done(`${name(section.id)} is already the last section.`);
+    return done(`${name(section.id)} is already switched ${op}.`);
+  }
+  if (op === "off") return done(`${name(section.id)} is switched off. ${DRAFT}`);
+  if (op === "on") return done(`${name(section.id)} is switched back on. ${DRAFT}`);
+  return done(`${name(section.id)} is now ${op === "up" ? `above ${name(saved.layout.order[at + 1])}` : `below ${name(saved.layout.order[at - 1])}`}. ${DRAFT}`);
+}
+
 const MOVED = "The drafts, the site or the warnings have changed since this list was made, so nothing was published. The list on this screen is the new one: read it, then publish.";
 const NOTHING = "Nothing was waiting to be published. Everything you have saved is on the site.";
 const PUBLISH_BUSY = "Someone else changed the site’s words at the same moment, so nothing was published. Press the button again.";
@@ -156,7 +203,7 @@ export async function publishAction(fd: FormData): Promise<PublishState> {
   }
   updateTag(CONTENT_TAG);
   refresh();
-  return { status: "ok", message: done.changed ? "Published. Visitors see the new wording from their next page view." : NOTHING, at: Date.now() };
+  return { status: "ok", message: done.changed ? "Published. Visitors see the changes from their next page view." : NOTHING, at: Date.now() };
 }
 
 /** Puts back what the site showed before the last publish. The drafts stay as they are. */

@@ -47,7 +47,7 @@
 import { logAdminAction } from "@/lib/admin/log";
 import type { Query } from "@/lib/db-query";
 import { OVERLAY_FORMAT, newOverlay, type Overlay } from "./format";
-import { baseline, codeModel, normaliseOverlay, textAt } from "./model";
+import { baseline, codeModel, diffSectionEdit, layoutOn, normaliseOverlay, sectionLayout, textAt, type Layout } from "./model";
 import { siteRegistry, usableValue } from "./registry";
 
 export const CONTENT_KEY = "site.content";
@@ -214,6 +214,61 @@ export async function saveDraft(q: Query, changes: readonly DraftChange[], base:
   });
   if (done === "busy") return { ok: false, reason: "busy" };
   return { ok: true, changed: done.written, content: done.after };
+}
+
+/**
+ * One press on a page's section controls (plan R7): switch a section off or on, move it one place up or down among
+ * the page's sections, or put the page's sections back as the baseline has them.
+ */
+export type SectionChange = { page: string } & ({ op: "off" | "on" | "up" | "down"; section: string } | { op: "reset" });
+
+export type SectionsResult =
+  | { ok: true; changed: boolean; content: StoredContent; layout: Layout }
+  /** "unknown-section": the page, or the section, is not one an admin may move or switch off. Nothing was stored. */
+  | { ok: false; reason: "unknown-section" | "busy" };
+
+/**
+ * Stores one change to a page's sections in the draft. No visitor sees it until it is published.
+ *
+ * The change is made to the page's sections AS THE DRAFT HAS THEM WHEN THE WRITE LANDS, not as some screen last
+ * showed them: "move Price up" pressed in two tabs moves it twice, and never puts back an order the other tab has
+ * left. What is stored is the page's one entry, written the one way diffSectionEdit writes it. A page whose
+ * sections are as the baseline has them has no entry at all: an empty one is never written.
+ *
+ * Moving the first section up, or the last one down, changes nothing, and so does switching off what is off.
+ * A fixed section (a page's title, everything under Shared) and an id the page does not have are refused.
+ */
+export async function saveSections(q: Query, change: SectionChange, base: unknown = baseline): Promise<SectionsResult> {
+  const page = siteRegistry.pages.find((entry) => entry.id === change.page);
+  if (!page || !page.sections.some((section) => !section.fixed)) return { ok: false, reason: "unknown-section" };
+  if (change.op !== "reset" && !page.sections.some((section) => section.id === change.section && !section.fixed)) return { ok: false, reason: "unknown-section" };
+  const original = sectionLayout(base, page.id);
+  let layout = original;
+  const done = await transition(q, base, (now) => {
+    const before = layoutOn(now.draft, page.id, base);
+    layout = changedLayout(before, change, original);
+    const entry = diffSectionEdit(original, layout);
+    const sections = Object.fromEntries(Object.entries(now.draft.sections).filter(([id]) => id !== page.id));
+    if (entry) sections[page.id] = entry;
+    const draft = { ...now.draft, sections };
+    return sameOverlay(draft, now.draft) ? null : { ...now, draft };
+  });
+  if (done === "busy") return { ok: false, reason: "busy" };
+  return { ok: true, changed: done.written, content: done.after, layout };
+}
+
+/** A layout after one press. `original` is what "reset" goes back to. */
+function changedLayout(before: Layout, change: SectionChange, original: Layout): Layout {
+  if (change.op === "reset") return original;
+  const { section } = change;
+  if (change.op === "off") return { order: before.order, off: before.order.filter((id) => id === section || before.off.includes(id)) };
+  if (change.op === "on") return { order: before.order, off: before.off.filter((id) => id !== section) };
+  const at = before.order.indexOf(section);
+  const to = change.op === "up" ? at - 1 : at + 1;
+  if (at === -1 || to < 0 || to >= before.order.length) return before;
+  const order = [...before.order];
+  [order[at], order[to]] = [order[to], order[at]];
+  return { order, off: before.off };
 }
 
 export type PublishResult =

@@ -110,17 +110,23 @@ describe("the layers, with a release file that holds a headline", () => {
     expect(v1Copy(amounts, await getSiteContent()).copy.home.hero.headline).toBe(v1.home.hero.headline);
   });
 
-  it("writes two layers as one overlay on the code copy, and carries section and list entries, the site's in place of the release's", () => {
+  it("writes two layers as one overlay on the code copy: sections merged by id, and list entries carried, the site's in place of the release's", () => {
     expect(composeOverlays(emptyOverlay, emptyOverlay)).toEqual(emptyOverlay);
     expect(composeOverlays(edits(released), emptyOverlay)).toEqual(edits(released));
-    const below = { ...edits(released), sections: { home: { order: ["price", "questions"], off: [] }, faq: { order: [], off: ["getting-started"] } }, lists: { "home.problem.statements": { order: [], removed: ["alone"], added: [] } } };
-    const above = { ...edits({ [SUB]: "Own sub-line.", "no.such.field": "x", [START]: "{nope}" }), sections: { home: { order: ["questions", "price"], off: [] } }, lists: {} };
+    const swapped = ["hero", "problem", "examples", "compounds", "testimonials", "control", "questions", "price", "closing"];
+    // The release has Questions above Price on Home, "It compounds" off, and one group of /faq off.
+    const below = { ...edits(released), sections: { home: { order: swapped, off: ["compounds"] }, faq: { order: [], off: ["getting-started"] } }, lists: { "home.problem.statements": { order: [], removed: ["alone"], added: [] } } };
+    // The site switches Price off on Home, and says nothing about the order or about /faq.
+    const above = { ...edits({ [SUB]: "Own sub-line.", "no.such.field": "x", [START]: "{nope}" }), sections: { home: { order: [], off: ["price"] } }, lists: {} };
     expect(composeOverlays(below, above)).toEqual({
       format: 1,
       text: { [HEADLINE]: "Released headline.", [SUB]: "Own sub-line." },
-      sections: { home: { order: ["questions", "price"], off: [] }, faq: { order: [], off: ["getting-started"] } },
+      // Not the site's entry in place of the release's: the release's order and its switched-off section, with the site's on top.
+      sections: { home: { order: swapped, off: ["compounds", "price"] }, faq: { order: [], off: ["getting-started"] } },
       lists: { "home.problem.statements": { order: [], removed: ["alone"], added: [] } },
     });
+    // An entry that changes nothing is in no result.
+    expect(composeOverlays({ ...emptyOverlay, sections: { home: { order: [], off: [] } } }, { ...emptyOverlay, sections: { faq: { order: [], off: [] } } }).sections).toEqual({});
   });
 });
 

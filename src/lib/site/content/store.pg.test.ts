@@ -11,7 +11,7 @@ import { testDb } from "@/test-helpers/pglite-db";
 import { emptyOverlay, newOverlay, type Overlay } from "./format";
 import { applyOverlay, baseline, codeModel } from "./model";
 import { siteRegistry } from "./registry";
-import { CONTENT_KEY, LEGACY_QUESTIONS_KEY, changedBetween, legacyQuestionOverlay, parseStored, publish, readPublished, readStored, sameOverlay, saveDraft, undoPublish } from "./store";
+import { CONTENT_KEY, LEGACY_QUESTIONS_KEY, changedBetween, legacyQuestionOverlay, parseStored, publish, readPublished, readStored, sameOverlay, saveDraft, saveSections, undoPublish } from "./store";
 
 const ADMIN = "admin@example.com";
 const HEADLINE = "home.hero.headline";
@@ -527,5 +527,122 @@ describe("a very large row (plan R18)", () => {
     expect(await readPublished(query)).toEqual(edits({ [START]: "Start now" }));
     await saveDraft(query, [{ field: SUB, text: "A new sub-line." }]);
     expect(await value()).toEqual({ draft: edits({ [START]: "Start now", [SUB]: "A new sub-line." }), published: edits({ [START]: "Start now" }), previous: null });
+  });
+});
+
+/**
+ * A page's sections in the draft (plan U6, R7): each press of a section control is one write to the page's one
+ * entry, made to the sections as the draft has them when the write lands.
+ */
+describe("a page's sections in the draft", () => {
+  const HOME = ["hero", "problem", "examples", "compounds", "testimonials", "control", "price", "questions", "closing"];
+  const SWAPPED = HOME.map((id) => (id === "price" ? "questions" : id === "questions" ? "price" : id));
+  const sections = (entries: Overlay["sections"]): Overlay => ({ ...newOverlay(), sections: entries });
+  const draft = async () => (await readStored(query)).draft;
+
+  it("switches a section off in the draft only, as the page's one entry, in one statement", async () => {
+    ran = [];
+    const saved = await saveSections(query, { page: "home", op: "off", section: "compounds" });
+    expect(saved).toMatchObject({ ok: true, changed: true, layout: { order: HOME, off: ["compounds"] } });
+    expect(writes()).toEqual(["insert into settings"]);
+    expect(await value()).toEqual({ draft: sections({ home: { order: [], off: ["compounds"] } }), published: none, previous: null });
+    // A draft: nothing a visitor sees has changed, and nothing is logged.
+    expect(await readPublished(query)).toEqual(none);
+    expect(await log()).toEqual([]);
+  });
+
+  it("moves a section one place up or down among the page's sections, and writes the whole order", async () => {
+    expect(await saveSections(query, { page: "home", op: "up", section: "questions" })).toMatchObject({ ok: true, changed: true, layout: { order: SWAPPED } });
+    expect((await draft()).sections).toEqual({ home: { order: SWAPPED, off: [] } });
+    // And down again: the page is as the baseline has it, so it has no entry at all. An empty one is never written.
+    expect(await saveSections(query, { page: "home", op: "down", section: "questions" })).toMatchObject({ ok: true, changed: true, layout: { order: HOME, off: [] } });
+    expect(await value()).toEqual({ draft: none, published: none, previous: null });
+  });
+
+  it("changes nothing when the first section is moved up, the last one down, or a switch is already where it is asked to be", async () => {
+    await saveSections(query, { page: "home", op: "off", section: "price" });
+    ran = [];
+    expect(await saveSections(query, { page: "home", op: "up", section: "hero" })).toMatchObject({ ok: true, changed: false });
+    expect(await saveSections(query, { page: "home", op: "down", section: "closing" })).toMatchObject({ ok: true, changed: false });
+    expect(await saveSections(query, { page: "home", op: "off", section: "price" })).toMatchObject({ ok: true, changed: false });
+    expect(await saveSections(query, { page: "home", op: "on", section: "hero" })).toMatchObject({ ok: true, changed: false });
+    expect(await saveSections(query, { page: "faq", op: "reset" })).toMatchObject({ ok: true, changed: false });
+    expect(writes()).toEqual([]);
+    expect((await draft()).sections).toEqual({ home: { order: [], off: ["price"] } });
+  });
+
+  it("puts a page's sections back as the baseline has them with one reset, and leaves the other pages and the texts alone", async () => {
+    await saveDraft(query, [{ field: HEADLINE, text: "A new headline." }]);
+    await saveSections(query, { page: "home", op: "off", section: "compounds" });
+    await saveSections(query, { page: "home", op: "up", section: "questions" });
+    await saveSections(query, { page: "faq", op: "off", section: "price-and-billing" });
+    expect((await draft()).sections).toEqual({ home: { order: SWAPPED, off: ["compounds"] }, faq: { order: [], off: ["price-and-billing"] } });
+    expect(await saveSections(query, { page: "home", op: "reset" })).toMatchObject({ ok: true, changed: true, layout: { order: HOME, off: [] } });
+    expect(await draft()).toEqual({ ...edits({ [HEADLINE]: "A new headline." }), sections: { faq: { order: [], off: ["price-and-billing"] } } });
+  });
+
+  it("refuses a page with no sections to move, a fixed section and an id the page does not have, and stores nothing", async () => {
+    ran = [];
+    for (const change of [
+      { page: "shared", op: "off", section: "nav" },
+      { page: "shared", op: "reset" },
+      { page: "nope", op: "off", section: "price" },
+      { page: "howItWorks", op: "off", section: "title" },
+      { page: "faq", op: "up", section: "title" },
+      { page: "home", op: "off", section: "zack" },
+      { page: "home", op: "off", section: "constructor" },
+    ] as const) {
+      expect(await saveSections(query, change), JSON.stringify(change)).toEqual({ ok: false, reason: "unknown-section" });
+    }
+    expect(ran).toEqual([]);
+    expect(await value()).toBeUndefined();
+  });
+
+  it("keeps both of two presses that run together, each made to the sections the other has left", async () => {
+    const [a, b] = await Promise.all([saveSections(query, { page: "home", op: "off", section: "compounds" }), saveSections(query, { page: "home", op: "up", section: "questions" })]);
+    expect(a).toMatchObject({ ok: true, changed: true });
+    expect(b).toMatchObject({ ok: true, changed: true });
+    expect((await draft()).sections).toEqual({ home: { order: SWAPPED, off: ["compounds"] } });
+    // The same press from two tabs moves the section twice: it is never the order one tab last saw that is written.
+    await Promise.all([saveSections(query, { page: "home", op: "up", section: "questions" }), saveSections(query, { page: "home", op: "up", section: "questions" })]);
+    expect((await draft()).sections.home.order.indexOf("questions")).toBe(4);
+  });
+
+  it("is published and undone with everything else, and logged by name without the order", async () => {
+    await saveDraft(query, [{ field: HEADLINE, text: "A new headline." }]);
+    await saveSections(query, { page: "home", op: "off", section: "price" });
+    const checked = await draft();
+    expect(await publish(query, ADMIN, checked)).toMatchObject({ ok: true, changed: true });
+    expect(await readPublished(query)).toEqual({ ...edits({ [HEADLINE]: "A new headline." }), sections: { home: { order: [], off: ["price"] } } });
+    expect((await log()).map((row) => [row.action, row.detail.changed])).toEqual([["site_content_published", [HEADLINE, "sections.home"]]]);
+    expect(await undoPublish(query, ADMIN)).toMatchObject({ ok: true, changed: true });
+    expect(await readPublished(query)).toEqual(none);
+    // The draft is still there, to fix and publish again.
+    expect(await draft()).toEqual(checked);
+  });
+
+  it("is not published when the sections have changed since the draft was checked", async () => {
+    await saveSections(query, { page: "home", op: "off", section: "price" });
+    const checked = await draft();
+    await saveSections(query, { page: "home", op: "off", section: "compounds" });
+    expect(await publish(query, ADMIN, checked)).toEqual({ ok: false, reason: "draft-changed" });
+    expect(await readPublished(query)).toEqual(none);
+  });
+
+  it("stops counting once a release has the same sections, and a stored entry that changes nothing is gone at the next save (KTD6)", async () => {
+    await saveSections(query, { page: "home", op: "off", section: "compounds" });
+    await saveSections(query, { page: "home", op: "off", section: "price" });
+    await publish(query, ADMIN, await draft());
+    // The same row, read by the code of a release that has "It compounds" off: only Price is the site's own.
+    const released = applyOverlay(codeModel, sections({ home: { order: [], off: ["compounds"] } }));
+    expect((await readPublished(query, released)).sections).toEqual({ home: { order: [], off: ["price"] } });
+    // On that release, switching "It compounds" back on is an edit, written by naming the section.
+    await saveSections(query, { page: "home", op: "on", section: "compounds" }, released);
+    expect((await readStored(query, released)).draft.sections).toEqual({ home: { order: ["compounds"], off: ["price"] } });
+    // A row written by hand with entries that change nothing: read as no entry, and not stored again.
+    await put(CONTENT_KEY, { draft: sections({ home: { order: [], off: [] }, faq: { order: ["getting-started"], off: [] } }), published: sections({ home: { order: HOME, off: [] } }), previous: null });
+    expect(await readStored(query)).toMatchObject({ draft: none, published: none });
+    await saveDraft(query, [{ field: SUB, text: "A new sub-line." }]);
+    expect(await value()).toEqual({ draft: edits({ [SUB]: "A new sub-line." }), published: none, previous: null });
   });
 });

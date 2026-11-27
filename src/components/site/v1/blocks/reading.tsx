@@ -11,12 +11,16 @@ import { SectionHead } from "./section-head";
  * headings under it take the next size down.
  */
 
-/** The heading that opens a reading page, on ground. The first section's own space follows it. */
-export function PageHead({ title, id = "page" }: { title: string; id?: string }) {
+/**
+ * The heading that opens a reading page, on ground. The first section's own space follows it. `alone` is for a
+ * page whose heading is not followed by a ground section (an admin has switched them off, or moved the start
+ * band up): the heading then gets the space under it that the section would have given.
+ */
+export function PageHead({ title, id = "page", alone = false }: { title: string; id?: string; alone?: boolean }) {
   const titleId = `${id}-title`;
   return (
     <section aria-labelledby={titleId} className="bg-ground">
-      <div className="wrap pt-16 md:pt-24">
+      <div className={alone ? "wrap py-16 md:py-24" : "wrap pt-16 md:pt-24"}>
         <SectionHead id={titleId} title={title} as="h1" />
       </div>
     </section>

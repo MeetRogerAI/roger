@@ -15,6 +15,7 @@ import { letterShown } from "@/data/site/letter";
 import { questionsOn } from "@/data/site/v1";
 import { emptyOverlay, type Overlay } from "@/lib/site/content/format";
 import { v1Copy } from "@/lib/site/content/model";
+import { siteRegistry } from "@/lib/site/content/registry";
 import { amountsFrom, hasBareDollar } from "@/lib/site/amounts";
 import { compoundingCaption } from "@/lib/site/compounding";
 import type { Testimonial } from "@/lib/site/testimonials";
@@ -604,6 +605,157 @@ describe("the v1 homepage's words", () => {
     expect(seen).not.toMatch(/real estate/i);
     expect(seen).not.toMatch(/Monday lists?\b|one list at a time|one at a time/i);
     expect(seen.match(/Cora Curations?/g)!.length).toBeGreaterThan(10);
+  });
+});
+
+/**
+ * The sections an admin has switched off or moved (plan U6, R7). The built-in order above is what the page prints
+ * with nothing stored. With something stored, the page prints the sections that are on, in the stored order, and
+ * one rule decides what stands between two neighbours, whatever the order:
+ *
+ *   both on ground      the hairline, as the built-in order has between the problem and the examples
+ *   both on night       the same line in the night's rule colour, so two dark chapters never run into one block
+ *   anything else       nothing: the change of background is the break
+ *
+ * A section that prints nothing (no testimonial is cleared) is no neighbour.
+ */
+describe("the v1 homepage with its sections switched off or moved (plan U6)", () => {
+  const HOME = ["hero", "problem", "examples", "compounds", "testimonials", "control", "price", "questions", "closing"];
+  /** The name each section has in the markup, by its id in the registry. */
+  const named: Record<string, string> = { testimonials: "say" };
+  const laid = (home: { order?: string[]; off?: string[] }, more: Overlay["sections"] = {}): Overlay => ({ ...emptyOverlay, sections: { ...more, home: { order: home.order ?? [], off: home.off ?? [] } } });
+  /** The page's sections and what stands between them, in order: a section by its name, "—" for a hairline, "=" for the line between two night chapters. */
+  const flow = (markup: string) =>
+    [...markup.matchAll(/<section\b[^>]*aria-labelledby="([\w-]+)-title"|data-hairline|data-seam="([\w-]+)"/g)].map((m) => (m[1] ? m[1] : m[2] ? (m[2] === "night" ? "=" : `=${m[2]}`) : "—"));
+  const swapped = HOME.map((id) => (id === "price" ? "questions" : id === "questions" ? "price" : id));
+
+  it("is the same page, byte for byte, with no entry, an entry that changes nothing, and nonsense where the entry should be", async () => {
+    for (const testimonials of [[], quotes]) {
+      const plain = await full({ testimonials });
+      for (const content of [emptyOverlay, laid({}), laid({ order: HOME }), laid({ order: ["gone"], off: ["nope"] }), { ...emptyOverlay, sections: { home: "x" } } as never, { ...emptyOverlay, sections: { faq: { order: [], off: [] } } }]) {
+        expect(await full({ testimonials, content }), JSON.stringify(content)).toBe(plain);
+      }
+    }
+  });
+
+  it("has the registry's ground under every section, and the registry's anchor as the section's id", async () => {
+    const markup = await view({ testimonials: quotes });
+    const page = siteRegistry.pages.find((entry) => entry.id === "home")!;
+    expect(page.sections.map((section) => section.id)).toEqual(HOME);
+    expect(sections(markup).map((s) => s.ground)).toEqual(page.sections.map((section) => section.ground));
+    for (const section of page.sections) {
+      const tag = new RegExp(`<section\\b[^>]*aria-labelledby="${named[section.id] ?? section.id}-title"[^>]*>`).exec(markup)![0];
+      expect(/\sid="([^"]*)"/.exec(tag)?.[1] ?? null, section.id).toBe(section.anchor);
+    }
+  });
+
+  it("leaves a switched-off section out, heading and all, and puts a hairline between the two ground sections that are now neighbours", async () => {
+    const page = await view({ content: laid({ off: ["compounds"] }) });
+    expect(page).not.toContain('id="compounds"');
+    expect(text(page)).not.toContain(copy.home.compounds.title);
+    expect(text(page)).not.toContain(copy.home.compounds.line);
+    // The examples and the control block are both on ground, with nothing between them now: one hairline, by the rule.
+    expect(flow(page)).toEqual(["hero", "problem", "—", "examples", "—", "control", "price", "questions", "closing"]);
+    // Every other section is what it was.
+    const plain = await view();
+    for (const name of ["hero", "problem", "control", "questions", "closing"]) expect(sectionMarkup(page, name).replace(/<div data-hairline[\s\S]*$/, ""), name).toBe(sectionMarkup(plain, name).replace(/<div data-hairline[\s\S]*$/, ""));
+    // With testimonials cleared, they stand between the two: the hairline is theirs, as in the built-in order.
+    expect(flow(await view({ testimonials: quotes, content: laid({ off: ["compounds"] }) }))).toEqual(["hero", "problem", "—", "examples", "—", "say", "—", "control", "price", "questions", "closing"]);
+  });
+
+  it("follows a stored order: Questions above Price, both with their ids, and a line between the two night chapters that now meet", async () => {
+    const page = await view({ content: laid({ order: swapped }) });
+    expect(sections(page).map((s) => s.name)).toEqual(["hero", "problem", "examples", "compounds", "control", "questions", "price", "closing"]);
+    expect(page.indexOf('id="questions"')).toBeGreaterThan(-1);
+    expect(page.indexOf('id="questions"')).toBeLessThan(page.indexOf('id="price"'));
+    // Control and Questions are two ground neighbours: a hairline. Price and Closing are two night ones: the night's line, and no hairline.
+    expect(flow(page)).toEqual(["hero", "problem", "—", "examples", "compounds", "control", "—", "questions", "price", "=", "closing"]);
+    expect(page).toMatch(/<div data-seam="night" class="bg-night"><div class="wrap"><hr class="border-night-rule"\/><\/div><\/div>/);
+  });
+
+  it("gives Problem and Control a hairline when they are made neighbours, and Price and Closing none", async () => {
+    const order = ["hero", "problem", "control", "examples", "compounds", "testimonials", "price", "questions", "closing"];
+    expect(flow(await view({ content: laid({ order }) }))).toEqual(["hero", "problem", "—", "control", "—", "examples", "compounds", "price", "questions", "closing"]);
+    // Questions switched off: Price and Closing meet. No hairline is added for them; the night's own line keeps them apart.
+    const page = await view({ content: laid({ off: ["questions"] }) });
+    expect(flow(page)).toEqual(["hero", "problem", "—", "examples", "compounds", "control", "price", "=", "closing"]);
+    expect(page.match(/data-hairline/g)).toHaveLength(1);
+  });
+
+  it("ignores a stored id the page does not have, and prints a section the stored order does not name where the code has it", async () => {
+    // An order from before "It compounds" and the testimonials existed, with a section that is gone.
+    const older = ["hero", "who-runs-this", "examples", "problem", "control", "price", "questions", "closing"];
+    expect(sections(await view({ testimonials: quotes, content: laid({ order: older }) })).map((s) => s.name)).toEqual(["hero", "examples", "compounds", "say", "problem", "control", "price", "questions", "closing"]);
+  });
+
+  it("does not count a section that prints nothing as a neighbour: testimonials with no cleared quote", async () => {
+    // Testimonials moved between Price and Closing. With none cleared, the two night chapters are neighbours.
+    const order = ["hero", "problem", "examples", "compounds", "control", "questions", "price", "testimonials", "closing"];
+    expect(flow(await view({ content: laid({ order }) }))).toEqual(["hero", "problem", "—", "examples", "compounds", "control", "—", "questions", "price", "=", "closing"]);
+    expect(flow(await view({ testimonials: quotes, content: laid({ order }) }))).toEqual(["hero", "problem", "—", "examples", "compounds", "control", "—", "questions", "price", "say", "closing"]);
+    // Switched off, they are absent even with a quote cleared.
+    expect(await view({ testimonials: quotes, content: laid({ off: ["testimonials"] }) })).not.toContain('id="say"');
+  });
+
+  it("keeps the rule for any order and any sections switched off: one line between two neighbours on the same ground, none between two on different grounds", async () => {
+    const ground = (name: string) => siteRegistry.pages.find((entry) => entry.id === "home")!.sections.find((section) => (named[section.id] ?? section.id) === name)!.ground;
+    let seed = 7;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    let seams = 0;
+    for (let run = 0; run < 40; run++) {
+      const order = HOME.map((id) => [next(), id] as const).sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+      const off = HOME.filter(() => next() < 0.25);
+      const testimonials = next() < 0.5 ? quotes : [];
+      const page = await view({ testimonials, content: laid({ order, off }) });
+      const seen = flow(page);
+      const names = seen.filter((mark) => mark !== "—" && !mark.startsWith("="));
+      const label = `order ${order.join(",")} off ${off.join(",")}`;
+      // Exactly the sections that are on and print something, in the stored order.
+      expect(names, label).toEqual(order.filter((id) => !off.includes(id) && (id !== "testimonials" || testimonials.length > 0)).map((id) => named[id] ?? id));
+      const expected: string[] = [];
+      for (const [i, name] of names.entries()) {
+        if (i > 0 && ground(names[i - 1]) === ground(name)) expected.push(ground(name) === "ground" ? "—" : ground(name) === "night" ? "=" : `=${ground(name)}`);
+        expected.push(name);
+      }
+      expect(seen, label).toEqual(expected);
+      seams += seen.filter((mark) => mark === "=").length;
+      // Never two sections' markup for one id, and at most one h1.
+      expect((page.match(/<h1\b/g) ?? []).length, label).toBe(off.includes("hero") ? 0 : 1);
+    }
+    // The orders tried do put night chapters side by side.
+    expect(seams).toBeGreaterThan(5);
+  });
+
+  it("takes its questions from the groups /faq shows: a group switched off there is left out here, and /faq's order is this section's", async () => {
+    const all = questionsOn(copy, "home");
+    const ofGroup = (id: string) => copy.questions.find((group) => group.id === id)!.items.filter((item) => item.on.includes("home"));
+    const asked = (markup: string) => [...sectionMarkup(markup, "questions").matchAll(/<summary\b[^>]*>([\s\S]*?)<svg/g)].map((m) => text(m[1]));
+    expect(asked(await view())).toEqual(all.map((item) => item.q));
+    // The group with the most of the homepage's questions, switched off on /faq.
+    const group = [...copy.questions].sort((a, b) => ofGroup(b.id).length - ofGroup(a.id).length)[0];
+    expect(ofGroup(group.id).length).toBeGreaterThan(0);
+    const without = await view({ content: { ...emptyOverlay, sections: { faq: { order: [], off: [group.id] } } } });
+    expect(asked(without)).toEqual(all.filter((item) => !ofGroup(group.id).some((gone) => gone.q === item.q)).map((item) => item.q));
+    // /faq's groups in reverse: the homepage's questions follow.
+    const reversed = [...copy.questions].reverse();
+    const turned = await view({ content: { ...emptyOverlay, sections: { faq: { order: reversed.map((entry) => entry.id), off: [] } } } });
+    expect(asked(turned)).toEqual(reversed.flatMap((entry) => ofGroup(entry.id)).map((item) => item.q));
+    // Every group off: the section has nothing to show, and is not printed, heading and all.
+    const none = await view({ content: { ...emptyOverlay, sections: { faq: { order: [], off: copy.questions.map((entry) => entry.id) } } } });
+    expect(none).not.toContain('id="questions"');
+    expect(flow(none)).toEqual(["hero", "problem", "—", "examples", "compounds", "control", "price", "=", "closing"]);
+  });
+
+  it("still has no element with the id price when Price is off: the header's link then opens the page at its top", async () => {
+    const page = await view({ content: laid({ off: ["price"] }) });
+    expect(page).not.toMatch(/\sid="price"/);
+    expect(text(page)).not.toContain(copy.priceBlock.title);
+    expect(flow(page)).toEqual(["hero", "problem", "—", "examples", "compounds", "control", "—", "questions", "closing"]);
+    // Nothing is streamed in for a price block that is not there.
+    expect(streamed(await full({ content: laid({ off: ["price"] }) }))).not.toContain(copy.priceBlock.title);
   });
 });
 

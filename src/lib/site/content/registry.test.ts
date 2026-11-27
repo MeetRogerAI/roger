@@ -196,6 +196,34 @@ describe("the covered pages and their sections (R5)", () => {
     expect(page("faq").sections.slice(1, 5).map((section) => section.label)).toEqual(v1.questions.map((group) => group.title));
   });
 
+  it("says which background each movable section is painted on, and which id a link can land on (plan U6)", () => {
+    const grounds = (id: string) => page(id).sections.map((section) => section.ground);
+    // Home: no two night chapters are neighbours in the built-in order, and it opens and closes on night.
+    expect(grounds("home")).toEqual(["night", "ground", "ground", "ground-2", "ground", "ground", "night", "ground", "night"]);
+    expect(grounds("howItWorks")).toEqual([null, "ground", "ground", "ground", "ground", "ground", "ground", "night"]);
+    expect(grounds("faq")).toEqual([null, "ground", "ground", "ground", "ground", "night"]);
+    expect(grounds("about")).toEqual([null, "ground", "night"]);
+    // /library draws no line between its sections, so none of them has a ground. A fixed section never has one.
+    expect(grounds("library")).toEqual([null, null, null, null]);
+    expect(grounds("shared")).toEqual([null, null, null, null, null]);
+    for (const entry of siteRegistry.pages) for (const section of entry.sections) if (section.fixed) expect(section.ground, `${entry.id}.${section.id}`).toBeNull();
+    // The anchors: the ids the pages' markup has, which the page tests hold them to.
+    const anchors = Object.fromEntries(siteRegistry.pages.map((entry) => [entry.id, entry.sections.filter((section) => section.anchor !== null).map((section) => `${section.id}:${section.anchor}`)]));
+    expect(anchors).toEqual({
+      home: ["problem:problem", "examples:examples", "compounds:compounds", "testimonials:say", "control:control", "price:price", "questions:questions"],
+      howItWorks: ["week:week", "zack:zack", "cora:cora", "anatomy:anatomy", "firstWeeks:first-weeks", "noAgent:no-agent"],
+      library: ["watch:watch"],
+      faq: v1.questions.map((group) => `${group.id}:${group.id}`),
+      about: [],
+      shared: [],
+    });
+    // A section's anchor is unique on its page, so a link lands on one place.
+    for (const entry of siteRegistry.pages) {
+      const ids = entry.sections.flatMap((section) => (section.anchor === null ? [] : [section.anchor]));
+      expect(new Set(ids).size, entry.id).toBe(ids.length);
+    }
+  });
+
   it("puts every list in the section its items are edited under", () => {
     expect([...siteRegistry.lists.values()].map((list) => `${list.page}.${list.section}: ${list.label} (${list.item})`).sort()).toEqual([
       "faq.cora-and-the-ideas: Questions (Question)",

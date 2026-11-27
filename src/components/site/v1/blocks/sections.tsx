@@ -1,5 +1,7 @@
+import { Fragment, type ReactNode } from "react";
 import { Reveal } from "@/components/site/shared/reveal";
 import type { SampleCardCopy, TextItem } from "@/data/site/copy-types";
+import { siteRegistry, type Ground } from "@/lib/site/content/registry";
 import type { ExampleView } from "@/lib/site/sample";
 import { ExampleTabs } from "./example-tabs";
 import { SampleCard } from "./sample-card";
@@ -67,4 +69,56 @@ export function Hairline() {
       </div>
     </div>
   );
+}
+
+/**
+ * The same line for two neighbours on one of the other two backgrounds. The built-in order has no such pair: it
+ * takes an admin moving a section, or switching one off, to put two night chapters (or two ground-2 ones) side by
+ * side. The line is the background's own rule colour, so the two read as two chapters and not as one tall block.
+ */
+function Seam({ ground }: { ground: "night" | "ground-2" }) {
+  return (
+    <div data-seam={ground} className={ground === "night" ? "bg-night" : "bg-ground-2"}>
+      <div className="wrap">
+        <hr className={ground === "night" ? "border-night-rule" : "border-rule-strong"} />
+      </div>
+    </div>
+  );
+}
+
+/** One section of a page, ready to print: its id in the registry, the background it is painted on, and its markup. */
+export type PagePart = { id: string; ground: Ground | null; node: ReactNode };
+
+/**
+ * A page's sections in the order given, with a line between two neighbours on the same background (plan U6):
+ * the hairline between two ground sections, as the built-in order has always had, and its like between two night
+ * chapters or two ground-2 ones. Neighbours on different backgrounds get nothing: the change of colour is the break.
+ *
+ * Hand it only the sections that print something: one that is switched off, or has nothing to show, is no
+ * neighbour. A part with no ground (null) never gets a line on either side.
+ */
+export function InOrder({ parts }: { parts: PagePart[] }) {
+  return parts.map((part, i) => {
+    const before = i > 0 ? parts[i - 1].ground : null;
+    return (
+      <Fragment key={part.id}>
+        {before !== null && before === part.ground && (part.ground === "ground" ? <Hairline /> : <Seam ground={part.ground} />)}
+        {part.node}
+      </Fragment>
+    );
+  });
+}
+
+/**
+ * A page's sections that are on, in the page's order, as parts to print. `shown` is sectionsShown's answer, and
+ * `nodes` each section's markup by its id in the registry: null for one that has nothing to print (no testimonial
+ * is cleared), which is then no part at all. The grounds are the registry's.
+ */
+export function pageParts(pageId: string, shown: readonly string[], nodes: Record<string, ReactNode>): PagePart[] {
+  const sections = siteRegistry.pages.find((page) => page.id === pageId)?.sections ?? [];
+  return shown.flatMap((id) => {
+    const section = sections.find((entry) => entry.id === id);
+    const node = Object.hasOwn(nodes, id) ? nodes[id] : null;
+    return section && node !== null && node !== undefined && node !== false ? [{ id, ground: section.ground, node }] : [];
+  });
 }

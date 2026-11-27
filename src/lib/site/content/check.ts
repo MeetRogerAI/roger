@@ -6,7 +6,11 @@
  *                          it refuses: only what would break a page.
  *   draftChanges           every field whose draft wording is not what the
  *                          site shows now. This is what a publish would change.
- *   pageStatus             the same, counted per page, for the Pages screen.
+ *   sectionChanges         the same for a page's sections (U6): each one
+ *                          switched off or on, or moved, as a plain sentence.
+ *   pageStatus             both, counted per page, for the Pages screen.
+ *   linkWarnings           the site's own links that would point at a section
+ *                          the draft has switched off (R17).
  *   wordingWarnings        the wording rules those changes break. A warning
  *                          never blocks: the owner may publish anyway, and
  *                          each one published is written to the admin log.
@@ -27,8 +31,8 @@ import { fillAmounts, type Amounts } from "../amounts";
 import { checkClaims, textPage, type RuleId } from "../claims";
 import { captionNames } from "../compounding";
 import type { Overlay } from "./format";
-import { baseline, textAt } from "./model";
-import { siteRegistry, type Field, type Registry } from "./registry";
+import { baseline, layoutOn, sameLayout, sectionLayout, textAt } from "./model";
+import { siteRegistry, type Field, type Page, type Registry, type Section } from "./registry";
 import { canonical } from "./store";
 import { asPlaceholder, placeholdersIn, plainBlock, plainLine, unknownPlaceholder, usableDestination } from "./text";
 
@@ -99,20 +103,143 @@ export function draftChanges(content: { draft: Overlay; published: Overlay }, ba
   return out;
 }
 
+/** One thing a publish would change about a page's sections, as a sentence the owner reads. */
+export type SectionChange = {
+  page: Page;
+  section: Section;
+  /** "off" and "on": the section is switched. "moved": it changes its place among the page's sections. */
+  kind: "off" | "on" | "moved";
+  /** The whole of it, with the page: "Home: the “Price” section will be switched off." */
+  says: string;
+};
+
+/** The longest run of ids that is in both orders, in the same order: the sections that keep their places relative to each other. */
+function kept(a: readonly string[], b: readonly string[]): Set<string> {
+  const run: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) run[i][j] = a[i] === b[j] ? run[i + 1][j + 1] + 1 : Math.max(run[i + 1][j], run[i][j + 1]);
+  const out = new Set<string>();
+  for (let i = 0, j = 0; i < a.length && j < b.length; ) {
+    if (a[i] === b[j]) {
+      out.add(a[i]);
+      i++;
+      j++;
+      // On a tie (two neighbours changed places) the one that went up is the one said to move.
+    } else if (run[i + 1][j] > run[i][j + 1]) i++;
+    else j++;
+  }
+  return out;
+}
+
+/**
+ * What a publish would change about each page's sections (plan R7), in the order the pages are listed: first the
+ * sections switched off or back on, then the ones that move, each in the order the draft shows them.
+ *
+ * A move is told for as few sections as explain the new order: where "Questions" and "Price" have changed places,
+ * "Questions" moves up, and "Price" is not also listed as moving down. Each is placed by its new neighbour.
+ */
+export function sectionChanges(content: { draft: Overlay; published: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): SectionChange[] {
+  const out: SectionChange[] = [];
+  for (const page of registry.pages) {
+    if (!Object.hasOwn(content.draft.sections, page.id) && !Object.hasOwn(content.published.sections, page.id)) continue;
+    const from = layoutOn(content.published, page.id, base, registry);
+    const to = layoutOn(content.draft, page.id, base, registry);
+    const section = (id: string) => page.sections.find((entry) => entry.id === id)!;
+    const name = (id: string) => `“${section(id).label}”`;
+    for (const id of to.order) {
+      const [was, is] = [from.off.includes(id), to.off.includes(id)];
+      if (was !== is) out.push({ page, section: section(id), kind: is ? "off" : "on", says: `${page.label}: the ${name(id)} section will be switched ${is ? "off" : "back on"}.` });
+    }
+    const still = kept(from.order, to.order);
+    for (const [at, id] of to.order.entries()) {
+      if (still.has(id)) continue;
+      const up = at < from.order.indexOf(id);
+      const says = up ? `${page.label}: ${name(id)} moves up, above ${name(to.order[at + 1])}.` : `${page.label}: ${name(id)} moves down, below ${name(to.order[at - 1])}.`;
+      out.push({ page, section: section(id), kind: "moved", says });
+    }
+  }
+  return out;
+}
+
 export type PageStatus = {
-  /** Fields whose draft is not published yet. */
+  /** What is saved as a draft and not published yet: fields whose wording would change, and changes to the page's sections. */
   drafts: number;
   /** Fields whose draft wording differs from the original. */
   edits: number;
+  /** True when the draft has the page's sections in another order than the original, or one of them switched the other way. */
+  rearranged: boolean;
 };
 
-/** For each page, how many fields have a draft waiting and how many differ from the original wording. */
+/** For each page, how many changes have a draft waiting, how many fields differ from the original wording, and whether its sections do. */
 export function pageStatus(content: { draft: Overlay; published: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): Map<string, PageStatus> {
-  const out = new Map<string, PageStatus>(registry.pages.map((page) => [page.id, { drafts: 0, edits: 0 }]));
+  const out = new Map<string, PageStatus>(registry.pages.map((page) => [page.id, { drafts: 0, edits: 0, rearranged: false }]));
   for (const change of draftChanges(content, base, registry)) out.get(change.field.page)!.drafts++;
+  for (const change of sectionChanges(content, base, registry)) out.get(change.page.id)!.drafts++;
   for (const id of Object.keys(content.draft.text)) {
     const field = registry.fields.get(id);
     if (field && content.draft.text[id] !== textAt(base, id, registry)) out.get(field.page)!.edits++;
+  }
+  for (const page of registry.pages) out.get(page.id)!.rearranged = !sameLayout(layoutOn(content.draft, page.id, base, registry), sectionLayout(base, page.id, registry));
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Links that would point at a section that is switched off (plan R17)
+// ---------------------------------------------------------------------------
+
+/**
+ * The links the site's own code draws to a section of a covered page, as they are today. Each is named by the
+ * field that holds its words, so the warning can quote the link as the owner has worded it.
+ *
+ * THIS IS THE WHOLE OF WHAT THIS UNIT WARNS ABOUT. Links an admin types, links to an item of a list, and a page
+ * left without its main heading are U9's, which replaces this table with the links the draft would render.
+ */
+const builtInLinks: readonly { label: string; where: string; from: { page: string; section: string } | null; to: { page: string; section: string } }[] = [
+  // chrome.ts, PRICE_SECTION_HREF: the header and the footer, on every page.
+  { label: "nav.pricing", where: "in the header and in the footer of every page", from: null, to: { page: "home", section: "price" } },
+  // v1.ts, control.link.href.
+  { label: "control.link.label", where: "on the homepage, under “You decide what Zack shares”", from: { page: "home", section: "control" }, to: { page: "howItWorks", section: "zack" } },
+  // src/app/library/page.tsx, "#watch".
+  { label: "library.watchLink", where: "at the top of the Use cases page", from: { page: "library", section: "intro" }, to: { page: "library", section: "watch" } },
+];
+
+/** The site's own links that land on a section, each as words to follow "The": "“Pricing” link in the header and in the footer of every page". For the note beside the section's switch. */
+export function linksInto(content: { draft: Overlay }, pageId: string, sectionId: string, base: unknown = baseline, registry: Registry = siteRegistry): string[] {
+  return builtInLinks.filter((link) => link.to.page === pageId && link.to.section === sectionId).map((link) => `“${wordingOf(content.draft, link.label, base, registry)}” link ${link.where}`);
+}
+
+export type LinkWarning = {
+  /** The page and the section that is switched off. */
+  page: Page;
+  section: Section;
+  /** The address the link has: "/#price". */
+  href: string;
+  /** The link's words, as the draft has them. */
+  link: string;
+  /** The whole of it, as a sentence the owner reads. */
+  says: string;
+};
+
+/**
+ * The links that would point at a section the draft has switched off (plan R17, AE3). A warning, like the wording
+ * ones: it never blocks a publish. It is not an override of a wording rule, and is not written to the admin log.
+ * A link whose own section is switched off too is not on the site, and is not listed.
+ */
+export function linkWarnings(content: { draft: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): LinkWarning[] {
+  const out: LinkWarning[] = [];
+  const isOff = (at: { page: string; section: string }) => layoutOn(content.draft, at.page, base, registry).off.includes(at.section);
+  for (const link of builtInLinks) {
+    const page = registry.pages.find((entry) => entry.id === link.to.page);
+    const section = page?.sections.find((entry) => entry.id === link.to.section);
+    if (!page || !section || section.anchor === null || !isOff(link.to) || (link.from && isOff(link.from))) continue;
+    const words = wordingOf(content.draft, link.label, base, registry);
+    const lands = page.id === "home" ? "the top of the homepage" : `the top of the ${page.label} page`;
+    out.push({
+      page,
+      section,
+      href: `${page.path === "/" ? "/" : page.path}#${section.anchor}`,
+      link: words,
+      says: `The “${words}” link ${link.where} points at the “${section.label}” section of ${page.label}, which is switched off. A visitor who presses it lands at ${lands} instead.`,
+    });
   }
   return out;
 }

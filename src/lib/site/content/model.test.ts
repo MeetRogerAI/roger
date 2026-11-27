@@ -1,7 +1,8 @@
 /**
  * The layers of site content (plan U3, KTD1, KTD4, KTD6): putting an overlay
  * on a model, reading an overlay back from two models, what counts as an edit,
- * and the one rule lists and sections are ordered by. Text only in this unit.
+ * and the one rule lists and sections are ordered by. Text, and since U6 each
+ * page’s sections: which are on, and in which order.
  */
 import { describe, expect, it } from "vitest";
 import { v3Defaults } from "@/data/config";
@@ -10,7 +11,25 @@ import { questionsOn, v1, v1Zack } from "@/data/site/v1";
 import { fixtureCopy, fixtureRegistry, fixtureSpec, type FixtureCopy } from "@/test-helpers/content-fixture";
 import { amountsFrom, fillCopy } from "../amounts";
 import { emptyOverlay, isEmptyOverlay, parseOverlay, parseOverlayStrict, type Overlay } from "./format";
-import { applyOverlay, baseline, codeModel, diffToOverlay, mergeOrder, normaliseOverlay, releasedOverlay, textAt, v1Copy } from "./model";
+import {
+  applyOverlay,
+  applySectionEdit,
+  baseline,
+  codeLayout,
+  codeModel,
+  composeOverlays,
+  diffSectionEdit,
+  diffToOverlay,
+  layoutOn,
+  mergeOrder,
+  normaliseOverlay,
+  questionGroupsShown,
+  releasedOverlay,
+  sectionLayout,
+  sectionsShown,
+  textAt,
+  v1Copy,
+} from "./model";
 import { buildRegistry, siteRegistry, siteSpec } from "./registry";
 
 const amounts = amountsFrom(v3Defaults);
@@ -165,11 +184,152 @@ describe("applyOverlay", () => {
     expect(hostile.link).toEqual({ label: "About", href: "/faq" });
   });
 
-  it("does not yet apply sections or lists: an overlay that holds them changes text only", () => {
-    const stored: Overlay = { ...edits({ [HEADLINE]: "Applied." }), sections: { home: { order: ["questions", "price"], off: ["compounds"] } }, lists: { "home.problem.statements": { order: ["alone", "told"], removed: ["unposted"], added: [] } } };
+  it("does not yet apply lists: an overlay that holds one changes the text and the sections only", () => {
+    const stored: Overlay = { ...edits({ [HEADLINE]: "Applied." }), sections: { home: { order: [], off: ["compounds"] } }, lists: { "home.problem.statements": { order: ["alone", "told"], removed: ["unposted"], added: [] } } };
     const out = applyOverlay(codeModel, stored);
     expect(out.home.hero.headline).toBe("Applied.");
     expect(out.home.problem).toBe(codeModel.home.problem);
+    expect(sectionLayout(out, "home").off).toEqual(["compounds"]);
+  });
+});
+
+/**
+ * A page's sections (plan U6, R7, KTD4): which are on and in which order, as each layer leaves them. A model has
+ * no place for that, so it is held beside the model, and read with sectionLayout.
+ */
+describe("a page's sections", () => {
+  const HOME = ["hero", "problem", "examples", "compounds", "testimonials", "control", "price", "questions", "closing"];
+  const sections = (entries: Overlay["sections"]): Overlay => ({ ...emptyOverlay, sections: entries });
+  /** Home with Questions and Price having changed places. */
+  const SWAPPED = HOME.map((id) => (id === "price" ? "questions" : id === "questions" ? "price" : id));
+
+  it("are the registry's, all on, where nothing is stored: a page's title and everything under Shared are not among them", () => {
+    expect(codeLayout("home")).toEqual({ order: HOME, off: [] });
+    expect(codeLayout("howItWorks").order).toEqual(["week", "zack", "cora", "anatomy", "firstWeeks", "noAgent", "startBand"]);
+    expect(codeLayout("faq").order).toEqual(["getting-started", "zack-and-privacy", "cora-and-the-ideas", "price-and-billing", "startBand"]);
+    expect(codeLayout("about").order).toEqual(["letter", "startBand"]);
+    expect(codeLayout("library").order).toEqual(["intro", "rows", "watch", "band"]);
+    expect(codeLayout("shared")).toEqual({ order: [], off: [] });
+    expect(codeLayout("nope")).toEqual({ order: [], off: [] });
+    for (const page of siteRegistry.pages) {
+      expect(sectionLayout(codeModel, page.id), page.id).toEqual(codeLayout(page.id));
+      expect(sectionsShown(page.id), page.id).toEqual(codeLayout(page.id).order);
+      expect(sectionsShown(page.id, emptyOverlay), page.id).toEqual(codeLayout(page.id).order);
+    }
+  });
+
+  it("applies an entry by id: the order it names, the sections it switches off, and nothing about the ones it does not name", () => {
+    const code = codeLayout("home");
+    expect(applySectionEdit(code, undefined)).toBe(code);
+    expect(applySectionEdit(code, { order: [], off: ["compounds"] })).toEqual({ order: HOME, off: ["compounds"] });
+    expect(applySectionEdit(code, { order: SWAPPED, off: [] })).toEqual({ order: SWAPPED, off: [] });
+    // `off` is kept in the page's order, whatever order it was written in.
+    expect(applySectionEdit(code, { order: [], off: ["price", "problem"] }).off).toEqual(["problem", "price"]);
+    // An entry on a layer that already has a section off: named, it is on again; not named, it stays off.
+    const below = { order: HOME, off: ["compounds", "price"] };
+    expect(applySectionEdit(below, { order: ["price"], off: [] })).toEqual({ order: HOME, off: ["compounds"] });
+    expect(applySectionEdit(below, { order: [], off: ["closing"] })).toEqual({ order: HOME, off: ["compounds", "price", "closing"] });
+    expect(applySectionEdit(below, { order: SWAPPED, off: ["price"] })).toEqual({ order: SWAPPED, off: ["price"] });
+  });
+
+  it("ignores a stored id the page does not have, and never moves or hides a fixed section", () => {
+    const out = applyOverlay(codeModel, sections({ home: { order: ["gone", "closing", "hero"], off: ["gone", "nope"] }, howItWorks: { order: ["title"], off: ["title"] }, shared: { order: ["nav"], off: ["buttons"] }, nope: { order: ["x"], off: [] } }));
+    // Closing and Hero are named, in that order; every other section follows the one it follows in code.
+    expect(sectionLayout(out, "home")).toEqual({ order: ["closing", "hero", "problem", "examples", "compounds", "testimonials", "control", "price", "questions"], off: [] });
+    expect(sectionLayout(out, "howItWorks")).toEqual(codeLayout("howItWorks"));
+    expect(sectionLayout(out, "shared")).toEqual({ order: [], off: [] });
+  });
+
+  it("shows a section added in code later in its code position, on, on a site whose stored order is older", () => {
+    // /faq's sections are the copy's question groups: a group added in code is a section added in code.
+    const later = withCode((copy) => void copy.questions.splice(2, 0, { id: "new-group", title: "New group", items: [{ id: "new-q", q: "New?", a: "Yes.", on: [] }] }));
+    const registry = registryOf(later);
+    // Stored before the group existed: the four groups in another order, one off.
+    const stored = sections({ faq: { order: ["price-and-billing", "getting-started", "zack-and-privacy", "cora-and-the-ideas", "startBand"], off: ["getting-started"] } });
+    expect(sectionLayout(applyOverlay(later, stored, registry), "faq", registry)).toEqual({
+      // After "zack-and-privacy", which it follows in code.
+      order: ["price-and-billing", "getting-started", "zack-and-privacy", "new-group", "cora-and-the-ideas", "startBand"],
+      off: ["getting-started"],
+    });
+    // And a group the code has since removed is ignored, in the order and among the ones switched off.
+    const removed = withCode((copy) => void copy.questions.splice(0, 1));
+    expect(sectionLayout(applyOverlay(removed, stored, registryOf(removed)), "faq", registryOf(removed))).toEqual({ order: ["price-and-billing", "zack-and-privacy", "cora-and-the-ideas", "startBand"], off: [] });
+  });
+
+  it("merges the three layers by id: the code's order, the release's entry on it, the site's own on both", () => {
+    const released = sections({ home: { order: SWAPPED, off: ["compounds"] } });
+    const base = applyOverlay(codeModel, released);
+    expect(sectionLayout(base, "home")).toEqual({ order: SWAPPED, off: ["compounds"] });
+    // The site switches Price off, and says nothing else: the release's order and its switched-off section stay.
+    const own = sections({ home: { order: [], off: ["price"] } });
+    expect(sectionLayout(applyOverlay(base, own), "home")).toEqual({ order: SWAPPED, off: ["compounds", "price"] });
+    // As the one overlay a page's view is handed, on the code model.
+    const one = composeOverlays(released, own);
+    expect(one.sections).toEqual({ home: { order: SWAPPED, off: ["compounds", "price"] } });
+    expect(sectionsShown("home", one)).toEqual(SWAPPED.filter((id) => id !== "compounds" && id !== "price"));
+    // A later release moves a section: the site, which only switched Price off, follows the new order.
+    const next = applyOverlay(codeModel, sections({ home: { order: ["closing", ...HOME.filter((id) => id !== "closing")], off: [] } }));
+    expect(sectionLayout(applyOverlay(next, normaliseOverlay(base, own)), "home")).toEqual({ order: ["closing", ...HOME.filter((id) => id !== "closing")], off: ["price"] });
+    // The site switches back on what the release has off, by naming it.
+    expect(sectionLayout(applyOverlay(base, sections({ home: { order: ["compounds"], off: [] } })), "home")).toEqual({ order: SWAPPED, off: [] });
+    // The model the release was applied to is not changed by what is applied to it afterwards.
+    expect(sectionLayout(base, "home")).toEqual({ order: SWAPPED, off: ["compounds"] });
+    expect(sectionLayout(codeModel, "home")).toEqual(codeLayout("home"));
+  });
+
+  it("carries a model's layouts through a text edit, and gives a model whose sections change an object of its own", () => {
+    const base = applyOverlay(codeModel, sections({ home: { order: [], off: ["price"] } }));
+    expect(base).not.toBe(codeModel);
+    expect(base).toEqual(codeModel);
+    expect(sectionLayout(applyOverlay(base, edits({ [HEADLINE]: "A new headline" })), "home").off).toEqual(["price"]);
+    expect(applyOverlay(base, emptyOverlay)).toBe(base);
+    // An entry that changes nothing gives the model itself.
+    expect(applyOverlay(codeModel, sections({ home: { order: HOME, off: [] } }))).toBe(codeModel);
+  });
+
+  it("writes the difference between two layouts one way, as little as says it, and never an empty entry", () => {
+    const code = codeLayout("home");
+    expect(diffSectionEdit(code, code)).toBeNull();
+    expect(diffSectionEdit(code, { order: [...HOME], off: [] })).toBeNull();
+    // Only a switch: the order is left to the layer below.
+    expect(diffSectionEdit(code, { order: HOME, off: ["price"] })).toEqual({ order: [], off: ["price"] });
+    // A move: the whole order.
+    expect(diffSectionEdit(code, { order: SWAPPED, off: [] })).toEqual({ order: SWAPPED, off: [] });
+    // Back on over a layer that has it off: named, and nothing else.
+    const below = { order: HOME, off: ["compounds", "price"] };
+    expect(diffSectionEdit(below, { order: HOME, off: ["compounds"] })).toEqual({ order: ["price"], off: [] });
+    expect(diffSectionEdit(below, { order: HOME, off: ["compounds", "price"] })).toBeNull();
+    expect(diffSectionEdit(below, { order: SWAPPED, off: ["price"] })).toEqual({ order: SWAPPED, off: ["price"] });
+    // Whatever it is handed, the entry applied to the layer below gives the layout.
+    for (const layout of [{ order: SWAPPED, off: ["hero", "closing"] }, { order: HOME, off: [] }, { order: HOME, off: HOME }]) {
+      expect(applySectionEdit(below, diffSectionEdit(below, layout) ?? undefined)).toEqual({ order: layout.order, off: layout.order.filter((id) => layout.off.includes(id)) });
+    }
+  });
+
+  it("normalises a stored entry: one that says what the base already has is gone, and `{ order: [], off: [] }` is never kept", () => {
+    expect(normaliseOverlay(codeModel, sections({ home: { order: HOME, off: [] }, faq: { order: [], off: [] } })).sections).toEqual({});
+    expect(normaliseOverlay(codeModel, sections({ home: { order: HOME, off: ["price"] } })).sections).toEqual({ home: { order: [], off: ["price"] } });
+    // A partial order is written out whole, as the page will show it.
+    expect(normaliseOverlay(codeModel, sections({ home: { order: ["questions", "price"], off: [] } })).sections).toEqual({
+      home: { order: ["hero", "problem", "examples", "compounds", "testimonials", "control", "questions", "closing", "price"], off: [] },
+    });
+    // Once a release has made the site's layout the built-in one, the site's entry is no edit (KTD6).
+    const stored = sections({ home: { order: SWAPPED, off: ["compounds"] } });
+    expect(normaliseOverlay(applyOverlay(codeModel, stored), stored).sections).toEqual({});
+    for (const overlay of [normaliseOverlay(codeModel, stored), diffToOverlay(codeModel, applyOverlay(codeModel, stored)), composeOverlays(stored, emptyOverlay), composeOverlays(emptyOverlay, stored)]) {
+      for (const entry of Object.values(overlay.sections)) expect(entry.order.length + entry.off.length).toBeGreaterThan(0);
+      expect(overlay.sections).toEqual(stored.sections);
+    }
+  });
+
+  it("gives a page's view the sections that are on, in order, and /faq's groups to both pages that print them", () => {
+    const stored = sections({ home: { order: SWAPPED, off: ["compounds"] }, faq: { order: ["price-and-billing", "getting-started", "zack-and-privacy", "cora-and-the-ideas", "startBand"], off: ["zack-and-privacy"] } });
+    expect(sectionsShown("home", stored)).toEqual(["hero", "problem", "examples", "testimonials", "control", "questions", "price", "closing"]);
+    expect(questionGroupsShown(v1.questions, stored).map((group) => group.id)).toEqual(["price-and-billing", "getting-started", "cora-and-the-ideas"]);
+    expect(questionGroupsShown(v1.questions)).toEqual(v1.questions);
+    // Nonsense where the sections should be is no sections entry at all.
+    expect(sectionsShown("home", { ...emptyOverlay, sections: { home: "x" } } as never)).toEqual(HOME);
+    expect(layoutOn(stored, "home")).toEqual({ order: SWAPPED, off: ["compounds"] });
   });
 });
 
@@ -264,8 +424,8 @@ describe("normaliseOverlay (KTD6)", () => {
     expect(Object.isFrozen(normaliseOverlay(codeModel, emptyOverlay).text)).toBe(false);
   });
 
-  it("carries section and list entries as read, until the units that apply them compare them too", () => {
-    const stored: Overlay = { ...edits({ [HEADLINE]: v1.home.hero.headline }), sections: { home: { order: ["questions", "price"], off: [] } }, lists: { "control.points": { order: [], removed: ["off"], added: [] } } };
+  it("carries list entries as read, until the unit that applies them compares them too", () => {
+    const stored: Overlay = { ...edits({ [HEADLINE]: v1.home.hero.headline }), sections: { home: { order: [], off: ["price"] } }, lists: { "control.points": { order: [], removed: ["off"], added: [] } } };
     expect(normaliseOverlay(codeModel, stored)).toEqual({ ...stored, text: {} });
   });
 
@@ -409,8 +569,18 @@ describe("the laws of the layers, on generated overlays", () => {
       const same = textAt(base, id) ?? "x";
       text[id] = pick<unknown>([`Edit ${i}`, `Edit ${i} at {monthlyUsd}`, same, same, `${same} `, same.toLowerCase(), "", "   ", HIDDEN, "{nope}", "Week {week}", "Two\nlines", "<b>bold</b>", 7, null, ["x"]]);
     }
-    return { ...emptyOverlay, text } as Overlay;
+    // And the sections of some pages: an order that names some of them, some twice, a fixed one, one the page does not have; some switched off.
+    const sections: Record<string, unknown> = {};
+    for (const page of siteRegistry.pages) {
+      if (next() < 0.6) continue;
+      const pool = [...page.sections.map((section) => section.id), "gone", "x-added"];
+      const some = () => pool.filter(() => next() < 0.5).map((id) => [next(), id] as const).sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+      sections[page.id] = next() < 0.1 ? pick<unknown>(["x", null, { order: "x" }, { order: [], off: [] }]) : { order: next() < 0.4 ? [] : [...some(), ...some().slice(0, 2)], off: next() < 0.4 ? [] : some() };
+    }
+    return { ...emptyOverlay, text, sections } as Overlay;
   };
+  /** A model with its pages' sections beside it: two are the same only when both the words and the sections are. */
+  const whole = (model: unknown) => ({ model, sections: Object.fromEntries(siteRegistry.pages.map((page) => [page.id, sectionLayout(model, page.id)])) });
   const RUNS = 400;
   const each = (law: (next: () => number, run: number) => void) => {
     for (let run = 0; run < RUNS; run++) law(generator(run + 1), run);
@@ -421,7 +591,7 @@ describe("the laws of the layers, on generated overlays", () => {
     each((next, run) => {
       const stored = generated(next, codeModel);
       const x = applyOverlay(codeModel, stored);
-      expect(applyOverlay(codeModel, diffToOverlay(codeModel, x)), `run ${run}`).toEqual(x);
+      expect(whole(applyOverlay(codeModel, diffToOverlay(codeModel, x))), `run ${run}`).toEqual(whole(x));
       expect(diffToOverlay(codeModel, x), `run ${run}`).toEqual(normaliseOverlay(codeModel, stored));
     });
     expect(JSON.stringify(codeModel)).toBe(before);
@@ -434,7 +604,9 @@ describe("the laws of the layers, on generated overlays", () => {
       const stored = generated(next, codeModel);
       const once = normaliseOverlay(codeModel, stored);
       expect(normaliseOverlay(codeModel, once), `run ${run}`).toEqual(once);
-      expect(applyOverlay(codeModel, once), `run ${run}`).toEqual(applyOverlay(codeModel, stored));
+      expect(whole(applyOverlay(codeModel, once)), `run ${run}`).toEqual(whole(applyOverlay(codeModel, stored)));
+      // No section entry is left that changes nothing: an empty one is never written.
+      for (const [page, entry] of Object.entries(once.sections)) expect(entry.order.length + entry.off.length, `run ${run} ${page}`).toBeGreaterThan(0);
       // No entry is left that says what the base says, and every entry left is one the strict reading accepts.
       for (const [id, text] of Object.entries(once.text)) expect(text, `run ${run} ${id}`).not.toBe(textAt(codeModel, id));
       expect(parseOverlayStrict(once), `run ${run}`).toEqual({ ok: true, overlay: once });
@@ -454,10 +626,15 @@ describe("the laws of the layers, on generated overlays", () => {
       const published = generated(next, base);
       const shown = applyOverlay(base, published);
       // Normalising the site's edits against the baseline first (KTD6) shows the same page.
-      expect(applyOverlay(base, normaliseOverlay(base, published)), `run ${run}`).toEqual(shown);
+      expect(whole(applyOverlay(base, normaliseOverlay(base, published))), `run ${run}`).toEqual(whole(shown));
       // The one overlay a page's view is handed.
       const one = diffToOverlay(codeModel, shown);
-      expect(applyOverlay(codeModel, one), `run ${run}`).toEqual(shown);
+      expect(whole(applyOverlay(codeModel, one)), `run ${run}`).toEqual(whole(shown));
+      // The sections a page's view prints from that one overlay are the ones the three layers leave on.
+      for (const page of siteRegistry.pages) {
+        const layout = sectionLayout(shown, page.id);
+        expect(sectionsShown(page.id, one), `run ${run} ${page.id}`).toEqual(layout.order.filter((id) => !layout.off.includes(id)));
+      }
       // The site's edit wins where both layers have the field; the release's shows where the site has none.
       const site = normaliseOverlay(base, published).text;
       const release = normaliseOverlay(codeModel, released).text;
@@ -472,10 +649,10 @@ describe("the laws of the layers, on generated overlays", () => {
       const [a, b, c] = [generated(next, codeModel), generated(next, codeModel), generated(next, codeModel)];
       const stacked = applyOverlay(applyOverlay(applyOverlay(codeModel, a), b), c);
       const lowerTwo = diffToOverlay(codeModel, applyOverlay(applyOverlay(codeModel, a), b));
-      expect(applyOverlay(applyOverlay(codeModel, lowerTwo), c), `run ${run}`).toEqual(stacked);
+      expect(whole(applyOverlay(applyOverlay(codeModel, lowerTwo), c)), `run ${run}`).toEqual(whole(stacked));
       const afterA = applyOverlay(codeModel, a);
       const upperTwo = diffToOverlay(afterA, applyOverlay(applyOverlay(afterA, b), c));
-      expect(applyOverlay(afterA, upperTwo), `run ${run}`).toEqual(stacked);
+      expect(whole(applyOverlay(afterA, upperTwo)), `run ${run}`).toEqual(whole(stacked));
     });
   });
 

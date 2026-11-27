@@ -88,11 +88,18 @@ export type Field = {
   item?: { array: string; id: string; noun: string | null };
 };
 
+/** The three backgrounds a page's sections are painted on (globals.css). */
+export type Ground = "night" | "ground" | "ground-2";
+
 export type Section = {
   id: string;
   label: string;
   /** True for a group of fields that is not a section of the page an admin may switch off or move: a page's title, and everything under Shared. */
   fixed: boolean;
+  /** The background the page paints it on, for a section an admin may move: two neighbours on the same one get a line between them (the page views). Null for a fixed section, and on /library, which draws no such lines. */
+  ground: Ground | null;
+  /** The id the section has in the page's markup, which a link can land on ("/#price"). Null for a section no link can land on. */
+  anchor: string | null;
   /** In the order the admin reads them. Empty for a section with no words of its own, such as the start band. */
   fields: readonly Field[];
 };
@@ -140,6 +147,8 @@ export type SectionSpec = {
   id: string;
   label: string;
   fixed?: boolean;
+  ground?: Ground;
+  anchor?: string;
   /** The zones every field of the section is printed in, unless the field names its own. */
   zones?: readonly Zone[];
   /** Pattern to field, in the order the admin reads them. */
@@ -167,7 +176,7 @@ const lead = (label: string): FieldSpec => ({ label, max: 400 });
 const para = (label: string): FieldSpec => ({ label, max: 1500 });
 
 /** A section with no words of its own: the night band a reading page ends on. Its button and its line are under Shared. */
-const startBand: SectionSpec = { id: "startBand", label: "Start button band" };
+const startBand: SectionSpec = { id: "startBand", label: "Start button band", ground: "night" };
 
 /**
  * The site's spec, from the copy: the five covered pages and Shared (plan R5), in the order Pages lists them.
@@ -185,6 +194,7 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           {
             id: "hero",
             label: "Hero",
+            ground: "night",
             fields: {
               "home.hero.headline": line("Headline"),
               "home.hero.sub": lead("Line under the headline"),
@@ -195,10 +205,12 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
               "home.hero.graphic.play": short("Play button"),
             },
           },
-          { id: "problem", label: "The problem", fields: { "home.problem.title": line("Heading"), "home.problem.statements.*.text": lead("Text") } },
+          { id: "problem", label: "The problem", ground: "ground", anchor: "problem", fields: { "home.problem.title": line("Heading"), "home.problem.statements.*.text": lead("Text") } },
           {
             id: "examples",
             label: "Cora Curation examples",
+            ground: "ground",
+            anchor: "examples",
             fields: {
               "sample.title": line("Heading"),
               "sample.idea.title": short("Card: first heading"),
@@ -214,6 +226,8 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           {
             id: "compounds",
             label: "It compounds",
+            ground: "ground-2",
+            anchor: "compounds",
             // The one section that may print the loop's week numbers and counts.
             zones: ["compounding"],
             fields: {
@@ -226,10 +240,12 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
               "bricks.caption.bricks": { ...short("Caption: the count of ideas"), placeholders: captionNames },
             },
           },
-          { id: "testimonials", label: "What people say", fields: { "testimonials.title": line("Heading") } },
+          { id: "testimonials", label: "What people say", ground: "ground", anchor: "say", fields: { "testimonials.title": line("Heading") } },
           {
             id: "control",
             label: "You decide what Zack shares",
+            ground: "ground",
+            anchor: "control",
             fields: {
               "control.title": line("Heading"),
               "control.points.*.title": line("Title"),
@@ -240,6 +256,8 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           {
             id: "price",
             label: "Price",
+            ground: "night",
+            anchor: "price",
             fields: {
               "priceBlock.title": line("Heading"),
               "priceBlock.sub": lead("Line under the heading"),
@@ -247,8 +265,8 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
               "priceBlock.monthly.note": lead("Note under the price"),
             },
           },
-          { id: "questions", label: "Questions", fields: { "questionsBlock.title": line("Heading"), "questionsBlock.more.label": short("Link to all questions") } },
-          { id: "closing", label: "Closing band", fields: { "home.closing.line": line("Line"), "home.closing.start": short("Button") } },
+          { id: "questions", label: "Questions", ground: "ground", anchor: "questions", fields: { "questionsBlock.title": line("Heading"), "questionsBlock.more.label": short("Link to all questions") } },
+          { id: "closing", label: "Closing band", ground: "night", fields: { "home.closing.line": line("Line"), "home.closing.start": short("Button") } },
         ],
       },
       {
@@ -260,11 +278,16 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           {
             id: "week",
             label: "The week",
+            ground: "ground",
+            anchor: "week",
             fields: { "howItWorks.week.title": line("Heading"), "howItWorks.week.days.*.day": short("Day"), "howItWorks.week.days.*.body": para("Text") },
           },
           {
             id: "zack",
             label: "Zack, in detail",
+            ground: "ground",
+            // The copy's own: howItWorks.zack.id, which the control block's link names. A test holds the two together.
+            anchor: "zack",
             fields: {
               "howItWorks.zack.title": line("Heading"),
               "howItWorks.zack.points.*.title": line("Title"),
@@ -272,10 +295,12 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
               "howItWorks.zack.filesLink.label": line("Line above the Zack files"),
             },
           },
-          { id: "cora", label: "Cora, in detail", fields: { "howItWorks.cora.title": line("Heading"), "howItWorks.cora.body": para("Text") } },
+          { id: "cora", label: "Cora, in detail", ground: "ground", anchor: "cora", fields: { "howItWorks.cora.title": line("Heading"), "howItWorks.cora.body": para("Text") } },
           {
             id: "anatomy",
             label: "The anatomy of an idea",
+            ground: "ground",
+            anchor: "anatomy",
             fields: {
               "howItWorks.anatomy.title": line("Heading"),
               "howItWorks.anatomy.prefaceLabel": line("Label above the playbook preface"),
@@ -283,10 +308,12 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
               "howItWorks.anatomy.notes.*.note": line("Note"),
             },
           },
-          { id: "firstWeeks", label: "Your first weeks", fields: { "howItWorks.firstWeeks.title": line("Heading"), "howItWorks.firstWeeks.steps.*.text": lead("Text") } },
+          { id: "firstWeeks", label: "Your first weeks", ground: "ground", anchor: "first-weeks", fields: { "howItWorks.firstWeeks.title": line("Heading"), "howItWorks.firstWeeks.steps.*.text": lead("Text") } },
           {
             id: "noAgent",
             label: "If you have no AI agent yet",
+            ground: "ground",
+            anchor: "no-agent",
             fields: { "howItWorks.noAgent.title": line("Heading"), "howItWorks.noAgent.body": para("Text"), "howItWorks.noAgent.link.label": short("Link") },
           },
           startBand,
@@ -309,7 +336,7 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           },
           // The rows are edited on the Use cases screen (plan R5).
           { id: "rows", label: "The use cases" },
-          { id: "watch", label: "Not in the library yet?", fields: { "library.watch.title": line("Heading"), "library.watch.note": lead("Line under the watch form") } },
+          { id: "watch", label: "Not in the library yet?", anchor: "watch", fields: { "library.watch.title": line("Heading"), "library.watch.note": lead("Line under the watch form") } },
           { id: "band", label: "Closing band", fields: { "library.band": line("Line"), closingSub: lead("Line under it") } },
         ],
       },
@@ -322,6 +349,8 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           ...copy.questions.map((group) => ({
             id: group.id,
             label: group.title,
+            ground: "ground" as const,
+            anchor: group.id,
             fields: {
               [`questions.${group.id}.title`]: line("Heading"),
               [`questions.${group.id}.items.*.q`]: line("Question"),
@@ -340,6 +369,7 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           {
             id: "letter",
             label: "Peter’s letter",
+            ground: "ground",
             fields: {
               "about.leadIn": line("Line above the letter"),
               // Peter's own words: the zone the page prints them in.
@@ -592,6 +622,8 @@ export function buildRegistry(copy: unknown, spec: RegistrySpec): Registry {
       id: section.id,
       label: section.label,
       fixed: section.fixed ?? false,
+      ground: section.fixed ? null : (section.ground ?? null),
+      anchor: section.anchor ?? null,
       fields: found.map(({ field }) => field).filter((field) => field.page === page.id && field.section === section.id),
     })),
   }));
