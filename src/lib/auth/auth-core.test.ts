@@ -96,6 +96,14 @@ describe("sessions", () => {
     expect(renewed!.expiresAt.getTime()).toBe(later(50 * DAY).getTime());
   });
 
+  it("records the sign-in as the user's last activity, and again on renewal (idle retention, privacy P3)", async () => {
+    const seen = async () => (await query<{ at: string }>("select last_seen_at::text as at from users where id = $1", [userId]))[0].at;
+    const { token } = await createSession(query, userId, "email", t0);
+    expect(new Date(await seen()).getTime()).toBe(t0.getTime());
+    await findSession(query, token, later(20 * DAY));
+    expect(new Date(await seen()).getTime()).toBe(later(20 * DAY).getTime());
+  });
+
   it("refuses a forged or unknown cookie", async () => {
     expect(await findSession(query, "not-a-real-session", t0)).toBeNull();
     expect(await findSession(query, undefined, t0)).toBeNull();

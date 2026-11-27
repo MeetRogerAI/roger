@@ -21,7 +21,7 @@ import { stripe } from "@/lib/billing/stripe";
 import { stripeGateway, type CardGateway } from "@/lib/billing/gateway";
 import { handleStripeEvent } from "@/lib/billing/webhook";
 import { closeFailedWeekOrders, voidLeftoverInvoices } from "@/lib/billing/orders";
-import { applyRetention, cleanUpExpired } from "./retention";
+import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords } from "./retention";
 import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
 import { noCardClocks, type NoCardClock } from "./clocks";
 import { sendUnsentWelcomes } from "@/lib/signup/finish";
@@ -85,6 +85,10 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "expired_cleanup", run: (q) => cleanUpExpired(q) },
   // Runs and unshared plays, the set number of days after access ends. Never ahead of the real clock.
   { name: "retention", run: (q, d) => applyRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())), retentionDays: d.settings.retentionDays }) },
+  // Runs of one-at-a-time and held members idle for a year (privacy P3). Never ahead of the real clock.
+  { name: "idle_retention", run: (q, d) => applyIdleRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
+  // Old sign-up interest, notification and Stripe event records (privacy P6). Never ahead of the real clock.
+  { name: "old_records", run: (q, d) => purgeOldRecords(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
   // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
   { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.
