@@ -7,8 +7,10 @@
   This is the live checklist for Roger v3. The spec is "Roger v3 - design spec.md" in this folder.
   Published at https://claude.ai/artifact/PvCLU9uLcV2abfxwNqd7tE (republish this file there after editing).
 
-  Three tabs:
-  - "PR #N" (the open PR) and "Everything else" are checklists. Each item is an <li class="item" data-id="...">.
+  Tabs: "Everything else" and "Reference". When a PR needs its own checklist, add a "PR #N" tab back
+  (button id="tab-pr", data-tab="pr"; <section class="panel" id="pr" data-pr="N"> with a #merge-gate div and a
+  data-merge item, as in git history before 2026-11-27); the scripts handle it being absent. Remove it once empty.
+  - "PR #N" (when present) and "Everything else" are checklists. Each item is an <li class="item" data-id="...">.
     Ticks are NOT stored in this file. They live in the artifact's shared data, collection "checks",
     one document per item id ({done: true, by, at}). Read them with the ArtifactData tool (list "checks").
     Items with data-gate="1" must all be ticked before the open PR may be merged; data-merge marks the merge item.
@@ -152,38 +154,15 @@
   <h1>Roger v3 launch list</h1>
 
   <div class="tabs" role="tablist" aria-label="Launch list sections">
-    <button class="tab" role="tab" id="tab-pr" aria-controls="pr" data-tab="pr">PR #59<span class="count" data-count="pr"></span></button>
     <button class="tab" role="tab" id="tab-golive" aria-controls="golive" data-tab="golive">Everything else<span class="count" data-count="golive"></span></button>
     <button class="tab" role="tab" id="tab-reference" aria-controls="reference" data-tab="reference">Reference</button>
   </div>
-
-  <section class="panel" id="pr" role="tabpanel" aria-labelledby="tab-pr" data-pr="59">
-    <div class="gate" id="merge-gate"><span class="dot"></span><div><b id="merge-gate-title">Not ready to merge yet</b><span id="merge-gate-text"></span></div></div>
-
-    <div class="group">
-      <h2>Before you merge</h2>
-      <ul class="list" data-group="merge">
-        <li class="item" data-id="pr59-merge" data-merge="1"><div class="what">Merge PR #59 into main</div><div class="detail"><p>The welcome email no longer says "When your first list is ready we’ll ask for your card." (your wording sign-off), and the Terms page gains the approved "Roger monthly: no refunds, cancel any time" section, which the Payment page's "Terms and refunds" link now opens. Tell Claude Code "merge PR #59". Vercel then deploys meetroger.ai; sign-up stays off in production.</p></div><div class="tags"><span class="tag who-you">You say go</span><span class="tag who-claude">Claude Code merges</span></div></li>
-      </ul>
-    </div>
-
-    <div class="group">
-      <h2>Before sign-up opens</h2>
-      <ul class="list" data-group="after">
-        <li class="item" data-id="s-terms"><div class="what">Approve the monthly terms: no refunds, cancel any time</div><div class="detail"><p><a class="tlink" href="https://github.com/MeetRogerAI/roger/blob/main/artifacts/terms-monthly-draft.md">Read the draft section</a>. Once you approve it, Claude Code puts it on the Terms page in place of the 14-day money-back guarantee and points the Payment page's "Terms and refunds" link to it.</p></div><div class="tags"><span class="tag who-you">You approve</span><span class="tag who-claude">Claude Code adds it</span></div></li>
-        <li class="item" data-id="s-csp"><div class="what">Turn on the Payment page's script blocking</div><div class="detail"><p>The card number is typed into Stripe's own fields, so Roger never sees it. The remaining risk is a harmful script getting into Roger's Payment page itself, for example through a compromised add-on, and copying what people type there. A rule on the page tells the browser to run code only from Roger and Stripe and to block everything else. Today the rule only <i>watches</i>: it reports what it would have blocked and blocks nothing. On preview it reported nothing, so switching it to <i>block</i> should change nothing members can see. It is a one-line change. Suggested: switch it on before sign-up opens. Tell Claude Code "turn on script blocking".</p></div><div class="tags"><span class="tag who-you">You say go</span><span class="tag who-claude">Claude Code changes it</span></div></li>
-      </ul>
-    </div>
-  </section>
 
   <section class="panel" id="golive" role="tabpanel" aria-labelledby="tab-golive" hidden>
 
     <div class="group">
       <h2>Content</h2>
       <ul class="list">
-        <li class="item" data-id="g-zack"><div class="what">Approve Zack 2.0 for Claude, Duet, Grok Bot and Hark</div><div class="detail"><p>Drafts are in the repo (S1).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="g-cora"><div class="what">Approve Cora 2.0</div><div class="detail"><p>Draft in <code>content/cora/cora.md</code> (S2).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="g-categories"><div class="what">Confirm the category list</div><div class="detail"><p>Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands (D10, closes S3).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-setup-file"><div class="what">Supply and publish the starter setup file</div><div class="detail"><p>Send <code>Real estate Grok Bot Setup.md</code>, read version 1, publish it, and give the Grok Bot download link (S9).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-emails"><div class="what">Read the other automatic emails</div><div class="detail"><p>The ~30 emails and sign-up screens from the first build, including "tax included" vs "plus tax" and the higher-rate invoice line (S18).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-privacy"><div class="what">Have privacy and terms read, then remove the "draft" label</div><div class="detail"><p>Include the AI provider's position on training (S10) and the privacy points the build raised (S22). Then link them from sign-up.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
@@ -227,7 +206,7 @@
       <h2>Decisions</h2>
       <ul class="list">
         <li class="item" data-id="g-cora-decisions"><div class="what">Rule on Cora's six literal readings and the three unbuilt Cora 2.0 changes</div><div class="detail"><p>Listed in S20.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="g-defaults"><div class="what">Confirm or change the eleven defaults</div><div class="detail"><p>D1 to D12 on the Reference tab, section 2.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-defaults"><div class="what">Confirm or change the ten defaults</div><div class="detail"><p>D1 to D8, D11 and D12 on the Reference tab, section 2.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
       </ul>
     </div>
 
@@ -239,17 +218,6 @@
         <li class="item" data-id="g-higher-price"><div class="what">Check no subscription is on the higher price by mistake</div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
         <li class="item" data-id="g-open"><div class="what">Turn on the weekly cycle, then sign-up</div><div class="detail"><p>An admin turns on <code>v3.cycleLive</code>, then <code>v3.signupOpen</code>.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
         <li class="item" data-id="g-password"><div class="what">After launch: remove the shared admin password</div><div class="detail"><p>Once both admins have signed in by email on production, unset <code>ADMIN_PASSWORD</code> (S21).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-      </ul>
-    </div>
-
-    <div class="group">
-      <h2>Later, not needed for launch</h2>
-      <ul class="list">
-        <li class="item" data-id="l-levels-docs"><div class="what">Approve the Levels documents</div><div class="detail"><p>Roger AI Agent Levels and Check Charts v1.1, and the Levels Build Spec v1.2.</p></div><div class="tags"><span class="tag who-you">You</span><span class="tag later">Later</span></div></li>
-        <li class="item" data-id="l-zack21"><div class="what">Zack 2.1 content, once B1 is live</div><div class="detail"><p>Collects level evidence in a private <code>roger-level</code> block.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
-        <li class="item" data-id="l-b2"><div class="what">B2: growth</div><div class="detail"><p>About 13.5 half-days: referrals and credit, the Wednesday stats email, bricks and Seasons, leaderboard and points, the group session and guests (needs S11), sponsors, and quiz question 5 moved to Levels 0 to 9.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
-        <li class="item" data-id="l-b3"><div class="what">B3</div><div class="detail"><p>As in spec 1.5.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
-        <li class="item" data-id="l-b4"><div class="what">B4: levels</div><div class="detail"><p>About 10.5 half-days after B3: level intake, the level engine, the dashboard check chart, the stats email Level line, and Cora's use of levels.</p></div><div class="tags"><span class="tag later">Later</span></div></li>
       </ul>
     </div>
   </section>
@@ -285,36 +253,6 @@
           <tr><th scope="col">No.</th><th scope="col">Item</th><th scope="col">Where it goes</th><th scope="col">Done when</th><th scope="col">Blocks</th><th scope="col">Until then</th><th scope="col">Status</th><th scope="col">Notes</th></tr>
         </thead>
         <tbody>
-          <tr data-id="S1" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S1</td>
-            <th scope="row">Zack version 2.0, for Claude, Duet, Grok Bot and Hark</th>
-            <td><code>content/zack/{claude,duet,grok-bot,hark}.md</code> and the connector text in <code>content/zack/connect/</code></td>
-            <td>Each file carries the seven changes in spec B.5, its header says version 2.0, and a test run from each agent ends with a valid <code>roger-run</code> block.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Claude Code may draft all four from the 1.9 files and the spec for Peter to approve. The public 1.9 files stay as they are for the free tool.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes"></td>
-          </tr>
-          <tr data-id="S2" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S2</td>
-            <th scope="row">Cora version 2.0</th>
-            <td><code>content/cora/cora.md</code></td>
-            <td>The file applies the nine changes in spec B.7 to Cora v1.1, and Peter has approved it.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Claude Code may draft it from <code>artifacts/Archives/Circles/Cora The Curator v1.1.md</code> for Peter to approve.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes"></td>
-          </tr>
-          <tr data-id="S3" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S3</td>
-            <th scope="row">The fixed category list, confirmed</th>
-            <td>One shared file read by Zack, the quiz and Cora</td>
-            <td>Peter has confirmed the list, and the same list appears in the Zack files, the quiz and Cora.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Build with default D10.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes"></td>
-          </tr>
           <tr data-id="S5" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S5</td>
             <th scope="row">Google sign-in credentials</th>
@@ -599,16 +537,6 @@
             <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
             <td class="notes"></td>
           </tr>
-          <tr data-id="D10" data-status="unconfirmed" data-blocks="B1">
-            <td class="id">D10</td>
-            <th scope="row">Categories: Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands</th>
-            <td>The one list Zack labels plays with, the quiz offers, and Cora matches on. Confirming this also closes S3.</td>
-            <td>The shared category file</td>
-            <td>B.5</td>
-            <td><span class="ver">B1</span></td>
-            <td class="statuscell"><span class="st unconfirmed">Unconfirmed</span></td>
-            <td class="notes"></td>
-          </tr>
           <tr data-id="D11" data-status="unconfirmed" data-blocks="B1">
             <td class="id">D11</td>
             <th scope="row">A one-at-a-time order is charged on Monday at 6:00 AM only if that week's Zack run arrived; if not, no charge, no list, and the order does not carry over</th>
@@ -710,6 +638,7 @@
 
   function counts() {
     ['pr', 'golive'].forEach(function (tab) {
+      if (!document.getElementById(tab)) return;
       var lis = document.querySelectorAll('#' + tab + ' .item[data-id]');
       var n = 0;
       lis.forEach(function (li) { var s = state[li.getAttribute('data-id')]; if (s && s.done) n++; });
@@ -722,7 +651,9 @@
     var need = document.querySelectorAll('.item[data-gate="1"]');
     var left = 0;
     need.forEach(function (li) { var s = state[li.getAttribute('data-id')]; if (!(s && s.done)) left++; });
-    var pr = document.getElementById('pr').getAttribute('data-pr');
+    var panel = document.getElementById('pr');
+    if (!panel) return;
+    var pr = panel.getAttribute('data-pr');
     var mi = document.querySelector('#pr .item[data-merge]');
     var merged = mi && state[mi.getAttribute('data-id')] && state[mi.getAttribute('data-id')].done;
     var g = document.getElementById('merge-gate');
@@ -753,7 +684,7 @@
   // Tabs, routed on the hash so a link can open one.
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
   function show(name) {
-    if (['pr', 'golive', 'reference'].indexOf(name) < 0) name = 'pr';
+    if (!document.getElementById(name) || ['pr', 'golive', 'reference'].indexOf(name) < 0) name = document.getElementById('pr') ? 'pr' : 'golive';
     tabs.forEach(function (b) {
       var on = b.getAttribute('data-tab') === name;
       b.setAttribute('aria-selected', on ? 'true' : 'false');

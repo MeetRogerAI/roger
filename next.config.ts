@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
     return [
       // Previews are public (no Vercel login, so sign-in works like production) but never indexed.
       ...(process.env.VERCEL_ENV === "preview" ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }] : []),
-      // The Payment step's CSP, on its routes only (report-only for now; see src/lib/payment-csp.ts).
+      // The Payment step's CSP, on its routes only (enforced; see src/lib/payment-csp.ts).
       ...paymentCspHeaders(),
     ];
   },

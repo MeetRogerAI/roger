@@ -9,12 +9,12 @@
  * receive reports, so violations show in the browser console only (plan,
  * Unit 6 review fixes).
  *
- * Shipped as `Content-Security-Policy-Report-Only` for now: Next.js inlines
+ * Enforced since 2026-11-26 (it shipped report-only first). Next.js inlines
  * its own bootstrap scripts, and with Cache Components the page's static
  * shell is prerendered, where a per-request nonce cannot reach (Next's CSP
  * guide: nonces need fully dynamic rendering and are incompatible with
- * partial prerendering). So `script-src` carries `'unsafe-inline'` until
- * enforcement is decided (plan, Unit 6 as-built note); `'unsafe-eval'` only
+ * partial prerendering). So `script-src` carries `'unsafe-inline'` (a nonce
+ * would need fully dynamic rendering; plan, Unit 6 as-built note); `'unsafe-eval'` only
  * in development, where React needs it.
  */
 export function paymentCsp(dev = process.env.NODE_ENV === "development"): string {
@@ -36,8 +36,8 @@ export function paymentCsp(dev = process.env.NODE_ENV === "development"): string
 /** The routes it applies to. */
 export const PAYMENT_CSP_ROUTES = ["/start/payment", "/start/payment/done"] as const;
 
-/** The header name: report-only until enforcement (see above). */
-export const PAYMENT_CSP_HEADER = "Content-Security-Policy-Report-Only";
+/** The header name: enforced since 2026-11-26 (Peter; the preview check reported no violations). */
+export const PAYMENT_CSP_HEADER = "Content-Security-Policy";
 
 /** `next.config.ts` `headers()` entries for the Payment routes. */
 export function paymentCspHeaders(dev?: boolean) {
