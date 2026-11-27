@@ -5,10 +5,10 @@ import type { SiteAudience } from "@/lib/site/start-link";
 import { CurrencyToggle, ForCurrency } from "./price-currency";
 
 /**
- * The price block, a night chapter (spec A.4). Two ways to buy, side by side:
- * monthly, marked as the choice most people make and the larger of the two,
- * and one list at a time. The trial line always sits directly under the
- * prices. No other plan is shown.
+ * The price block, a night chapter (spec A.4). One plan, monthly (Peter's
+ * homepage review, November 26, 2026: the marketing pages show no other), under
+ * the block's heading and its one line. The trial line always sits directly
+ * under the price.
  *
  * Rendered as the child of CountryDefault, which supplies the currency for the
  * visitor's country:
@@ -34,7 +34,7 @@ export function PriceBlock({
   /** The audience of the page, carried by the start button. */
   audience?: SiteAudience;
   id?: string;
-  /** "h1" on /pricing, where the block opens the page. The plan names are one level under it: h2 there, h3 elsewhere. */
+  /** "h1" on /pricing, where the block opens the page. The plan's name is one level under it: h2 there, h3 elsewhere. */
   as?: "h1" | "h2";
 }) {
   const titleId = `${id}-title`;
@@ -46,30 +46,22 @@ export function PriceBlock({
         <Heading id={titleId} className="text-h2">
           {copy.title}
         </Heading>
+        <p data-price-sub className="mx-auto mt-4 max-w-[44rem] text-lead text-night-ink-2">
+          {copy.sub}
+        </p>
         <div className="mt-8">
           <CurrencyToggle initial={initialCurrency} label={copy.switchLabel} options={currencies} />
         </div>
 
-        <div className="mx-auto mt-8 grid max-w-[60rem] items-stretch gap-4 text-left md:grid-cols-[1.35fr_1fr]" aria-live="polite">
+        <div className="mx-auto mt-8 max-w-[36rem] text-left" aria-live="polite">
           <div data-plan="monthly" className="rounded-[8px] border border-night-ink-2 bg-night-2 p-6 sm:p-10">
-            <p className="inline-block rounded-full border border-night-ink-2 px-3 py-1 text-meta font-semibold">{copy.popular}</p>
-            <PlanName className="mt-5 text-title">{copy.monthly.name}</PlanName>
+            <PlanName className="text-title">{copy.monthly.name}</PlanName>
             {currencies.map((currency) => (
               <ForCurrency key={currency} currency={currency} initial={initialCurrency}>
-                <Price currency={currency} amount={amounts.monthly[currency]} per={copy.perMonth} tax={copy.tax[currency]} large />
+                <Price currency={currency} amount={amounts.monthly[currency]} per={copy.perMonth} tax={copy.tax[currency]} />
               </ForCurrency>
             ))}
             <p className="mt-5 text-small">{copy.monthly.note}</p>
-          </div>
-
-          <div data-plan="list" className="rounded-[8px] border border-night-rule p-6 sm:p-8">
-            <PlanName className="text-title">{copy.list.name}</PlanName>
-            {currencies.map((currency) => (
-              <ForCurrency key={currency} currency={currency} initial={initialCurrency}>
-                <Price currency={currency} amount={amounts.list[currency]} per={copy.perList} tax={copy.tax[currency]} />
-              </ForCurrency>
-            ))}
-            <p className="mt-5 text-small text-night-ink-2">{copy.list.note}</p>
           </div>
         </div>
         <p data-trial-line className="mx-auto mt-8 max-w-[44rem] text-small text-night-ink-2">
@@ -85,13 +77,13 @@ export function PriceBlock({
 }
 
 /** "US$200 / month USD", with the tax note under it. The amount is the large part. */
-function Price({ currency, amount, per, tax, large = false }: { currency: Currency; amount: number; per: string; tax: string; large?: boolean }) {
+function Price({ currency, amount, per, tax }: { currency: Currency; amount: number; per: string; tax: string }) {
   // The same words as priceLine in src/lib/site/amounts.ts, in two sizes. A test holds the two together.
   return (
     <span className="mt-4 block">
-      <span className={`tabular block font-[650] leading-none tracking-[-0.04em] ${large ? "text-[clamp(3rem,7vw,5rem)]" : "text-h3"}`}>
+      <span className="tabular block text-[clamp(3rem,7vw,5rem)] font-[650] leading-none tracking-[-0.04em]">
         {money(currency, amount)}
-        <span className={`font-medium tracking-[-0.02em] text-night-ink-2 ${large ? "text-[clamp(1.1875rem,2vw,1.5rem)]" : "text-small"}`}>{` / ${per} ${currency}`}</span>
+        <span className="text-[clamp(1.1875rem,2vw,1.5rem)] font-medium tracking-[-0.02em] text-night-ink-2">{` / ${per} ${currency}`}</span>
       </span>
       <span className="mt-2 block text-meta text-night-ink-2">{tax}</span>
     </span>

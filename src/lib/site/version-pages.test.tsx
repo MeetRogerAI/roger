@@ -120,7 +120,7 @@ describe("a site version before its pages are built", () => {
 
   it("carries the v1 headline and sub-line in the root metadata, home title, JSON-LD and social card, and no Circles wording", async () => {
     const title = "Roger: Your AI agents, smarter every Monday.";
-    const description = "Roger makes your AI agents smarter every week, with ideas that worked for other real estate users.";
+    const description = "Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.";
     expect(rootMetadata.title).toEqual({ default: title, template: "%s · Roger" });
     expect(rootMetadata.description).toBe(description);
     expect(homeMetadata.title).toEqual({ absolute: title });
@@ -143,8 +143,9 @@ describe("a site version before its pages are built", () => {
     expect(hrefs(header)).toEqual(["#main", "/", "/how-it-works", "/pricing", "/library", "/faq", "/about", "/signin", "/start"]);
     expect(header).toContain('<a aria-current="page"');
     expect(header).toContain(">Sign in</a>");
-    expect(header).toContain(">Get two free Monday lists</span>");
-    expect(header).toContain(">Start free</span>");
+    // The same words as every other start button, at every width.
+    expect(header).toMatch(/<a class="btn btn-m [^"]*" href="\/start">Get two free Cora Curations<\/a>/);
+    expect(header).not.toContain("Start free");
     // The signed-in state is swapped in by the browser, never prerendered.
     expect(header).not.toContain("Open Roger");
     expect(header).not.toContain('href="/app"');
@@ -201,7 +202,7 @@ describe("a site version before its pages are built", () => {
     path = "/nothing-here";
     const page = await pageMarkup(<NotFound />);
     expect(hrefs(page)).toEqual(["/start", "/"]);
-    expect(page).toContain(">Get two free Monday lists</a>");
+    expect(page).toContain(">Get two free Cora Curations</a>");
     expect(page).toContain("That page isn’t here");
     const markup = await pageMarkup(<RootLayout params={Promise.resolve({})}><NotFound /></RootLayout>);
     // The header, the footer and the page itself are all there, so the check below is not passing on an empty page.
@@ -269,8 +270,8 @@ describe("a site version before its pages are built", () => {
     expect(band).toContain(sentence);
     // One link, the primary button, to /start with nothing added on the server.
     expect(hrefs(band)).toEqual(["/start"]);
-    expect(band).toContain('<a class="btn btn-l" href="/start">Get two free Monday lists</a>');
-    expect(band).toContain("Your first two Monday lists are free. We ask for a card when you start.");
+    expect(band).toContain('<a class="btn btn-l" href="/start">Get two free Cora Curations</a>');
+    expect(band).toContain("Your first two Cora Curations are free. We ask for a card when you start.");
     // It is the page's only start link.
     expect(hrefs(markup).filter((h) => h.startsWith("/start"))).toEqual(["/start"]);
   });

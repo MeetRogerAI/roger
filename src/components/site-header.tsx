@@ -102,10 +102,8 @@ function AccountLinks({ cta, account }: { cta: NonNullable<NavSet["cta"]>; accou
           {account.signIn.label}
         </Link>
         <span className="header-cta">
-          <StartLink className="btn btn-m">
-            <span className="hidden xl:inline">{cta.label}</span>
-            <span className="xl:hidden">{cta.short}</span>
-          </StartLink>
+          {/* The same words at every width (Peter, November 26, 2026). On a phone they take two lines, in a smaller size, so the row still fits. */}
+          <StartLink className="btn btn-m max-sm:max-w-[8.5rem] max-sm:px-3.5 max-sm:text-[0.8125rem] max-sm:leading-[1.15]">{cta.label}</StartLink>
         </span>
       </span>
       {signedIn && (

@@ -237,10 +237,10 @@ describe("the v1 /agents page's sections", () => {
   it("hero: the two buttons, the second to /zack, and the card line directly under them", async () => {
     const hero = sectionMarkup(await view(), "hero");
     const actions = /<div data-hero-actions[\s\S]*?<\/div>/.exec(hero)![0];
-    expect(text(actions)).toBe("Get two free Monday lists Run Zack on yourself first");
+    expect(text(actions)).toBe("Get two free Cora Curations Run Zack on yourself first");
     expect(hrefs(actions)).toEqual(["/start?path=agents", "/zack"]);
     expect(actions).toMatch(/<a [^>]*href="\/zack"[^>]*>Run Zack on yourself first<\/a>/);
-    expect(hero.slice(hero.indexOf(actions) + actions.length)).toMatch(/^<p class="[^"]*text-meta[^"]*">Card required\. Charged only with your third list\.<\/p>/);
+    expect(hero.slice(hero.indexOf(actions) + actions.length)).toMatch(/^<p class="[^"]*text-meta[^"]*">Card required\. Charged only with your third Cora Curation\.<\/p>/);
   });
 
   it("the problem: the three statements for people who run agents", async () => {
@@ -280,8 +280,12 @@ describe("the v1 /agents page's sections", () => {
   it("price: the price block for the visitor's country, with the audience agents", async () => {
     const usd = sectionMarkup(await view(), "price");
     expect(usd).toMatch(/aria-pressed="true"[^>]*>USD</);
-    for (const line of ["US$200 / month USD", "US$200 / list USD", "CA$280 / month CAD", "CA$280 / list CAD"]) expect(text(usd)).toContain(line);
+    for (const line of ["US$200 / month USD", "CA$280 / month CAD"]) expect(text(usd)).toContain(line);
     expect(text(usd)).toContain(copy.trialLine);
+    // Monthly only, under Peter's line.
+    expect(usd.match(/data-plan="/g)).toHaveLength(1);
+    expect(text(usd)).not.toMatch(/one list|one at a time|\/ list\b/i);
+    expect(text(usd)).toContain("Get two Cora Curations for free and pay only after you have tried the product for two full weeks.");
 
     resetNextFakes({}, { "x-vercel-ip-country": "CA" });
     const canada = await full();
@@ -291,17 +295,26 @@ describe("the v1 /agents page's sections", () => {
     expect(sections(streamed(canada)).map((s) => s.name)).toEqual(["price"]);
   });
 
-  it("questions: the six tagged for this page, and the link to /faq", async () => {
+  it("questions: the seven tagged for this page, and the link to /faq", async () => {
     const questions = sectionMarkup(await view(), "questions");
-    const six = questionsOn(copy, "agents");
-    expect(six).toHaveLength(6);
-    expect(questions.match(/<details/g)).toHaveLength(6);
-    for (const q of six) expect(text(questions)).toContain(`${q.q} ${q.a}`);
+    const seven = questionsOn(copy, "agents");
+    expect(seven).toHaveLength(7);
+    expect(questions.match(/<details/g)).toHaveLength(7);
+    for (const q of seven) expect(text(questions)).toContain(`${q.q} ${q.a}`);
     expect(hrefs(questions)).toEqual(["/faq"]);
   });
 
-  it("closing band: the line, the button and the trial line", async () => {
-    expect(text(sectionMarkup(await view(), "closing"))).toBe(`Find out what other heavy users know. ${copy.buttons.start} ${copy.trialLine}`);
+  it("closing band: the line, the line under the price, the button and the trial line", async () => {
+    expect(text(sectionMarkup(await view(), "closing"))).toBe(`Find out what other heavy users know. ${copy.priceBlock.sub} ${copy.buttons.start} ${copy.trialLine}`);
+  });
+
+  it("the sample idea: the same folded card as the homepage's, with all of the play's text in the page", async () => {
+    const sample = sectionMarkup(await view(), "sample");
+    const rows = sample.match(/<details\b[^>]*>/g) ?? [];
+    expect(rows).toHaveLength(11);
+    for (const row of rows) expect(row).not.toMatch(/\sopen\b/);
+    expect(text(sample)).toContain(idea.description);
+    expect(text(sample)).toContain(idea.pasteToInstall);
   });
 });
 
@@ -311,7 +324,7 @@ describe("the v1 /agents page's links", () => {
       const starts = hrefs(markup).filter((h) => h.startsWith("/start"));
       // The hero, the price block and the closing band.
       expect(starts).toEqual(["/start?path=agents", "/start?path=agents", "/start?path=agents"]);
-      expect(markup.match(/>Get two free Monday lists<\/a>/g)).toHaveLength(3);
+      expect(markup.match(/>Get two free Cora Curations<\/a>/g)).toHaveLength(3);
     }
   });
 
@@ -337,9 +350,9 @@ describe("the v1 /agents page's words", () => {
   it("take every price from the amounts, never from the copy", async () => {
     const other = amountsFrom({ ...v3Defaults, priceUsd: 311, priceCad: 433, priceRunUsd: 322, priceRunCad: 444, priceHigherUsd: 655, priceHigherCad: 877 });
     const seen = text(await view({ amounts: other }));
-    for (const line of ["US$311 / month USD", "CA$433 / month CAD", "US$322 / list USD", "CA$444 / list CAD", "US$655 a month (CA$877 in Canada)"]) expect(seen).toContain(line);
-    // Every dollar figure on the page is one of the six.
-    expect([...new Set(seen.match(/(?:US|CA)\$[\d,]+/g))].sort()).toEqual(["CA$433", "CA$444", "CA$877", "US$311", "US$322", "US$655"]);
+    for (const line of ["US$311 / month USD", "CA$433 / month CAD", "US$655 a month (CA$877 in Canada)"]) expect(seen).toContain(line);
+    // Every dollar figure on the page is the monthly price or the higher rate. The price of one list is not on the page.
+    expect([...new Set(seen.match(/(?:US|CA)\$[\d,]+/g))].sort()).toEqual(["CA$433", "CA$877", "US$311", "US$655"]);
     expect(hasBareDollar(seen)).toBe(false);
   });
 });

@@ -2,6 +2,8 @@
 
 Site version 1 uses the spec's draft copy word for word (plan R14a). This file lists every line that is not the spec's own wording, and why.
 
+**Read section 7 first.** Peter's homepage review of November 26, 2026 changed the audience, the price shown, the name of what arrives each Monday and every start button. Sections 1 to 6 are the record before that review, and several lines they quote ("Monday lists", "one list at a time", "for real estate") are no longer on the site.
+
 Sources compared:
 
 - **Marketing spec**: `artifacts/v3-marketing-website-spec.md`, "Messaging and copy direction".
@@ -617,3 +619,112 @@ The page already ended at week 26 with 78 bricks. The data file (`src/data/site/
 **(5) "Do not use the brokerage name."**
 
 No name was added anywhere. The claims check keeps its rule and its deny-list (`brokerages` in `ClaimsContext`, `src/lib/site/claims.ts`), and the list stays empty by this decision: the comment there now says the name is not recorded in the repo and must not be added. Nothing is waiting on Peter for it. A search of the site copy (`src/data/site`, `src/components/site`, `public/zack`, `content/zack`) for a brokerage or realty company name found none. Outside the site copy, the unlisted page `/rlpsignature`, which Peter did not name and which was not changed, carries its group's name in its title and text.
+
+## 7. Peter's homepage review, November 26, 2026
+
+Peter read the homepage on the preview and asked for the changes below. Sections 1 to 6 are the record of what the copy was before; where they quote a line that this section changes, this section is what the site says now.
+
+His decisions, in short:
+
+- The site speaks to anyone who uses AI agents, not to people in real estate.
+- The marketing pages show one way to pay, monthly. "One list at a time" is gone from them.
+- What arrives each Monday is called a "Cora Curation" (both words capitalised). No marketing page says "Monday list".
+- Every start button and link, the header's included, reads "Get two free Cora Curations".
+- The hero's sub-line, the line under the price and the third point of "You decide what Zack shares" are his words.
+- The hero's picture is the four parts of "How it works". The sample idea is folded. "It compounds" is a loop of seven weeks.
+
+The line under the price was changed twice on the day. The first wording, which made a claim about the value received, was replaced the same day with "Get two Cora Curations for free and pay only after you have tried the product for two full weeks." Only the second wording was ever built into the tests and the claims check.
+
+### 7.1 His own lines
+
+| Where | Before | Now |
+|---|---|---|
+| Hero sub-line; also the homepage's search description, the root metadata description and the JSON-LD description | Roger makes your AI agents smarter every week, with ideas that worked for other real estate users. | Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network. |
+| Price block, under the heading (homepage, `/agents`, `/pricing`) | (no line) | Get two Cora Curations for free and pay only after you have tried the product for two full weeks. |
+| Closing band, under its line (homepage, `/agents`) | (no line) | the same sentence |
+| "You decide what Zack shares", third point, title | Turn sharing off any time in your dashboard. | Protect your privacy and your most valuable ideas at any time. |
+| The same point, body | On monthly your ideas keep coming and the price becomes US$400 a month (CA$560 in Canada). | Turn sharing off any time in your dashboard. Your Cora Curations keep coming and the price becomes US$400 a month (CA$560 in Canada). |
+| Every start button and link | Get two free Monday lists (and "Start free" in the header below 1280 pixels) | Get two free Cora Curations, at every width |
+
+In the copy file both counts in the line under the price are `{freeLists}`, so they follow the setting: with three free Cora Curations it reads "Get three … for three full weeks".
+
+Neither of his lines needs an exception in the claims check. "battle tested" is not on the hype list, "real people" is not a count of users, and "two full weeks" is a word, not a digit. A test holds that no allow-list entry touches either line.
+
+The header's button has one label now. On a phone it takes two lines in a smaller size so the row still fits beside "Sign in" and the menu.
+
+### 7.2 Cora Curations, and monthly only
+
+| Where | Before | Now |
+|---|---|---|
+| Card line under a start button | Card required. Charged only with your third list. | Card required. Charged only with your third Cora Curation. |
+| Trial line (under the price, the closing band, the library band) | Your first two Monday lists are free. We ask for a card when you start. On monthly it is charged with your third list. On one at a time it is charged only when you order a list. Cancel before then and you pay nothing. | Your first two Cora Curations are free. We ask for a card when you start. It is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing. |
+| Price block, the plans | Monthly ("Most people choose this", "A new list every Monday.") beside One list at a time ("One list, for one Monday.") | Monthly alone: "A new Cora Curation every Monday: three ideas picked for you by Cora, each with a full playbook." The "Most people choose this" mark is removed, because there is nothing to choose between. |
+| Homepage closing line | See what your first two Mondays bring. | See what your first two Cora Curations bring. |
+| Homepage, "How it works", step 3 body | Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. | Early Monday, Cora reads what worked for everyone and picks the three ideas that fit you best. That is your Cora Curation. |
+| FAQ, "I compete with other people on Roger…" | … If you switch sharing off completely in your dashboard, monthly still brings three ideas every Monday and costs US$400 a month (CA$560 in Canada). | … If you switch sharing off completely in your dashboard, your Cora Curation still arrives every Monday and the price becomes US$400 a month (CA$560 in Canada). |
+| FAQ, "What does it cost?" | US$200 a month, or US$200 for one list at a time, plus tax where it applies. In Canada it is CA$280 a month or CA$280 a list, plus HST. Monthly brings a list every Monday for the price of one list. | US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. Get two Cora Curations for free and pay only after you have tried the product for two full weeks. If you turn sharing off in your dashboard, the price becomes US$400 a month (CA$560 in Canada). |
+| FAQ, "When is my card charged?" | On monthly, with your third Monday list and not before. On one at a time, only when you order a list. Your first two lists are free either way, and we email you after your second list with what happens next. | A card is required when you sign up, and it is not charged then. The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next. |
+| FAQ, "What if Zack misses a week?" | On monthly, the first miss each month is forgiven. … | The first miss each month is forgiven. … |
+| FAQ, "Can I get a refund?" | No. You get two free lists before any charge, and you can cancel any time. | No. You get two free Cora Curations before any charge, and you can cancel any time. |
+| FAQ, "Can I buy one list at a time?" | Yes. One list costs US$200 (CA$280 in Canada), and you order it for any Monday you want. For the same price, monthly brings a new list every Monday. | Removed. |
+| FAQ, new question, shown on the homepage, `/agents` and `/faq` | (none) | What is a Cora Curation? What arrives each Monday: three ideas picked for you by Cora, each with a full playbook. Cora is the AI agent that ranks every play in Roger. |
+| `/pricing`, "What is included", first item; also the page's search description | Three ideas every Monday, each with a full playbook. | A Cora Curation every Monday: three ideas picked for you by Cora, each with a full playbook. |
+| `/pricing`, third section | "Monthly or one at a time, explained": two columns, Monthly ("Three ideas every Monday. Charged once a month, starting with your third list.") and One at a time ("Order a list for any Monday you want one. You are charged only for the lists you order."), and under both "One list on its own costs the same as a whole month. Monthly brings a list every Monday for that price." | "Monthly, explained": "A Cora Curation every Monday. Your first two are free. Your card is charged once a month, starting with your third Cora Curation." and under it "One price, charged once a month. Cancel in one click." |
+| `/pricing`, "How contributing works" | … On monthly, if Zack misses a week, … One-at-a-time lists need that week's Zack report. | … If Zack misses a week, … (the last sentence is removed) |
+| `/pricing`, "No refunds" | There are no refunds. You get two free lists before any charge, and you can cancel in one click. | There are no refunds. You get two free Cora Curations before any charge, and you can cancel in one click. |
+| `/how-it-works`, Monday; also the page's search description | … You receive your three ideas, each with a full playbook. | … They arrive as your Cora Curation, each with a full playbook. |
+| `/how-it-works`, "Your first two weeks", steps 3 to 6 | Your first two Monday lists arrive. They are free. / After your second list, we email you with what happens next. / On monthly, your card is charged with your third list. On one at a time, it is charged only when you order a list. Cancel before then and you pay nothing. / If no first list is delivered within 21 days of sign-up, the trial closes without a charge. | Your first two Cora Curations arrive, one each Monday. They are free. / After your second Cora Curation, we email you with what happens next. / Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing. / If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge. |
+
+"What is a Cora Curation?" is new wording, not Peter's and not the spec's. Each page that names a Cora Curation says once what it is, in the same words ("three ideas picked for you by Cora, each with a full playbook"): the price block's note on the homepage, `/agents` and `/pricing`, the Monday paragraph on `/how-it-works`, and this question on `/faq`. Cora is called "the AI agent that ranks every play in Roger", which keeps the "AI agent" rule; the phrase "Roger's ranking agent" is used only on `/zack`, where the rule does not apply.
+
+The homepage and `/agents` now show seven questions each, not six. The answer to "What does it cost?" names the higher rate, so the homepage states it twice: in the control block and in that answer, each time as what turning sharing off does.
+
+The code that printed the one-list price on the marketing pages is removed: the second plan card, the `list` words of the price block, `perList`, `popular`, and `startShort`. `{listUsd}` and `{listCad}` are no longer named in `src/data/site/v1.ts`. The amounts themselves stay, because the terms still state them and the app uses them.
+
+### 7.3 For anyone, not for people in real estate
+
+| Where | Before | Now |
+|---|---|---|
+| Homepage, "The problem", first statement | Everyone in real estate is being told to use AI. Almost nobody is told what to use it for. | Everyone is being told to use AI. Almost nobody is told what to use it for. |
+| Homepage, "How it works", step 2 body | … writes up what worked, with client details removed. | … writes up what worked, with private details removed. |
+| `/how-it-works`, Sunday | … writes up what worked, with client details removed. He runs on his own, … | … writes up what worked, with private details removed. He runs on his own, … |
+| FAQ, "I don't use AI agents yet. Can I start?" | Yes. The startup page walks you through installing one and setting up a starter team for real estate. Most people finish in about half an hour. | Yes. The startup page walks you through installing one and setting up a starter team. Most people finish in about half an hour. |
+| `/how-it-works`, "If you have no AI agent yet" | You can still start. The startup page walks you through installing one and setting up a starter team for real estate. | You can still start. The startup page walks you through installing one and setting up a starter team. |
+
+Kept as they are, on purpose:
+
+- **The sample play.** "Client email in two tones" is one person's real, cleaned play, and it says "buyers", "sellers", "a listing" and "a home evaluation" because that person's work does. Nothing around it says the play is for people in real estate: the section's words are "What arrives on Monday" and "This is one idea, as it arrives." Its field `heavyUseFor` ("people in real estate and other client service roles with a busy inbox") is not printed on any public page, and was not changed: a change to the play needs Peter's approval (2.2).
+- **Peter's letter.** One paragraph shown on the homepage and `/about` is about his own background: "I made my first real estate investment at 17 and still own it, 35+ years later. I also spent 18+ years in real estate finance, …". It is his history, not a description of who the site is for, and it is his to change. It is the only place a marketing page says "real estate", and a test holds that.
+- **"clients"** where it means anyone's clients: "It involves their clients and their business", "names, clients, addresses, amounts", and the same on `/agents`.
+- **The "AI agent" rule.** It stays. The reason given in the code now reads "some readers are called agents in their own work".
+- **The start links' address.** `/start?path=re` is how sign-up knows which page a visitor came from. It is behaviour, not a word a visitor reads.
+
+### 7.4 Labels that are new
+
+| Where | Words |
+|---|---|
+| Hero picture, the row above it | Use, Collect, Curate, Deploy |
+| Hero picture, its name for a screen reader, and its button | How Roger works, in four parts / Pause, Play |
+| Sample idea, headings | The Idea / The Playbook (was "The playbook") |
+| Sample idea, rows | Summary / What To Copy / "8 steps" (the count is the play's own) / "The full playbook" (only for a playbook with no numbered parts) |
+| "It compounds", its name for a screen reader, and its button | The stack, week by week / Pause, Play |
+
+The four labels are mapped onto the four steps of "How it works" in order: **Use** is "Set up your AI agents", **Collect** is "Zack reviews your week", **Curate** is "Cora picks your three ideas", **Deploy** is "Paste to install". The picture shows each step's headline only, read from the same copy as the section below.
+
+The sample idea's heading "Paste to install" inside the card is gone: the row is "What To Copy". The bundled play's fields are placed like this: its description under Summary; its install prompt, the help line, the copy button and "Written on Claude" under What To Copy; the eight numbered parts of its playbook as the eight steps. The play has exactly eight parts, so the row reads "8 steps". Cora's scores, for a play that has them, are a third folded row under The Idea. Nothing in the play was added, removed or reworded.
+
+"It compounds" shows weeks 1, 2, 3, 4, 10, 17 and 26, with 3, 6, 9, 12, 30, 51 and 78 bricks. Weeks 4, 10 and 17 are new. A count is always its week times three, worked out in `src/data/site/compounding.ts`.
+
+### 7.5 Where the new wording and the product differ today
+
+Nothing under `src/app/start`, `src/app/signin`, `src/app/app`, `src/app/admin` or `src/components/app` was changed. These are the places where a visitor who follows a start button will read something the marketing pages no longer say.
+
+1. **Sign-up still offers one list at a time.** `/start/plan` asks "Choose how to pay after your two free lists." and offers "One list at a time, US$200 each" beside monthly. `/start/card` has a line for "One at a time". The marketing pages now say monthly is the price and that the card "is charged with your third Cora Curation, and once a month after that", which is not true for a person who picks one at a time at sign-up: they are charged only when they order.
+2. **The app and billing still offer the switch.** The billing panel has "Or switch to one list at a time.", and the weekly view has the order button for it.
+3. **Sign-up, the app and the emails say "list", never "Cora Curation".** `/start` ("We're getting the first Monday lists ready."), `/start/plan` ("Your first two Monday lists are free either way."), `/start/done` ("Your first Monday list arrives once you're set up."), the app's status lines ("Free list 1 of 2."), the billing lines ("starting with your third list"), the settings ("The Monday list email") and the emails the send job writes ("Your list, and your receipt").
+4. **`/getstarted`**, the app's setup page, is linked from `/how-it-works` and listed in the sitemap. Its search description still ends "get your first Monday list." It was left as the app's page.
+5. **The terms still describe both ways to pay**, because that is what billing does: "Your first two Monday lists are free.", "One list at a time costs US$200 a list (CA$280 in Canada). …", "One-at-a-time lists need that week's Zack report." The privacy and terms texts were reviewed and approved as legal documents (6.3) and were not reworded here. They need Peter's decision: either the option is withdrawn from sign-up and the terms follow, or the terms stay as they are.
+6. **"pay only after you have tried the product for two full weeks."** What the product does: a card is required at sign-up and is not charged; the first charge is made automatically with the third Cora Curation, on the Monday it is ready. The first one arrives on a Monday on or after sign-up and each later one a week after the last, so the third comes 14 days after the first at the soonest, and never less than 14 days after sign-up. A person who signs up on a Sunday and gets their first one the next morning is charged 15 days after sign-up; a person whose first one arrives the day they sign up is charged on day 14 exactly. So the sentence holds, counted from sign-up or from the first Cora Curation, with two things a reader might not expect: the charge comes on the morning the third one arrives, at the two-week mark and not some days after it; and it is automatic unless the person cancels first, not a choice made after the two weeks. A week with no Cora Curation (Zack missed, or nothing new for that person) pushes the charge later, never earlier.
+7. **"Protect your privacy and your most valuable ideas at any time."** Turning sharing off is all or nothing in the dashboard, with the higher price. Keeping back single ideas is done through Zack's rules (skip subjects, block words), which the first two points of the same block describe. The line does not say which, so it is not false, but there is no switch named "protect this idea".
+8. **"real people in the network."** The product has no feature called a network. The line is read as "other Roger users", which is what the plays come from.
+9. **"What is a Cora Curation?"** says each has three ideas. A week can deliver two when fewer fit (the billing code counts two as a delivered week). The spec's own copy says "three ideas" throughout, so this is not new, but the new name makes the count part of a definition.
