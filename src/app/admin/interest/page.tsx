@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
 import { loadInterest } from "@/lib/admin/interest";
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { query } from "@/lib/db-query";
 
 /** Interest (spec B.12): "not ready" emails, cancellation reasons, and members on each plan. */
@@ -24,7 +25,7 @@ export default async function InterestPage() {
 
       <div className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-5">
         {stat(i.plans.monthly, "paying monthly")}
-        {stat(i.plans.perRun, "paying one at a time")}
+        {stat(i.plans.perRun, oneAtATimeOffered() ? "paying one at a time" : "paying one at a time (not offered at launch)")}
         {stat(i.plans.trial, "on the trial")}
         {stat(i.plans.sponsored, "sponsored")}
         {stat(i.notOpen, "asked to hear when sign-up opens")}

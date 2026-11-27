@@ -37,7 +37,7 @@ function Message({ outcome }: { outcome: CompleteOutcome | "error" }): ReactNode
   switch (outcome) {
     case "done":
       return (
-        <Body title="You’re in." text="Your checklist is waiting. Your first Monday list arrives once you’re set up.">
+        <Body title="You’re in." text="Your checklist is waiting. Your first Cora Curation arrives on a Monday, once you’re set up.">
           <Link href="/app" className="btn btn-l">
             Open Roger
           </Link>
@@ -53,9 +53,9 @@ function Message({ outcome }: { outcome: CompleteOutcome | "error" }): ReactNode
       );
     case "not_consented":
       return (
-        <Body title="One step is missing." text="Choose your plan and tick the box to agree before adding your card.">
+        <Body title="One step is missing." text="Confirm your plan and tick the box to agree before adding your card.">
           <Link href="/start/plan" className="btn btn-l">
-            Choose your plan
+            Confirm your plan
           </Link>
         </Body>
       );

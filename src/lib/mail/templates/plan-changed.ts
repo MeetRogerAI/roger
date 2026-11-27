@@ -6,7 +6,7 @@ import { appUrl, renderEmail, type Rendered } from "../layout";
  * ends with the monthly line (spec B.9).
  */
 export function planChangedEmail(o: { to: "monthly" | "per_run"; effect: string; later?: boolean; monthlyLine?: string | null }): Rendered {
-  const name = o.to === "monthly" ? "monthly" : "one list at a time";
+  const name = o.to === "monthly" ? "monthly" : "one Cora Curation at a time";
   return renderEmail({
     subject: o.later ? `Your switch to ${name} is booked` : `Your plan is now ${name}`,
     preview: o.effect,
@@ -20,12 +20,12 @@ export function planChangedEmail(o: { to: "monthly" | "per_run"; effect: string;
 /** A switch to monthly whose first charge failed for seven days: back to one list at a time, nothing charged. */
 export function backToPerRunEmail(): Rendered {
   return renderEmail({
-    subject: "You’re back on one list at a time",
+    subject: "You’re back on one Cora Curation at a time",
     preview: "Your monthly plan didn’t start. Nothing was charged.",
-    heading: "You’re back on one list at a time.",
+    heading: "You’re back on one Cora Curation at a time.",
     paragraphs: [
-      "We couldn’t charge your card for your first monthly payment, so monthly didn’t start and nothing was charged. That week’s list isn’t sent.",
-      "You can still order a list for any Monday you want one. Update your card first on the billing page.",
+      "We couldn’t charge your card for your first monthly payment, so monthly didn’t start and nothing was charged. That week’s Cora Curation isn’t sent.",
+      "You can still order a Cora Curation for any Monday you want one. Update your card first on the billing page.",
     ],
     button: { label: "Billing", url: appUrl("/app/billing") },
   });
@@ -33,7 +33,7 @@ export function backToPerRunEmail(): Rendered {
 
 /** A switch booked for after Monday that could not be made. */
 export function bookedSwitchDroppedEmail(o: { to: "monthly" | "per_run"; why: string }): Rendered {
-  const name = o.to === "monthly" ? "monthly" : "one list at a time";
+  const name = o.to === "monthly" ? "monthly" : "one Cora Curation at a time";
   return renderEmail({
     subject: `Your switch to ${name} didn’t happen`,
     preview: o.why,

@@ -131,6 +131,19 @@ export const flags = {
 export type SiteConfig = typeof siteConfig;
 
 /**
+ * Which plans a person can choose. At launch Roger is monthly only (Peter,
+ * November 26, 2026): "one Cora Curation at a time" (`per_run` in the code and
+ * the database) is not offered. While this is false nobody can choose it at
+ * sign-up, switch to it, place an order on it, or be shown it or its price.
+ * The order and charge machinery for it stays in place and tested, so setting
+ * this to true brings the option back. The terms (src/data/site/legal.ts) and
+ * the marketing pages describe monthly only either way and would need the
+ * option written back in. Read through src/lib/billing/offered.ts, never from
+ * here.
+ */
+export const plans = { oneAtATimeOffered: false as boolean } as const;
+
+/**
  * Roger v3 settings (spec 0.9). Saved values in the `settings` table, under
  * keys like "v3.priceUsd", override these. Times are Toronto wall clock,
  * "HH:MM": the run cutoff is on Sunday, the three jobs on Monday, stats on

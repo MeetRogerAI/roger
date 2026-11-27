@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { useLoopPlay } from "./use-loop-play";
+import { stepAfter, useLoopPlay } from "./use-loop-play";
 
 /**
  * The picture beside the homepage headline (Peter's homepage review,
@@ -15,9 +15,9 @@ import { useLoopPlay } from "./use-loop-play";
  * Only once script is running and motion is allowed (html.js, in globals.css,
  * "The hero's four parts") does it become a loop: the labels become a row of
  * buttons above the frame, the frame shows the current part's headline alone,
- * and the part changes every few seconds. It stops while a mouse is over it,
- * while the keyboard's focus is in it, while the tab is hidden and when
- * "Pause" is pressed (use-loop-play.ts). A label jumps to its part, which
+ * and the part changes every few seconds. It stops while the keyboard's focus
+ * is in it, while the tab is hidden and when "Pause" is pressed, and not for
+ * a pointer resting on it (use-loop-play.ts). A label jumps to its part, which
  * then stays up for its full time. Nothing announces a change to a screen
  * reader.
  *
@@ -48,8 +48,7 @@ export function HeroSteps({ copy, headlines, className = "" }: { copy: HeroSteps
     // With reduced motion the still picture is showing, so there is nothing to advance.
     if (!window.matchMedia("(prefers-reduced-motion: no-preference)").matches) return;
     // One wait for each part, started again when the part changes: a part a label jumped to gets its full time.
-    const timer = window.setTimeout(() => setCurrent((c) => nextStep(c, count)), HERO_STEP_MS);
-    return () => window.clearTimeout(timer);
+    return stepAfter(HERO_STEP_MS, () => setCurrent((c) => nextStep(c, count)));
   }, [playing, current, count]);
 
   return (

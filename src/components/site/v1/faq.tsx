@@ -32,7 +32,8 @@ export function V1FaqView({
       <PageHead title={copy.faq.title} />
       <div className="bg-ground pb-10 pt-6 md:pb-14 md:pt-10">
         {copy.questions.map((group) => (
-          <Questions key={group.id} id={group.id} title={group.title} items={group.items} group />
+          // One name for every group: one question open on the whole page, and opening another closes it.
+          <Questions key={group.id} id={group.id} title={group.title} items={group.items} group accordion="faq-questions" />
         ))}
       </div>
       <StartBand start={copy.buttons.start} cardLine={copy.cardLine} />

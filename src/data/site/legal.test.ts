@@ -8,8 +8,9 @@ import { describe, expect, it, vi } from "vitest";
 import { siteConfig, v3Defaults } from "@/data/config";
 import { circlesPrivacyPreview } from "@/data/circles-legal";
 import { privacy as legacyPrivacy, type LegalDoc } from "@/data/legal";
-import { amountsFrom, hasBareDollar, money } from "@/lib/site/amounts";
+import { amountsFrom, fillAmounts, hasBareDollar, money } from "@/lib/site/amounts";
 import { siteLegal, siteLegalMeta, sitePrivacy, siteTerms, trainingPosition } from "./legal";
+import { v1 } from "./v1";
 
 vi.hoisted(() => {
   delete process.env.DATABASE_URL;
@@ -29,6 +30,7 @@ const section = (doc: LegalDoc, id: string) => {
 
 const privacyText = textOf(privacy);
 const termsText = textOf(terms);
+const fill = (text: string) => fillAmounts(text, amounts);
 
 describe("both documents", () => {
   it("are dated November 2026 and titled plainly", () => {
@@ -330,22 +332,37 @@ describe("the passages kept from the earlier privacy text", () => {
 });
 
 describe("terms say each point in the spec's list", () => {
-  it("the trial: two free lists, a card on file, the charge with the third list, the 21-day close", () => {
+  it("the trial: two free Cora Curations, a card on file, the charge with the third and monthly after it, the 21-day close", () => {
     const trial = section(terms, "trial");
-    expect(trial).toContain("Your first two Monday lists are free.");
-    expect(trial).toContain("We ask for a card when you sign up, and it is kept on file.");
-    expect(trial).toContain("On monthly, your card is charged with your third list.");
-    expect(trial).toContain("If no first list is delivered within 21 days of sign-up, the trial closes without a charge.");
+    expect(trial).toContain("Your first two Cora Curations are free.");
+    expect(trial).toContain("A Cora Curation is the set of ideas Roger sends you on a Monday.");
+    expect(trial).toContain("Only a Cora Curation that is delivered to you counts as one of them.");
+    expect(trial).toContain("We ask for a card when you sign up, and it is kept on file. It is not charged then.");
+    expect(trial).toContain("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
+    expect(trial).toContain("If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge.");
   });
 
-  it("the monthly price and the one-list price, in both currencies", () => {
+  it("one plan, monthly, at one price in both currencies", () => {
     const price = section(terms, "price");
-    expect(price).toContain("Monthly costs US$200 a month (CA$280 in Canada).");
-    expect(price).toContain("One list at a time costs US$200 a list (CA$280 in Canada).");
+    expect(price).toContain("Roger has one plan, monthly. It costs US$200 a month (CA$280 in Canada).");
+    expect(price).toContain("It is charged once a month and brings a Cora Curation every Monday.");
   });
 
-  it("the weeks monthly brings no list", () => {
-    expect(section(terms, "price")).toContain("A week has no list when Roger has no new ideas for you or the week fails on our side, and lists are held while a payment is unpaid.");
+  it("the weeks monthly brings no Cora Curation", () => {
+    expect(section(terms, "price")).toContain(
+      "A week has no Cora Curation when Roger has no new ideas for you or the week fails on our side, and Cora Curations are held while a payment is unpaid.",
+    );
+  });
+
+  it("describes monthly only (Peter, November 26, 2026): no other way to pay, no price for one, and never a list", () => {
+    expect(termsText).not.toMatch(/one at a time|one-at-a-time|you order|ordered|On monthly/i);
+    expect(termsText).not.toMatch(/\blists?\b/i);
+    // Both words capitalised, wherever it is named.
+    expect(termsText.match(/cora curations?/gi) ?? []).toEqual(termsText.match(/Cora Curations?/g) ?? []);
+    expect((termsText.match(/Cora Curation/g) ?? []).length).toBeGreaterThanOrEqual(8);
+    // The same promises as the pricing page and the FAQ make (src/data/site/v1.ts).
+    expect(fill(v1.pricing.explained.body)).toBe("A Cora Curation every Monday. Your first two are free. Your card is charged once a month, starting with your third Cora Curation.");
+    expect(fill(v1.trialLine)).toContain("It is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
   });
 
   it("the contributor rule", () => {
@@ -361,10 +378,6 @@ describe("terms say each point in the spec's list", () => {
     expect(rule).toContain("If you set sharing to matching only or to Zack off in your dashboard, the monthly price is US$400 a month (CA$560 in Canada).");
     expect(rule).toContain("Those are the only two cases where the higher rate applies.");
     expect(rule).toContain("It is not a plan you can choose.");
-  });
-
-  it("a one-at-a-time list needs the week's report, and cannot be ordered with Zack off", () => {
-    expect(section(terms, "contributing")).toContain("One-at-a-time lists need that week’s Zack report. With Zack off, a list cannot be ordered.");
   });
 
   it("how the difference is billed", () => {
@@ -399,13 +412,12 @@ describe("the amounts in the terms", () => {
     const allowed = new Set([
       money("USD", v3Defaults.priceUsd),
       money("CAD", v3Defaults.priceCad),
-      money("USD", v3Defaults.priceRunUsd),
-      money("CAD", v3Defaults.priceRunCad),
       money("USD", v3Defaults.priceHigherUsd),
       money("CAD", v3Defaults.priceHigherCad),
     ]);
     const shown = termsText.match(/(?:US|CA)\$[\d,]+/g) ?? [];
-    expect(shown.length).toBeGreaterThanOrEqual(8);
+    // The monthly price once, and the higher rate in its two cases, each in both currencies. The price of one at a time is not stated.
+    expect(shown).toHaveLength(6);
     for (const amount of shown) expect(allowed.has(amount), amount).toBe(true);
     // Every other number is the trial's close or the year.
     const others = termsText.replace(/(?:US|CA)\$[\d,]+/g, "").match(/\d+/g);
@@ -420,12 +432,13 @@ describe("the amounts in the terms", () => {
 
   it("follow the settings: each named amount lands in its own sentence", () => {
     const other = siteLegal(amountsFrom({ ...v3Defaults, priceUsd: 311, priceCad: 433, priceRunUsd: 322, priceRunCad: 444, priceHigherUsd: 655, priceHigherCad: 877, freeRuns: 3, trialCloseDays: 30 })).terms;
-    expect(section(other, "price")).toContain("Monthly costs US$311 a month (CA$433 in Canada).");
-    expect(section(other, "price")).toContain("One list at a time costs US$322 a list (CA$444 in Canada).");
+    expect(section(other, "price")).toContain("It costs US$311 a month (CA$433 in Canada).");
+    // The settings still hold a price for one at a time; the terms do not print it.
+    expect(textOf(other)).not.toMatch(/US\$322|CA\$444/);
     expect(section(other, "contributing")).toContain("A second miss makes that month US$655 (CA$877 in Canada).");
     expect(section(other, "contributing")).toContain("the monthly price is US$655 a month (CA$877 in Canada)");
-    expect(section(other, "trial")).toContain("Your first three Monday lists are free.");
-    expect(section(other, "trial")).toContain("charged with your fourth list");
+    expect(section(other, "trial")).toContain("Your first three Cora Curations are free.");
+    expect(section(other, "trial")).toContain("charged with your fourth Cora Curation");
     expect(section(other, "trial")).toContain("within 30 days of sign-up");
     expect(textOf(other)).not.toMatch(/US\$200|CA\$280|US\$400|CA\$560/);
   });

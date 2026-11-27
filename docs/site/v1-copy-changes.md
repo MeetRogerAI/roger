@@ -224,7 +224,7 @@ The spec says what these sections hold, without giving the words. The wording be
 | Sample card, after each score | "of 10", as in "8 of 10" |
 | Sample card, the five score names | "Hours saved", "Reach", "Ease to copy", "Proof", "Surprise". These are the spec's names for Cora's five scores. The card prints the name and the score only, with none of the app's explanatory text under a name. |
 | Brick stack, each brick's label for screen readers | "Week", "idea", "set up", "not set up yet", read as "Week 2, idea 1: set up" |
-| Brick stack, the caption under a stack | "Week {week}" and "{bricks} bricks", read as "Week 26" and "78 bricks". The numbers are the compounding story's own. |
+| Brick stack, the caption under a stack | "Week {week}" and "{bricks} ideas", read as "Week 26" and "78 ideas" (it read "78 bricks" until section 8.8; `{bricks}` is only the count's name in the code). The numbers are the compounding story's own. |
 | Sample card | "Paste to install", "Copy prompt and playbook", "Written on", "Cora’s scores", "Not scored yet" (shown only when a play has some of its five scores and not others), "The playbook". The two help lines are the app's own: "The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions." and "Words like “skill” or “routine” may have another name on your AI agent." |
 | `/pricing` headings | "Pricing", "What is included", "Monthly or one at a time, explained", "How contributing works", "No refunds" |
 | `/how-it-works` headings | "How it works", "The week", "Zack, in detail", "Cora, in detail", "The anatomy of an idea", "Your first two weeks" (the number is the settings' count of free lists), "If you have no AI agent yet". The six section headings are spec A.8's own names for the sections. |
@@ -639,7 +639,7 @@ The line under the price was changed twice on the day. The first wording, which 
 
 | Where | Before | Now |
 |---|---|---|
-| Hero sub-line; also the homepage's search description, the root metadata description and the JSON-LD description | Roger makes your AI agents smarter every week, with ideas that worked for other real estate users. | Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network. |
+| Hero sub-line; also the homepage's search description, the root metadata description and the JSON-LD description | Roger makes your AI agents smarter every week, with ideas that worked for other real estate users. | Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network. (Hyphenated on November 26, 2026: Peter, "hyphenated for battle-tested is good.") |
 | Price block, under the heading (homepage, `/agents`, `/pricing`) | (no line) | Get two Cora Curations for free and pay only after you have tried the product for two full weeks. |
 | Closing band, under its line (homepage, `/agents`) | (no line) | the same sentence |
 | "You decide what Zack shares", third point, title | Turn sharing off any time in your dashboard. | Protect your privacy and your most valuable ideas at any time. |
@@ -648,7 +648,7 @@ The line under the price was changed twice on the day. The first wording, which 
 
 In the copy file both counts in the line under the price are `{freeLists}`, so they follow the setting: with three free Cora Curations it reads "Get three … for three full weeks".
 
-Neither of his lines needs an exception in the claims check. "battle tested" is not on the hype list, "real people" is not a count of users, and "two full weeks" is a word, not a digit. A test holds that no allow-list entry touches either line.
+Neither of his lines needs an exception in the claims check. "battle-tested" is not on the hype list, "real people" is not a count of users, and "two full weeks" is a word, not a digit. A test holds that no allow-list entry touches either line.
 
 The header's button has one label now. On a phone it takes two lines in a smaller size so the row still fits beside "Sign in" and the menu.
 
@@ -713,11 +713,13 @@ The four labels are mapped onto the four steps of "How it works" in order: **Use
 
 The sample idea's heading "Paste to install" inside the card is gone: the row is "What To Copy". The bundled play's fields are placed like this: its description under Summary; its install prompt, the help line, the copy button and "Written on Claude" under What To Copy; the eight numbered parts of its playbook as the eight steps. The play has exactly eight parts, so the row reads "8 steps". Cora's scores, for a play that has them, are a third folded row under The Idea. Nothing in the play was added, removed or reworded.
 
-"It compounds" shows weeks 1, 2, 3, 4, 10, 17 and 26, with 3, 6, 9, 12, 30, 51 and 78 bricks. Weeks 4, 10 and 17 are new. A count is always its week times three, worked out in `src/data/site/compounding.ts`.
+"It compounds" shows weeks 1, 2, 3, 4, 10, 17 and 26, with 3, 6, 9, 12, 30, 51 and 78 ideas (the page said "bricks" until section 8.8). Weeks 4, 10 and 17 are new. A count is always its week times three, worked out in `src/data/site/compounding.ts`.
 
 ### 7.5 Where the new wording and the product differ today
 
-Nothing under `src/app/start`, `src/app/signin`, `src/app/app`, `src/app/admin` or `src/components/app` was changed. These are the places where a visitor who follows a start button will read something the marketing pages no longer say.
+**Items 1 to 5 are resolved by section 8** (Peter, November 26, 2026: "it's all monthly so no Monday lists, all Cora Curations. There is no option for one-at-a-time at launch. The terms should say Cora Curations."). They are kept below as the record of what was found. Items 6 to 9 are re-checked in section 8.9.
+
+When this list was written, nothing under `src/app/start`, `src/app/signin`, `src/app/app`, `src/app/admin` or `src/components/app` had been changed. These were the places where a visitor who followed a start button read something the marketing pages no longer said.
 
 1. **Sign-up still offers one list at a time.** `/start/plan` asks "Choose how to pay after your two free lists." and offers "One list at a time, US$200 each" beside monthly. `/start/card` has a line for "One at a time". The marketing pages now say monthly is the price and that the card "is charged with your third Cora Curation, and once a month after that", which is not true for a person who picks one at a time at sign-up: they are charged only when they order.
 2. **The app and billing still offer the switch.** The billing panel has "Or switch to one list at a time.", and the weekly view has the order button for it.
@@ -728,3 +730,188 @@ Nothing under `src/app/start`, `src/app/signin`, `src/app/app`, `src/app/admin` 
 7. **"Protect your privacy and your most valuable ideas at any time."** Turning sharing off is all or nothing in the dashboard, with the higher price. Keeping back single ideas is done through Zack's rules (skip subjects, block words), which the first two points of the same block describe. The line does not say which, so it is not false, but there is no switch named "protect this idea".
 8. **"real people in the network."** The product has no feature called a network. The line is read as "other Roger users", which is what the plays come from.
 9. **"What is a Cora Curation?"** says each has three ideas. A week can deliver two when fewer fit (the billing code counts two as a delivered week). The spec's own copy says "three ideas" throughout, so this is not new, but the new name makes the count part of a definition.
+
+## 8. Monthly only and Cora Curations in sign-up, the app, emails and terms, November 26, 2026
+
+Peter's direction, word for word: "it's all monthly so no Monday lists, all Cora Curations. There is no option for one-at-a-time at launch. The terms should say Cora Curations. hyphenated for battle-tested is good."
+
+This is the first change on this branch to sign-up, the signed-in app, the emails and the terms. It changes words and what is offered. It does not change how much or when anyone is charged, any Stripe call, the database, a cron schedule or a setting's default.
+
+What was done, in short:
+
+- "battle tested" is "battle-tested" (hero sub-line, root metadata, JSON-LD, the social card's line).
+- Everywhere a person reads it, the weekly delivery is a "Cora Curation", both words capitalised. "Monday" stays as the day it arrives, and "ideas" stays "ideas".
+- One at a time is not offered. One switch, `plans.oneAtATimeOffered` in `src/data/config.ts` (read through `src/lib/billing/offered.ts`), is off. Its order and charge code stays, tested with the switch on.
+- The terms describe monthly only.
+
+### 8.1 Sign-up
+
+| Where | Before | Now |
+|---|---|---|
+| `/start`, sign-up not open | We’re getting the first Monday lists ready. | We’re getting the first Cora Curations ready. |
+| `/start/account`, under the heading | … then you choose your plan. | … then you confirm your plan. |
+| `/start/account`, "Check your email." | … to confirm your address and choose your plan. | … to confirm your address and confirm your plan. |
+| `/start/plan`, heading | Choose how to pay after your two free lists. | Your plan after your two free Cora Curations. |
+| `/start/plan`, under the heading | Your first two Monday lists are free either way. Prices are before tax. | Your first two Cora Curations are free. The price is before tax. |
+| `/start/plan`, the plan | Two radio buttons: "Most people choose this / Monthly, US$200 a month / Three ideas every Monday. Charged once a month, starting with your third list." and "One list at a time, US$200 each / Order a list for any Monday you want one, after your two free lists. Monthly costs the same and brings a list every Monday." | One panel, nothing to choose: "Monthly, US$200 a month / A Cora Curation every Monday. Charged once a month, starting with your third Cora Curation." |
+| `/start/plan`, under the plan | On monthly: if Zack misses two weeks in a month, that month is US$400. We always tell you first. | If Zack misses two weeks in a month, that month is US$400. We always tell you first. |
+| `/start/plan`, a plan posted that is not offered | (accepted) | That plan isn’t offered. Roger is monthly. |
+| `/start/card`, the bold line | You get two free Cora curations. Your card is charged only on the third. | You get two free Cora Curations. Your card is charged only with the third. |
+| `/start/card`, the line for one at a time | One at a time: after your two free lists, you are charged US$200, plus tax where it applies, only when you order a list. | Not reachable while the switch is off. (With it on: "One at a time: after your two free Cora Curations, you are charged …, only when you order one.") |
+| `/start/done`, "You’re in." | Your checklist is waiting. Your first Monday list arrives once you’re set up. | Your checklist is waiting. Your first Cora Curation arrives on a Monday, once you’re set up. |
+| `/start/done`, "One step is missing." | Choose your plan and tick the box to agree before adding your card. / button "Choose your plan" | Confirm your plan and tick the box to agree before adding your card. / button "Confirm your plan" |
+| `/getstarted`, search description | … Then connect Zack and get your first Monday list. | … Then connect Zack and get your first Cora Curation. |
+
+The plan step is kept and not skipped. The consent box is on that step, the card step sends anyone without the consent back to it, and admin-made sign-in links and the confirmation email open at it. With one plan it confirms the plan and takes the consent. The page sends no plan and the server stores monthly; a posted "per_run" is refused.
+
+### 8.2 The signed-in app
+
+| Where | Before | Now |
+|---|---|---|
+| `/app`, heading before the first one | Your first list is on its way | Your first Cora Curation is on its way |
+| `/app`, under a second-miss banner | … Check Zack or switch to one list at a time. | … Check Zack. |
+| Checklist, "Wait for Monday" | Your first list arrives on a Monday morning, once Zack has sent a report. | Your first Cora Curation arrives on a Monday morning, once Zack has sent a report. |
+| `/app/history`, empty | No ideas yet. Your first list arrives on a Monday morning. | No ideas yet. Your first Cora Curation arrives on a Monday morning. |
+| Status line, trial | Your first 2 lists are free. / Free list 1 of 2. / Free list 2 of 2. Your next list is your first paid one: … | Your first 2 Cora Curations are free. / Free Cora Curation 1 of 2. / Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: … |
+| Status line, payment | … so your lists are paused. … / … so your list is waiting. … / Your payment didn’t go through; lists pause on … | … so your Cora Curations are paused. … / … so your Cora Curation is waiting. … / Your payment didn’t go through; Cora Curations pause on … |
+| Status line, cancelled | Your plan is cancelled. Your lists continue until … | Your plan is cancelled. Your Cora Curations continue until … |
+| Status line, sponsored | Your lists are covered by your sponsor. | Your Cora Curations are covered by your sponsor. |
+| Status line, amount changed | … so your list waits a day … / … and your list comes straight after; … | … so your Cora Curation waits a day … / … and your Cora Curation comes straight after; … |
+| `/app/billing`, plan line | Monthly: US$200 a month, plus tax where it applies, for a list every Monday. | Monthly: US$200 a month, plus tax where it applies, for a Cora Curation every Monday. |
+| `/app/billing`, next charge in the trial | Nothing until your free lists are done. Then US$200 a month, …, starting with your third list. / Your first charge, with your third list: … / Your first charge comes with your next list: … | Nothing until your free Cora Curations are done. Then US$200 a month, …, starting with your third Cora Curation. / Your first charge, with your third Cora Curation: … / Your first charge comes with your next Cora Curation: … |
+| `/app/billing`, cancelled | Nothing more will be charged. Your lists continue until … | Nothing more will be charged. Your Cora Curations continue until … |
+| `/app/billing`, "Switch plan" for a monthly member | A section with "Switch to one list at a time" and its effect | No section |
+| `/app/billing`, under Cancel | Or switch to one list at a time. | (removed) |
+| `/app/billing`, cancel confirmation | Cancelled. Your lists continue until … | Cancelled. Your Cora Curations continue until … |
+| `/app/settings`, Emails | The Monday list email | The Monday email with your Cora Curation |
+| `/app/zack`, sharing choice "Zack off" | Zack sends nothing. Your lists are picked from what Roger already knows about you. | Zack sends nothing. Your Cora Curations are picked from what Roger already knows about you. |
+| `/app/zack`, each report in the history | List for Monday, December 14 | Cora Curation for Monday, December 14 |
+| `/app/zack`, after an upload | Report received for your list on … | Report received for your Cora Curation on … |
+
+For an account that is already on one at a time, see 8.5.
+
+### 8.3 Emails
+
+Every template in `src/lib/mail/templates` was read. Subjects that changed:
+
+| Before | Now |
+|---|---|
+| Your list, and your receipt | Your Cora Curation, and your receipt |
+| No list this week | No Cora Curation this week |
+| Your next list is your first paid one | Your next Cora Curation is your first paid one |
+| Your Monday lists are paused | Your Cora Curations are paused |
+| Connect Zack to get your Monday list | Connect Zack to get your Cora Curation |
+
+Lines in the body that changed (monthly members and people signing up):
+
+| Email | Before | Now |
+|---|---|---|
+| Confirm your email (sign-up) | One click, then choose your plan. / … carry on to choosing your plan. | One click, then confirm your plan. / … carry on to your plan. |
+| Welcome | Your first two Monday lists are free. Your card is charged only with the third. | Your first two Cora Curations are free, one each Monday. Your card is charged only with the third. |
+| No Cora Curation this week | Zack hasn’t sent a report yet, so there is no list this week and no free list was used. | Zack hasn’t sent a report yet, so there is no Cora Curation this week and no free one was used. |
+| No new ideas for you this week | This list is missing because of Roger … / … this week doesn’t use one of your free lists. | This Cora Curation is missing because of Roger … / … this week doesn’t use one of your free Cora Curations. |
+| Your next Cora Curation is your first paid one | Your free lists are done. Your next list follows Zack’s next report, … | Your free Cora Curations are done. Your next one follows Zack’s next report, … |
+| Your first charge could be on Monday | … your third list comes on … | … your third Cora Curation comes on … |
+| The two emails above, their button | Cancel or change plan | Cancel or see billing |
+| You’re subscribed | Your third list is ready now, and a new one arrives every Monday. / button "Open this week’s list" | Your third Cora Curation is ready now, and a new one arrives every Monday. / button "Open this week’s Cora Curation" |
+| Your card didn’t go through | Your list is ready and waiting. … | Your Cora Curation is ready and waiting. … |
+| Your first charge moved | … and your list is built from it, so there was no list and nothing was charged. / … with your third list. | … and your Cora Curation is built from it, so there wasn’t one and nothing was charged. / … with your third Cora Curation. |
+| Your first charge amount changed | We’ll charge it tomorrow and send your list then. | We’ll charge it tomorrow and send your Cora Curation then. |
+| Your monthly payment didn’t go through | … keep your lists coming. / Your lists keep coming for now … / … your Monday lists pause until it is paid. | … keep your Cora Curations coming. / Your Cora Curations keep coming for now … / … your Cora Curations pause until it is paid. |
+| Your Cora Curations are paused / Your payment went through | … so your lists are paused. / … your lists start again … / … any list that was waiting is on its way. | … so your Cora Curations are paused. / … your Cora Curations start again … / … any Cora Curation that was waiting is on its way. |
+| Your Roger plan is cancelled | Your lists continue until … | Your Cora Curations continue until … |
+| Second missed week | If a weekly report doesn’t suit you, you can switch to one list at a time on the billing page (…). If you cancel before that invoice, the difference isn’t collected. | If you cancel before that invoice on the billing page (…), the difference isn’t collected. |
+| Zack hasn’t sent a report yet / trial closed | Your free lists start with … / If no list has gone out by … / Your free lists went out, … so your first paid list never came … / … so no list went out … | Your free Cora Curations start with … / If no Cora Curation has gone out by … / Your free Cora Curations went out, … so your first paid one never came … / … so no Cora Curation went out … |
+| Zack’s first report arrived / report deleted / upload reminder / the admin's "report hasn’t arrived" nudge | … your list on … / … for Monday’s list. | … your Cora Curation on … / … for Monday’s Cora Curation. |
+| Finish setting up (admin nudge) | … your first lists start on the next Monday. | … your first Cora Curations start on the next Monday. |
+| Your email address changed (by support) | Sign-in links, lists and receipts come here from now on. | Sign-in links, Cora Curations and receipts come here from now on. |
+
+A test (`src/lib/mail/templates/monthly-only.test.ts`) renders every template and holds that none says "list", and that none a monthly member can get names one at a time, an order or a change of plan.
+
+### 8.4 Terms
+
+Only the three sections about the plan changed. Every other sentence of the terms, and all of the privacy text, is as Peter approved it.
+
+| Section | Before | Now |
+|---|---|---|
+| The free trial | Your first two Monday lists are free. Only a list that is delivered to you counts as one of them. | Your first two Cora Curations are free. A Cora Curation is the set of ideas Roger sends you on a Monday. Only a Cora Curation that is delivered to you counts as one of them. |
+| The free trial | On monthly, your card is charged with your third list. On one list at a time, it is charged only when you order a list. Cancel before then and you pay nothing. | Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing. |
+| The free trial | If no first list is delivered within 21 days of sign-up, the trial closes without a charge. | If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge. |
+| The price | Monthly costs US$200 a month (CA$280 in Canada). It is charged once a month and brings a list every Monday. A week has no list when Roger has no new ideas for you or the week fails on our side, and lists are held while a payment is unpaid. | Roger has one plan, monthly. It costs US$200 a month (CA$280 in Canada). It is charged once a month and brings a Cora Curation every Monday. A week has no Cora Curation when Roger has no new ideas for you or the week fails on our side, and Cora Curations are held while a payment is unpaid. |
+| The price | One list at a time costs US$200 a list (CA$280 in Canada). You order a list for any Monday you want one, and you are charged only for the lists you order. | (removed) |
+| Contributing, and the higher monthly rate | On monthly, if Zack misses a week, the first miss each billing month is forgiven. … | If Zack misses a week, the first miss each billing month is forgiven. … |
+| Contributing, and the higher monthly rate | One-at-a-time lists need that week’s Zack report. With Zack off, a list cannot be ordered. | (removed) |
+
+Unchanged in the terms and still true: "We ask for a card when you sign up, and it is kept on file. It is not charged then."; the second-miss rate and the rate with sharing set to matching only or Zack off, US$400 a month (CA$560 in Canada), each in both currencies; "Those are the only two cases where the higher rate applies. It is not a plan you can choose."
+
+One sentence is new and is Peter's to confirm: "A Cora Curation is the set of ideas Roger sends you on a Monday." The terms did not need to define a "list"; they do need to say what a Cora Curation is. It gives no count, because a week can bring fewer than three (8.9).
+
+The terms now print six amounts, not eight, and the claims check no longer allows the price of one at a time on any page.
+
+### 8.5 One at a time: what the switch does
+
+The plan was built end to end: a choice at `/start/plan`, stored in `users.plan` as `per_run`; a welcome line and a card-step line for it; an order box on `/app` and `/app/billing`; an order and its Monday charge on its own invoice (`src/lib/billing/orders.ts`); a Friday "want one this Monday?" email; a switch each way on `/app/billing` (`src/lib/billing/switch.ts`); two settings and two Stripe prices for it. None of that was deleted.
+
+While `plans.oneAtATimeOffered` is false:
+
+- Sign-up stores monthly. A posted `per_run` is refused. A sign-up left half done on `per_run` is sent back to the plan step.
+- A monthly member is offered no switch and is shown no mention of one at a time or its price, on any page or in any email. A switch posted anyway is refused before Stripe is called.
+- No new order can be placed, by anyone. The order box is not shown. The Friday order email is not sent.
+- The marketing pages and the terms describe monthly only whatever the switch says. Turning it on would need the option written back into them.
+
+**An account already on one at a time (a decision for Peter to confirm).** Nobody is migrated and nobody is charged differently. Such an account stays on its plan. It still gets any free Cora Curations it has left. It cannot place a new order, so nothing is charged, and its pages say so: "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday. You can switch to monthly on the billing page; nothing is charged unless you do." Its billing page shows its plan with no price for one, and one button, "Switch to monthly". An order it placed before the switch went off is honoured: it can still be cancelled until Sunday night, and otherwise is charged once and delivered that Monday, as agreed. The other choice would have been to let such an account keep ordering; it was not taken because it leaves the option and its price on show. No such account is expected at launch: sign-up has not been open.
+
+Not gated, on purpose: a switch to one at a time that a monthly member made or booked while it was offered still runs to its end (Stripe has already been told to stop renewing, and reversing that silently would change what they are charged). They can still press "stay on monthly".
+
+Texts for an account on one at a time, which only show with the switch on or to an account already on the plan, were reworded too: "One Cora Curation at a time", "Your Cora Curation is ordered", "No Cora Curation this week, and no charge", "Want a Cora Curation this Monday?", "Order this Cora Curation", "Your free Cora Curations are done", "You’re back on one Cora Curation at a time".
+
+### 8.6 Admin
+
+Admin screens were left in their own words where the term is plainly internal. One label changed: on Interest, "paying one at a time" reads "paying one at a time (not offered at launch)" while the switch is off. No admin screen shows the two settings or the Stripe prices for one at a time; they stay in the settings table and the environment.
+
+Left as they are, for Peter to know: "Trial (1 of 2 free lists used)", "Free lists used", "Give one extra free list" and its messages, "2 free lists left", "One at a time", "Switching to one at a time", "The week is the Monday of the list", "It counts for the coming Monday’s list", and the admin alert "No price id for one list".
+
+### 8.7 Left unchanged, and why
+
+- **Names in the code and the database.** `per_run`, `free_lists_used`, `listOrderedEmail`, `who-gets-a-list.ts`, the `{freeLists}` and `{bricks}` names in the copy, the setting keys `v3.priceRunUsd` and `v3.priceRunCad`, the Stripe price variables, notification kinds such as `monday_list`, URL paths, and log lines.
+- **One Stripe line.** An order's invoice line is described to Stripe as "Roger list for the week of …". It is a Stripe call, so it was not touched; it appears only on an order's invoice, and no order can be placed while the switch is off.
+- **Zack's and Cora's instruction files** under `content/` and `public/zack/` do not say "Monday list". `/app/zack` prints Zack's instructions, which use "list" for their own lists (a review list, a ban list); those are not the delivery.
+- **Design documents under `artifacts/`** still say "Monday lists" and describe one at a time: `Roger v3 - design spec.md`, `v3-marketing-website-spec.md`, `marketing-site-design-guide-roger.md`, and one archived Circles spec. They are the record of the brief, not text a user reads.
+- **Other uses of the word.** "Your never-include list", "Choose a time zone from the list.", "You’re on the list." (the library's watch), and the Circles and legacy pages, which v1 does not serve.
+- **`/getstarted`** still has the button "Start free" and the line "use your agent setup every day". Neither is about the weekly delivery; both are for Peter (acceptance, open defect 1).
+
+### 8.8 Six more changes to the homepage, November 26, 2026
+
+Peter's words, and what was done.
+
+1. "only one + at a time should be open on the home page. Opening up one closes the other". The rows that fold share a native `name`, so the browser closes the others with no script: the questions are one group; the sample idea's rows (Summary, What To Copy, Cora’s scores, the steps row) are another; the steps inside the playbook are a third, so opening a step never closes the row it is in. The same components are on `/agents` (questions and sample idea) and `/faq`, where all eighteen questions share one name, so one answer is open on the whole page. `/pricing` has no folding rows. Browsers older than Chrome 120, Safari 17.2 and Firefox 130 ignore the attribute; a few lines of script do the same for them and stand aside everywhere else.
+2. "it compounds should cycle through the weeks consistently, not end the first time it gets to 26 weeks." The loop's clock never ended: on the deployed preview, with no pointer near it, it went round for as long as it was watched. What stopped it was the rule that a mouse resting on the block pauses it. A reader watches it with the pointer over it, so it stopped under them, with the button still reading "Pause". That rule is removed from both loops (the hero's four parts had it too). A loop now stops for its Pause button, for keyboard focus inside it, and for a hidden tab. Week 26 stays up 2.4 seconds and every other week 1.7 (it was 3.4).
+3. "it compounds should use the word ideas throughout. Bricks make no sense the way it is set up." The caption and the seven lines read "Week 2 / 6 ideas" to "Week 26 / 78 ideas". The squares stay. Each square's label for a screen reader already said "Week 2, idea 1: set up". No visible or spoken text on any marketing page says "brick".
+4. "under you decide what Zack shares, you did not implement the changes I wanted for the 3rd subhead. Turn sharing off any time in your dashboard. is the hero. The hero is the subhead."
+
+   | | Before | Now |
+   |---|---|---|
+   | Third point, heading | Protect your privacy and your most valuable ideas at any time. | Turn sharing off any time in your dashboard. |
+   | Third point, text | Turn sharing off any time in your dashboard. Your Cora Curations keep coming and the price becomes US$400 a month (CA$560 in Canada). | Protect your privacy and your most valuable ideas at any time. |
+
+5. "in the questions, delete "If you turn sharing off in your dashboard, the price becomes US$400 a month (CA$560 in Canada).""
+
+   | | Before | Now |
+   |---|---|---|
+   | What does it cost? (homepage, `/faq`) | US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. Get two Cora Curations for free and pay only after you have tried the product for two full weeks. If you turn sharing off in your dashboard, the price becomes US$400 a month (CA$560 in Canada). | US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. Get two Cora Curations for free and pay only after you have tried the product for two full weeks. |
+
+6. "for when is my card charged, delete "A card is required when you sign up, and it is not charged then.""
+
+   | | Before | Now |
+   |---|---|---|
+   | When is my card charged? (homepage, `/agents`, `/faq`) | A card is required when you sign up, and it is not charged then. The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next. | The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next. |
+
+**Where the higher rate is still stated, after 4 and 5.** It is no longer on the homepage at all. It is on `/pricing` ("Contributing": a second miss, and sharing set to matching only or Zack off); on `/faq` in two answers, "I compete with other people on Roger. What if I don’t want to share?" (also shown on `/agents`) and "What if Zack misses a week?"; and in the terms. On sign-up it is on the plan step, for two missed weeks. A visitor who reads only the homepage and signs up first meets it there.
+
+**After 6, what still says a card is asked for.** The line under every start button, "Card required. Charged only with your third Cora Curation."; the trial line under the price; "Why do you need a card for a free trial?" on `/faq`; and the terms.
+
+### 8.9 The three checks, against the charge code
+
+1. **"Charged only with your third Cora Curation, and once a month after that."** The first charge is made by the Monday charge job (`src/lib/billing/charge-job.ts`) at 6:00 AM Toronto, for a monthly member in the trial who has had both free ones and has picks that week. It starts a Stripe subscription, and Stripe renews it on the same day of each month (`billing_cycle_anchor`), so a renewal is by calendar month and does not usually fall on a Monday. Where the sentence would not hold as written: a card that is declined is charged later, when a new card is given or a retry works, and the Cora Curation waits for it; a first charge whose amount changed after the reminder is charged a day later, on the Tuesday; a month at the higher rate has the difference on that month's one invoice, so it is still one charge, but larger; a failed renewal is tried again by Stripe over the following days; and an account already on one at a time is charged per order.
+2. **"pay only after you have tried the product for two full weeks."** The first charge can never come sooner than 14 days after sign-up. A report counts for the coming Monday up to Sunday 11:59 PM; from a Monday, that is the Monday after (`weekOf` in `src/lib/clock.ts`). Each Cora Curation is one Monday, the charge comes with the third, so it is at least two Mondays after the first. The soonest case is a person who signs up late on a Sunday and whose Zack reports before midnight: first one the next morning, charge 14 days and about 6 hours after sign-up. A person who signs up on a Monday is charged no sooner than 21 days later. The card step states the date ("no earlier than Monday, December 14" for a sign-up in the week of November 26). Counted from the moment the first one arrives, it is one hour short of two full weeks, because the send is at 7:00 AM and the charge at 6:00 AM two Mondays later. And the charge is automatic unless the person cancels first.
+3. **"three ideas."** A week delivers two or one when fewer fit (`pickThree` in `src/lib/cora/pick.ts`, outcome "short"). A short week counts as a delivered Cora Curation: it uses a free one, and it is charged as the third. The app and the Monday email say so that week ("This week there are 2 ideas that fit you, not three. We only send ideas that fit."). The marketing pages and "What is a Cora Curation?" say three with no qualifier. "Up to three ideas" would be exact; it is Peter's line to change. The terms' new definition gives no count.

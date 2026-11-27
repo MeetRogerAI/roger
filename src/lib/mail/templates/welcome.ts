@@ -30,16 +30,16 @@ export function welcomeEmail(o: {
           `After that, Roger is ${price} a month, ${tax}. Your first charge will be no earlier than ${longDate(o.firstChargeNoEarlier)}. We’ll email you the exact date and amount before it happens. You can cancel any time in one click.`,
           `Roger works because everyone’s Zack sends a report each week. If Zack misses two weeks in one month, that month is ${higher}. We always tell you first.`,
         ]
-      : [`After your two free lists, you’re charged ${price}, ${tax}, only when you order a list. Nothing is charged automatically.`];
+      : [`After your two free Cora Curations, you’re charged ${price}, ${tax}, only when you order one. Nothing is charged automatically.`];
   const next =
     o.path === "running"
       ? { line: "Your next step is to connect Zack to your AI agent. It takes a few minutes.", label: "Connect Zack" }
       : { line: "Your next step is to set up your AI agent and the starter team. Most people finish in about half an hour.", label: "Get started" };
   return renderEmail({
     subject: "Welcome to Roger",
-    preview: "Your first two Monday lists are free.",
+    preview: "Your first two Cora Curations are free.",
     heading: `Welcome, ${o.name.split(" ")[0] || "there"}.`,
-    paragraphs: ["Your first two Monday lists are free. Your card is charged only with the third.", ...terms, next.line],
+    paragraphs: ["Your first two Cora Curations are free, one each Monday. Your card is charged only with the third.", ...terms, next.line],
     button: { label: next.label, url: appUrl("/app") },
   });
 }

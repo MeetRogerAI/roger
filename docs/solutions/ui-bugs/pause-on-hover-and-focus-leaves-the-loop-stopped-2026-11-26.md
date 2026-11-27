@@ -29,7 +29,8 @@ pointer was over them or focus was inside them. Both could end up stopped with n
 
 ## What to do
 
-- Take the hover hold only when `pointerType === "mouse"`.
+- Do not pause on hover at all (changed later on November 26, 2026; see "Follow-up" below). The
+  first fix was to take the hover hold only when `pointerType === "mouse"`.
 - Take the focus hold only for `:focus-visible` focus (keyboard), not for focus left by a click.
 - Pressing Play releases every hold. The button's label is derived from whether the timer is
   actually running, never from the user's last press alone.
@@ -43,3 +44,20 @@ Use real input in the browser check: mouse moves and clicks, touch taps and the 
 through the DevTools protocol. `element.click()` followed by `blur()` cannot show this fault.
 A related trap when listing what Tab can reach: `getClientRects()` is non-empty for content
 inside a closed `<details>`; use `checkVisibility()`.
+
+## Follow-up: the mouse-only hover hold still read as a broken loop
+
+The owner reported that "It compounds" ended the first time it reached week 26. Its clock was
+sound: on the deployed build it cycled for as long as it was watched with no pointer near it.
+A reader watches a loop with the mouse resting on it, so the hover hold stopped it under them, at
+whatever state it had reached, with the button still reading "Pause". The hover hold was removed
+from the shared hook. A loop now stops for its Pause button, keyboard focus inside it, and a
+hidden tab. The Pause button is what meets the need to stop moving content.
+
+- Pause on hover is wrong for a block that is the thing being watched. It suits a carousel a
+  reader reaches into, not a picture they look at.
+- A stop the control does not show ("Pause" on a stopped loop) reads as a fault, whatever caused it.
+- To find it, watch the deployed page three ways: no pointer, the pointer scrolled onto the block,
+  and the pointer moved onto it. Reading the timer code would not have found it.
+- When the page scrolls smoothly, read an element's position only after the scroll has settled,
+  or a scripted click lands somewhere else.

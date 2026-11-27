@@ -1,4 +1,5 @@
 import { addDays, weekOf } from "@/lib/clock";
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { amount, money, type Currency, type Plan } from "@/lib/billing/prices";
 import { SHARING_OFF } from "@/lib/app/status";
 import { longDate } from "@/lib/mail/templates/welcome";
@@ -28,7 +29,8 @@ export function sharingEffect(o: {
   quoteWeek?: string | null;
 }): string | null {
   const cur = o.currency ?? "USD";
-  if (o.plan === "per_run") return o.to === "off" ? "With Zack off, lists can’t be ordered until sharing is back on. Your price doesn’t change." : null;
+  // Ordering is named only while one at a time is offered (billing/offered.ts); otherwise nothing can be ordered either way.
+  if (o.plan === "per_run") return o.to === "off" && oneAtATimeOffered() ? "With Zack off, Cora Curations can’t be ordered until sharing is back on. Your price doesn’t change." : null;
   const band = (s: Sharing) => (s === "share" ? "standard" : "higher");
   if (band(o.from) === band(o.to)) return null;
   const standard = money(amount(o.settings, "monthly", cur), cur);

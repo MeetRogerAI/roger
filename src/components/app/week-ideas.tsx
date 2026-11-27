@@ -59,12 +59,12 @@ export function OrderBox({ week, weekLabel, ordered, price }: { week: string; we
     });
   return (
     <div className="rounded-[8px] border border-rule bg-surface p-5">
-      <p className="text-title">{state.ordered ? `Your list for ${weekLabel} is ordered.` : `Want a list on ${weekLabel}?`}</p>
+      <p className="text-title">{state.ordered ? `Your Cora Curation for ${weekLabel} is ordered.` : `Want a Cora Curation on ${weekLabel}?`}</p>
       <p className="mt-1 text-small text-ink-2">
         {state.ordered ? "You can cancel until Sunday night." : `${price}, charged that morning once Zack’s report has arrived. Order until Sunday night.`}
       </p>
       <button type="button" className="btn mt-4" disabled={pending} onClick={() => act(state.ordered ? cancelNextList : orderNextList, !state.ordered)}>
-        {pending ? "Saving…" : state.ordered ? "Cancel the order" : "Order this list"}
+        {pending ? "Saving…" : state.ordered ? "Cancel the order" : "Order this Cora Curation"}
       </button>
       <p role="status" aria-live="polite" className="mt-2 text-small text-ink-2">
         {state.message}

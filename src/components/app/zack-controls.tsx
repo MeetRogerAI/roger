@@ -33,7 +33,7 @@ function Message({ ok, text }: { ok: boolean; text?: string }) {
 const SHARING: { value: "share" | "match_only" | "off"; label: string; hint: string }[] = [
   { value: "share", label: "Share with the pool", hint: "Your plays, with private details removed, can help other members. This keeps your monthly price at the standard rate." },
   { value: "match_only", label: "Use for my matching only", hint: "Zack still runs and Roger uses his report only to pick your ideas. Nothing of yours is shared." },
-  { value: "off", label: "Zack off", hint: "Zack sends nothing. Your lists are picked from what Roger already knows about you." },
+  { value: "off", label: "Zack off", hint: "Zack sends nothing. Your Cora Curations are picked from what Roger already knows about you." },
 ];
 
 /** Spec B.5 item 2: the choice, then a confirmation that states the price effect, then saved. */

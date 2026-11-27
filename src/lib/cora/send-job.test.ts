@@ -80,7 +80,7 @@ describe("the Monday send", () => {
     const email = to("a@example.com")[0].text;
     const ideas = await weekIdeas(query, a, WEEK, settings.playbookPreface);
     for (const i of ideas) expect(email).toContain(i.title);
-    expect(email).toContain("Free list 1 of 2.");
+    expect(email).toContain("Free Cora Curation 1 of 2.");
     expect(await user(a)).toEqual({ free_lists_used: 1 });
   });
 
@@ -143,13 +143,16 @@ describe("the Monday send", () => {
     expect(await user(a)).toEqual({ free_lists_used: 1 });
   });
 
-  it("sends a charged order one 'Your list, and your receipt' email", async () => {
+  it("sends a charged order one 'Your Cora Curation, and your receipt' email", async () => {
     const a = await member("a@example.com", { status: "active", plan: "per_run", free_lists_used: 2 });
     await picked(a);
     await query("insert into orders (user_id, week_of, status, amount_cents, currency) values ($1, $2, 'charged', 5650, 'USD')", [a, WEEK]);
     await runSendJob(query, deps(), { week: WEEK });
-    expect(to("a@example.com").map((m) => m.subject)).toEqual(["Your list, and your receipt"]);
-    expect(to("a@example.com")[0].text).toContain("This list: US$56.50 with tax.");
+    expect(to("a@example.com").map((m) => m.subject)).toEqual(["Your Cora Curation, and your receipt"]);
+    expect(to("a@example.com")[0].text).toContain("This Cora Curation: US$56.50 with tax.");
+    // One at a time is not offered at launch, so the line does not invite another order; it names monthly instead.
+    expect(to("a@example.com")[0].text).not.toMatch(/Order next Monday/);
+    expect(to("a@example.com")[0].text).toContain("You can switch to monthly on the billing page");
     expect((await query<{ status: string }>("select status from orders"))[0].status).toBe("sent");
   });
 
@@ -157,7 +160,7 @@ describe("the Monday send", () => {
     const a = await member("a@example.com");
     await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, $2, 'not_eligible')", [a, WEEK]);
     await runSendJob(query, deps(), { week: WEEK });
-    expect(to("a@example.com")[0].text).toContain("no free list was used");
+    expect(to("a@example.com")[0].text).toContain("there is no Cora Curation this week and no free one was used");
     expect(await user(a)).toEqual({ free_lists_used: 0 });
   });
 
@@ -175,7 +178,7 @@ describe("the Monday send", () => {
     const a = await member("a@example.com");
     await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, $2, 'none')", [a, WEEK]);
     await runSendJob(query, deps(), { week: WEEK });
-    expect(to("a@example.com")[0].text).toContain("Nothing was charged, and this week doesn’t use one of your free lists.");
+    expect(to("a@example.com")[0].text).toContain("Nothing was charged, and this week doesn’t use one of your free Cora Curations.");
     expect(sent.map((m) => m.subject)).toContain("[Roger] A member had no eligible ideas");
   });
 
@@ -184,9 +187,9 @@ describe("the Monday send", () => {
     await picked(a);
     await runSendJob(query, deps(), { week: WEEK });
     const subjects = to("a@example.com").map((m) => m.subject);
-    expect(subjects).toEqual(["Your next list is your first paid one", "Your three ideas for the week of Monday, December 14"]);
+    expect(subjects).toEqual(["Your next Cora Curation is your first paid one", "Your three ideas for the week of Monday, December 14"]);
     // Both emails state the same date and the same told amount.
-    expect(to("a@example.com")[1].text).toContain("Free list 2 of 2. Your next list is your first paid one: Monday, December 21, US$226 with tax.");
+    expect(to("a@example.com")[1].text).toContain("Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 21, US$226 with tax.");
     expect(to("a@example.com")[0].text).toContain("US$226");
   });
 
@@ -198,7 +201,7 @@ describe("the Monday send", () => {
     expect(to("a@example.com")).toEqual([]);
     failing = false;
     await runSendJob(query, deps(new Date("2026-12-14T12:15:00Z")), { week: WEEK });
-    expect(to("a@example.com").map((m) => m.subject)).toEqual(["Your next list is your first paid one", "Your three ideas for the week of Monday, December 14"]);
+    expect(to("a@example.com").map((m) => m.subject)).toEqual(["Your next Cora Curation is your first paid one", "Your three ideas for the week of Monday, December 14"]);
     expect(await user(a)).toEqual({ free_lists_used: 2 });
   });
 

@@ -316,6 +316,16 @@ describe("the v1 /agents page's sections", () => {
     expect(text(sample)).toContain(idea.description);
     expect(text(sample)).toContain(idea.pasteToInstall);
   });
+
+  it("opens one row at a time, as the homepage does: the questions share a name, the sample idea's rows another, its steps a third", async () => {
+    const markup = await view();
+    const named = (html: string) => [...html.matchAll(/<details\b([^>]*)>/g)].map((m) => ({ step: m[1].includes('data-fold="step"'), name: /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "" }));
+    expect(new Set(named(sectionMarkup(markup, "questions")).map((r) => r.name))).toEqual(new Set(["questions-rows"]));
+    const sample = named(sectionMarkup(markup, "sample"));
+    expect(new Set(sample.filter((r) => !r.step).map((r) => r.name))).toEqual(new Set(["sample-rows"]));
+    expect(new Set(sample.filter((r) => r.step).map((r) => r.name))).toEqual(new Set(["sample-steps"]));
+    for (const row of named(markup)) expect(row.name).not.toBe("");
+  });
 });
 
 describe("the v1 /agents page's links", () => {

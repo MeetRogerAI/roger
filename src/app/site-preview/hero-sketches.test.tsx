@@ -192,7 +192,7 @@ describe.each(numbers)("hero sketch %s", (n) => {
   it("shows the bricks: three to a week, each with a label a screen reader hears", () => {
     const labels = [...markup.matchAll(new RegExp(`${copy.bricks.week} (\\d+), ${copy.bricks.idea} (\\d+): (?:${copy.bricks.setUp}|${copy.bricks.empty})`, "g"))];
     // Sketch 4 draws its bricks in one SVG, named by the week and the count.
-    if (n === "4") expect(markup).toMatch(/<svg[^>]*role="img"[^>]*aria-label="Week 3: 9 bricks"/);
+    if (n === "4") expect(markup).toMatch(/<svg[^>]*role="img"[^>]*aria-label="Week 3: 9 ideas"/);
     else expect(labels.length).toBeGreaterThanOrEqual(9);
     expect(text(markup)).toContain("Week 3");
   });

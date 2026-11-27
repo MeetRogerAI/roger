@@ -274,6 +274,12 @@ describe("/faq on v1", () => {
     expect(hrefs(markup)).toEqual(["/start"]);
     expect(text(startBand(markup))).toBe("Get two free Cora Curations Card required. Charged only with your third Cora Curation.");
   });
+
+  it("keeps one answer open at a time on the whole page: all eighteen, in every group, share one native name", async () => {
+    const names = [...(await faq()).matchAll(/<details\b([^>]*)>/g)].map((m) => /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "");
+    expect(names).toHaveLength(18);
+    expect(new Set(names)).toEqual(new Set(["faq-questions"]));
+  });
 });
 
 describe("/how-it-works on v1", () => {

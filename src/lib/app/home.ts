@@ -1,6 +1,7 @@
 import { weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { contributionStatus } from "@/lib/billing/contribution";
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { amount, money, type Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
 import { adjustmentLine, statusLine, type StatusFacts } from "./status";
@@ -80,7 +81,10 @@ export async function loadHome(q: Query, userId: string, s: V3Settings, now: Dat
     const next = weekOf(now, s.runCutoff);
     const [o] = await q<{ status: string }>(`select status from orders where user_id = $1 and week_of = $2`, [userId, next]);
     const cur = u.currency ?? "USD";
-    orderBox = { week: next, ordered: o?.status === "ordered", price: money(amount(s, "per_run", cur), cur) };
+    const ordered = o?.status === "ordered";
+    // While one at a time is not offered (billing/offered.ts) there is nothing to order, so no box and no price.
+    // An order placed before then is still shown, so it can still be cancelled.
+    if (oneAtATimeOffered() || ordered) orderBox = { week: next, ordered, price: money(amount(s, "per_run", cur), cur) };
   }
   // Spec B.9 notice 4: after a second miss, a banner on /app as well as the strip.
   const banner = adjustmentLine(contribution, s, u.currency ?? "USD");

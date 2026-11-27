@@ -155,6 +155,6 @@ export async function uploadReport(_prev: UploadState, fd: FormData): Promise<Up
   refresh();
   return {
     status: "saved",
-    message: `${kind === "run" ? "Report" : "Profile"} received for your list on ${stored.week_of}${stored.replaced ? ", replacing the earlier one" : ""}.`,
+    message: `${kind === "run" ? "Report" : "Profile"} received for your Cora Curation on ${stored.week_of}${stored.replaced ? ", replacing the earlier one" : ""}.`,
   };
 }

@@ -1,3 +1,4 @@
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 import { MISSED_FIX } from "./missed-forgiven";
 import { longDate } from "./welcome";
@@ -30,7 +31,10 @@ export function secondMissEmail(o: OwedMail): Rendered {
     paragraphs: [
       o.ended ? carriedMissText({ ...o, periodEnd: o.ended.periodEnd, reason: "two_misses" }) : secondMissText(o),
       MISSED_FIX,
-      `If a weekly report doesn’t suit you, you can switch to one list at a time on the billing page (${appUrl("/app/billing")}). If you cancel before that invoice, the difference isn’t collected.`,
+      // The switch is named only while one at a time is offered (billing/offered.ts): at launch it is not.
+      oneAtATimeOffered()
+        ? `If a weekly report doesn’t suit you, you can switch to one Cora Curation at a time on the billing page (${appUrl("/app/billing")}). If you cancel before that invoice, the difference isn’t collected.`
+        : `If you cancel before that invoice on the billing page (${appUrl("/app/billing")}), the difference isn’t collected.`,
     ],
     button: { label: "Check Zack", url: appUrl("/app/zack") },
   });

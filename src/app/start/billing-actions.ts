@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireUserForAction } from "@/lib/auth/access";
 import { startCardSetup } from "@/lib/billing/card-setup";
 import { stripeGateway } from "@/lib/billing/gateway";
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { query } from "@/lib/db-query";
 import { field } from "@/lib/form";
 import { appUrl } from "@/lib/mail/layout";
@@ -12,12 +13,19 @@ import { clientIp, hit, limits } from "@/lib/rate-limit";
 
 export type PlanState = { status: "idle" | "error"; errors?: Record<string, string>; message?: string };
 
-/** Screen 3 (spec B.4): the plan and the consent, which the user ticks themselves. */
+/**
+ * Screen 3 (spec B.4): the plan and the consent, which the user ticks themselves.
+ * While one at a time is not offered (billing/offered.ts) the page shows
+ * monthly only and sends no plan, and monthly is what is stored: a posted
+ * "per_run" is refused here, whatever the page showed.
+ */
 export async function savePlan(_prev: PlanState, fd: FormData): Promise<PlanState> {
   const session = await requireUserForAction();
-  const plan = field(fd, "plan");
+  const offered = oneAtATimeOffered();
+  const plan = field(fd, "plan") || (offered ? "" : "monthly");
   const errors: Record<string, string> = {};
-  if (plan !== "monthly" && plan !== "per_run") errors.plan = "Choose one.";
+  if (plan === "per_run" && !offered) errors.plan = "That plan isn’t offered. Roger is monthly.";
+  else if (plan !== "monthly" && plan !== "per_run") errors.plan = "Choose one.";
   if (field(fd, "consent") !== "yes") errors.consent = "Tick the box to agree, so Zack can run for you each week.";
   if (Object.keys(errors).length) return { status: "error", errors };
   const rows = await query(
@@ -52,7 +60,9 @@ export async function openCardPage(): Promise<PlanState> {
     await hit(`checkout:ip-day:${ip}`, limits.checkoutPerIpDay),
   ];
   if (allowed.includes(false)) return { status: "error", message: "Too many tries. Wait a while and try again, or write to us." };
-  const [u] = await query<{ currency: "USD" | "CAD" | null }>(`select currency from users where id = $1`, [session.userId]);
+  const [u] = await query<{ currency: "USD" | "CAD" | null; plan: string; status: string }>(`select currency, plan, status from users where id = $1`, [session.userId]);
+  // A sign-up left half done on one at a time, from when it was offered: back to the plan step, which stores monthly.
+  if (u?.status === "signup" && u.plan === "per_run" && !oneAtATimeOffered()) redirect("/start/plan");
   let r: Awaited<ReturnType<typeof startCardSetup>>;
   try {
     r = await startCardSetup(query, gw, {

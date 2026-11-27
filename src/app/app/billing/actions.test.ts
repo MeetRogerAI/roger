@@ -48,6 +48,9 @@ vi.mock("@/lib/billing/subscriptions", async (orig) => ({
   stripeAdjustments: () => null,
 }));
 vi.mock("@/lib/billing/gateway", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/gateway")>()), stripeGateway: () => card }));
+// The one-at-a-time switch (src/lib/billing/offered.ts): off, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
 
 const { cancelAction, switchAction, undoCancelAction, updateCardAction } = await import("./actions");
 const form = (o: Record<string, string>) => {
@@ -67,6 +70,7 @@ beforeEach(async () => {
   hits.length = 0;
   limitAfter = Infinity;
   refreshed = 0;
+  offer.on = false;
   plans = fakePlans();
   card = fakeGateway();
   const end = new Date(Date.now() + 20 * 86_400_000);
@@ -111,7 +115,25 @@ describe("the billing actions act only on the signed-in account", () => {
     expect(plans.calls).toEqual([]);
   });
 
-  it("switches only the caller, and refuses a plan that isn't one of the two", async () => {
+  it("refuses a switch to one at a time while it is not offered, posted directly: Stripe is not called, nothing changes and nothing is emailed", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-12T15:00:00Z"));
+    try {
+      expect(await outcome(() => switchAction({ status: "idle" }, form({ to: "per_run" })))).toEqual({
+        value: { status: "error", message: "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday." },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(plans.calls).toEqual([]);
+    expect(await status(mine)).toMatchObject({ status: "active", plan: "monthly", cancelling: false });
+    expect((await current<{ plan_change_to: string | null }>("select plan_change_to from users where id = $1", [mine]))[0].plan_change_to).toBeNull();
+    expect(mailed).toEqual([]);
+    expect(refreshed).toBe(0);
+  });
+
+  it("with one at a time offered: switches only the caller, and refuses a plan that isn't one of the two", async () => {
+    offer.on = true;
     // A Saturday, outside the window from Sunday's cutoff to the end of Monday.
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-12-12T15:00:00Z"));

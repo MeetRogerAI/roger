@@ -153,18 +153,17 @@ export const siteTerms: LegalDoc = {
       id: "trial",
       heading: "The free trial",
       body: [
-        "Your first {freeLists} Monday lists are free. Only a list that is delivered to you counts as one of them.",
+        "Your first {freeLists} Cora Curations are free. A Cora Curation is the set of ideas Roger sends you on a Monday. Only a Cora Curation that is delivered to you counts as one of them.",
         "We ask for a card when you sign up, and it is kept on file. It is not charged then.",
-        "On monthly, your card is charged with your {firstPaidList} list. On one list at a time, it is charged only when you order a list. Cancel before then and you pay nothing.",
-        "If no first list is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
+        "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
+        "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
       ],
     },
     {
       id: "price",
       heading: "The price",
       body: [
-        "Monthly costs {monthlyUsd} a month ({monthlyCad} in Canada). It is charged once a month and brings a list every Monday. A week has no list when Roger has no new ideas for you or the week fails on our side, and lists are held while a payment is unpaid.",
-        "One list at a time costs {listUsd} a list ({listCad} in Canada). You order a list for any Monday you want one, and you are charged only for the lists you order.",
+        "Roger has one plan, monthly. It costs {monthlyUsd} a month ({monthlyCad} in Canada). It is charged once a month and brings a Cora Curation every Monday. A week has no Cora Curation when Roger has no new ideas for you or the week fails on our side, and Cora Curations are held while a payment is unpaid.",
       ],
     },
     {
@@ -172,11 +171,10 @@ export const siteTerms: LegalDoc = {
       heading: "Contributing, and the higher monthly rate",
       body: [
         "Roger works because everyone’s Zack contributes. Everyone starts as a contributor.",
-        "On monthly, if Zack misses a week, the first miss each billing month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). A miss caused by Roger never counts. We email you both times.",
+        "If Zack misses a week, the first miss each billing month is forgiven. A second miss makes that month {higherUsd} ({higherCad} in Canada). A miss caused by Roger never counts. We email you both times.",
         "If you set sharing to matching only or to Zack off in your dashboard, the monthly price is {higherUsd} a month ({higherCad} in Canada).",
         "Those are the only two cases where the higher rate applies. It is not a plan you can choose.",
         "Your subscription itself stays at the standard price. For a month at the higher rate, the difference is added to your next invoice as its own line.",
-        "One-at-a-time lists need that week’s Zack report. With Zack off, a list cannot be ordered.",
       ],
     },
     {

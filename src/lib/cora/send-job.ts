@@ -2,6 +2,7 @@ import { isAtOrPast, torontoDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { statusLine, type StatusFacts } from "@/lib/app/status";
 import { weekIdeas } from "@/lib/app/week";
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { amount, money, type Currency } from "@/lib/billing/prices";
 import { sendFirstPaidNext } from "@/lib/billing/quote";
 import { contributionStatus, processContributions } from "@/lib/billing/contribution";
@@ -107,7 +108,8 @@ export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string):
     if (now.plan === "monthly" && d.gw && !(await sentAlready(q, now.id, "first_paid_next", week))) {
       await sendFirstPaidNext(q, { gw: d.gw, settings: d.settings, now: d.now, ...mailOf(d) }, now.id).catch((e) => console.error("[send] first paid next", e instanceof Error ? e.message : e));
     }
-    if (now.plan === "per_run") {
+    // "How to order the next one" goes only while ordering is offered (billing/offered.ts); otherwise the Monday email's status line says what is open.
+    if (now.plan === "per_run" && oneAtATimeOffered()) {
       const cur = now.currency ?? "USD";
       await sendToUser({ id: now.id, email: now.email }, "order_next", week, orderNextEmail({ price: money(amount(d.settings, "per_run", cur), cur) }), d).catch(() => {});
     }
@@ -166,9 +168,9 @@ export async function runSendJob(q: Query, d: SendDeps, o: { week: string }): Pr
         // of Roger, and the week never counts as missed (contribution.ts excuses an outcome of 'none').
         const paying = u.plan === "monthly" && u.status === "active" && !u.sponsored;
         const note = paying
-          ? "This list is missing because of Roger, not you, and this week never counts as a missed week."
+          ? "This Cora Curation is missing because of Roger, not you, and this week never counts as a missed week."
           : onFreeLists
-            ? "Nothing was charged, and this week doesn’t use one of your free lists."
+            ? "Nothing was charged, and this week doesn’t use one of your free Cora Curations."
             : u.sponsored
               ? ""
               : "Nothing was charged.";
