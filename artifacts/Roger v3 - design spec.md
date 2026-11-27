@@ -1,6 +1,6 @@
 # Roger v3: design and build spec for meetroger.ai
 
-Version 1.4 · November 26, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
+Version 1.5 · November 26, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
 
 **What this is.** A spec to hand to Claude Code. It replaces the Circles spec (`artifacts/Archives/Circles/Roger (CTA Circles) - design spec.md`, version 0.6) and turns meetroger.ai into the v3 product: a free trial, one plan (monthly) *(1.4)*, and a weekly cycle that sends each user three ideas every Monday. Strategy source: `artifacts/Strategy/Roger-Strategy-v3.1.md`. Decisions source: the design interview with Peter on November 21, 2026.
 
@@ -52,6 +52,14 @@ Version 1.4 · November 26, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/
 - **Emails** (B.13): first list held, held reminder, the no-card closing email; the welcome is reworded and moves to Step 3.
 - **Admin** (B.12): a "First list held, no card" attention state and a "Trial · no card" status; `/admin/interest` shows a sign-up funnel by week (signed up, Zack connected, first teaser, card saved, first charge) instead of the per-run plan count.
 
+**What changed in 1.5** (Peter, November 26, 2026: Roger AI Levels and the build order):
+
+- A fourth app version, **B4: levels**, comes after B3 (B.16a, B.17), with acceptance checks 51 to 58 (B.18). It is specified in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md` (the implementation) and `Roger AI Agent Levels and Check Charts v1.1.md` (the ten levels, rules and check charts). No existing version is renumbered.
+- In B2, the 26-week brick colours are renamed **Seasons** (`--color-season-1` to `--color-season-5`), because "Level" now means only Roger AI Levels (0.7, B.15).
+- In B2, sign-up quiz question 5 offers Levels 0 to 9, with each level's "you need it when…" symptom (B.4).
+- Zack 2.1 adds a private `roger-level` block. It ships as content once B1 is live, after intake is confirmed to ignore a fenced block it does not recognise (B.5).
+- B.17 no longer lists anything that could be cut from B1. Every version is built in full.
+
 ---
 
 # Part 0. Shared context
@@ -79,6 +87,7 @@ Roger makes each user's AI agents better every week. An agent called Zack runs i
 | Referral credit | A referrer earns a credit equal to the referred user's first payment at list price (one month, or one list), in the referrer's own currency, when that payment clears. No cap. (Version B2.) |
 | Office deals | Sponsor codes created in the admin. Sponsored users skip the card step *(1.4: they never see a held list or Payment)*. The brokerage receives an invoice and nothing else: no login, no reporting. (Version B2.) |
 | Group session | Weekly, hosted by the Roger team, for subscribers, one guest each. A session card in the dashboard. (Version B2.) |
+| Roger AI Levels | *(1.5)* Ten levels, 0 (Non-user) to 9 (Multiplier), placed by what a user's agent system actually does, with a binary check chart for each level-up. Zack 2.1 collects the evidence in a private `roger-level` block; Roger scores it; Cora uses it to choose ideas. The levels are in `Roger AI Agent Levels and Check Charts v1.1.md`; the build is in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`. Version B4, with two small pieces in B2. |
 | Audiences | The homepage is for people in real estate. `/agents` is for people who already run AI agents. |
 | Sign-up quiz | Routes people into three paths and never blocks anyone. Its answers become the profile Cora matches on. |
 | Sign-in | Email link, plus "Sign in with Google". No passwords. |
@@ -180,7 +189,7 @@ The two builders work in the same repo. Ownership is by path so they rarely touc
 | `--color-f-ease` | Ease to copy bar | `#2c8463` |
 | `--color-f-proof` | Proof bar | `#6650b4` |
 | `--color-f-surprise` | Surprise bar | `#b0457a` |
-| `--color-level-1` to `--color-level-5` | Brick and graph colour for each level | reach, ease, proof, surprise, hours, in that order |
+| `--color-season-1` to `--color-season-5` | Brick and graph colour for each Season *(1.5: renamed from `--color-level-*` in B2)* | reach, ease, proof, surprise, hours, in that order |
 | `--color-marker` | The "you are here" dot on the graph | `#c63b2b` |
 
 Check each value for at least 3:1 contrast against `--color-ground` and `--color-surface`, and add lifted versions for night chapters. Adjust lightness if needed and keep the hue. Every bar and brick also carries a text label or number, so colour is never the only signal.
@@ -285,7 +294,7 @@ Sitemap with `v3Mode` on: `/`, `/agents`, `/pricing`, `/how-it-works`, `/faq`, `
 
 Build these once in `src/components/v3/` and reuse them across pages.
 
-1. **Brick stack.** The recurring visual (0.7). Takes a week count and a level.
+1. **Brick stack.** The recurring visual (0.7). Takes a week count and a Season *(1.5)*.
 2. **Price block (night).** USD and CAD toggle, reusing the behaviour in `src/components/circles/price.tsx`: default from the `x-vercel-ip-country` header, the choice kept for the tab, the currency code always shown after the amount. *(1.4)* One price, monthly; one list at a time is not shown. Under it: the trial line and the tax line. No non-contributor plan is shown anywhere on the public site.
    - Display: "US$200 / month USD", or "CA$280 / month CAD" *(1.4)*. With CAD showing, add "plus HST". With USD showing, add "plus tax where it applies".
    - *(1.4)* Under the price, one short line: "A new list every Monday." ~~The two plans cost the same, so the block must make plain that monthly is much cheaper per list.~~ (1.3, removed with the one-list price.)
@@ -570,7 +579,7 @@ Every `/app/*` and `/admin/*` page carries noindex and requires a session.
 | 2 | Do you use AI agents for work today? | Not yet / Most weeks / Every day |
 | 3 | Which AI agents do you use, or plan to? | Choose any *(1.3)*: the list in `src/data/zack.ts`, "Another one" (with a text field), "Not sure yet". A star marks the primary agent: the first one ticked, or another the user picks with "Make primary". The account is set up first for the primary agent; members can switch on `/app/zack`. |
 | 4 | How many agents, bots or scheduled routines do you run? | None / 1–2 / 3–5 / 6 or more |
-| 5 | Which level sounds most like you today? *(1.3)* | One of the AI agent levels 0 to 8 (Non-user to Self-evolving), each shown with what the system does and the user's role (`src/data/agent-levels.ts`, from "Roger AI Agent Levels and Check Charts v1.0") |
+| 5 | Which level sounds most like you today? *(1.3)* | One of the AI agent levels. *(1.5, B2)* Levels 0 to 9 (Non-user to Multiplier), each shown with its "you need it when…" symptom, what the system does and the user's role (`src/data/agent-levels.ts`, from "Roger AI Agent Levels and Check Charts v1.1"). B1 shipped Levels 0 to 8 from v1.0. |
 | 6 | What do you most want help with? | Choose any, from the fixed category list (B.5) |
 | 7 | How do you feel about trying new software for work? | I avoid it / I'll try it if someone shows me / I try new tools often |
 
@@ -1227,8 +1236,8 @@ create table if not exists setup_files (
 |---|---|
 | **Referral links** | Every user has a link, `/r/{code}`, shown on `/app/referrals` with a "Copy" button and the referral script. Visiting it stores the code for 60 days and carries it into `/start`. The first referrer recorded for a person wins. A person cannot refer themselves. |
 | **Referral credit** | When a referred user's first invoice is paid, the referrer is credited that first payment at list price (one month, or one list) in the referrer's own currency, applied to their Stripe balance so it comes off their next invoices or orders. No cap; unused credit carries forward. A sponsored referred user earns the referrer nothing. `/app/referrals` lists each person referred, their stage (invited, in trial, paying), and the credit earned and remaining. |
-| **Wednesday stats email** | Level, bricks, contribution points, leaderboard rank, credit balance, and one invitation link. |
-| **Bricks and levels** | On `/app/history`: a 26-week compounding graph, the line in the level colour, a larger marker on the user's current week. Each idea set up is a brick. After week 26 the graph starts again in the next level's colour, up to level 5. The colour is the whole reward. |
+| **Wednesday stats email** | Season *(1.5)*, bricks, contribution points, leaderboard rank, credit balance, and one invitation link. B4 adds the user's Level and "1 step from Level N" when one core item is open. |
+| **Bricks and Seasons** *(1.5: renamed from "Bricks and levels")* | On `/app/history`: a 26-week compounding graph, the line in the Season colour, a larger marker on the user's current week. Each idea set up is a brick. After week 26 the graph starts again in the next Season's colour, up to Season 5. The colour is the whole reward. "Level" is not used here: it means Roger AI Levels (B4). |
 | **Leaderboard** | One network-wide board on `/app/leaderboard`. A user earns 1 point when Cora picks one of their plays for another user and 1 more when that user's set-up is confirmed. Users appear under a display name they choose. Counts are shown ("2 users adopted your idea"), never names. |
 | **Group session** | A card on `/app/sessions`: the next session's day, time, and Google Meet link, with "Add to calendar". Paying and sponsored users only; trial users see it greyed out with "Opens when you subscribe". A subscriber invites one guest per session by name and email; the guest receives a one-time invitation at `/g/{token}` and is recorded as that subscriber's referral. Admins set the day, time, and link, and tick who attended. |
 | **Sponsors** | In `/admin/sponsors` an admin creates a sponsor: name, currency, negotiated standard and higher monthly prices, number of seats, and a code. A person who signs up at `/start?sponsor={code}` ~~skips the card step~~ *(1.4: is never asked for a card: no held list, no Payment)*. Each month the admin page shows the seats in use at each price and prepares a Stripe invoice to the sponsor for an admin to send. The sponsor has no login and sees nothing about any user. The contributor rule applies to sponsored users at the sponsor's two prices. |
@@ -1243,6 +1252,22 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 | **Pipeline** | `/admin/pipeline`: every person from first touch (lead, guest, referral, waitlist, sign-up) through trial to paying, with the date of each stage and where they came from. Replaces counting by hand. |
 | **Review bot** | `/admin/review`: on a schedule, a model reads the week's runs, flags, rejections, picks, and set-up rates and proposes specific wording changes to the Zack and Cora instruction files. An admin reads each proposal and approves or rejects it. Nothing changes without approval, and approved changes go into the repo as a normal commit. |
 | **Feedback** | Users' replies and notes are stored against their record and are part of what the review bot reads. |
+
+## B.16a Version B4: levels *(1.5)*
+
+Built after B3. The full specification is `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`, section 3.6, with the levels, rules and check charts in `Roger AI Agent Levels and Check Charts v1.1.md`.
+
+| Feature | What it does |
+|---|---|
+| **Level intake** | Validates Zack 2.1's private `roger-level` block (agents, routines, rules, 7 days of activity, self-report answers) and runs the privacy check on it, like the rest of the profile. |
+| **Level engine** | After each Zack run: sets each check item's live state, computes the earned level (a level never drops), and lists gaps and next-level items. |
+| **Dashboard check chart** | The user's Level and its name, the next level's check chart with live 0s and 1s, gaps flagged first, and how each item is checked. |
+| **Stats email and operations view** | The Level line in the Wednesday email; each user's Level and core gaps in the admin operations view. |
+| **Cora uses levels** | Eligibility (no play above the user's Level + 1) and three slots: fix a gap, reach the next level, best fit. |
+
+Before B4 starts: Zack 2.1 is approved and live, and Cora 2.0 change 8 (matching on "Also runs" and the profile's Setup) is built (launch list S20, S23, S24).
+
+New tables: `level_items` (user, item, live state, last evidence date), `user_levels` (user, level earned, earned at, peak).
 
 ## B.17 Versions and sizes
 
@@ -1267,21 +1292,13 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 
 Add about 4 half-days for end-to-end testing with Stripe's test clock, which this version needs because most of its behaviour happens over weeks.
 
-**What could come out of B1 if time is short,** in the order I would cut:
+Every version is built in full *(1.5)*.
 
-1. Google sign-in (0.5). Email link alone works.
-2. The automatic invoice line for a second miss (1). An admin adds it by hand in Stripe from the operations view while user numbers are small. The notices stay.
-3. The model fallback for reports without a `roger-run` block (0.5). Unlisted agents wait.
-4. Run deletion by the user (0.5). An admin does it on request.
-5. The sample idea chooser and the interest page (0.5).
-
-That is about 3 half-days. Nothing else in B1 can go without breaking the trial, the charge, or the weekly cycle.
-
-**B2: growth.** About 13 half-days: referral links and credit 3.5, stats email 1, bricks and levels 2, leaderboard and points 2, group session and guests 1.5, sponsors 3.
+**B2: growth.** About 13.5 half-days *(1.5)*: referral links and credit 3.5, stats email 1, bricks and Seasons (including the rename from levels) 2, leaderboard and points 2, group session and guests 1.5, sponsors 3, quiz question 5 to Levels 0 to 9 with symptoms 0.5.
 
 **B3: measurement.** About 8 half-days: measures 2, pipeline 3, review bot 3.
 
-**B4: levels.** About 10.5 half-days, after B3. Specified in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`, section 3, which also adds about 0.5 half-day to B2: the Season rename inside "bricks and levels", and quiz question 5 offering Levels 0 to 9 with symptoms. *(Added November 26, 2026.)*
+**B4: levels.** About 10.5 half-days *(1.5)*, after B3 (B.16a): level intake 1, level engine and storage 3, dashboard check chart 2, stats email Level line and operations view 1.5, Cora's use of levels 2, tests on the pilot users' real runs 1. Specified in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`, section 3.6.
 
 ## B.18 Acceptance checks
 
@@ -1358,6 +1375,17 @@ That is about 3 half-days. Nothing else in B1 can go without breaking the trial,
 48. Sponsored members never see a teaser or Payment and get their lists from the first Monday.
 49. The admin funnel counts sign-ups by week through Zack connected, first teaser, card saved and first charge.
 50. Monthly is the only plan offered anywhere in the product (leftover per-run test accounts on preview excepted).
+
+**Levels** *(1.5; B2 items marked, the rest B4)*
+
+51. (B2) The brick graph, its tokens and the stats email say "Season"; the word "Level" appears only for Roger AI Levels.
+52. (B2) Quiz question 5 offers Levels 0 to 9, each with its "you need it when…" symptom, and stores the answer.
+53. A run with a valid `roger-level` block is stored and scored; a run without one is still accepted and scored on its other evidence; the block never enters the shared pool.
+54. A user's earned Level never goes down. Each check item shows its live 0 or 1, and gaps below the Level are listed first.
+55. A level is never earned on self-reported items alone: every level needs at least three core items verified by Zack or Roger data.
+56. The dashboard shows the next level's check chart with how each item is checked; the operations view shows each user's Level and core gaps.
+57. Cora never picks a play whose entry level is above the user's Level + 1, and fills the three slots in order: gap, next level, best fit.
+58. Scoring the pilot users' real Zack 2.1 runs gives the levels the Roger team assigned by hand, or every difference is explained.
 
 ---
 

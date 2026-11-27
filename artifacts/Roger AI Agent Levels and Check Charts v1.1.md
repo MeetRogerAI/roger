@@ -1,7 +1,7 @@
 # Roger AI Agent Levels and Check Charts v1.1
 
 Version 1.1 · November 26, 2026 · Roger (meetroger.ai) · Draft for Peter's approval
-Folder: `AI Agent Setup Levels/` · Companion file: `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.1.md` (how Zack, Cora and the dashboard implement these levels)
+Folder: `AI Agent Setup Levels/` · Companion file: `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md` (how Zack, Cora and the dashboard implement these levels)
 
 Labels used throughout, as in Strategy v3.1: **Decided** means Peter settled it in the November 25 interview. **Recommendation** means proposed here and not yet approved. **Estimate** means planning math.
 
@@ -23,7 +23,7 @@ Ten levels, 0 to 9, that place every person (prospect or user, work or home) by 
 | D6 | **A level never drops.** It is earned and permanent, like riding a bicycle. The **check chart stays live**: each item shows its current 0 or 1 from recent Zack runs, and Cora reads the live chart. |
 | D7 | **Guardrails are core items at every level from 1 up.** You cannot level up on capability while skipping safety. |
 | D8 | The top two levels are **8 Self-evolving** and **9 Multiplier**. |
-| D9 | The deliverable is Markdown. Levels and check charts live in this file; the implementation lives in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.1.md`. Zack and Cora move to 2.1. |
+| D9 | The deliverable is Markdown. Levels and check charts live in this file; the implementation lives in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`. Zack and Cora move to 2.1. |
 | D10 | Design skill is included as **electives, never core** (section 5). |
 
 ### Changes in v1.1 (November 26, 2026)
@@ -35,6 +35,7 @@ Applied from m4lka's "Grok Bot: 6 Bots, 200+ Agents, a Smaller Bill" (Oct 29, 20
 - **A "you need it when" symptom for each level**, added to the table in section 1.
 - 6.12 stays an elective. Promoting it to core is open question 6.
 - Totals go from 137 to 148 items. Core is unchanged at 55.
+- Build order (November 26): this system is app version B4, after B3, with the Season rename and quiz Levels 0 to 9 in B2. See the build spec, section 3, and the v3 design spec 1.5, B.16a.
 
 ### How it was made
 
