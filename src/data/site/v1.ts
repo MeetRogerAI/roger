@@ -149,12 +149,12 @@ const questions: V1QuestionGroup[] = [
     items: [
       {
         q: "What does it cost?",
-        a: `{monthlyUsd} a month, plus tax where it applies. In Canada it is {monthlyCad} a month, plus HST. ${valueLine} If you turn sharing off in your dashboard, the price becomes {higherUsd} a month ({higherCad} in Canada).`,
+        a: `{monthlyUsd} a month, plus tax where it applies. In Canada it is {monthlyCad} a month, plus HST. ${valueLine}`,
         on: ["home"],
       },
       {
         q: "When is my card charged?",
-        a: "A card is required when you sign up, and it is not charged then. The first charge comes with your {firstPaidList} Cora Curation, and the charge repeats once a month after that. Your first {freeLists} Cora Curations are free, and we email you after the {lastFreeList} one with what happens next.",
+        a: "The first charge comes with your {firstPaidList} Cora Curation, and the charge repeats once a month after that. Your first {freeLists} Cora Curations are free, and we email you after the {lastFreeList} one with what happens next.",
         on: ["home", "agents"],
       },
       {
@@ -178,7 +178,7 @@ const questions: V1QuestionGroup[] = [
 
 // The homepage headline and sub-line, which the browser title, the search description and the social card repeat.
 const headline = "Your AI agents, smarter every Monday.";
-const subLine = "Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.";
+const subLine = "Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network.";
 
 // Lines of /pricing, /how-it-works and /about that each page's search description repeats. None names an amount, so static metadata can read them.
 const firstIncluded = `A Cora Curation every Monday: ${curationIs}.`;
@@ -252,9 +252,10 @@ export const v1 = {
     points: [
       { title: "Read every line.", body: "The exact instructions your Zack runs are in your dashboard." },
       { title: "Set your own rules.", body: "Skip whole subjects, block names and words, or add rules in your own words." },
+      // Peter, November 26, 2026: "Turn sharing off any time in your dashboard. is the hero. The hero is the subhead." Nothing else in this point.
       {
-        title: "Protect your privacy and your most valuable ideas at any time.",
-        body: "Turn sharing off any time in your dashboard. Your Cora Curations keep coming and the price becomes {higherUsd} a month ({higherCad} in Canada).",
+        title: "Turn sharing off any time in your dashboard.",
+        body: "Protect your privacy and your most valuable ideas at any time.",
       },
     ],
     link: { label: "How Zack works", href: "/how-it-works#zack" },
@@ -294,8 +295,11 @@ export const v1 = {
     idea: "idea",
     setUp: "set up",
     empty: "not set up yet",
-    /** Under a stack. The numbers come from ./compounding.ts. */
-    caption: { week: "Week {week}", bricks: "{bricks} bricks" },
+    /**
+     * Under a stack. The numbers come from ./compounding.ts. The count is said in ideas: each square is one idea
+     * (Peter, November 26, 2026: "use the word ideas throughout"). {bricks} is only the count's name in the code.
+     */
+    caption: { week: "Week {week}", bricks: "{bricks} ideas" },
   } satisfies BrickWords,
 
   // --- Pages ---

@@ -169,7 +169,7 @@ async function endAtPeriodEnd(q: Query, d: PlanDeps, u: PlanUser, reason: string
   // The month's difference will never be invoiced (there is no renewal): deleted now, restored on undo.
   await adjustmentOnCancelScheduled(q, d, u.id).catch((e) => console.error("[billing] cancel adjustment", u.id, e instanceof Error ? e.message : e));
   await finishCancellation(q, d, u.id);
-  return { ok: true, message: `Cancelled. Your lists continue until ${longDate(torontoDate(new Date(ends)))}, and nothing more will be charged.` };
+  return { ok: true, message: `Cancelled. Your Cora Curations continue until ${longDate(torontoDate(new Date(ends)))}, and nothing more will be charged.` };
 }
 
 /** A renewal Stripe confirms is unpaid: the subscription ends now; admins decide about the open invoice, so the cards stay. */

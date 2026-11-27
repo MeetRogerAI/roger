@@ -23,10 +23,10 @@ export function cancelledEmail(o: { when: "now"; charged: boolean } | { when: "p
   }
   return renderEmail({
     subject: "Your Roger plan is cancelled",
-    preview: `Your lists continue until ${longDate(o.accessEnds)}.`,
+    preview: `Your Cora Curations continue until ${longDate(o.accessEnds)}.`,
     heading: "Your plan is cancelled.",
     paragraphs: [
-      `Your lists continue until ${longDate(o.accessEnds)}, the end of the month you paid for. Nothing more will be charged, and there is no refund for the rest of the month.`,
+      `Your Cora Curations continue until ${longDate(o.accessEnds)}, the end of the month you paid for. Nothing more will be charged, and there is no refund for the rest of the month.`,
       "Changed your mind? Undo it on the billing page before then and your plan continues as before.",
     ],
     button: { label: "Billing", url: appUrl("/app/billing") },

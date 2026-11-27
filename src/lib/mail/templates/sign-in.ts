@@ -54,9 +54,9 @@ export function confirmNewEmail(token: string): Rendered {
 export function startConfirmEmail(token: string): Rendered {
   return renderEmail({
     subject: "Confirm your email to start Roger",
-    preview: "One click, then choose your plan.",
+    preview: "One click, then confirm your plan.",
     heading: "Confirm your email",
-    paragraphs: ["Use the button to confirm this address and carry on to choosing your plan. The link works once, for the next 15 minutes."],
+    paragraphs: ["Use the button to confirm this address and carry on to your plan. The link works once, for the next 15 minutes."],
     button: { label: "Confirm and continue", url: appUrl(`/auth/confirm?t=${encodeURIComponent(token)}`) },
     after: ["If you didn’t start signing up for Roger, ignore this email."],
   });

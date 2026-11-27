@@ -54,7 +54,7 @@ export function runDeletedEmail(o: { weekOf: string }): Rendered {
     preview: `The report for ${longDate(o.weekOf)}.`,
     heading: "Zack’s report was deleted.",
     paragraphs: [
-      `The report for your list on ${longDate(o.weekOf)}, its private profile, and any of its plays not yet shared were removed. Plays already in the shared pool stay there in anonymous form.`,
+      `The report for your Cora Curation on ${longDate(o.weekOf)}, its private profile, and any of its plays not yet shared were removed. Plays already in the shared pool stay there in anonymous form.`,
     ],
     button: { label: "Open the Zack page", url: appUrl("/app/zack") },
   });

@@ -4,6 +4,7 @@ import { SimpleMarkdown } from "@/components/app/simple-markdown";
 import type { SampleCardCopy } from "@/data/site/copy-types";
 import { playbookSteps } from "@/lib/site/playbook";
 import type { IdeaView } from "@/lib/site/sample";
+import { OneOpen } from "./one-open";
 
 /**
  * The public sample idea (plan KTD6, R11): one real play, folded, to be opened
@@ -57,10 +58,13 @@ function Mark({ open }: { open: string }) {
 
 const summaryRow = "flex min-h-12 cursor-pointer list-none items-center justify-between gap-6 py-3 [&::-webkit-details-marker]:hidden";
 
-/** One folded row of the card. `fold` names it for the page's tests and checks. */
-function Fold({ fold, label, children }: { fold: string; label: string; children: ReactNode }) {
+/**
+ * One folded row of the card. `fold` names it for the page's tests and checks. `name` is shared by the card's rows, so
+ * that opening one closes the other (Peter, November 26, 2026): the native `name` of details, which needs no script.
+ */
+function Fold({ fold, name, label, children }: { fold: string; name: string; label: string; children: ReactNode }) {
   return (
-    <details data-fold={fold} className="group/fold border-t border-rule">
+    <details data-fold={fold} name={name} className="group/fold border-t border-rule">
       <summary className={`${summaryRow} text-title`}>
         {label}
         <Mark open="group-open/fold:rotate-45" />
@@ -74,6 +78,9 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
   const titleId = `${id}-idea`;
   const scored = idea.scores.some((s) => typeof s.value === "number");
   const steps = playbookSteps(idea.playbookMd);
+  // One row of the card open at a time (Summary, What To Copy, Cora's scores, the steps), and inside the playbook one step.
+  const rows = `${id}-rows`;
+  const stepRows = `${id}-steps`;
   return (
     // data-claims: the play's own text and scores, for the claims check (src/lib/site/claims.ts).
     <article aria-labelledby={titleId} data-claims="sample" className="mx-auto max-w-[44rem] rounded-[8px] border border-rule bg-surface p-5 text-left text-ink sm:p-8">
@@ -87,11 +94,11 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
           {copy.idea.title}
         </h4>
         <div className="border-b border-rule">
-          <Fold fold="summary" label={copy.idea.summary}>
+          <Fold fold="summary" name={rows} label={copy.idea.summary}>
             <p className="text-body">{idea.description}</p>
           </Fold>
 
-          <Fold fold="copy" label={copy.idea.copy}>
+          <Fold fold="copy" name={rows} label={copy.idea.copy}>
             <p className="text-small text-ink-2">{copy.install.help}</p>
             <blockquote className="mt-4 border-l-2 border-rule-strong pl-4 text-small">{idea.pasteToInstall}</blockquote>
             <CopyTextButton text={idea.copyText} label={copy.install.copy} className="btn btn-m btn-ink mt-5" />
@@ -99,7 +106,7 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
           </Fold>
 
           {scored && (
-            <Fold fold="scores" label={copy.scores.title}>
+            <Fold fold="scores" name={rows} label={copy.scores.title}>
               <dl className="space-y-3">
                 {idea.scores.map((s) => (
                   <div key={s.key} data-score={s.key} className="grid grid-cols-[minmax(0,8rem)_1fr_auto] items-center gap-3">
@@ -124,11 +131,11 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
           </h4>
           <div className="border-b border-rule">
             {/* One row when folded, however many steps the playbook has. */}
-            <Fold fold="playbook" label={steps ? `${steps.length} ${copy.playbook.steps}` : copy.playbook.whole}>
+            <Fold fold="playbook" name={rows} label={steps ? `${steps.length} ${copy.playbook.steps}` : copy.playbook.whole}>
               {steps ? (
                 <div data-steps={steps.length} className="rounded-[8px] bg-ground px-4 sm:px-5">
                   {steps.map((step, i) => (
-                    <details key={i} data-fold="step" className="group/step border-t border-rule first:border-t-0">
+                    <details key={i} data-fold="step" name={stepRows} className="group/step border-t border-rule first:border-t-0">
                       <summary className={`${summaryRow} text-small font-[620]`}>
                         {step.heading}
                         <Mark open="group-open/step:rotate-45" />
@@ -144,6 +151,7 @@ export function SampleCard({ idea, copy, id = "sample" }: { idea: IdeaView; copy
           </div>
         </section>
       )}
+      <OneOpen />
     </article>
   );
 }

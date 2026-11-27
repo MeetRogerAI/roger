@@ -9,10 +9,10 @@ import { longDate } from "./welcome";
 export function uploadReminderEmail(o: { week: string }): Rendered {
   return renderEmail({
     subject: "Zack’s report for Monday hasn’t arrived",
-    preview: "Upload it tonight for Monday’s list.",
+    preview: "Upload it tonight for Monday’s Cora Curation.",
     heading: "Zack’s report hasn’t arrived yet.",
     paragraphs: [
-      `Your list for ${longDate(o.week)} is picked from this week’s report, and we haven’t had it yet.`,
+      `Your Cora Curation for ${longDate(o.week)} is picked from this week’s report, and we haven’t had it yet.`,
       "Run Zack, then paste or upload his report on the Zack page before the Sunday cutoff.",
     ],
     button: { label: "Upload the report", url: appUrl("/app/zack") },

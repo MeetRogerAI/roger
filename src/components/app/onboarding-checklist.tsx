@@ -44,7 +44,7 @@ export function ChecklistView({ list }: { list: Checklist }) {
                 s.label
               )}
               <span className="sr-only">{s.done ? ", done" : ", not done yet"}</span>
-              {s.key === "monday" && !s.done && <span className="block text-ink-2">Your first list arrives on a Monday morning, once Zack has sent a report.</span>}
+              {s.key === "monday" && !s.done && <span className="block text-ink-2">Your first Cora Curation arrives on a Monday morning, once Zack has sent a report.</span>}
             </span>
           </li>
         ))}

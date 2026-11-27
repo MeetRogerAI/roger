@@ -1,20 +1,24 @@
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 import { longDate } from "./welcome";
 
 type Amount = { week: string; amountCents: number; currency: Currency };
 
+/** The billing page's button. With monthly the only plan (billing/offered.ts) there is no plan to change to, so it offers only what the page does. */
+const billingLabel = () => (oneAtATimeOffered() ? "Cancel or change plan" : "Cancel or see billing");
+
 /** Spec B.13 email 7 (monthly): after the second free list, the date and the exact amount of the first charge. */
 export function firstPaidNextEmail(o: Amount): Rendered {
   return renderEmail({
-    subject: "Your next list is your first paid one",
+    subject: "Your next Cora Curation is your first paid one",
     preview: `${moneyCents(o.amountCents, o.currency)}, no earlier than ${longDate(o.week)}.`,
-    heading: "Your next list is your first paid one.",
+    heading: "Your next Cora Curation is your first paid one.",
     paragraphs: [
-      `Your free lists are done. Your next list follows Zack’s next report, no earlier than ${longDate(o.week)}, and that morning we’ll charge ${moneyCents(o.amountCents, o.currency)}, tax included, for your first month.`,
+      `Your free Cora Curations are done. Your next one follows Zack’s next report, no earlier than ${longDate(o.week)}, and that morning we’ll charge ${moneyCents(o.amountCents, o.currency)}, tax included, for your first month.`,
       "If you’d rather not continue, cancel before then and nothing is charged.",
     ],
-    button: { label: "Cancel or change plan", url: appUrl("/app/billing") },
+    button: { label: billingLabel(), url: appUrl("/app/billing") },
   });
 }
 
@@ -25,10 +29,10 @@ export function firstChargeReminderEmail(o: Amount): Rendered {
     preview: `${moneyCents(o.amountCents, o.currency)}, no earlier than ${longDate(o.week)}.`,
     heading: "Your first charge could be on Monday.",
     paragraphs: [
-      `If Zack’s report arrives by Sunday night, your third list comes on ${longDate(o.week)} and we’ll charge ${moneyCents(o.amountCents, o.currency)}, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.`,
+      `If Zack’s report arrives by Sunday night, your third Cora Curation comes on ${longDate(o.week)} and we’ll charge ${moneyCents(o.amountCents, o.currency)}, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.`,
       "To stop, cancel before then and nothing is charged.",
     ],
-    button: { label: "Cancel or change plan", url: appUrl("/app/billing") },
+    button: { label: billingLabel(), url: appUrl("/app/billing") },
   });
 }
 

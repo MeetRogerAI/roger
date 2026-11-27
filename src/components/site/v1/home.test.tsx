@@ -182,7 +182,7 @@ describe("the v1 homepage's sections", () => {
 
   it("hero: the sub-line is Peter's, for anyone and not for one trade", async () => {
     const hero = sectionMarkup(await view(), "hero");
-    expect(text(hero)).toContain("Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.");
+    expect(text(hero)).toContain("Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network.");
     expect(text(hero)).not.toMatch(/real estate/i);
   });
 
@@ -372,14 +372,16 @@ describe("the compounding loop, with no script", () => {
     expect(markup).toMatch(/<button type="button" data-loop-pause="true" class="[^"]*\bhidden\b/);
   });
 
-  it("shows every state's week and brick count as text, in the copy's words and the data's numbers", () => {
+  it("shows every state's week and count of ideas as text, in the copy's words and the data's numbers", () => {
     const labels = [...markup.matchAll(/<li data-loop-state="(\d+)"[^>]*>(.*?)<\/li>/g)];
     expect(labels.map((m) => Number(m[1]))).toEqual(storySteps.map((s) => s.week));
     for (const [i, step] of storySteps.entries()) {
       const caption = compoundingCaption(copy.bricks.caption, step);
       expect(text(labels[i][2])).toBe(`${caption.week} ${caption.bricks}`);
     }
-    expect(seen).toContain("Week 1 3 bricks Week 2 6 bricks Week 3 9 bricks Week 4 12 bricks Week 10 30 bricks Week 17 51 bricks Week 26 78 bricks");
+    expect(seen).toContain("Week 1 3 ideas Week 2 6 ideas Week 3 9 ideas Week 4 12 ideas Week 10 30 ideas Week 17 51 ideas Week 26 78 ideas");
+    // "Ideas" throughout: the section never says "bricks" (Peter, November 26, 2026).
+    expect(seen).not.toMatch(/bricks?/i);
     // The list is read by everyone. The large caption above the stack repeats its last line, so that one is kept from a screen reader.
     expect(markup).toMatch(/<ol data-loop-states="true"/);
     expect(markup).not.toMatch(/<ol[^>]*aria-hidden/);
@@ -484,9 +486,52 @@ describe("the v1 homepage's words", () => {
     expect(seen).not.toContain("!");
     expect(seen).not.toMatch(emoji);
     expect(seen).not.toMatch(/Circle/);
-    // The higher rate appears twice, in the control block and in the answer to "What does it cost?", each time with both currencies and as what turning sharing off does.
-    expect(seen.match(/US\$400/g)).toHaveLength(2);
-    expect(seen.match(/the price becomes US\$400 a month \(CA\$560 in Canada\)\./g)).toHaveLength(2);
+    // The higher rate is not on the homepage: Peter took it out of the control block and out of "What does it cost?"
+    // (November 26, 2026). It is stated on /pricing, in two answers on /faq (one of them also on /agents) and in the terms.
+    expect(seen).not.toMatch(/US\$400|CA\$560|the price becomes/);
+    expect(seen).not.toMatch(/bricks?/i);
+  });
+
+  it("the third point under “You decide what Zack shares” leads with turning sharing off, and says nothing more than Peter's line", async () => {
+    const control = text(sectionMarkup(await view(), "control"));
+    expect(control).toContain("Turn sharing off any time in your dashboard. Protect your privacy and your most valuable ideas at any time. How Zack works");
+    expect(control).not.toMatch(/Cora Curations keep coming|\$/);
+  });
+
+  it("answers the two money questions in Peter's cut: no higher rate in “What does it cost?”, and “When is my card charged?” starts at the first charge", async () => {
+    const questions = sectionMarkup(await view(), "questions");
+    const answer = (q: string) => text(new RegExp(`<summary[^>]*>${q.replace("?", "\\?")}.*?</summary>(.*?)</details>`).exec(questions)![1]);
+    expect(answer("What does it cost?")).toBe(
+      "US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. Get two Cora Curations for free and pay only after you have tried the product for two full weeks.",
+    );
+    expect(answer("When is my card charged?")).toBe(
+      "The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",
+    );
+    // The line under the buttons still says a card is asked for.
+    expect(text(sectionMarkup(await view(), "hero"))).toContain("Card required. Charged only with your third Cora Curation.");
+  });
+
+  it("opens one row at a time: the questions share one name, the sample idea's rows another and its steps a third, with no script", async () => {
+    const markup = await view();
+    const names = (html: string, fold?: string) => [...html.matchAll(/<details\b([^>]*)>/g)].filter((m) => fold === undefined || m[1].includes(`data-fold="${fold}"`)).map((m) => /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "");
+    const questions = names(sectionMarkup(markup, "questions"));
+    expect(questions).toHaveLength(7);
+    expect(new Set(questions)).toEqual(new Set(["questions-rows"]));
+    const sample = sectionMarkup(markup, "sample");
+    const rows = [...sample.matchAll(/<details\b([^>]*)>/g)].map((m) => ({ fold: /data-fold="([^"]*)"/.exec(m[1])![1], name: /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "" }));
+    const top = rows.filter((r) => r.fold !== "step");
+    const steps = rows.filter((r) => r.fold === "step");
+    expect(top.map((r) => r.fold)).toEqual(expect.arrayContaining(["summary", "copy", "playbook"]));
+    expect(new Set(top.map((r) => r.name))).toEqual(new Set(["sample-rows"]));
+    expect(steps.length).toBeGreaterThan(1);
+    expect(new Set(steps.map((r) => r.name))).toEqual(new Set(["sample-steps"]));
+    // Three groups, each with its own name, so a step opening never closes the row it is in.
+    expect(new Set([...questions, ...rows.map((r) => r.name)]).size).toBe(3);
+    // Every row on the page that folds is in one of them, and none arrives open.
+    for (const m of markup.matchAll(/<details\b([^>]*)>/g)) {
+      expect(m[1]).toMatch(/\sname="[^"]+"/);
+      expect(m[1]).not.toMatch(/\sopen(?:[\s=]|$)/);
+    }
   });
 
   it("speak to anyone, of Cora Curations and of one monthly price (Peter's homepage review, November 26, 2026)", async () => {

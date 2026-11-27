@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Reveal } from "@/components/site/shared/reveal";
 import type { Question } from "@/data/site/copy-types";
+import { OneOpen } from "./one-open";
 
 /**
  * The questions accordion (spec A.4), in the markup of FaqSection in
@@ -18,6 +19,7 @@ export function Questions({
   id = "questions",
   as: Heading = "h2",
   group = false,
+  accordion,
 }: {
   title: string;
   items: Question[];
@@ -29,9 +31,16 @@ export function Questions({
   as?: "h2" | "h3";
   /** One of several on a page, as on /faq: the heading keeps its level and takes the smaller size, and the groups sit closer together. */
   group?: boolean;
+  /**
+   * The name the questions share, so that only one is open at a time: opening one closes the other
+   * (Peter, November 26, 2026). It is the native `name` of details, so it works with no script. Left out, it is
+   * this block's id. /faq gives all its groups one name, so one question is open on the whole page.
+   */
+  accordion?: string;
 }) {
   if (items.length === 0) return null;
   const titleId = `${id}-title`;
+  const shared = accordion ?? `${id}-rows`;
   return (
     <section id={id} aria-labelledby={titleId} className={`scroll-mt-14 ${night ? "on-night bg-night text-night-ink" : "bg-ground"}`}>
       <Reveal className={`wrap grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16 ${group ? "py-10 md:py-14" : "py-24 md:py-32"}`}>
@@ -45,6 +54,7 @@ export function Questions({
             {items.map((item) => (
               <details
                 key={item.q}
+                name={shared}
                 className={`group rounded-[8px] px-5 transition-colors duration-[180ms] sm:px-6 ${night ? "bg-night-2" : "bg-ground-2 open:bg-surface"}`}
               >
                 <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-6 py-4 text-title [&::-webkit-details-marker]:hidden">
@@ -65,6 +75,7 @@ export function Questions({
               </details>
             ))}
           </div>
+          <OneOpen />
           {more && (
             <p className="mt-8 px-5 sm:px-6">
               <Link href={more.href} className="tlink chev">

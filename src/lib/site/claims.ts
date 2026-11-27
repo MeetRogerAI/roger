@@ -257,10 +257,10 @@ export const allowed: readonly Allowed[] = [
   // --- numbers --------------------------------------------------------------
   {
     rule: "number",
-    why: "A price from the settings (plan KTD8, R8): the monthly price, the higher rate and the one-list price (which only the terms still state), each with its country in front.",
+    why: "A price from the settings (plan KTD8, R8): the monthly price and the higher rate, each with its country in front. The price of one at a time is on no page (monthly only at launch), so it is not allowed here.",
     words: ({ context: { amounts } }) =>
       anyOf(
-        (["USD", "CAD"] as const).flatMap((currency) => [amounts.monthly, amounts.list, amounts.higher].map((price) => `${currency === "CAD" ? "CA" : "US"}$${price[currency].toLocaleString("en-US")}`)),
+        (["USD", "CAD"] as const).flatMap((currency) => [amounts.monthly, amounts.higher].map((price) => `${currency === "CAD" ? "CA" : "US"}$${price[currency].toLocaleString("en-US")}`)),
         "g",
       ),
   },
@@ -281,12 +281,12 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "number",
-    why: "Plan R10, the one settled exception to “no hard-coded numbers”: the seven week numbers and seven brick counts of the “It compounds” loop (compoundingNumbers in src/data/site/compounding.ts), inside that section only. Any other number there is still a violation.",
+    why: "Plan R10, the one settled exception to “no hard-coded numbers”: the seven week numbers and the seven counts of ideas of the “It compounds” loop, as in “Week 2” and “6 ideas” (compoundingNumbers in src/data/site/compounding.ts), inside that section only. Any other number there is still a violation.",
     words: ({ segment, context }) => (inZone(segment, "compounding") && context.compounding.length > 0 ? new RegExp(`(?<!\\d|\\d[.,])(?:${context.compounding.join("|")})(?!\\d|[.,]\\d)`, "g") : null),
   },
   {
     rule: "number",
-    why: "Spec 0.7: every brick carries a text label, so colour is never the only signal. The label says which week and which of its ideas: “Week 2, idea 3: set up”.",
+    why: "Spec 0.7: every square of a stack carries a text label, so colour is never the only signal. The label says which week and which of its ideas: “Week 2, idea 3: set up”.",
     words: ({ segment }) => (inZone(segment, "bricks") ? /\p{L}+ \d+, \p{L}+ \d+:/gu : null),
   },
   {

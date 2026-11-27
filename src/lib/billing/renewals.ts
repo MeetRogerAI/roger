@@ -175,7 +175,7 @@ export async function subscriptionEnded(q: Query, d: RenewalDeps, o: { subscript
       `per_run_now:${o.subscription}`,
       planChangedEmail({
         to: "per_run",
-        effect: `Your paid month has ended. From now on nothing is charged unless you order a list, ${money(amount(d.settings, "per_run", cur), cur)} plus tax each.`,
+        effect: `Your paid month has ended. From now on nothing is charged unless you order a Cora Curation, ${money(amount(d.settings, "per_run", cur), cur)} plus tax each.`,
         monthlyLine: `Monthly is ${money(amount(d.settings, "monthly", cur), cur)} for every Monday.`,
       }),
       d,

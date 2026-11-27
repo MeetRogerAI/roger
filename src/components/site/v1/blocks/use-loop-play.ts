@@ -1,46 +1,43 @@
 "use client";
 
-import { useReducer, useSyncExternalStore, type FocusEvent, type PointerEvent } from "react";
+import { useReducer, useSyncExternalStore, type FocusEvent } from "react";
 
 /**
  * What stops and starts the homepage's two loops (the hero's four parts and
  * "It compounds"), in one place so both behave the same.
  *
- * A loop stops for four things:
+ * A loop stops for three things:
  *
  * - its Pause button, until Play is pressed;
- * - a mouse pointer resting on it. Only a mouse: a finger has no way to
- *   leave, so a tap would stop the loop for good with nothing saying so;
  * - keyboard focus inside it. Only focus the browser shows a ring for: a
- *   button keeps focus after a mouse click, and that must not hold the loop
- *   once the pointer has gone;
+ *   button keeps focus after a mouse click, and that must not hold the loop;
  * - the tab being hidden.
  *
+ * A pointer resting on a loop does not stop it. It used to, and that is what
+ * made "It compounds" look as if it ended: a reader watches a loop with the
+ * mouse over it, so it stopped under them, at whatever state it had reached,
+ * with the button still reading "Pause" (Peter's review of the preview,
+ * November 26, 2026). The Pause button is the way to stop a loop.
+ *
  * The button says what it will do: "Pause" until it is pressed, then "Play".
- * Pressing Play also lets go of the pointer and of focus, which are both on
- * the button at that moment, so the loop moves when the button says it does.
- * They hold it again the next time the pointer or focus comes in.
+ * Pressing Play also lets go of focus, which is on the button at that moment,
+ * so the loop moves when the button says it does. Focus holds it again the
+ * next time it comes in by keyboard.
  */
-export type Holds = { paused: boolean; hovered: boolean; focused: boolean };
+export type Holds = { paused: boolean; focused: boolean };
 
 export type HoldEvent =
   | { type: "toggle" }
-  | { type: "pointerenter"; pointerType: string }
-  | { type: "pointerleave" }
   | { type: "focus"; visible: boolean }
   /** `left` is whether focus went out of the loop, not to another control in it. */
   | { type: "blur"; left: boolean };
 
-export const noHolds: Holds = { paused: false, hovered: false, focused: false };
+export const noHolds: Holds = { paused: false, focused: false };
 
 export function holdsAfter(holds: Holds, event: HoldEvent): Holds {
   switch (event.type) {
     case "toggle":
       return holds.paused ? noHolds : { ...holds, paused: true };
-    case "pointerenter":
-      return event.pointerType === "mouse" ? { ...holds, hovered: true } : holds;
-    case "pointerleave":
-      return holds.hovered ? { ...holds, hovered: false } : holds;
     case "focus":
       return event.visible && !holds.focused ? { ...holds, focused: true } : holds;
     case "blur":
@@ -48,9 +45,20 @@ export function holdsAfter(holds: Holds, event: HoldEvent): Holds {
   }
 }
 
-/** Whether the loop is moving: not stopped by its button, the pointer, focus or a hidden tab. */
+/** Whether the loop is moving: not stopped by its button, keyboard focus or a hidden tab. */
 export function isPlaying(holds: Holds, tabHidden = false): boolean {
-  return !holds.paused && !holds.hovered && !holds.focused && !tabHidden;
+  return !holds.paused && !holds.focused && !tabHidden;
+}
+
+/**
+ * One wait of a loop's clock: `advance` is called once, `ms` from now, unless
+ * the returned function is called first. A loop calls this for the state it is
+ * at, every time that state changes, so each state schedules the one after it
+ * and nothing in the clock itself can end the loop.
+ */
+export function stepAfter(ms: number, advance: () => void): () => void {
+  const timer = setTimeout(advance, ms);
+  return () => clearTimeout(timer);
 }
 
 function watchVisibility(changed: () => void) {
@@ -73,8 +81,6 @@ export function useLoopPlay() {
     toggle: () => send({ type: "toggle" }),
     /** For the element that holds the whole loop. */
     holdProps: {
-      onPointerEnter: (e: PointerEvent<HTMLElement>) => send({ type: "pointerenter", pointerType: e.pointerType }),
-      onPointerLeave: () => send({ type: "pointerleave" }),
       onFocus: (e: FocusEvent<HTMLElement>) => send({ type: "focus", visible: e.target.matches(":focus-visible") }),
       onBlur: (e: FocusEvent<HTMLElement>) => send({ type: "blur", left: !e.currentTarget.contains(e.relatedTarget) }),
     },

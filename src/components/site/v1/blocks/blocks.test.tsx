@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import fixture from "../../../../../db/seeds/sample-play.fixture.json";
@@ -24,6 +26,8 @@ const { ClosingBand } = await import("./closing-band");
 const { ControlBlock } = await import("./control-block");
 const { PriceBlock } = await import("./price-block");
 const { Questions } = await import("./questions");
+const { othersToClose } = await import("./one-open");
+const oneOpenSource = readFileSync(path.join(process.cwd(), "src/components/site/v1/blocks/one-open.tsx"), "utf8");
 const { SampleCard } = await import("./sample-card");
 const { SectionHead } = await import("./section-head");
 const { Testimonials } = await import("./testimonials");
@@ -426,7 +430,8 @@ describe("the brick stack", () => {
     expect(bricks).toHaveLength(compoundingFinal.bricks);
     for (const brick of bricks) expect(brick).toMatch(/<span class="sr-only">Week \d+, idea [123]: set up<\/span>/);
     expect(new Set(bricks.map((b) => text(b))).size).toBe(bricks.length);
-    expect(text(markup)).toContain("Week 26 78 bricks");
+    expect(text(markup)).toContain("Week 26 78 ideas");
+    expect(text(markup)).not.toMatch(/bricks?/i);
   });
 
   it("builds its caption from the copy's words, and has none unless asked", () => {
@@ -502,19 +507,21 @@ describe("the other blocks", () => {
     const seen = text(markup);
     expect(seen).toContain("You decide what Zack shares");
     expect(markup.match(/<li/g)).toHaveLength(3);
-    expect(seen).toContain("the price becomes US$400 a month (CA$560 in Canada).");
+    // No price in the block: the third point is Peter's two lines and nothing else.
+    expect(seen).not.toMatch(/\$|the price becomes|Cora Curations keep coming/);
     expect(markup).toContain('href="/how-it-works#zack"');
   });
 
-  it("control block: each point reads title first, and the third is Peter's line on privacy over the sentence on turning sharing off", () => {
+  it("control block: each point reads title first, and the third leads with turning sharing off, over Peter's line on privacy (“The hero is the subhead”)", () => {
     const markup = renderToStaticMarkup(<ControlBlock copy={copy.control} />);
     const points = (markup.match(/<li[^>]*>.*?<\/li>/g) ?? []).map(text);
     expect(points).toEqual([
       "Read every line. The exact instructions your Zack runs are in your dashboard.",
       "Set your own rules. Skip whole subjects, block names and words, or add rules in your own words.",
-      "Protect your privacy and your most valuable ideas at any time. Turn sharing off any time in your dashboard. Your Cora Curations keep coming and the price becomes US$400 a month (CA$560 in Canada).",
+      "Turn sharing off any time in your dashboard. Protect your privacy and your most valuable ideas at any time.",
     ]);
-    expect(copy.control.points.map((p) => p.title)).toEqual(["Read every line.", "Set your own rules.", "Protect your privacy and your most valuable ideas at any time."]);
+    expect(copy.control.points.map((p) => p.title)).toEqual(["Read every line.", "Set your own rules.", "Turn sharing off any time in your dashboard."]);
+    expect(copy.control.points[2].body).toBe("Protect your privacy and your most valuable ideas at any time.");
     expect(markup.match(/<p class="text-title">/g)).toHaveLength(3);
   });
 
@@ -531,6 +538,33 @@ describe("the other blocks", () => {
     expect(markup.match(/<summary/g)).toHaveLength(items.length);
     expect(markup).toContain('href="/faq"');
     expect(renderToStaticMarkup(<Questions title="None" items={[]} />)).toBe("");
+  });
+
+  it("questions: only one is open at a time, by the native name they share, and a page can give several groups one name", () => {
+    const items = questionsOn(copy, "home");
+    const names = (html: string) => [...html.matchAll(/<details\b([^>]*)>/g)].map((m) => /\sname="([^"]*)"/.exec(m[1])?.[1] ?? "");
+    expect(new Set(names(renderToStaticMarkup(<Questions title="Questions" items={items} />)))).toEqual(new Set(["questions-rows"]));
+    expect(new Set(names(renderToStaticMarkup(<Questions id="billing" title="Billing" items={items} />)))).toEqual(new Set(["billing-rows"]));
+    expect(new Set(names(renderToStaticMarkup(<Questions id="billing" title="Billing" items={items} accordion="faq-questions" />)))).toEqual(new Set(["faq-questions"]));
+    // No script is needed: nothing in the block's markup is a handler, and none arrives open.
+    expect(renderToStaticMarkup(<Questions title="Questions" items={items} />)).not.toMatch(/<details[^>]*\sopen(?:[\s=>])|onclick|ontoggle/i);
+  });
+
+  it("the fallback for a browser without details name closes the other open rows of the same name, and only those", () => {
+    const rows = [
+      { name: "questions-rows", open: true },
+      { name: "questions-rows", open: true },
+      { name: "sample-rows", open: true },
+      { name: "questions-rows", open: false },
+      { name: "", open: true },
+    ];
+    expect(othersToClose(rows[1], rows)).toEqual([0]);
+    expect(othersToClose(rows[2], rows)).toEqual([]);
+    // A row that closed, or one with no name, closes nothing.
+    expect(othersToClose(rows[3], rows)).toEqual([]);
+    expect(othersToClose(rows[4], rows)).toEqual([]);
+    // It stands aside where the browser already does this.
+    expect(oneOpenSource).toContain('if ("name" in HTMLDetailsElement.prototype) return;');
   });
 
   it("closing band: one line, the line under the price, the start button, then the trial line", async () => {
@@ -593,14 +627,14 @@ describe("v1 copy", () => {
 
   it("speaks to anyone who uses AI agents: no real estate wording anywhere in the copy", () => {
     for (const s of filled) expect(s.text, s.path).not.toMatch(/real estate|realtor|brokerage|open house|\blistings?\b|\bbuyers?\b|\bsellers?\b|home evaluation/i);
-    expect(copy.home.hero.sub).toBe("Roger makes your AI agents smarter every week, with battle tested ideas that have already worked for real people in the network.");
+    expect(copy.home.hero.sub).toBe("Roger makes your AI agents smarter every week, with battle-tested ideas that have already worked for real people in the network.");
     expect(copy.home.problem.statements[0]).toBe("Everyone is being told to use AI. Almost nobody is told what to use it for.");
   });
 
   it("names only amounts that exist, and shows no bare dollar sign once filled", () => {
     // The brick caption's {week} and {bricks} are not amounts: they are filled per stack.
     const captions = filled.filter((s) => s.path.startsWith("bricks.caption."));
-    expect(captions.map((s) => s.text)).toEqual(["Week {week}", "{bricks} bricks"]);
+    expect(captions.map((s) => s.text)).toEqual(["Week {week}", "{bricks} ideas"]);
     for (const s of filled.filter((x) => !captions.includes(x))) {
       expect(s.text, s.path).not.toMatch(/[{}]/);
       expect(hasBareDollar(s.text), s.path).toBe(false);
@@ -624,14 +658,14 @@ describe("v1 copy", () => {
     });
   });
 
-  it("answers “What does it cost?” as the price block does: monthly only, both prices, Peter's line, and the higher rate as the effect of turning sharing off", () => {
+  it("answers “What does it cost?” as the price block does: monthly only, both prices and Peter's line, and no higher rate (his cut of November 26, 2026)", () => {
     const items = copy.questions.flatMap((g) => g.items);
-    expect(items.find((i) => i.q === "What does it cost?")?.a).toBe(
-      `US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. ${copy.priceBlock.sub} If you turn sharing off in your dashboard, the price becomes US$400 a month (CA$560 in Canada).`,
-    );
+    expect(items.find((i) => i.q === "What does it cost?")?.a).toBe(`US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. ${copy.priceBlock.sub}`);
+    // His second cut: the answer starts at the first charge. The line under the buttons still says a card is asked for.
     expect(items.find((i) => i.q === "When is my card charged?")?.a).toBe(
-      "A card is required when you sign up, and it is not charged then. The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",
+      "The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",
     );
+    expect(copy.cardLine).toBe("Card required. Charged only with your third Cora Curation.");
     expect(items.map((i) => i.q)).not.toContain("Can I buy one list at a time?");
   });
 
@@ -645,7 +679,11 @@ describe("v1 copy", () => {
 
   it("gives the Canadian higher rate every time it gives the US one", () => {
     const higher = filled.filter((s) => /US\$400|CA\$560/.test(s.text));
-    expect(higher.map((s) => s.path).sort()).toEqual(["control.points[2].body", "pricing.contributing.body", "questions[1].items[4].a", "questions[3].items[0].a", "questions[3].items[3].a"]);
+    // Where the higher rate is still stated in the page copy: /pricing ("Contributing"), and two answers on /faq, "I compete
+    // with other people on Roger…" (also on /agents) and "What if Zack misses a week?". Not on the homepage. The terms state it too.
+    expect(higher.map((s) => s.path).sort()).toEqual(["pricing.contributing.body", "questions[1].items[4].a", "questions[3].items[3].a"]);
+    expect(copy.questions[1].items[4].on).toEqual(["agents"]);
+    expect(copy.questions[3].items[3].on).toEqual([]);
     for (const s of higher) {
       expect(s.text.match(/US\$400/g), s.path).toHaveLength(s.text.match(/US\$400 (?:a month )?\(CA\$560 in Canada\)/g)?.length ?? 0);
       expect(s.text.match(/CA\$560/g), s.path).toHaveLength(s.text.match(/US\$400/g)!.length);
@@ -757,7 +795,7 @@ describe("the bundled sample play", () => {
 });
 
 describe("the compounding data", () => {
-  it("is exactly seven states, weeks 1, 2, 3, 4, 10, 17 and 26, and ends at 78 bricks", () => {
+  it("is exactly seven states, weeks 1, 2, 3, 4, 10, 17 and 26, and ends at 78 ideas", () => {
     expect(compoundingSteps).toHaveLength(7);
     expect(compoundingWeeks).toEqual([1, 2, 3, 4, 10, 17, 26]);
     expect(compoundingSteps.map((s) => [s.week, s.bricks])).toEqual([
@@ -786,7 +824,8 @@ describe("the compounding data", () => {
 
   it("holds numbers only: the words of a caption come from the copy", () => {
     for (const s of compoundingSteps) expect(Object.values(s).every((v) => typeof v === "number")).toBe(true);
-    expect(v1.bricks.caption).toEqual({ week: "Week {week}", bricks: "{bricks} bricks" });
-    expect(compoundingSteps.map((s) => compoundingCaption(copy.bricks.caption, s)).at(-1)).toEqual({ week: "Week 26", bricks: "78 bricks" });
+    // The count is said in ideas; {bricks} is only its name in the code.
+    expect(v1.bricks.caption).toEqual({ week: "Week {week}", bricks: "{bricks} ideas" });
+    expect(compoundingSteps.map((s) => compoundingCaption(copy.bricks.caption, s)).at(-1)).toEqual({ week: "Week 26", bricks: "78 ideas" });
   });
 });

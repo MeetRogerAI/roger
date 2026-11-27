@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mergeV3 } from "@/lib/v3-settings";
-import { sharingEffect } from "./sharing-effect";
+
+// The one-at-a-time switch (`plans.oneAtATimeOffered`, read through billing/offered): off, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
+
+const { sharingEffect } = await import("./sharing-effect");
+
+beforeEach(() => {
+  offer.on = false;
+});
 
 const s = mergeV3([]);
 const o = { settings: s, plan: "monthly" as const, currency: "USD" as const, trialStartedAt: null, status: "active" };
@@ -21,8 +30,14 @@ describe("sharingEffect", () => {
     expect(sharingEffect({ ...o, status: "trial", trialStartedAt: "2026-11-24T15:00:00Z", from: "share", to: "off" })).toContain("no earlier than Monday, December 14");
   });
 
-  it("for one list at a time: no price change; Zack off means no orders", () => {
+  it("for one at a time, while it is offered: no price change; Zack off means no orders", () => {
+    offer.on = true;
     expect(sharingEffect({ ...o, plan: "per_run", from: "share", to: "match_only" })).toBeNull();
-    expect(sharingEffect({ ...o, plan: "per_run", from: "share", to: "off" })).toContain("can’t be ordered");
+    expect(sharingEffect({ ...o, plan: "per_run", from: "share", to: "off" })).toBe("With Zack off, Cora Curations can’t be ordered until sharing is back on. Your price doesn’t change.");
+  });
+
+  it("for an account still on one at a time while it is not offered: nothing about ordering, since nothing can be ordered either way", () => {
+    expect(sharingEffect({ ...o, plan: "per_run", from: "share", to: "match_only" })).toBeNull();
+    expect(sharingEffect({ ...o, plan: "per_run", from: "share", to: "off" })).toBeNull();
   });
 });
