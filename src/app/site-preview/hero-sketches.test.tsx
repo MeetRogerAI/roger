@@ -17,7 +17,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { v3Defaults } from "@/data/config";
 import { compoundingSteps } from "@/data/site/compounding";
-import { v1Copy } from "@/data/site/v1";
+import { v1Copy } from "@/lib/site/content/model";
 import { amountsFrom } from "@/lib/site/amounts";
 import { checkClaims, decodeEntities, describeViolations, readPage, type ClaimsContext } from "@/lib/site/claims";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";

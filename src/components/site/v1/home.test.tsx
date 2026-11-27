@@ -12,7 +12,9 @@ import { v3Defaults } from "@/data/config";
 import { compoundingFinal, compoundingSteps } from "@/data/site/compounding";
 import { examples } from "@/data/site/examples";
 import { letterShown } from "@/data/site/letter";
-import { questionsOn, v1Copy, type QuestionOverrides } from "@/data/site/v1";
+import { questionsOn } from "@/data/site/v1";
+import { emptyOverlay, type Overlay } from "@/lib/site/content/format";
+import { v1Copy } from "@/lib/site/content/model";
 import { amountsFrom, hasBareDollar } from "@/lib/site/amounts";
 import { compoundingCaption } from "@/lib/site/compounding";
 import type { Testimonial } from "@/lib/site/testimonials";
@@ -81,8 +83,8 @@ const STREAMED = '<div hidden id="S:';
 const shell = (markup: string) => markup.split(STREAMED)[0];
 const streamed = (markup: string) => markup.slice(shell(markup).length);
 
-const full = (over: { testimonials?: Testimonial[]; questions?: QuestionOverrides } = {}) =>
-  pageMarkup(<V1HomeView version="v1" amounts={amounts} examples={shown} testimonials={over.testimonials ?? []} questions={over.questions} />);
+const full = (over: { testimonials?: Testimonial[]; content?: Overlay } = {}) =>
+  pageMarkup(<V1HomeView version="v1" amounts={amounts} examples={shown} testimonials={over.testimonials ?? []} content={over.content} />);
 const view = async (over: Parameters<typeof full>[0] = {}) => shell(await full(over));
 const served = async (version: "v1" | "v2" | "v3" = "v1") => shell(await pageMarkup(<V1Home version={version} />));
 
@@ -137,8 +139,8 @@ describe("the v1 homepage, as the page serves it", () => {
       copy.home.hero.sub,
       copy.home.hero.graphic.steps[0].body,
       copy.home.hero.graphic.steps[3].body,
-      copy.home.problem.statements[0],
-      copy.home.problem.statements[2],
+      copy.home.problem.statements[0].text,
+      copy.home.problem.statements[2].text,
       copy.sample.title,
       shown[0].idea.title,
       copy.home.compounds.line,
@@ -236,7 +238,7 @@ describe("the v1 homepage's sections", () => {
   it("the problem: the three statements", async () => {
     const problem = sectionMarkup(await view(), "problem");
     expect(problem.match(/<li/g)).toHaveLength(3);
-    expect(text(problem)).toBe(`${copy.home.problem.title} ${copy.home.problem.statements.join(" ")}`);
+    expect(text(problem)).toBe(`${copy.home.problem.title} ${copy.home.problem.statements.map((statement) => statement.text).join(" ")}`);
   });
 
   it("examples: the heading “Cora Curation Examples” with no line under it, then the short titles to pick by", async () => {
@@ -350,7 +352,15 @@ describe("the v1 homepage's sections", () => {
   });
 
   it("questions: an answer edited in the admin is printed in place of the built-in one, with its amounts filled in", async () => {
-    const edited = sectionMarkup(await view({ questions: { cost: { a: "It is {monthlyUsd} a month. Your first {freeLists} Cora Curations are free." }, "each-week": { q: "What is my part each week?" } } }), "questions");
+    // The edits as the page is handed them: one overlay on the code copy, each text under its field's id.
+    const content: Overlay = {
+      ...emptyOverlay,
+      text: {
+        "questions.price-and-billing.items.cost.a": "It is {monthlyUsd} a month. Your first {freeLists} Cora Curations are free.",
+        "questions.getting-started.items.each-week.q": "What is my part each week?",
+      },
+    };
+    const edited = sectionMarkup(await view({ content }), "questions");
     expect(text(edited)).toContain("What does it cost? It is US$200 a month. Your first two Cora Curations are free.");
     expect(text(edited)).not.toContain("plus tax where it applies");
     // A question whose wording alone was edited keeps its built-in answer.

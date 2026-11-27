@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { AdaptPrompt, CopyText, FreeRunEmailForm, FreeRunReportForm } from "@/components/site/shared/free-run-form";
-import { v1Copy, type V1ZackCopy } from "@/data/site/v1";
+import type { V1ZackCopy } from "@/data/site/v1";
 import { hasDb } from "@/lib/db";
 import { query } from "@/lib/db-query";
 import { getAmounts } from "@/lib/site/amounts";
+import { v1Copy } from "@/lib/site/content/model";
 import { isRunToken, readRun, type RunView } from "@/lib/site/free-run";
 import type { BuiltVersion } from "@/lib/site/version";
 import { downloadName, freeRunAgents, OTHER_AGENT, zackFile, type FreeRunAgent, type ZackFile } from "@/lib/site/zack-files";

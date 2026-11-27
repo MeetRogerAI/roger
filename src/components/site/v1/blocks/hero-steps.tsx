@@ -36,7 +36,8 @@ export function nextStep(current: number, count: number): number {
   return count > 0 ? (current + 1) % count : 0;
 }
 
-export type HeroStep = { label: string; title: string; body: string };
+/** `id` is the step's name in the copy, which never changes; a step is never known by its place in the list. */
+export type HeroStep = { id: string; label: string; title: string; body: string };
 export type HeroStepsCopy = { name: string; steps: HeroStep[]; pause: string; play: string };
 
 export function HeroSteps({ copy, words, className = "" }: { copy: HeroStepsCopy; /** The words of each idea's label in a stack. */ words: BrickWords; className?: string }) {
@@ -58,7 +59,7 @@ export function HeroSteps({ copy, words, className = "" }: { copy: HeroStepsCopy
       <div data-step-tabs role="group" aria-label={copy.name} className="mb-3 hidden grid-cols-4 gap-1 rounded-full border border-night-rule bg-night-2 p-1">
         {copy.steps.map((step, i) => (
           <button
-            key={step.label}
+            key={step.id}
             type="button"
             aria-current={i === current ? "step" : undefined}
             onClick={() => setCurrent(i)}
@@ -72,7 +73,7 @@ export function HeroSteps({ copy, words, className = "" }: { copy: HeroStepsCopy
       <div ref={stageRef} data-step-stage className="rounded-[8px] border border-night-rule bg-night-2 p-6 sm:p-8">
         <ol data-step-list className="grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-1">
           {copy.steps.map((step, i) => (
-            <li key={step.label} data-step={i} data-active={i === current ? "yes" : "no"}>
+            <li key={step.id} data-step={i} data-active={i === current ? "yes" : "no"}>
               <span data-step-label className="mb-4 block text-meta font-semibold uppercase tracking-wider text-night-ink-2">
                 {step.label}
               </span>

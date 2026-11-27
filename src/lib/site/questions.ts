@@ -26,14 +26,17 @@
  */
 import { cacheLife, cacheTag } from "next/cache";
 import { compoundingNumbers } from "@/data/site/compounding";
-import { builtInQuestions, type QuestionOverrides } from "@/data/site/v1";
+import { builtInQuestions, v1 } from "@/data/site/v1";
 import { logAdminAction } from "@/lib/admin/log";
 import { hasDb } from "@/lib/db";
 import { query, type Query } from "@/lib/db-query";
-import { amountNames, fillAmounts, type Amounts } from "./amounts";
+import { fillAmounts, type Amounts } from "./amounts";
 import { checkClaims, textPage, type Violation } from "./claims";
+import { newOverlay, type Overlay } from "./content/format";
+import { amountPlaceholderNames, amountPlaceholders, plainLine, unknownPlaceholder } from "./content/text";
 
-export type { QuestionOverrides };
+/** Questions and answers edited in the admin, by question id, as the "site.questions" row holds them. A part left out keeps the built-in wording. */
+export type QuestionOverrides = Record<string, { q?: string; a?: string }>;
 
 export const QUESTIONS_KEY = "site.questions";
 export const QUESTIONS_TAG = "site-questions";
@@ -90,26 +93,22 @@ export async function getQuestionOverrides(): Promise<QuestionOverrides> {
 }
 
 /**
- * Characters that print nothing: the soft hyphen, zero-width spaces and joiners, the word joiner, and the marks
- * that change the direction text runs in. Text pasted from a document can carry them. Left in, one inside a word
- * hides that word from the claims check while the page still reads the same, and a direction mark can show an
- * answer's words in another order than the one that was checked.
+ * The same edits as an overlay on the code copy, which is what a page's view takes (src/lib/site/content): each
+ * part under its question's field id. An id that is no question's is left out.
  */
-const UNSEEN = /[­͏؜᠎​-‏‪-‮⁠-⁯﻿￹-￻]/g;
-
-/** One line of text: line breaks and runs of spaces become one space, and characters no page should print are removed. */
-export function plainLine(text: string): string {
-  let out = "";
-  for (const ch of text.replace(UNSEEN, "")) {
-    const code = ch.codePointAt(0) ?? 0;
-    // Control characters (tab and line breaks included, and the second control block) become a space.
-    out += code < 32 || (code >= 127 && code < 160) ? " " : ch;
+export function questionOverlay(overrides: QuestionOverrides): Overlay {
+  const out = newOverlay();
+  for (const group of v1.questions) {
+    for (const item of group.items) {
+      const edit = Object.hasOwn(overrides, item.id) ? overrides[item.id] : undefined;
+      for (const part of ["q", "a"] as const) {
+        const text = edit?.[part];
+        if (typeof text === "string") out.text[`questions.${group.id}.items.${item.id}.${part}`] = text;
+      }
+    }
   }
-  return out.replace(/\s+/g, " ").trim();
+  return out;
 }
-
-/** Every amount an answer may name, as it is written in an answer: "{monthlyUsd}". */
-export const amountPlaceholders = (amounts: Amounts): string[] => Object.keys(amountNames(amounts)).map((name) => `{${name}}`);
 
 const ruleNames: Record<Violation["rule"], string> = {
   vocabulary: "it says “agent” without “AI” in front",
@@ -130,16 +129,10 @@ export function refusal(what: "question" | "answer", text: string, amounts: Amou
   if (text === "") return `${The} is empty.`;
   if (text.length > max) return `${The} is ${text.length} characters long. The most is ${max}.`;
   if (/[<>]/.test(text)) return `${The} has a “<” or a “>”. It is printed as plain text, so markup would show as written.`;
-  let filled: string;
-  try {
-    filled = fillAmounts(text, amounts);
-  } catch {
-    const name = /\{(\w*)\}/.exec(text)?.[0] ?? "{…}";
-    return `${The} names an amount that does not exist, such as ${name}. The amounts are ${amountPlaceholders(amounts).join(", ")}.`;
-  }
-  // fillAmounts leaves the two names of a brick-stack caption, {week} and {bricks}, as they are. No answer is a caption, so one left here would be printed with its braces.
-  const left = /\{\w+\}/.exec(filled);
-  if (left) return `${The} names an amount that does not exist, such as ${left[0]}. The amounts are ${amountPlaceholders(amounts).join(", ")}.`;
+  // The names of a brick-stack caption, {week} and {bricks}, are no amounts: no answer is a caption, so one left here would be printed with its braces.
+  const unknown = unknownPlaceholder(text, amountPlaceholderNames);
+  if (unknown) return `${The} names an amount that does not exist, such as ${unknown}. The amounts are ${amountPlaceholders.join(", ")}.`;
+  const filled = fillAmounts(text, amounts);
   // /faq shows every question, and is held to every rule.
   const found = checkClaims(textPage("/faq", [filled]), { amounts, compounding: compoundingNumbers });
   if (found.length === 0) return null;

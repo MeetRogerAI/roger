@@ -6,17 +6,20 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { v3Defaults } from "@/data/config";
-import { builtInQuestions, questionsOn, questionsWith, v1, v1Copy } from "@/data/site/v1";
+import { builtInQuestions, questionsOn, v1 } from "@/data/site/v1";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
 import { amountsFrom } from "./amounts";
+import { v1Copy } from "./content/model";
+import { siteRegistry } from "./content/registry";
+import { plainLine } from "./content/text";
 
 vi.hoisted(() => {
   delete process.env.DATABASE_URL;
 });
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 
-const { ANSWER_MAX, QUESTION_MAX, QUESTIONS_KEY, getQuestionOverrides, pagesShowing, parseOverrides, plainLine, readQuestionOverrides, refusal, resetQuestion, saveQuestion } = await import("./questions");
+const { ANSWER_MAX, QUESTION_MAX, QUESTIONS_KEY, getQuestionOverrides, pagesShowing, parseOverrides, questionOverlay, readQuestionOverrides, refusal, resetQuestion, saveQuestion } = await import("./questions");
 
 const amounts = amountsFrom(v3Defaults);
 const ADMIN = "admin@example.com";
@@ -54,7 +57,7 @@ describe("reading the edits", () => {
     expect(process.env.DATABASE_URL).toBeUndefined();
     expect(await getQuestionOverrides()).toEqual({});
     // And the pages then render the built-in questions, unchanged.
-    expect(v1Copy(amounts, await getQuestionOverrides()).copy.questions).toEqual(v1Copy(amounts).copy.questions);
+    expect(v1Copy(amounts, questionOverlay(await getQuestionOverrides())).copy.questions).toEqual(v1Copy(amounts).copy.questions);
   });
 
   it("keeps only what a page can use from a stored row: known ids, text parts, nothing else", () => {
@@ -75,7 +78,7 @@ describe("reading the edits", () => {
 
 describe("what a page is given", () => {
   it("is the edit where there is one and the built-in wording everywhere else, with the amounts of an edit filled in", () => {
-    const { copy } = v1Copy(amounts, { cost: { a: "{monthlyUsd} a month ({monthlyCad} in Canada). Your first {freeLists} Cora Curations are free." }, "who-sees": { q: "Who can see my plays?" } });
+    const { copy } = v1Copy(amounts, questionOverlay({ cost: { a: "{monthlyUsd} a month ({monthlyCad} in Canada). Your first {freeLists} Cora Curations are free." }, "who-sees": { q: "Who can see my plays?" } }));
     const all = copy.questions.flatMap((group) => group.items);
     expect(all).toHaveLength(18);
     expect(all.find((item) => item.id === "cost")).toMatchObject({ q: "What does it cost?", a: "US$200 a month (CA$280 in Canada). Your first two Cora Curations are free." });
@@ -85,18 +88,31 @@ describe("what a page is given", () => {
     for (const item of all.filter((i) => !["cost", "who-sees"].includes(i.id))) expect(item).toEqual(plain.find((p) => p.id === item.id));
     expect(questionsOn(copy, "home").find((item) => item.q === "What does it cost?")?.a).toBe("US$200 a month (CA$280 in Canada). Your first two Cora Curations are free.");
     // The amounts follow the settings, in an edit as in the built-in copy.
-    const dearer = v1Copy(amountsFrom({ ...v3Defaults, priceUsd: 230, priceCad: 310, freeRuns: 3 }), { cost: { a: "{monthlyUsd} a month. Your first {freeLists} are free." } });
+    const dearer = v1Copy(amountsFrom({ ...v3Defaults, priceUsd: 230, priceCad: 310, freeRuns: 3 }), questionOverlay({ cost: { a: "{monthlyUsd} a month. Your first {freeLists} are free." } }));
     expect(dearer.copy.questions[3].items[0].a).toBe("US$230 a month. Your first three are free.");
   });
 
   it("falls back to the built-in wording for an edit it cannot print, and never throws", () => {
-    const groups = questionsWith({ cost: { a: "It costs {nothing}." }, refund: { q: "", a: "   " } }, amounts);
-    const all = groups.flatMap((group) => group.items);
-    expect(all.find((item) => item.id === "cost")!.a).toBe(builtIn("cost").a);
-    expect(all.find((item) => item.id === "refund")).toMatchObject({ q: builtIn("refund").q, a: builtIn("refund").a });
-    expect(() => v1Copy(amounts, { cost: { a: "It costs {nothing}." } })).not.toThrow();
+    const plain = v1Copy(amounts).copy.questions;
+    const shown = (overrides: Parameters<typeof questionOverlay>[0]) => v1Copy(amounts, questionOverlay(overrides)).copy.questions;
+    const all = shown({ cost: { a: "It costs {nothing}." }, refund: { q: "", a: "   " } }).flatMap((group) => group.items);
+    expect(all.find((item) => item.id === "cost")!.a).toBe(plain[3].items[0].a);
+    expect(all.find((item) => item.id === "refund")).toMatchObject({ q: plain[3].items[4].q, a: plain[3].items[4].a });
     // An id that is a property of every object is no question's.
-    expect(questionsWith({ constructor: { a: "x" }, toString: { q: "y" } } as never, amounts)).toEqual(questionsWith({}, amounts));
+    expect(shown({ constructor: { a: "x" }, toString: { q: "y" } } as never)).toEqual(plain);
+  });
+
+  it("is handed the edits as an overlay: each part under its question's field id, which the registry knows", () => {
+    expect(questionOverlay({ cost: { a: "{monthlyUsd} a month." }, "who-sees": { q: "Who can see my plays?" }, "not-a-question": { q: "Hello?" } })).toEqual({
+      format: 1,
+      text: { "questions.price-and-billing.items.cost.a": "{monthlyUsd} a month.", "questions.zack-and-privacy.items.who-sees.q": "Who can see my plays?" },
+      sections: {},
+      lists: {},
+    });
+    // Every question has both of its fields in the registry, under the id the conversion writes.
+    const every = questionOverlay(Object.fromEntries(builtInQuestions().map((item) => [item.id, { q: "Q", a: "A" }])));
+    expect(Object.keys(every.text)).toHaveLength(36);
+    for (const id of Object.keys(every.text)) expect(siteRegistry.fields.has(id), id).toBe(true);
   });
 });
 
@@ -107,7 +123,7 @@ describe("saving an edit", () => {
     // Only the part that differs from the built-in wording is stored.
     expect(await stored(query)).toEqual({ cost: { a: answer } });
     expect(await readQuestionOverrides(query)).toEqual({ cost: { a: answer } });
-    expect(v1Copy(amounts, await readQuestionOverrides(query)).copy.questions[3].items[0].a).toBe("US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST.");
+    expect(v1Copy(amounts, questionOverlay(await readQuestionOverrides(query))).copy.questions[3].items[0].a).toBe("US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST.");
     expect(await log(query)).toEqual([{ admin_email: ADMIN, action: "site_question_saved", detail: { id: "cost", a: answer } }]);
   });
 
@@ -148,7 +164,7 @@ describe("resetting an edit", () => {
     await saveQuestion(query, ADMIN, { id: "refund", q: "Do you give refunds?", a: "No." }, amounts);
     expect(await resetQuestion(query, "second@example.com", "refund")).toMatchObject({ ok: true });
     expect(await readQuestionOverrides(query)).toEqual({});
-    expect(v1Copy(amounts, await readQuestionOverrides(query)).copy.questions).toEqual(v1Copy(amounts).copy.questions);
+    expect(v1Copy(amounts, questionOverlay(await readQuestionOverrides(query))).copy.questions).toEqual(v1Copy(amounts).copy.questions);
     expect((await log(query)).map((row) => [row.admin_email, row.action, row.detail.id])).toEqual([
       [ADMIN, "site_question_saved", "refund"],
       ["second@example.com", "site_question_reset", "refund"],

@@ -7,7 +7,8 @@ import { WatchSentence } from "@/components/home/watch-sentence";
 import { LibraryBrowser, LibraryStatic } from "@/components/library-browser";
 import { getUseCases } from "@/lib/library-source";
 import { ClosingBand } from "@/components/site/v1/blocks/closing-band";
-import { closingBandCopy, v1Copy } from "@/data/site/v1";
+import { closingBandCopy } from "@/data/site/v1";
+import { v1Copy } from "@/lib/site/content/model";
 import { getAmounts } from "@/lib/site/amounts";
 import type { BuiltVersion } from "@/lib/site/version";
 
@@ -58,6 +59,22 @@ async function TrialBand({ version }: { version: BuiltVersion }) {
   );
 }
 
+/** Stands in a site version's intro line for the number of use cases (src/data/site/v1.ts, `library.intro`). */
+const COUNT = "[count]";
+
+/** A line of copy with the count of use cases where it says "[count]". A line that does not say it is printed as it is. */
+function WithCount({ line, count }: { line: string; count: number }) {
+  const at = line.indexOf(COUNT);
+  if (at === -1) return <>{line}</>;
+  return (
+    <>
+      {line.slice(0, at)}
+      {count.toLocaleString("en-CA")}
+      {line.slice(at + COUNT.length)}
+    </>
+  );
+}
+
 /**
  * The word for the software. A site version says "AI agent" in full, because
  * its readers in real estate are also called agents (spec 0.4, A.16 check 10).
@@ -68,6 +85,8 @@ const anyAgent = isBuiltVersion(site) ? "Any AI agent" : undefined;
 
 export default async function LibraryPage() {
   const items = await getUseCases();
+  // A site version's own words for this page are in its copy. Circles and the legacy site keep theirs here.
+  const words = isBuiltVersion(site) ? v1Copy(await getAmounts()).copy.library : null;
 
   return (
     <>
@@ -75,25 +94,31 @@ export default async function LibraryPage() {
         <h1 id="library-title" className="lines text-h2 text-stretch-display">
           <span className="line block">
             <span data-line className="block" style={{ "--i": 0 } as React.CSSProperties}>
-              The use-case
+              {words ? words.title.first : "The use-case"}
             </span>
           </span>
           <span className="line block">
             <span data-line className="block" style={{ "--i": 1 } as React.CSSProperties}>
-              library
+              {words ? words.title.second : "library"}
             </span>
           </span>
         </h1>
         <div className="after-lines">
           <p className="text-lead">
-            {items.length.toLocaleString("en-CA")}
-            {` real things people’s ${agent}s did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.`}
+            {words ? (
+              <WithCount line={words.intro} count={items.length} />
+            ) : (
+              <>
+                {items.length.toLocaleString("en-CA")}
+                {` real things people’s ${agent}s did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.`}
+              </>
+            )}
           </p>
           <p className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
             {site === "circles" && <Link href="/apply" className="btn btn-m">Apply for a founding Circle</Link>}
             {site === "legacy" && <Link href="/packs/solopreneur" className="btn btn-m">Get the free starter pack</Link>}
             <Link href="#watch" className="tlink chev">
-              Watch for what you need
+              {words ? words.watchLink : "Watch for what you need"}
             </Link>
           </p>
         </div>
@@ -106,12 +131,12 @@ export default async function LibraryPage() {
       <section id="watch" aria-labelledby="watch-title" className="wrap scroll-mt-32 pb-8 pt-16 md:pt-24">
         <div id="final-cta" data-reveal>
         <h2 id="watch-title" className="text-h2">
-          Not in the library yet?
+          {words ? words.watch.title : "Not in the library yet?"}
         </h2>
         <div className="mt-6">
           <WatchSentence agent={agent} />
         </div>
-        <p className="mt-6 max-w-[36rem] text-small text-ink-2">{`The morning someone’s ${agent} does it, you get one email with the link. Every email has a link to stop.`}</p>
+        <p className="mt-6 max-w-[36rem] text-small text-ink-2">{words ? words.watch.note : `The morning someone’s ${agent} does it, you get one email with the link. Every email has a link to stop.`}</p>
         </div>
       </section>
 

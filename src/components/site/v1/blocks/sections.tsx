@@ -1,5 +1,5 @@
 import { Reveal } from "@/components/site/shared/reveal";
-import type { SampleCardCopy } from "@/data/site/copy-types";
+import type { SampleCardCopy, TextItem } from "@/data/site/copy-types";
 import type { ExampleView } from "@/lib/site/sample";
 import { ExampleTabs } from "./example-tabs";
 import { SampleCard } from "./sample-card";
@@ -12,7 +12,7 @@ import { SectionHead } from "./section-head";
  */
 
 /** "The problem", on ground: three statements side by side. */
-export function Problem({ copy, id = "problem" }: { copy: { title: string; statements: string[] }; id?: string }) {
+export function Problem({ copy, id = "problem" }: { copy: { title: string; statements: TextItem[] }; id?: string }) {
   const titleId = `${id}-title`;
   return (
     <section id={id} aria-labelledby={titleId} className="scroll-mt-14 bg-ground">
@@ -20,8 +20,8 @@ export function Problem({ copy, id = "problem" }: { copy: { title: string; state
         <SectionHead id={titleId} title={copy.title} />
         <Reveal as="ul" className="mx-auto mt-14 grid max-w-[64rem] gap-10 md:grid-cols-3 md:gap-12">
           {copy.statements.map((statement) => (
-            <li key={statement} className="border-t border-rule-strong pt-6">
-              <p className="text-lead">{statement}</p>
+            <li key={statement.id} className="border-t border-rule-strong pt-6">
+              <p className="text-lead">{statement.text}</p>
             </li>
           ))}
         </Reveal>
