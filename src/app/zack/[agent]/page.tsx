@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { V1ZackAgent } from "@/components/site/v1/zack";
-import { zackMeta } from "@/lib/site/chrome";
+import { builtPageMetadata, zackMeta } from "@/lib/site/chrome";
 import { getServedSite, isBuiltVersion, requireBuiltVersion } from "@/lib/site/version";
 import { freeRunAgent, freeRunAgents } from "@/lib/site/zack-files";
 
@@ -16,22 +16,22 @@ export function generateStaticParams() {
 /**
  * This address exists only in a site version (plan KTD4). The page for an
  * agent is open to search; the same page with a run token in its address is
- * one visitor's own, and is kept out.
+ * one visitor's own, and is kept out. With a token the page also sends no
+ * referrer, so the address that holds the token is never passed to another
+ * site by a link or a request from the page (as /auth/confirm does for its
+ * own token).
  */
 export async function generateMetadata({ params, searchParams }: PageProps<"/zack/[agent]">): Promise<Metadata> {
   if (!isBuiltVersion(site)) return { robots: hidden };
   const { agent: slug } = await params;
   const agent = freeRunAgent(slug);
   if (!agent) return { robots: hidden };
-  const meta = zackMeta(site);
-  const title = agent.name ? `${meta.title}: ${agent.name}` : meta.title;
+  const title = zackMeta(site).title;
   const { run } = await searchParams;
   return {
-    title: { absolute: title },
-    description: meta.description,
-    alternates: { canonical: `/zack/${agent.slug}` },
-    openGraph: { url: `/zack/${agent.slug}`, title: meta.headline, description: meta.description },
-    ...(run === undefined ? {} : { robots: hidden }),
+    ...builtPageMetadata(site, "zack", `/zack/${agent.slug}`),
+    title: { absolute: agent.name ? `${title}: ${agent.name}` : title },
+    ...(run === undefined ? {} : { robots: hidden, referrer: "no-referrer" as const }),
   };
 }
 
@@ -44,6 +44,5 @@ export default async function ZackAgentPage({ params, searchParams }: PageProps<
   const { agent: slug } = await params;
   const agent = freeRunAgent(slug);
   if (!agent) notFound();
-  // v2 and v3 show v1's page until each has its own (U13, U17).
   return <V1ZackAgent version={version} agent={agent} searchParams={searchParams} />;
 }

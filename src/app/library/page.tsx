@@ -48,7 +48,6 @@ function SetUpBand() {
  * The one band a site version adds, above the footer (spec A.12): the library
  * sentence, the primary start button and the trial line. The button has no
  * audience, so it carries the one remembered from the homepage or /agents.
- * v2 and v3 use v1's until each has its own.
  */
 async function TrialBand({ version }: { version: BuiltVersion }) {
   const { copy } = v1Copy(await getAmounts());

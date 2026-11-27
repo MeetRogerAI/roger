@@ -30,6 +30,13 @@ export const UNKNOWN_AUTHOR = "unknown author";
  * table's key: for each play the first orphan is relabelled and the rest are
  * deleted, and all of them are deleted when the play already has an "unknown
  * author" row. No row is touched twice.
+ *
+ * It changes nothing while `users` has no rows at all. A relabel cannot be
+ * undone, and an empty `users` table beside contributor rows is not a
+ * database where everyone was deleted: it is one that is partly restored or
+ * copied, with the pool loaded before the accounts. On such a database every
+ * row would look like an orphan. The guard is in the same statement, so it
+ * reads the table at the same moment the orphans are found.
  */
 export async function relabelOrphanContributors(q: Query): Promise<{ relabelled: number; dropped: number }> {
   const [r] = await q<{ relabelled: number; dropped: number }>(
@@ -40,6 +47,7 @@ export async function relabelOrphanContributors(q: Query): Promise<{ relabelled:
        from pool_play_contributors c
        where c.contributor <> '${UNKNOWN_AUTHOR}' and c.contributor not like 'seed:%'
          and not exists (select 1 from users u where u.id::text = c.contributor)
+         and exists (select 1 from users)
      ),
      dropped as (
        delete from pool_play_contributors c using orphans o

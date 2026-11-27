@@ -212,8 +212,25 @@ describe("a site version before its pages are built", () => {
     expect(markup).not.toContain("Circle");
   });
 
-  it("keeps the hidden legacy pages out of search", () => {
-    expect(companies.metadata.robots).toEqual({ index: false, follow: false });
+  it("keeps the hidden legacy pages out of search", async () => {
+    // All five still answer 200 under a site version, so the noindex in their metadata is what keeps them out.
+    const noindex = { index: false, follow: false };
+    expect(companies.metadata.robots).toEqual(noindex);
+    const setup = await import("@/app/setup/page");
+    const workshops = await import("@/app/workshops/page");
+    const refunds = await import("@/app/refunds/page");
+    const packs = await import("@/app/packs/[id]/page");
+    expect(setup.metadata.robots).toEqual(noindex);
+    expect(workshops.metadata.robots).toEqual(noindex);
+    expect(refunds.metadata.robots).toEqual(noindex);
+    // A pack's page works its metadata out from the address: every pack it has a page for is hidden.
+    const ids = packs.generateStaticParams();
+    expect(ids).toContainEqual({ id: "solopreneur" });
+    for (const { id } of ids) {
+      const pack = await packs.generateMetadata({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) });
+      expect(pack.robots, id).toEqual(noindex);
+      expect(pack.alternates, id).toEqual({ canonical: `/packs/${id}` });
+    }
   });
 
   it("links to no Circles or legacy offer page from the header, footer or library", async () => {

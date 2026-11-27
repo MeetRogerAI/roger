@@ -27,9 +27,9 @@ Design spec 1.3 already rewrote these lines for the new price, but its wording a
 
 No other line in the copy file states or implies US$100 or CA$140. A test fails if one appears.
 
-## 2. Needs Peter's approval
+## 2. Approved changes
 
-**Approved by Peter on November 26, 2026:** the letter change (2.1), the cleaned sample play (2.2), the higher-rate wording (2.3), the footer label "For people who run AI agents", and the wording in section 3. The privacy and terms drafts were approved to be written from the spec and marked as drafts.
+**Approved by Peter on November 26, 2026:** the letter change (2.1), the cleaned sample play (2.2), the higher-rate wording (2.3), the footer label "For people who run AI agents", and the wording in section 3. The privacy and terms text was approved to be written from the spec. At that approval both pages carried the note "Draft, under review."; Peter reviewed and confirmed them later the same day (decision 3 below), and the note is gone.
 
 **Four later decisions by Peter, also on November 26, 2026** (section 6 has what each one settled):
 
@@ -195,7 +195,11 @@ Checked and left as it is:
 
 - **`/how-it-works`, "What you can change"**, and the answer to "Can I see and change what Zack does?". Each file says the user's own rules "add restrictions (skip a category, skip a subject, never include these words, outline only, fewer plays)", and the dashboard has a box for rules in the user's own words. The lines already say this.
 - **The three short lines that say details are removed**: "writes up what worked, with client details removed" (homepage step 2, and Sunday on `/how-it-works`) and "with identities removed" (`/agents` step 1). They are one-line summaries in a list of steps. A version that says "is instructed to" and names Roger's second check did not read naturally at that length, so the short lines are kept and the full statement is in the answers above: "What he removes" sits under the Sunday line on `/how-it-works`, the control block on the homepage and `/agents` links to it, and `/agents` shows "What leaves my account?". If Peter wants the short lines changed too, they are three strings in `src/data/site/v1.ts`.
-- **The warning above the paste box on `/zack`** is still the spec's sentence: "… It is read by Roger’s team and by Cora, Roger’s ranking agent, and is never published." The privacy page says "may be read" and does not say "never published", because a report that is attached to an account has its plays shared in anonymous form. Not changed: it is not one of the lines this decision named.
+**The warning above the paste box on `/zack`.** Changed in code review on November 26, 2026, under the same approval: the site's wording follows what the product does. Peter has not read this line itself. Until then it was the spec's sentence, and it disagreed with the privacy page, which says a report "may be read" and does not say "never published", because a report attached to an account has its plays shared in anonymous form.
+
+| Where | Spec wording | v1 wording | The fact behind it |
+|---|---|---|---|
+| `/zack/[agent]`, above the paste box | "Check your report for client names or private details before pasting. It is read by Roger’s team and by Cora, Roger’s ranking agent, and is never published." (A.11) | "Check your report for client names or private details before pasting. It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form." | The first sentence is the spec's, word for word. The rest is the privacy page's "The free Zack run" (section 3, corrections 9b and 9c): "Your report may be read by Roger’s team and by Cora", and after sign-up from that run "its plays are shared with other users in anonymous form." No code reads a report nobody signed up from; `claimFreeRun` in `src/lib/zack/receive.ts` stores a claimed report with the account's sharing setting, which starts as "share". The line is `zackWarning` in `src/data/site/v1.ts`. A test (`src/components/site/v1/zack.test.tsx`) pins it word for word and holds its two statements to the privacy text. It says "agent" without "AI" because it is shown on `/zack` only (spec 0.4). |
 
 ## 3. Wording the spec describes but does not write
 
@@ -237,7 +241,7 @@ The spec says what these sections hold, without giving the words. The wording be
 
 This wording was added when the free run was built (plan U8), after Peter's approval on November 26, so he has not read it yet. All of it is in `v1Zack` in `src/data/site/v1.ts`. These two pages may say "agent" without "AI" (spec 0.4). No line names a price, an income or time saved. "[agent]" stands for the agent's name.
 
-The warning above the paste box is the spec's own sentence, word for word, and is not new: "Check your report for client names or private details before pasting. It is read by Roger’s team and by Cora, Roger’s ranking agent, and is never published."
+The warning above the paste box keeps the spec's first sentence, word for word: "Check your report for client names or private details before pasting." Its second sentence was reworded in code review to agree with the privacy page, and is now two: "It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form." Section 2.5 has the old wording and the fact behind the new.
 
 | Where | v1 wording |
 |---|---|
@@ -405,11 +409,11 @@ Privacy:
 - What a referral code or a campaign tag carries into sign-up.
 - The rate-limit records sign-in, sign-up and the card step keep, some of which hold an IP address. The free Zack run's are now stated.
 - That the record of which account a shared play came from is itself never removed. The page now says what becomes of it when the account is deleted: it says "unknown author" (6.4).
-- That Roger's team can read a matching profile. No admin page shows one today, so the draft does not say it.
+- That Roger's team can read a matching profile. No admin page shows one today, so the page does not say it.
 - What deleting an account removes. The design spec describes it (B.14), but the spec's list for this page does not ask for it.
 - Sign-up leads: what is kept about someone who starts sign-up and does not finish.
 - Which service stores data in which country.
-- Who the "30 days" promise is measured for. The draft says "We will answer within 30 days." The spec says only "with a 30-day promise", so whether the promise is to answer or to finish the correction or deletion is Peter's to settle.
+- Who the "30 days" promise is measured for. The page says "We will answer within 30 days." The spec says only "with a 30-day promise", so whether the promise is to answer or to finish the correction or deletion is Peter's to settle.
 - A named privacy contact, the law the page is written under, a regulator, or a right to complain.
 - Children, and any minimum age.
 - How changes to the page are announced.
@@ -443,11 +447,9 @@ Terms:
 - **The playbook names Claude.** The sample play was written on Claude, and its text says "Claude returns two ready-to-send versions", "a file Claude should check first" and "Claude drafts only". The card also prints "Written on Claude". This is the source's wording, kept. It is the third thing for Peter to settle in section 2.2.
 - **"One list on its own costs the same as a whole month"** is true only while the two settings are equal. So are "for the price of one list" in "What does it cost?" and "For the same price" in "Can I buy one list at a time?". The prices come from the settings and these sentences do not, so if the monthly price and the one-list price are ever set apart, the three sentences turn false and no test will catch it. They are the wording R14a asks for, so they are not changed.
 
-## 6. Resolve before merging to main, because merging goes live
+## 6. Decisions of November 26, 2026, and what remains
 
-Merging the v1 pull request into `main` puts v1 on meetroger.ai. There is no separate go-live step, so everything in this section is settled before the merge.
-
-On November 26, 2026 Peter made four decisions that settle the four largest items here. Each subsection below starts with what was decided and what was done. What still remains is under "Still open" in each.
+This section began as the list to resolve before merging to `main`, because merging the v1 pull request puts v1 on meetroger.ai with no separate go-live step. It is now a dated record: on November 26, 2026 Peter made four decisions that settled the four largest items. Each subsection below starts with what was decided and what was done. What remains is short, and is under "Still open" in each subsection, in 6.2, and in 6.4 (c). The list of what Peter still settles before the merge is in `docs/site/v1-acceptance.md`, "Resolve before merging".
 
 ### 6.1 Resolved: the public Zack files match Zack 2.0
 
@@ -539,7 +541,7 @@ The corrections themselves are in section 3. These are what they leave for Peter
 
 **(c) App-side items the privacy and terms text depends on.** The record of which account a shared play came from was settled on November 26, 2026 (the last item but two below). None of the others was changed, and they are what genuinely remains.
 
-- **The job that erases a departed user's runs runs only while the paid cycle is live.** The `retention` task in `src/lib/housekeeping/job.ts` is skipped while `v3.cycleLive` is off or Stripe is not set up. The privacy draft states the 90 days without that condition. It holds once the cycle is live, which is also when there are first users whose access can end.
+- **The job that erases a departed user's runs runs only while the paid cycle is live.** The `retention` task in `src/lib/housekeeping/job.ts` is skipped while `v3.cycleLive` is off or Stripe is not set up. The privacy page states the 90 days without that condition. It holds once the cycle is live, which is also when there are first users whose access can end.
 - **Nothing clears the cached settings when a v3 setting changes.** The page reads its amounts through a cache (`getAmounts` in `src/lib/site/amounts.ts`, five minutes) and the jobs read the settings directly, so for a few minutes after a change the page and the jobs can disagree about the retention period or a price.
 - **Shortening the retention setting applies to people who already left.** The job compares each user's access end with the setting as it is now, so a shorter period erases, at the next pass, the runs of users who left under the longer one.
 - **"The first miss each billing month is forgiven" is typed, and the number is a setting.** `v3.forgivenMissesPerMonth` is 1 today and can be set from 0 to 4 (`src/lib/v3-settings.ts`, read in `src/lib/billing/contribution.ts`). No amount name covers it, so the terms and the site copy turn false if it changes.
@@ -549,8 +551,10 @@ The corrections themselves are in section 3. These are what they leave for Peter
   - **The backfill.** The hourly task `unknown_authors` (`relabelOrphanContributors` in `src/lib/cora/contributors.ts`) relabels any row whose contributor is a user id that matches no user, with the same one-row-a-play handling. It covers accounts deleted before this change and anything a delete missed. It runs whether or not the paid cycle is live, and running it twice changes nothing. Rows for seed contributors ("seed:…") are not accounts and are left alone.
   - **Cora.** Nothing was changed in how Cora reads the record. She matches a row to a user by the user's id as text, so "unknown author" is never anyone's own play: it neither keeps a play from a user nor sends one. "Run by N users" is counted from the plays themselves, and a deleted account's plays are deleted with it, so an unknown author is not counted at all.
   - **The privacy page** now ends that paragraph: "When your account is deleted, that record is changed to say “unknown author”."
-  - **Not changed:** the rows themselves are still never deleted while their play is in the pool, and `db/schema.sql` was not touched. A seed contributor's rows ("seed:…") stay when the account it was linked to is deleted; they point to the hidden seed record, which the deletion unlinks from the account.
-- **A run's row is never fully removed while the account exists.** After retention or a delete, the row stays with its week, route, AI agent and times. The privacy draft now says so.
+  - **The admin log, for an account that was linked to a seed contributor.** Added in code review on November 26, 2026. The log's rows are kept when an account is deleted (`admin_actions.user_id` has no link to `users`, so nothing removes or empties them), and a `link_contributor` or `unlink_contributor` row named the hidden seed contributor, whose "seed:…" rows name its plays. The statement that deletes the account now also takes the contributor's id and label, and `movedTo` and `movedFrom`, out of that account's link rows, and takes the deleted id out of `movedTo` and `movedFrom` on other accounts' link rows. The rows themselves stay, so the log still shows that a link was made or removed, when and by whom.
+  - **A guard on the backfill.** Added in the same review. The hourly task changes nothing while the `users` table has no rows at all: on a partly restored database, with the pool loaded before the accounts, every row would look like an orphan, and a relabel cannot be undone.
+  - **Not changed:** the rows themselves are still never deleted while their play is in the pool, and `db/schema.sql` was not touched. A seed contributor's rows ("seed:…") stay when the account it was linked to is deleted; they point to the hidden seed record, which the deletion unlinks from the account, and after the change above nothing in the admin log ties that record to the deleted account. A play placed in the pool at the moment its account is being deleted can keep the account's id until the next hourly pass relabels it.
+- **A run's row is never fully removed while the account exists.** After retention or a delete, the row stays with its week, route, AI agent and times. The privacy page now says so.
 - **The run history shows the newest 60 runs.** "You can delete any run from your dashboard" is true of those; an older run has no button (`listRuns` in `src/lib/zack/settings.ts`).
 
 **(d) Resolved: both documents are reviewed.** See 6.3. The topics they do not cover are listed in section 3, "Topics the documents do not cover", as a reference.

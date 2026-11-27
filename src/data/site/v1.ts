@@ -198,9 +198,12 @@ export const v1 = {
     popular: "Most people choose this",
     tax: { USD: "plus tax where it applies", CAD: "plus HST" },
   },
-  /** Shown on /zack only, so the vocabulary rule does not apply to it. */
+  /**
+   * Shown on /zack only, so the vocabulary rule does not apply to it. The first sentence is the spec's (A.11).
+   * The rest says what the privacy page's "The free Zack run" says: the report may be read, and after sign-up its plays are shared.
+   */
   zackWarning:
-    "Check your report for client names or private details before pasting. It is read by Roger’s team and by Cora, Roger’s ranking agent, and is never published.",
+    "Check your report for client names or private details before pasting. It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form.",
   questions,
   /** Header links. The footer shows the same five under the same labels. */
   nav: {

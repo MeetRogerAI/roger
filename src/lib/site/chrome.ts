@@ -8,10 +8,11 @@
  * a prop from the root layout: importing a copy file there would pull the
  * settings reader into the browser bundle.
  */
+import type { Metadata } from "next";
 import type { SharedCopy } from "@/data/site/copy-types";
 import { v1, v1Agents, v1Zack } from "@/data/site/v1";
 import { fillCopy, getAmounts, type Amounts } from "./amounts";
-import type { BuiltVersion } from "./version";
+import { isBuiltVersion, type BuiltVersion, type ServedSite } from "./version";
 
 export type ChromeLink = { href: string; label: string };
 
@@ -34,8 +35,19 @@ export type SiteChrome = {
 /** The parts of a version's copy the header, the footer and the not-found page read. `meta` is read as written, by siteMeta. */
 export type ChromeCopy = Pick<SharedCopy, "buttons" | "nav" | "footer" | "notFound">;
 
-/** v2 and v3 use v1's words until each has a copy file of its own (U13, U17). */
-const copyFor = (version: BuiltVersion): ChromeCopy & Pick<SharedCopy, "meta"> => ({ v1, v2: v1, v3: v1 })[version];
+/** A version's three copy files: the site's, the /agents page's and the free Zack run's. */
+type VersionCopy = { main: typeof v1; agents: typeof v1Agents; zack: typeof v1Zack };
+
+const v1Files: VersionCopy = { main: v1, agents: v1Agents, zack: v1Zack };
+
+/**
+ * Which copy each version reads. v2 and v3 use v1's words, and show v1's
+ * pages, until each has a copy file and pages of its own (U13, U17). This is
+ * the one place that says so: give a version its own files here.
+ */
+const copyByVersion: Record<BuiltVersion, VersionCopy> = { v1: v1Files, v2: v1Files, v3: v1Files };
+
+const copyFor = (version: BuiltVersion): ChromeCopy & Pick<SharedCopy, "meta"> => copyByVersion[version].main;
 
 /** The eleven public pages of a site version, in the spec's sitemap order. */
 export const builtSitemapPaths = ["/", "/agents", "/pricing", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"] as const;
@@ -45,22 +57,42 @@ export function siteMeta(version: BuiltVersion): SharedCopy["meta"] {
   return copyFor(version).meta;
 }
 
-/** The same three for /agents, from that page's own copy. v2 and v3 use v1's until each has its own. */
+/** The same three for /agents, from that page's own copy. */
 export function agentsMeta(version: BuiltVersion): SharedCopy["meta"] {
-  return { v1: v1Agents, v2: v1Agents, v3: v1Agents }[version].meta;
+  return copyByVersion[version].agents.meta;
 }
 
-/** The same three for /zack and /zack/[agent], from the free run's own copy. v2 and v3 use v1's until each has its own. */
+/** The same three for /zack and /zack/[agent], from the free run's own copy. */
 export function zackMeta(version: BuiltVersion): SharedCopy["meta"] {
-  return { v1: v1Zack, v2: v1Zack, v3: v1Zack }[version].meta;
+  return copyByVersion[version].zack.meta;
 }
 
 /** The four reading pages, by their name in a version's copy. */
 export type ReadingPage = "pricing" | "howItWorks" | "faq" | "about";
 
-/** The same three for /pricing, /how-it-works, /faq and /about, from each page's own copy. v2 and v3 use v1's until each has its own. */
+/** The same three for /pricing, /how-it-works, /faq and /about, from each page's own copy. */
 export function pageMeta(version: BuiltVersion, page: ReadingPage): SharedCopy["meta"] {
-  return { v1, v2: v1, v3: v1 }[version][page].meta;
+  return copyByVersion[version].main[page].meta;
+}
+
+/** A page that has a title, a description and a social card line of its own: a reading page, /agents or the free Zack run. */
+export type MetaPage = ReadingPage | "agents" | "zack";
+
+/**
+ * The metadata of a route that exists only in a site version (plan KTD4):
+ * the page's own title and description, and `path` as its one address. Under
+ * Circles or the legacy site the route is not found, so it has nothing to
+ * index.
+ */
+export function builtPageMetadata(site: ServedSite, page: MetaPage, path: string): Metadata {
+  if (!isBuiltVersion(site)) return { robots: { index: false, follow: false } };
+  const meta = page === "agents" ? agentsMeta(site) : page === "zack" ? zackMeta(site) : pageMeta(site, page);
+  return {
+    title: { absolute: meta.title },
+    description: meta.description,
+    alternates: { canonical: path },
+    openGraph: { url: path, title: meta.headline, description: meta.description },
+  };
 }
 
 /**

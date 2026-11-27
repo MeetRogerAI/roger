@@ -5,7 +5,8 @@
  * The version is whatever the route files resolved when they were imported:
  * the test file sets SITE_VERSION in vi.hoisted before anything loads, and
  * mocks next/navigation (with `usePathname` reading `at.path`), next/headers,
- * next/cache and next/font/google, as the other page tests do. Nothing here is
+ * next/cache and next/font/google, as the other page tests do, and
+ * `@/lib/watches` for the two watch pages (see WATCH_TOKEN). Nothing here is
  * specific to v1, so the same list serves v2 and v3.
  */
 import type { Metadata } from "next";
@@ -40,7 +41,19 @@ export function metaWords(metadata: Metadata | undefined): string[] {
   return out;
 }
 
-/** The public routes of a site version: spec A.2, with one listed agent and "other" for /zack/[agent], and the not-found page. */
+/**
+ * The token the two watch pages are rendered with. They look the watch up in
+ * the database, so the test file mocks `@/lib/watches`: `confirmWatch` and
+ * `stopWatch` return the watch's words for the confirmed and stopped pages,
+ * or null for "That link has expired."
+ */
+export const WATCH_TOKEN = "watch-token-for-the-claims-check";
+
+/**
+ * The public routes of a site version: spec A.2, with one listed agent and
+ * "other" for /zack/[agent], the two pages reached from the library's watch
+ * email, and the not-found page.
+ */
 const routes: { path: string; load: () => Promise<Route>; props?: () => Props }[] = [
   { path: "/", load: () => import("@/app/page") },
   { path: "/agents", load: () => import("@/app/agents/page") },
@@ -54,6 +67,9 @@ const routes: { path: string; load: () => Promise<Route>; props?: () => Props }[
   { path: "/library", load: () => import("@/app/library/page") },
   { path: "/privacy", load: () => import("@/app/privacy/page") },
   { path: "/terms", load: () => import("@/app/terms/page") },
+  // The two pages the library's watch email leads to. Each carries a token, so each reads the watch: see WATCH_TOKEN.
+  { path: "/watch/confirm", load: () => import("@/app/watch/confirm/page"), props: () => ({ searchParams: Promise.resolve({ t: WATCH_TOKEN }) }) },
+  { path: "/watch/stop", load: () => import("@/app/watch/stop/page"), props: () => ({ searchParams: Promise.resolve({ t: WATCH_TOKEN }) }) },
   { path: "/a-page-that-is-not-there", load: () => import("@/app/not-found") },
 ];
 

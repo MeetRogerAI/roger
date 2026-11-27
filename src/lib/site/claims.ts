@@ -227,7 +227,7 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "time-saved",
-    why: "Privacy draft: how long a count of requests from one IP address is kept. A retention period, not time saved.",
+    why: "Privacy text: how long a count of requests from one IP address is kept. A retention period, not time saved.",
     words: ({ segment }) => (inZone(segment, "legal") ? /Each count covers one hour/g : null),
   },
   {

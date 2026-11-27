@@ -22,7 +22,6 @@ export const metadata: Metadata = isBuiltVersion(site)
     };
 
 export default async function ZackPage() {
-  // v2 and v3 show v1's page until each has its own (U13, U17).
   if (isBuiltVersion(site)) return <V1ZackPicker version={site} />;
   return HamptonPage();
 }

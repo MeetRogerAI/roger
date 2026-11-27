@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteAccount } from "@/lib/admin/users";
+import { deleteAccount, linkContributor, saveNote } from "@/lib/admin/users";
 import type { Query } from "@/lib/db-query";
 import type { IntakeModel } from "@/lib/intake/model";
 import type { Transport } from "@/lib/mail/send";
@@ -198,10 +200,33 @@ describe("Cora and an 'unknown author' row", () => {
   });
 
   it("still keeps a remaining contributor from being sent their own play when the other contributor is unknown", async () => {
-    await remove(a, "a@example.com");
     const inbox = await poolId(INBOX);
+    // c's own plays are gone, as when a later run replaces them (spec check 13). From here only c's row in
+    // pool_play_contributors can say the inbox play is c's own: nothing in `plays` links c to it any more.
+    await query("delete from plays where user_id = $1", [c]);
+    expect(await query("select 1 from plays where user_id = $1", [c])).toEqual([]);
+    expect((await contextOf(c)).runs).toEqual([]);
+    const contributorsOfInbox = () => query<{ contributor: string }>("select contributor from pool_play_contributors where pool_play_id = $1 order by contributor", [inbox]);
+
+    // The control, before any deletion: the row alone keeps the play from c, and b, who has no row, could be sent it.
+    expect((await contributorsOfInbox()).map((r) => r.contributor)).toEqual([a, c].sort());
+    expect((await contextOf(c)).own).toEqual([inbox, await poolId("Expense log")].sort());
+    expect((await contextOf(c)).eligible).not.toContain(inbox);
+    expect((await contextOf(b)).eligible).toContain(inbox);
+
+    // The result: the other contributor's account is deleted, and c's row and the exclusion are as they were.
+    const before = await contextOf(c);
+    expect(await remove(a, "a@example.com")).toMatchObject({ ok: true });
+    expect((await contributorsOfInbox()).map((r) => r.contributor)).toEqual([c, UNKNOWN_AUTHOR].sort());
+    expect(await contextOf(c)).toEqual(before);
     expect((await contextOf(c)).own).toContain(inbox);
     expect((await contextOf(c)).eligible).not.toContain(inbox);
+    expect((await contextOf(b)).eligible).toContain(inbox);
+
+    // And it is the row's doing: without it, nothing would keep the play from c.
+    await query("delete from pool_play_contributors where pool_play_id = $1 and contributor = $2", [inbox, c]);
+    expect((await contextOf(c)).own).not.toContain(inbox);
+    expect((await contextOf(c)).eligible).toContain(inbox);
   });
 
   it("never throws on a contributor that is not a user id, and treats no user as its author", async () => {
@@ -264,5 +289,128 @@ describe("the backfill for accounts deleted before the relabel existed", () => {
     const before = await rows();
     expect(await relabelOrphanContributors(query)).toEqual({ relabelled: 0, dropped: 0 });
     expect(await rows()).toEqual(before);
+  });
+
+  it("changes nothing while the users table has no rows at all, as on a partly restored database", async () => {
+    const before = await rows();
+    expect(before).toHaveLength(6);
+    // The pool and its contributor rows are there; the accounts are not (yet).
+    await query("delete from users");
+    expect(await query("select 1 from users")).toEqual([]);
+    expect(await rows()).toEqual(before);
+    expect(await relabelOrphanContributors(query)).toEqual({ relabelled: 0, dropped: 0 });
+    expect(await rows()).toEqual(before);
+    // Run again: still nothing.
+    expect(await relabelOrphanContributors(query)).toEqual({ relabelled: 0, dropped: 0 });
+    expect(await rows()).toEqual(before);
+  });
+
+  it("relabels orphans as before once there is at least one user", async () => {
+    await query("delete from users");
+    expect(await relabelOrphanContributors(query)).toEqual({ relabelled: 0, dropped: 0 });
+    // One account, which contributed nothing: every row is now a real orphan. Five plays, one of them with two rows.
+    await member("d@example.com");
+    expect(await relabelOrphanContributors(query)).toEqual({ relabelled: 5, dropped: 1 });
+    expect(await rows()).toEqual(["Calendar prep", "Expense log", "Follow-up drafts", INBOX, "Listing post"].map((title) => ({ title, contributor: UNKNOWN_AUTHOR })));
+  });
+
+  it("keeps the rows of an account in every status the schema allows: only an account that is gone is an orphan", async () => {
+    // The statuses are read from the schema, so a status added there is covered here.
+    const schema = readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8");
+    const statuses = /create table if not exists users \([\s\S]*?\n\s*status text[^\n]*check \(status in \(([^)]*)\)\)/
+      .exec(schema)![1]
+      .split(",")
+      .map((s) => s.trim().replace(/'/g, ""));
+    expect(statuses).toEqual(["signup", "trial", "active", "held", "cancelled", "closed"]);
+    const inbox = await poolId(INBOX);
+    const byStatus = new Map<string, string>();
+    for (const status of statuses) {
+      const [u] = await query<{ id: string }>("insert into users (email, status) values ($1, $2) returning id", [`${status}@example.com`, status]);
+      await query("insert into pool_play_contributors (pool_play_id, contributor) values ($1, $2)", [inbox, u.id]);
+      byStatus.set(status, u.id);
+    }
+    // The three who really contributed leave the active status too: closed (the step before deletion), trial, and held.
+    await query("update users set status = 'closed' where id = $1", [a]);
+    await query("update users set status = 'trial' where id = $1", [b]);
+    await query("update users set status = 'held', hold_reason = 'renewal_unpaid' where id = $1", [c]);
+    expect((await query<{ status: string }>("select distinct status from users order by status")).map((r) => r.status)).toEqual([...statuses].sort());
+
+    const before = await rows();
+    expect(before.filter((r) => r.title === INBOX).map((r) => r.contributor)).toEqual([a, c, ...byStatus.values()].sort());
+    expect(await relabelOrphanContributors(query)).toEqual({ relabelled: 0, dropped: 0 });
+    expect(await rows()).toEqual(before);
+
+    // The pass was looking: the closed account, once its user row is gone, is relabelled, and nobody else is.
+    await query("delete from users where id = $1", [byStatus.get("closed")]);
+    expect(await relabelOrphanContributors(query)).toEqual({ relabelled: 1, dropped: 0 });
+    const key = (r: Row) => `${r.title} | ${r.contributor}`;
+    expect((await rows()).map(key).sort()).toEqual(before.map((r) => key(r.contributor === byStatus.get("closed") ? { ...r, contributor: UNKNOWN_AUTHOR } : r)).sort());
+  });
+});
+
+describe("deleting an account that was linked to a seed contributor", () => {
+  type Logged = { user_id: string | null; action: string; detail: Record<string, unknown> };
+  const log = () => query<Logged>("select user_id, action, detail from admin_actions order by id");
+
+  it("leaves nothing in the admin log that ties the deleted id to the contributor, and keeps other accounts' rows", async () => {
+    const [{ id: rob }] = await query<{ id: string }>("insert into seed_contributors (label) values ('Rob') returning id");
+    const [{ id: sam }] = await query<{ id: string }>("insert into seed_contributors (label) values ('Sam') returning id");
+    // A seed contributor's rows name its plays: this is what a log row naming the contributor would lead to.
+    const listing = await poolId("Listing post");
+    await query("insert into pool_play_contributors (pool_play_id, contributor) values ($1, $2), ($1, $3)", [listing, `seed:${rob}`, `seed:${sam}`]);
+
+    // Rob is linked to a, then moved to b. Sam is linked to c, then moved to a, and is a's when a is deleted.
+    expect(await linkContributor(query, ADMIN, rob, a)).toMatchObject({ ok: true });
+    expect(await linkContributor(query, ADMIN, rob, b)).toMatchObject({ ok: true });
+    expect(await linkContributor(query, ADMIN, sam, c)).toMatchObject({ ok: true });
+    expect(await linkContributor(query, ADMIN, sam, a)).toMatchObject({ ok: true });
+    expect(await saveNote(query, ADMIN, a, "Asked to be deleted.")).toMatchObject({ ok: true });
+    const linked: Logged[] = [
+      { user_id: a, action: "link_contributor", detail: { contributorId: rob, label: "Rob", movedFrom: null } },
+      { user_id: a, action: "unlink_contributor", detail: { contributorId: rob, label: "Rob", movedTo: b } },
+      { user_id: b, action: "link_contributor", detail: { contributorId: rob, label: "Rob", movedFrom: a } },
+      { user_id: c, action: "link_contributor", detail: { contributorId: sam, label: "Sam", movedFrom: null } },
+      { user_id: c, action: "unlink_contributor", detail: { contributorId: sam, label: "Sam", movedTo: a } },
+      { user_id: a, action: "link_contributor", detail: { contributorId: sam, label: "Sam", movedFrom: c } },
+      { user_id: a, action: "note", detail: { length: 20 } },
+    ];
+    expect(await log()).toEqual(linked);
+
+    // A refused delete (the account is not closed) leaves the log as it is.
+    expect(await deleteAccount(query, ADMIN, a, "a@example.com")).toMatchObject({ ok: false });
+    expect(await log()).toEqual(linked);
+
+    expect(await remove(a, "a@example.com")).toEqual({ ok: true, message: "Account deleted." });
+    expect(await log()).toEqual([
+      // a's link rows stay as rows, and name no contributor and no other account.
+      { user_id: a, action: "link_contributor", detail: {} },
+      { user_id: a, action: "unlink_contributor", detail: {} },
+      // b's and c's rows keep their own contributor, and no longer say whom it came from or went to.
+      { user_id: b, action: "link_contributor", detail: { contributorId: rob, label: "Rob" } },
+      { user_id: c, action: "link_contributor", detail: { contributorId: sam, label: "Sam", movedFrom: null } },
+      { user_id: c, action: "unlink_contributor", detail: { contributorId: sam, label: "Sam" } },
+      { user_id: a, action: "link_contributor", detail: {} },
+      // Rows that are not about a link are not touched.
+      { user_id: a, action: "note", detail: { length: 20 } },
+      { user_id: a, action: "delete_account", detail: { email: "a@example.com" } },
+    ]);
+
+    // Said the other way round: no row that carries the deleted id, in either place, names a contributor.
+    const tied = await query(
+      `select id from admin_actions
+       where (user_id = $1 or detail::text like '%' || $1::text || '%')
+         and (detail::text like '%' || $2::text || '%' or detail::text like '%' || $3::text || '%' or detail::text like '%Rob%' or detail::text like '%Sam%')`,
+      [a, rob, sam],
+    );
+    expect(tied).toEqual([]);
+    expect(await query("select id from admin_actions where detail::text like '%' || $1::text || '%'", [a])).toEqual([]);
+
+    // The seed records are not the account's: Sam is unlinked by the deletion, Rob is still b's, and their rows stay.
+    expect(await query("select label, user_id from seed_contributors order by label")).toEqual([
+      { label: "Rob", user_id: b },
+      { label: "Sam", user_id: null },
+    ]);
+    expect((await rows()).filter((r) => r.title === "Listing post").map((r) => r.contributor)).toEqual([`seed:${rob}`, `seed:${sam}`, UNKNOWN_AUTHOR].sort());
+    expect(await query("select 1 from pool_play_contributors where contributor = $1", [a])).toEqual([]);
   });
 });

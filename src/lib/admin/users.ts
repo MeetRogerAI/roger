@@ -189,7 +189,8 @@ const isAdminAddress = (email: string) => adminEmails().includes(email.toLowerCa
  * Deletes a closed account and everything that is only theirs (runs, plays
  * not yet in the pool, picks, settings). Plays already in the pool stay in
  * their anonymous form. The admin log keeps its rows, including the deleted
- * address (see the privacy note in the plan). Refused while a dropped
+ * address (see the privacy note in the plan), without what would tie the
+ * account to a seed contributor (below). Refused while a dropped
  * higher-rate item may still be in Stripe (its delete not yet confirmed):
  * deleting the account would lose the record the hourly retry needs.
  *
@@ -205,6 +206,21 @@ const isAdminAddress = (email: string) => adminEmails().includes(email.toLowerCa
  * an "unknown author" row from an earlier deleted account, this account's row
  * is deleted instead, so a play never has more than one. The hourly
  * `unknown_authors` task (relabelOrphanContributors) is the safety net.
+ *
+ * The admin log is the other place that could tie the account to plays.
+ * `admin_actions.user_id` is a plain uuid with no link to `users`, so the
+ * account's rows are neither deleted nor emptied when it goes. Where the
+ * account was linked to a hidden seed contributor (linkContributor), its
+ * `link_contributor` and `unlink_contributor` rows name that contributor, and
+ * the contributor's "seed:<id>" rows name its plays. The same statement
+ * therefore takes out of those rows what names the contributor
+ * (`contributorId`, `label`, and the `movedTo` / `movedFrom` that would lead
+ * to another account's row for the same contributor), and takes the deleted
+ * id out of `movedTo` / `movedFrom` on other accounts' link rows, which keep
+ * their own contributor. The rows stay, so the log still shows that a link
+ * was made or removed, when and by whom. The seed contributor's own record
+ * and rows are not the account's and are left as they are: the deletion
+ * unlinks the record (`seed_contributors.user_id`, on delete set null).
  */
 export async function deleteAccount(q: Query, by: string, userId: string, confirmEmail: string): Promise<Done> {
   const [u] = await q<{ email: string; status: string; stripe_open: boolean }>(
@@ -233,6 +249,19 @@ export async function deleteAccount(q: Query, by: string, userId: string, confir
          update pool_play_contributors c set contributor = '${UNKNOWN_AUTHOR}'
          where c.contributor = (select id::text from gone)
            and not exists (select 1 from pool_play_contributors k where k.pool_play_id = c.pool_play_id and k.contributor = '${UNKNOWN_AUTHOR}')
+       ),
+       unlinked as (
+         update admin_actions a set detail = a.detail - 'contributorId' - 'label' - 'movedTo' - 'movedFrom'
+         where a.user_id = (select id from gone) and a.action in ('link_contributor', 'unlink_contributor')
+       ),
+       unnamed as (
+         update admin_actions a
+         set detail = a.detail
+               - (case when lower(a.detail->>'movedTo') = (select id::text from gone) then 'movedTo' else '' end)
+               - (case when lower(a.detail->>'movedFrom') = (select id::text from gone) then 'movedFrom' else '' end)
+         where a.action in ('link_contributor', 'unlink_contributor')
+           and a.user_id is distinct from (select id from gone)
+           and (select id::text from gone) in (lower(a.detail->>'movedTo'), lower(a.detail->>'movedFrom'))
        )
        select email from gone`,
       [userId, adminEmails()],

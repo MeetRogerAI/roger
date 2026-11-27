@@ -67,6 +67,11 @@ describe("the hourly pass", () => {
     );
     await query("insert into pool_play_contributors (pool_play_id, contributor) values ($1, '3f1c2a9e-5b7d-4c1a-9e2f-0a1b2c3d4e5f')", [play]);
     const d = { gw: null, settings: mergeV3([{ key: "v3.cycleLive", value: false }]), now: new Date(), query, transport };
+    // With no user at all the task changes nothing: that is a partly restored database, not one deleted account.
+    expect((await runHourly(query, d)).unknown_authors).toEqual(noOrphans);
+    expect(await query("select contributor from pool_play_contributors")).toEqual([{ contributor: "3f1c2a9e-5b7d-4c1a-9e2f-0a1b2c3d4e5f" }]);
+    // Another account exists, as on any real database: the row whose account is gone is relabelled.
+    await query("insert into users (email, status) values ('someone@example.com', 'active')");
     expect((await runHourly(query, d)).unknown_authors).toEqual({ relabelled: 1, dropped: 0 });
     expect(await query("select contributor from pool_play_contributors")).toEqual([{ contributor: "unknown author" }]);
     expect((await runHourly(query, d)).unknown_authors).toEqual(noOrphans);

@@ -18,12 +18,12 @@ Results are one of: **pass**, **fail**, **not applicable**, **not exercised** (w
 
 ## Resolve before merging, because merging goes live
 
-Items 1 to 4 were the largest. Peter decided all four on November 26, 2026, and the work that followed is recorded under each. Section 6 of `docs/site/v1-copy-changes.md` has the detail. Items 5 to 10 are still Peter's to settle before the pull request is merged, and item 11 lists the smaller notes that remain from items 1 to 4.
+Items 1 to 4 were the largest. Peter decided all four on November 26, 2026. What was decided and what was done is recorded once, in `docs/site/v1-copy-changes.md`, and each item below links to its section there. Items 5 to 10 are still Peter's to settle before the pull request is merged, and item 11 lists the smaller notes that remain from items 1 to 4.
 
-1. **Resolved: the public Zack files match Zack 2.0** (copy changes 6.1). Peter's decision: the public files match the latest Zack instructions, version 2.0. The four files in `public/zack` were already the 2.0 instructions; their Circles-era lines (a named collector, the circle's members, 12 months) were replaced with what is true of the free run, and a test holds them to it.
-2. **Resolved: the site's wording follows the Zack 2.0 instructions** (copy changes 2.5 and 6.4 a, b). Peter's decision: "the same applies." The answers to "What does Zack read?" and "What leaves my account?" and three of the four points of "Zack, in detail" now say what the four instruction files say, and a test compares them with the files.
-3. **Resolved: privacy and terms are reviewed** (copy changes 6.3). Privacy and terms reviewed and confirmed by Peter on November 26, 2026. Both pages render without "Draft, under review."
-4. **Resolved: a deleted account's shared plays say "unknown author"** (copy changes 6.4 c). Peter's decision. Deleting an account now changes its rows in the record of who contributed each shared play to "unknown author", an hourly task does the same for accounts already deleted, and the privacy page says so.
+1. **Resolved: the public Zack files match Zack 2.0.** See [copy changes 6.1](v1-copy-changes.md#61-resolved-the-public-zack-files-match-zack-20).
+2. **Resolved: the site's wording follows the Zack 2.0 instructions.** See [copy changes 2.5](v1-copy-changes.md#25-what-zack-reads-skips-removes-and-sends), and [6.4](v1-copy-changes.md#64-what-the-accuracy-audit-of-the-privacy-and-terms-drafts-left-open) (a) and (b).
+3. **Resolved: privacy and terms are reviewed**, and render without "Draft, under review." See [copy changes 6.3](v1-copy-changes.md#63-resolved-privacy-and-terms-are-reviewed).
+4. **Resolved: a deleted account's shared plays say "unknown author".** See [copy changes 6.4](v1-copy-changes.md#64-what-the-accuracy-audit-of-the-privacy-and-terms-drafts-left-open) (c), which also has what code review added on November 26: the admin log no longer ties a deleted account to a seed contributor, and the hourly task changes nothing while the `users` table is empty.
 5. **The sample play text** (plan R12; copy changes 2.2). The homepage, `/agents` and `/how-it-works` print one real play, cleaned. Peter approves the text, including that it names Claude.
 6. **The one change to Peter's letter** (copy changes 2.1), and the letter edit the spec asks for. Until the edit arrives the pages show only the paragraphs still true.
 7. **Production values the pages read** (the plan's go-live check). A preview uses a separate database, so nobody has seen v1 with production data. Before merging, check in production: the six `v3.*` prices against US$200 / US$200 / CA$280 / CA$280 / US$400 / CA$560; whether a sample play is chosen in the admin and reads cleanly (see "Open defects", item 6: the claims test cannot see it); which testimonials are cleared, and that each reads acceptably word for word; and the labels of the library's categories (item 7).
@@ -33,12 +33,16 @@ Items 1 to 4 were the largest. Peter decided all four on November 26, 2026, and 
 11. **What remains from items 1 to 4.** None of these blocks the checks. Each is in copy changes section 6.
     - **The "has not been run" notice** (6.1). The Claude, Duet and Hark public files still say "Version 2.0 has not been run on a <agent> account." The 2.0 source files say it too, so it was kept. Only Peter knows whether it is still true.
     - **Three one-line summaries still say details are "removed"** (2.5): the homepage's second step, Sunday on `/how-it-works`, and the first step on `/agents`. The detailed answers beside them say "is instructed to". They are three strings if Peter wants them changed.
-    - **The warning above the paste box on `/zack`** still says a report "is read by Roger's team and by Cora … and is never published" (the spec's sentence). The privacy page says "may be read" and does not say "never published".
-    - **`/hampton` still asks for the report by email** while the files it serves no longer describe a collector who receives reports (6.1). The page is unlisted and unchanged.
+    - **Resolved: the warning above the paste box on `/zack`** now agrees with the privacy page. It keeps the spec's first sentence and then says "It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form." Changed in code review on November 26, 2026; Peter has not read the line itself. See [copy changes 2.5](v1-copy-changes.md#25-what-zack-reads-skips-removes-and-sends).
+    - **The partner pages still ask for the report by email.** `/hampton`, `/rlp` and `/founders` tell visitors to email the report to Roger, while the files they serve no longer describe a collector who receives reports and point to pasting at meetroger.ai/zack (6.1). The pages are unlisted and unchanged (plan R9).
+    - **The Zack 2.0 source and the connected instructions still contain the Circles-era collector section.** `artifacts/Zack` and `content/zack` were not changed: the section "How the shared collection is handled (for the collector)" (a named collector, the circle's members, 12 months) was replaced in the four public copies only (6.1). A signed-up user's Zack fetches the `content/zack` files.
     - **The model provider's position on training is still to be stated** (6.3). The privacy page says it is being confirmed, and Peter confirmed the page with that sentence in it.
     - **The topics privacy and terms do not cover** (copy changes section 3) are kept as a reference list.
-    - **A seed contributor's rows stay** when the account it was linked to is deleted (6.4 c). They name the hidden seed record, not the account.
-    - **The app-side notes in 6.4 c that were not changed:** the job that erases a departed user's runs runs only while the paid cycle is live; nothing clears the cached settings when a setting changes; shortening the retention setting applies to people who already left; "the first miss each billing month" is typed while the number is a setting; a free-list setting of 0 garbles the copy; a run's row is never fully removed while the account exists; the run history shows the newest 60 runs. And the three in 6.3 on the free Zack run: signing up with a different email attaches nothing and says nothing, a person who already has an account gets nothing attached, and run tokens would go to an analytics provider if analytics were ever switched on.
+    - **A seed contributor's rows stay** when the account it was linked to is deleted (6.4 c). They name the hidden seed record, not the account, and the admin log's link rows for the deleted account no longer name that record.
+    - **A play placed at the moment its account is deleted keeps the old id for up to an hour.** If Cora's merge commits a contributor row after the deleting statement has started, that statement does not see the row. The hourly `unknown_authors` task relabels it at its next pass; until then the privacy page's sentence is not true of that one row.
+    - **The `retention` task still waits for the paid cycle and Stripe.** The hourly task that erases a departed user's runs (`retention` in `src/lib/housekeeping/job.ts`) runs only when `v3.cycleLive` is on and Stripe is set up, while `/privacy`, now shown without the draft note, states the period with no such condition. Three tasks run always (`expired_cleanup`, `free_run_purge`, `unknown_authors`); this one does not.
+    - **Text published from the database is not read by the claims check.** Testimonials an admin clears, the library's rows and an admin-chosen sample play reach production pages without passing through `src/lib/site/claims.test.tsx`, which reads rendered fixtures only (see "Open defects", items 5 to 7, and item 7 above).
+    - **The other app-side notes in 6.4 c that were not changed:** nothing clears the cached settings when a setting changes; shortening the retention setting applies to people who already left; "the first miss each billing month" is typed while the number is a setting; a free-list setting of 0 garbles the copy; a run's row is never fully removed while the account exists; the run history shows the newest 60 runs. And the three in 6.3 on the free Zack run: signing up with a different email attaches nothing and says nothing, a person who already has an account gets nothing attached, and run tokens would go to an analytics provider if analytics were ever switched on.
 
 ## A.16, check by check
 
@@ -124,6 +128,7 @@ Settled exception (plan Key Decision "The sample idea card shows a real play now
 - **Found by the claims test:** `/library` said "agent" without "AI" in four places in Roger's own words. Fixed; see "Defects fixed".
 - **After the fix:** in the browser, no bare "agent" on `/`, `/pricing`, `/faq`, `/about`, `/library`, `/privacy`, `/terms` or the not-found page. `/how-it-works` has one, inside the quoted line added to every playbook ("works for my agent system"), which is marked verbatim and listed for Peter in copy changes section 5.
 - **Open:** `/getstarted` says "use your agent setup every day". It is the app's page. See "Open defects", item 1.
+- **Found in code review afterwards:** `/watch/confirm`, reached from the library's watch email, said "someone’s agent". Fixed; see "Defects fixed", item 6. The browser pass above did not open the two watch pages.
 
 ### 11. Keyboard, state, reduced motion
 
@@ -160,6 +165,8 @@ For comparison, with motion allowed: 75 animations run at load, the compounding 
 `npm run lint`: 0 errors, 6 warnings, the baseline. `npx tsc --noEmit`: clean. `npm test`: 1,520 passed, 13 skipped. `npm run test:scenarios`: 23 passed. `npm run build`: passes.
 
 Run again on November 26, 2026 after the work on Peter's four decisions and the three defects below: lint 0 errors and 6 warnings, `npx tsc --noEmit` clean, `npm test` 1,592 passed and 13 skipped (72 new tests), `npm run test:scenarios` 23 passed, `npm run build` passes.
+
+Run a third time on November 26, 2026 after the last round of code-review fixes ("Defects fixed", items 6 and 7, and the deletion work in copy changes 6.4 c): lint 0 errors and 6 warnings, `npx tsc --noEmit` clean, `npm test` 1,607 passed and 13 skipped (15 new tests), `npm run test:scenarios` 23 passed, `npm run build` passes.
 
 ### The pass after Peter's four decisions
 
@@ -228,6 +235,11 @@ Fixed on November 26, 2026, after the acceptance pass. Each was listed under "Op
 4. **Two small movements ignored reduced motion** (was open defect 2). `.btn:active` scaled a pressed button to 0.98, and `.chev:hover::after` moved a link's chevron 2 pixels. Both rules are now inside `@media (prefers-reduced-motion: no-preference)`, the convention the rest of `src/app/globals.css` uses, so with motion allowed they behave as before. Seen in the browser with reduced motion: a pressed button and a hovered chevron have no transform. The rules are shared with the app's buttons, which get the same fix. Test: "shrink a pressed button and nudge a link's chevron only where motion is allowed" in `home.test.tsx`.
 5. **The saving-is-off message showed twice on `/zack/[agent]` with no database** (was open defect 8): once as the standing line and again under the field after a submit. The email form is now told which message the page already shows above it, and does not print the same words again. Seen in the browser: one line before a submit and one after. Files: `src/components/site/shared/free-run-form.tsx`, `src/components/site/v1/zack.tsx`. Test: "does not print the action's message a second time" in `zack.test.tsx`.
 
+Fixed in the last round of code review, November 26, 2026. Verified by tests; not opened in a browser.
+
+6. **The two pages the library's watch email leads to kept the old wording and a wrong link** (A.16 check 10). `/watch/confirm` said "the day someone’s agent does", and both it and `/watch/stop` ended on "Back to the library" linked to `/`, which under a site version is the homepage. Under a site version the confirm page now says "AI agent" and both links go to `/library`; Circles and the legacy site keep what they had. Both routes are in the claims check's route list, rendered once with a link that no longer works and once with one that finds its watch. Files: `src/app/watch/confirm/page.tsx`, `src/app/watch/stop/page.tsx`, `src/test-helpers/site-pages.tsx`. Test: "holds the two pages the library’s watch email leads to" in `claims.test.tsx`.
+7. **A run token in the address of `/zack/[agent]` could be passed on as a referrer.** With a token in its address the page now sets its referrer policy to `no-referrer`, as `/auth/confirm` does for its own token. Without a token the page sets none. File: `src/app/zack/[agent]/page.tsx`. Test: "is open to search, and kept out once its address carries a run token" in `zack.test.tsx`.
+
 ## Open defects
 
 None blocks the checks above. Each is outside the marketing files, or is a decision. The numbers are the ones the items had before three of them were fixed (2, 3 and 8, now under "Defects fixed"), so references elsewhere in this file still point to the right item.
@@ -279,6 +291,40 @@ None blocks the checks above. Each is outside the marketing files, or is a decis
 | A not-found address | 404, the v1 not-found page, noindex | the same |
 
 `.next` was left as the plain build. `/site-preview/blocks` is the only development-only page the site work added; its test (`src/app/site-preview/blocks/page.test.tsx`) holds it to not-found on Vercel production and on a production build with no `VERCEL_ENV`.
+
+## After v1 is live: cleanup
+
+None of this is needed for the merge. It is what the code review of November 26, 2026 found that only exists because Circles is still in the repo. Do it in one change once v1 is live and nobody needs `SITE_VERSION=circles` locally. Going back to Circles after it means restoring files as well as reverting the merge.
+
+**Delete**
+
+- **The Circles pages and components:** `src/components/circles` (`home.tsx`, `agents.tsx`, `price.tsx`, `proof.tsx`, `zack-page.tsx`), `src/data/circles-legal.ts`, and the Circles arms of the routes that branch on the served site: `/`, `/zack`, `/library`, `/privacy`, `/terms`, `/apply`, the root layout, the header, the footer, `robots.ts` and `sitemap.ts`. Decide with it what becomes of the hidden legacy pages (`/setup`, `/companies`, `/packs/[id]`, `/workshops`, `/refunds`, `/thanks`), which still answer 200 with noindex.
+- **The `circlesMode` flag and the "legacy" site variant.** `flags.circlesMode` in `src/data/config.ts` is always true, so no environment reaches "legacy": only a source edit does. Remove the flag, `"legacy"` from `ServedSite`, the `legacy` key of `bySite` and its callers, the legacy arms in the footer, header, layout, library and robots, and the whole of `src/lib/site/legacy-site.test.tsx`. `hiddenLegacyRobots` then always returns noindex and can be a constant.
+- **The `requireBuiltVersion` gates and the literal `export const instant = false`** on `/pricing`, `/faq`, `/how-it-works`, `/about`, `/agents` and `/zack/[agent]`, with the not-built branch of `builtPageMetadata` in `src/lib/site/chrome.ts` and of `generateMetadata` on `/zack/[agent]`. The gate fires only under Circles or the legacy site. Keep `instant = false` wherever a route needs it for another reason (`/apply` has one of its own). **Confirm with `npm run build`:** the review could not tell whether the build accepts these routes without the export.
+
+**Tests that pin output only Circles serves.** Delete each with the code it covers.
+
+- `src/app/robots.test.ts`: "keeps the Circles disallow list in production". This file and `src/app/sitemap.test.ts` also default to `site = "circles"`, so their general production tests run against Circles; point them at v1.
+- `src/app/sitemap.test.ts`: "lists exactly /, /library, /privacy and /terms under Circles".
+- `src/components/site/v1/home.test.tsx`: "is unchanged under Circles".
+- `src/app/not-found.test.tsx`: "is unchanged under Circles and on the legacy site".
+- `src/app/agents/page.test.tsx` and `src/app/reading-pages.test.tsx`: "is not found when the version is Circles (covers AE8)".
+- `src/components/site-header.test.ts`: "leaves other Circles pages alone, including /apply", and the Circles halves of "gives /zack and /zack/[agent] the public header under a version, and none under Circles" and "is the same under Circles and under a version for the app, the admin and the unlisted pages".
+- `src/components/site-header.signed-in.test.tsx`: "has no account row under Circles, signed in or not".
+- `src/components/site/v1/zack.test.tsx`: the two tests "under circles …" and "under legacy, /zack is the Hampton page and /zack/claude is not found".
+- `src/lib/site/version.test.ts`: "serves the legacy site when Circles resolves with circlesMode off", "tells a built version from Circles and the legacy site" and "is not found while Circles or the legacy site is served".
+- `src/lib/site/legacy-site.test.tsx`: the whole file.
+
+**Two tests that will fail outright when the Circles files go.** Rewrite them first.
+
+- `src/components/site/shared/currency-store.test.ts`, "the Circles price block": it reads `src/components/circles/price.tsx` from disk.
+- `src/data/site/legal.test.ts`: it imports `circlesPrivacyPreview` from `@/data/circles-legal` to hold v1's kept privacy passages word for word against the Circles text. Keep the passages' wording in the test, or in a fixture, before the import goes.
+
+**Rename, in the same change and not before, so the names change once**
+
+- `isBuiltVersion`, `requireBuiltVersion` and the type `BuiltVersion` in `src/lib/site/version.ts`. They read as the special case, and a built version will be the only case served. The comment on `SiteVersion` ("The Circles preview, or a site version") goes with them.
+
+**Keep.** The `live` and `preview` fields, the `SITE_VERSION` override and `isKnownNonProduction` are how a v2 branch is previewed while v1 stays live, and what keeps `/site-preview/blocks` out of production.
 
 ## How to view v1
 

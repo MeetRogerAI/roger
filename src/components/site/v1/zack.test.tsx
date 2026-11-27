@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReportState, StartRunState } from "@/app/zack/actions";
 import type { ReportCopy } from "@/components/site/shared/free-run-form";
 import { v3Defaults } from "@/data/config";
+import { siteLegal } from "@/data/site/legal";
 import { v1Copy } from "@/data/site/v1";
 import { amountsFrom } from "@/lib/site/amounts";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
@@ -39,7 +40,8 @@ const { testDb } = await import("@/test-helpers/pglite-db");
 const amounts = amountsFrom(v3Defaults);
 const { zack, copy } = v1Copy(amounts);
 const TOKEN = "Zk3-run_token-Zk3-run_token-Zk3-run_token-0";
-const WARNING = "Check your report for client names or private details before pasting. It is read by Roger’s team and by Cora, Roger’s ranking agent, and is never published.";
+const WARNING =
+  "Check your report for client names or private details before pasting. It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form.";
 
 const text = (markup: string) =>
   markup
@@ -221,6 +223,14 @@ describe("/zack/[agent] on v1: the steps", () => {
   it("puts the warning above the paste box, word for word", async () => {
     const markup = await flow("claude", { token: TOKEN, run: { agent: "claude", hasReport: false } });
     expect(copy.zackWarning).toBe(WARNING);
+    // The first sentence is the spec's. The rest agrees with the privacy page: "may be read", shared after sign-up, and no "never published".
+    expect(WARNING.startsWith("Check your report for client names or private details before pasting. ")).toBe(true);
+    expect(WARNING).not.toContain("never published");
+    expect(WARNING).not.toContain("It is read by");
+    const freeRun = siteLegal(amounts).privacy.sections.find((s) => s.id === "free-run")!;
+    const privacyText = JSON.stringify(freeRun);
+    expect(privacyText).toContain("may be read by Roger’s team and by Cora");
+    expect(privacyText).toContain("its plays are shared with other users in anonymous form");
     const step = /<section id="step-4"[\s\S]*?<\/section>/.exec(markup)![0];
     expect(text(step)).toContain("Step 4: Paste the report back");
     // The warning, then the box's own label, with nothing between them.
@@ -468,10 +478,14 @@ describe("the routes", () => {
       alternates: { canonical: "/zack/claude" },
       openGraph: { url: "/zack/claude", title: "Run Zack on yourself first", description: zack.intro },
     });
+    // With no token the page sets no referrer policy of its own.
+    expect(plain.referrer).toBeUndefined();
     for (const run of [TOKEN, "", "not-a-token"]) {
       const withRun = await page.generateMetadata(props("claude", { run }));
       expect(withRun.robots, run).toEqual({ index: false, follow: false });
       expect(withRun.alternates).toEqual({ canonical: "/zack/claude" });
+      // The address holds the token, so the page sends it to no other site as a referrer (as /auth/confirm does).
+      expect(withRun.referrer, run).toBe("no-referrer");
     }
     const markup = await pageMarkup(await page.default(props("claude")));
     expect(text(markup)).toContain("Run Zack on Claude");

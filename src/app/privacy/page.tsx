@@ -8,7 +8,7 @@ import { privacy } from "@/data/legal";
 
 const site = getServedSite();
 
-// A site version has its own draft and its own words for search. Circles and the legacy site keep theirs.
+// A site version has its own text and its own words for search. Circles and the legacy site keep theirs.
 export const metadata: Metadata = isBuiltVersion(site)
   ? {
       title: { absolute: siteLegalMeta.privacy.title },

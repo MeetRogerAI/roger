@@ -72,7 +72,6 @@ function byShelf(list: UseCase[]) {
 
 export default async function LibraryHome() {
   if (site === "circles") return <CirclesHome />;
-  // v2 and v3 show v1's home until each has its own (U13, U17).
   if (isBuiltVersion(site)) return <V1Home version={site} />;
   const [all, settings] = await Promise.all([getUseCases(), getSettings()]);
   const sorted = [...all].sort((a, b) =>

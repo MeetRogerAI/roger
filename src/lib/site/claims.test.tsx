@@ -16,7 +16,7 @@ import { samplePlay } from "@/data/site/sample-play";
 import { v1Copy } from "@/data/site/v1";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
-import { at, renderSitePages, sitePagePaths, type RenderedPage } from "@/test-helpers/site-pages";
+import { at, renderSitePages, sitePagePaths, WATCH_TOKEN, type RenderedPage } from "@/test-helpers/site-pages";
 import { amountsFrom } from "./amounts";
 import { allowed, checkClaims, checkRule, describeViolations, hypeWords, readPage, readSegments, ruleIds, textPage, type ClaimsContext, type PageText, type RuleId, type Zone } from "./claims";
 import type { SamplePlay } from "./sample";
@@ -29,7 +29,7 @@ const data = vi.hoisted(() => {
   process.env.SITE_VERSION = "v1";
   delete process.env.VERCEL_ENV;
   delete process.env.DATABASE_URL;
-  return { testimonials: [] as unknown[], play: null as unknown };
+  return { testimonials: [] as unknown[], play: null as unknown, watch: null as string | null, watchTokens: [] as string[] };
 });
 
 vi.mock("next/navigation", async (orig) => ({
@@ -47,6 +47,14 @@ vi.mock("@/lib/site/testimonials", async (orig) => {
   return { ...real, getTestimonials: async (audience: "re" | "agents") => real.forAudience(data.testimonials as Testimonial[], audience) };
 });
 vi.mock("@/lib/cora/sample", async (orig) => ({ ...(await orig<typeof import("@/lib/cora/sample")>()), getPublicSamplePlay: async () => data.play as SamplePlay | null }));
+// The watch a watch page's token finds: its words, or null for a link that no longer works. No database is read.
+vi.mock("@/lib/watches", () => {
+  const watchFor = async (token: string) => {
+    data.watchTokens.push(token);
+    return data.watch;
+  };
+  return { confirmWatch: watchFor, stopWatch: watchFor };
+});
 
 const amounts = amountsFrom(v3Defaults);
 const context: ClaimsContext = { amounts, compounding: compoundingSteps.flatMap((step) => [step.week, step.bricks]) };
@@ -62,6 +70,7 @@ beforeEach(() => {
   resetNextFakes();
   data.testimonials = [];
   data.play = null;
+  data.watch = null;
   at.path = "/";
 });
 
@@ -426,6 +435,9 @@ const scoredPlay: SamplePlay = {
   score: fixture.score,
 };
 
+/** What a visitor typed into the library's watch sentence: the words the two watch pages print back. */
+const WATCH = "book a table";
+
 const failures = (pages: RenderedPage[]) =>
   pages.flatMap((page) => [...check(readPage(page.path, page.markup)), ...check(textPage(page.path, page.meta))]);
 
@@ -440,14 +452,18 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     resetNextFakes();
     data.testimonials = [];
     data.play = null;
+    // A watch link that no longer works the first time, and one that finds its watch the second.
+    data.watch = null;
+    data.watchTokens = [];
     bare = await renderSitePages(VERSION);
     data.testimonials = quotes;
     data.play = scoredPlay;
+    data.watch = WATCH;
     full = await renderSitePages(VERSION);
   }, 120_000);
 
   it("renders all of them, each with the header and the footer", () => {
-    expect(sitePagePaths).toEqual(["/", "/agents", "/pricing", "/faq", "/how-it-works", "/about", "/zack", "/zack/claude", "/zack/other", "/library", "/privacy", "/terms", "/a-page-that-is-not-there"]);
+    expect(sitePagePaths).toEqual(["/", "/agents", "/pricing", "/faq", "/how-it-works", "/about", "/zack", "/zack/claude", "/zack/other", "/library", "/privacy", "/terms", "/watch/confirm", "/watch/stop", "/a-page-that-is-not-there"]);
     for (const pages of [bare, full]) {
       expect(pages.map((page) => page.path)).toEqual(sitePagePaths);
       for (const page of pages) {
@@ -539,6 +555,37 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
     const rows = readPage("/library", library.markup).segments.filter((s) => s.zones.includes("library"));
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.map((s) => s.text).join(" ")).toMatch(/\$\d/);
+  });
+
+  it("holds the two pages the library’s watch email leads to: AI agent, and the closing link to /library", () => {
+    const main = (pages: RenderedPage[], path: string) => pages.find((page) => page.path === path)!.markup.match(/<main[\s\S]*?<\/main>/)![0];
+    const words = (markup: string) => readPage("/watch", markup).segments.map((s) => s.text).join(" ").replace(/\s+/g, " ");
+    // Each page was rendered with its token, and looked the watch up with it: twice each, once for each state.
+    expect(data.watchTokens).toEqual([WATCH_TOKEN, WATCH_TOKEN, WATCH_TOKEN, WATCH_TOKEN]);
+    // The watch found: the confirmed page names the software in full, around the visitor's own words.
+    const confirmed = words(main(full, "/watch/confirm"));
+    expect(confirmed).toContain("You’re watching for it.");
+    expect(confirmed).toContain("We’ll email you the day someone’s AI agent does");
+    expect(confirmed).toContain(WATCH);
+    expect(confirmed).not.toMatch(/someone’s agent\b/);
+    const stopped = words(main(full, "/watch/stop"));
+    expect(stopped).toContain("Watch stopped.");
+    expect(stopped).toContain(WATCH);
+    // A link that no longer works: both pages say so.
+    for (const path of ["/watch/confirm", "/watch/stop"]) {
+      expect(words(main(bare, path)), path).toContain("That link has expired. Set the watch again from the library and we’ll send a fresh link.");
+    }
+    // In every state the page ends on one link, to the library itself and not to the homepage.
+    for (const pages of [bare, full]) {
+      for (const path of ["/watch/confirm", "/watch/stop"]) {
+        expect(main(pages, path), path).toMatch(/<a class="tlink chev" href="\/library">Back to the library<\/a>/);
+        expect([...main(pages, path).matchAll(/href="([^"]*)"/g)].map((m) => m[1]), path).toEqual(["/library"]);
+      }
+    }
+    // The rule has teeth here: the old wording on the same page is a violation.
+    const old = main(full, "/watch/confirm").replace("someone’s AI agent", "someone’s agent");
+    expect(old).not.toBe(main(full, "/watch/confirm"));
+    expect(rulesBroken(readPage("/watch/confirm", old))).toEqual(["vocabulary"]);
   });
 
   it("leaves the watch sentence’s two fields their focus ring: no class switches the outline off (U10 acceptance, open defect 3)", () => {
