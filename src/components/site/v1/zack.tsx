@@ -6,6 +6,7 @@ import { hasDb } from "@/lib/db";
 import { query } from "@/lib/db-query";
 import { getAmounts } from "@/lib/site/amounts";
 import { v1Copy } from "@/lib/site/content/model";
+import { getSiteContent } from "@/lib/site/content/read";
 import { isRunToken, readRun, type RunView } from "@/lib/site/free-run";
 import type { BuiltVersion } from "@/lib/site/version";
 import { downloadName, freeRunAgents, OTHER_AGENT, zackFile, type FreeRunAgent, type ZackFile } from "@/lib/site/zack-files";
@@ -74,7 +75,10 @@ function Step({ n, title, word, children }: { n: number; title: string; /** "Ste
 export async function V1ZackPicker({ version }: { version: BuiltVersion }) {
   const agents = freeRunAgents();
   const files = await Promise.all(agents.map((a) => zackFile(a.file)));
-  const { zack } = v1Copy(await getAmounts());
+  // The free run's own words are not editable in Pages, so no stored content changes them. The overlay is passed
+  // all the same: every page hands v1Copy what the site has published, and none has to know which words that is.
+  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
+  const { zack } = v1Copy(amounts, content);
   return <V1ZackPickerView version={version} zack={zack} agents={agents.map((agent, i) => ({ agent, version: files[i].version }))} />;
 }
 
@@ -167,8 +171,9 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
  * read in a child under Suspense.
  */
 export async function V1ZackAgent({ version, agent, searchParams }: { version: BuiltVersion; agent: FreeRunAgent; searchParams: Search }) {
-  const amounts = await getAmounts();
-  const { zack, copy } = v1Copy(amounts);
+  // The start button and the line under it are the site's shared words, as published.
+  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
+  const { zack, copy } = v1Copy(amounts, content);
   const file = await zackFile(agent.file);
   return (
     <div data-site={version}>

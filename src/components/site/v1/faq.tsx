@@ -1,25 +1,24 @@
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import type { Overlay } from "@/lib/site/content/format";
 import { v1Copy } from "@/lib/site/content/model";
-import { getQuestionOverrides, questionOverlay } from "@/lib/site/questions";
+import { getSiteContent } from "@/lib/site/content/read";
 import type { BuiltVersion } from "@/lib/site/version";
 import { Questions } from "./blocks/questions";
 import { PageHead, StartBand } from "./blocks/reading";
 
 /**
  * /faq on site version 1 (spec A.9): every question in the copy file, under
- * its group's heading, in the copy's order, then the start button. A question
- * or an answer edited in the admin (/admin/questions) is shown in place of
- * the built-in wording.
+ * its group's heading, in the copy's order, then the start button. Wording
+ * published in the admin is shown in place of the built-in wording.
  *
  * Each group is the questions accordion the homepage uses, so an answer opens
  * by keyboard with no script. A group's id is its id in the copy.
  */
 
-/** Reads the amounts the answers name and the admin's edits, both cached, so the page keeps its static shell. */
+/** Reads the amounts the answers name and the published content, both cached, so the page keeps its static shell. */
 export async function V1Faq({ version }: { version: BuiltVersion }) {
-  const [amounts, questions] = await Promise.all([getAmounts(), getQuestionOverrides()]);
-  return <V1FaqView version={version} amounts={amounts} content={questionOverlay(questions)} />;
+  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
+  return <V1FaqView version={version} amounts={amounts} content={content} />;
 }
 
 export function V1FaqView({
@@ -30,7 +29,7 @@ export function V1FaqView({
   /** The version being served. v2 and v3 show this page until they have their own. */
   version: BuiltVersion;
   amounts: Amounts;
-  /** The stored edits to show, as one overlay on the code copy. Left out, the page prints the code copy alone. */
+  /** Everything stored that the page should show, as one overlay on the code copy (getSiteContent). Left out, the page prints the code copy alone. */
   content?: Overlay;
 }) {
   const { copy } = v1Copy(amounts, content);

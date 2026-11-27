@@ -20,7 +20,7 @@
 import releasedFile from "@/data/site/released.json";
 import { v1Zack, type V1Copy, type V1ZackCopy } from "@/data/site/v1";
 import { fillCopy, type Amounts } from "../amounts";
-import { emptyOverlay, newOverlay, parseOverlay, type Overlay } from "./format";
+import { emptyOverlay, isEmptyOverlay, newOverlay, parseOverlay, type Overlay } from "./format";
 import { codeModel, siteRegistry, type Registry, type SiteCopy } from "./registry";
 
 export { codeModel, type SiteCopy };
@@ -126,6 +126,26 @@ export const releasedOverlay: Overlay = parseOverlay(releasedFile);
 
 /** The built-in wording: the code model with the release file on it (plan KTD1). What "reset" goes back to, and what a site's own edits are compared with. */
 export const baseline: SiteCopy = applyOverlay(codeModel, releasedOverlay);
+
+/**
+ * Two layers as ONE overlay on the code model, which is what a page's view is handed (plan U4): `released` is the
+ * release file, an overlay on the code model, and `own` is a site's published edits, an overlay on those two
+ * together. Where both hold a field, the site's edit wins. With no edits of the site's own, the result is the
+ * release file alone, which is the baseline a page shows when the database cannot be read (plan R18).
+ *
+ * Text is resolved through the models, so an entry either layer cannot print is not in the result. Section and
+ * list entries are not applied by anything yet (U6, U7): they are carried, the site's entry for a page or a list
+ * in place of the release's.
+ */
+export function composeOverlays(released: Overlay, own: Overlay, registry: Registry = siteRegistry): Overlay {
+  if (isEmptyOverlay(released) && isEmptyOverlay(own)) return emptyOverlay;
+  const below = parseOverlay(released, registry);
+  const above = parseOverlay(own, registry);
+  const out = diffToOverlay(codeModel, applyOverlay(applyOverlay(codeModel, below, registry), above, registry), registry);
+  out.sections = { ...below.sections, ...above.sections };
+  out.lists = { ...below.lists, ...above.lists };
+  return out;
+}
 
 /**
  * The copy a page prints, with every amount filled in. `overlay` is everything stored that the page should show,

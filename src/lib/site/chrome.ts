@@ -4,6 +4,11 @@
  * metadata. The words are the version's copy; the addresses are here, because
  * they are the same for every version.
  *
+ * The header, the footer and the not-found page show their words as
+ * published: getSiteChrome reads the stored content (plan U4). The metadata
+ * (siteMeta, pageMeta, zackMeta) is the code copy's, always: page titles and
+ * search descriptions are not editable in Pages.
+ *
  * Server files only. The header is a client component and takes the result as
  * a prop from the root layout: importing a copy file there would pull the
  * settings reader into the browser bundle.
@@ -12,6 +17,9 @@ import type { Metadata } from "next";
 import type { SharedCopy } from "@/data/site/copy-types";
 import { v1, v1Zack } from "@/data/site/v1";
 import { fillCopy, getAmounts, type Amounts } from "./amounts";
+import { emptyOverlay, type Overlay } from "./content/format";
+import { applyOverlay } from "./content/model";
+import { getSiteContent } from "./content/read";
 import { isBuiltVersion, type BuiltVersion, type ServedSite } from "./version";
 
 export type ChromeLink = { href: string; label: string };
@@ -124,11 +132,21 @@ export function chromeFrom(copy: ChromeCopy, amounts: Amounts): SiteChrome {
   };
 }
 
-export function siteChrome(version: BuiltVersion, amounts: Amounts): SiteChrome {
-  return chromeFrom(copyFor(version), amounts);
+/**
+ * A version's chrome. `content` is everything stored that the site should show, as one overlay on the code copy
+ * (src/lib/site/content): left out, the chrome is the code copy's. An overlay is read leniently where it is
+ * applied, so a stored label that names an amount that does not exist is not applied and cannot take the header
+ * down, and only the chrome's own four parts are filled.
+ */
+export function siteChrome(version: BuiltVersion, amounts: Amounts, content: Overlay = emptyOverlay): SiteChrome {
+  return chromeFrom(applyOverlay(copyFor(version), content), amounts);
 }
 
-/** The chrome with the amounts its labels name filled in from the settings. */
+/**
+ * The chrome as the site shows it: its labels as published (the release file and the site's own edits), with the
+ * amounts they name filled in from the settings. Both reads are cached, so the root layout keeps its static shell.
+ */
 export async function getSiteChrome(version: BuiltVersion): Promise<SiteChrome> {
-  return siteChrome(version, await getAmounts());
+  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
+  return siteChrome(version, amounts, content);
 }

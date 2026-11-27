@@ -5,7 +5,9 @@ import { SimpleMarkdown } from "@/components/app/simple-markdown";
 import { firstExample } from "@/data/site/examples";
 import { zackAgents } from "@/data/zack";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
+import type { Overlay } from "@/lib/site/content/format";
 import { v1Copy } from "@/lib/site/content/model";
+import { getSiteContent } from "@/lib/site/content/read";
 import { playbookParts } from "@/lib/site/playbook";
 import { getPlaybookPreface, publicIdeaView, type IdeaView } from "@/lib/site/sample";
 import type { BuiltVersion } from "@/lib/site/version";
@@ -69,9 +71,9 @@ export function annotate(md: string, notes: Note[]): { note: Note; part: string 
 
 /** Reads what the page shows, all of it cached, so the page keeps its static shell. */
 export async function V1HowItWorks({ version }: { version: BuiltVersion }) {
-  const [amounts, preface] = await Promise.all([getAmounts(), getPlaybookPreface()]);
+  const [amounts, preface, content] = await Promise.all([getAmounts(), getPlaybookPreface(), getSiteContent()]);
   // The idea taken apart is the first of the homepage's examples.
-  return <V1HowItWorksView version={version} amounts={amounts} idea={publicIdeaView(firstExample.play, preface)} preface={preface} files={zackFiles()} />;
+  return <V1HowItWorksView version={version} amounts={amounts} content={content} idea={publicIdeaView(firstExample.play, preface)} preface={preface} files={zackFiles()} />;
 }
 
 const partBox = "rounded-[8px] border border-rule bg-surface p-5 sm:p-6";
@@ -79,6 +81,7 @@ const partBox = "rounded-[8px] border border-rule bg-surface p-5 sm:p-6";
 export function V1HowItWorksView({
   version,
   amounts,
+  content,
   idea,
   preface,
   files,
@@ -86,6 +89,8 @@ export function V1HowItWorksView({
   /** The version being served. v2 and v3 show this page until they have their own. */
   version: BuiltVersion;
   amounts: Amounts;
+  /** Everything stored that the page should show, as one overlay on the code copy (getSiteContent). Left out, the page prints the code copy alone. */
+  content?: Overlay;
   /** The sample idea, built with publicIdeaView. */
   idea: IdeaView;
   /** The line added to the top of every playbook, from the settings. */
@@ -93,7 +98,7 @@ export function V1HowItWorksView({
   /** The public Zack files (zackFiles). Empty leaves the links out. */
   files: ZackFile[];
 }) {
-  const { copy } = v1Copy(amounts);
+  const { copy } = v1Copy(amounts, content);
   const how = copy.howItWorks;
   // The last note is for the install prompt, which is not part of the playbook.
   const playbookNotes = how.anatomy.notes.slice(0, -1);
