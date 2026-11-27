@@ -7,8 +7,8 @@ import { WatchSentence } from "@/components/home/watch-sentence";
 import { LibraryBrowser, LibraryStatic } from "@/components/library-browser";
 import { getUseCases } from "@/lib/library-source";
 import { ClosingBand } from "@/components/site/v1/blocks/closing-band";
-import { closingBandCopy } from "@/data/site/v1";
-import { v1Copy } from "@/lib/site/content/model";
+import { closingBandCopy, type V1Copy } from "@/data/site/v1";
+import { sectionsShown, v1Copy } from "@/lib/site/content/model";
 import { getSiteContent } from "@/lib/site/content/read";
 import { getAmounts } from "@/lib/site/amounts";
 import type { BuiltVersion } from "@/lib/site/version";
@@ -51,9 +51,7 @@ function SetUpBand() {
  * sentence, the primary start button and the trial line. The button has no
  * audience, so it carries the one remembered from the homepage or the free Zack run.
  */
-async function TrialBand({ version }: { version: BuiltVersion }) {
-  const [amounts, content] = await Promise.all([getAmounts(), getSiteContent()]);
-  const { copy } = v1Copy(amounts, content);
+function TrialBand({ version, copy }: { version: BuiltVersion; copy: V1Copy }) {
   return (
     <div data-site={version} data-library-band>
       <ClosingBand id="library-band" copy={closingBandCopy(copy, copy.library.band)} />
@@ -88,10 +86,13 @@ const anyAgent = isBuiltVersion(site) ? "Any AI agent" : undefined;
 export default async function LibraryPage() {
   const items = await getUseCases();
   // A site version's own words for this page are in its copy, as published. Circles and the legacy site keep theirs here, and read no stored content.
-  const words = isBuiltVersion(site) ? v1Copy(...(await Promise.all([getAmounts(), getSiteContent()]))).copy.library : null;
+  const [amounts, content] = isBuiltVersion(site) ? await Promise.all([getAmounts(), getSiteContent()]) : [null, null];
+  const copy = amounts && content ? v1Copy(amounts, content).copy : null;
+  const words = copy ? copy.library : null;
 
-  return (
-    <>
+  // The page's four sections, by their ids in the registry (src/lib/site/content/registry.ts).
+  const sections: Record<string, React.ReactNode> = {
+    intro: (
       <section aria-labelledby="library-title" className="wrap grid grid-cols-[minmax(0,1fr)] gap-6 pb-10 pt-10 md:pt-14 lg:grid-cols-[minmax(0,6fr)_minmax(0,6fr)] lg:items-end lg:gap-16">
         <h1 id="library-title" className="lines text-h2 text-stretch-display">
           <span className="line block">
@@ -125,13 +126,18 @@ export default async function LibraryPage() {
           </p>
         </div>
       </section>
-
+    ),
+    rows: (
       <Suspense fallback={<LibraryStatic items={items} showOffer={site === "legacy"} anyAgent={anyAgent} />}>
         <LibraryBrowser items={items} showOffer={site === "legacy"} anyAgent={anyAgent} band={isBuiltVersion(site) ? null : <SetUpBand />} />
       </Suspense>
-
+    ),
+    watch: (
       <section id="watch" aria-labelledby="watch-title" className="wrap scroll-mt-32 pb-8 pt-16 md:pt-24">
-        <div id="final-cta" data-reveal>
+        {/* suppressHydrationWarning: Reveals (src/components/reveals.tsx) marks this block "is-in" as it comes on screen. Moved to
+            the top of the page (Pages, plan U6) it is on screen before this part of the page hydrates, and the class is then
+            ahead of React: a difference React leaves alone, and that `next dev` would otherwise report on every load. */}
+        <div id="final-cta" data-reveal suppressHydrationWarning>
         <h2 id="watch-title" className="text-h2">
           {words ? words.watch.title : "Not in the library yet?"}
         </h2>
@@ -141,8 +147,23 @@ export default async function LibraryPage() {
         <p className="mt-6 max-w-[36rem] text-small text-ink-2">{words ? words.watch.note : `The morning someone’s ${agent} does it, you get one email with the link. Every email has a link to stop.`}</p>
         </div>
       </section>
+    ),
+    // The one band a site version adds. Circles and the legacy site have none.
+    band: isBuiltVersion(site) && copy ? <TrialBand version={site} copy={copy} /> : null,
+  };
+  // On a site version an admin may switch a section off or move it (Pages, plan U6): the page prints the ones that
+  // are on, in the stored order. Circles and the legacy site print all of them in the code's order.
+  const shown = sectionsShown("library", content ?? undefined);
+  const part = (at: number) => (at < shown.length && Object.hasOwn(sections, shown[at]) ? sections[shown[at]] : null);
 
-      {isBuiltVersion(site) && <TrialBand version={site} />}
+  return (
+    <>
+      {/* Four places, one for each section, written out and not mapped: the ids React gives the watch form's fields
+          depend on where it stands among these, and in the built-in order they are what they always were. */}
+      {part(0)}
+      {part(1)}
+      {part(2)}
+      {part(3)}
 
       {site === "legacy" && <StickyCta actions={[{ kind: "setupCall", label: "Book a free setup call" }]} />}
     </>

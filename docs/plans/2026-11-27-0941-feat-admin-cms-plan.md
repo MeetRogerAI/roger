@@ -528,6 +528,21 @@ docs/site/content-release.md
   - A section change is a draft: the public page is unchanged until publish.
 - **Verification:** In a browser, switch "It compounds" off and move Questions above Price in drafts, publish, and see the homepage follow with correct hairlines.
 
+### Notes for U7 to U10 from the U5 and U6 builds and reviews (November 27, 2026)
+
+- `reviewKey` takes `{draft, published}` and `publish` takes `over`: a new publish path passes both. "Nothing waiting" is `sameOverlay(draft, published)`.
+- Labels the owner reads come from `fieldLabelWith`; text shown in a review comes from `asRead` / `namesFilled`. Item numbering follows built-in order today: U7 makes it follow the draft's order and names added items. Keep the naming field first in each item's spec.
+- Client components may import `content/caption.ts` only; not `labels.ts`, `registry.ts` or `text.ts`.
+- Every id on an editing screen is page-specific (`sectionAnchor`, `sectionsAnchor`): Next keeps the screen you left in the document, hidden, and a test fails on a shared id. Effects re-run on return with old refs and state.
+- Lists reuse the section pattern (`applySectionEdit` / `diffSectionEdit`, `saveSections`) and its generated-overlay laws. `composeOverlays` still replaces list entries wholesale. A partial stored order pulls unnamed followers along with their predecessor (KTD4).
+- The editor's form sends `page`, `text:<fieldId>` and `reset`; section presses have their own action. New controls need their own keys or actions.
+- Check anything that can move on screen under `next dev` as well as a production build, with `.next` deleted first. A `data-reveal` block that can be first on screen needs `suppressHydrationWarning`.
+- Full-page screenshots: capture at scale 1 and keep them under 16,384 device pixels, or the picture repeats the page.
+- No block-kind (multi-line) field exists yet; U8's playbook field is the first, and multi-line tidying is untested in a browser.
+- U9: replace the `builtInLinks` table in `check.ts` with the links the draft would render; add the no-main-heading warning for Home's hero and for the Use cases page's intro; the Preview button belongs in the editing screen's header and the review's publish panel (`editorAddress`, `pageBySlug`).
+- U10: the export takes a switched-off section's fields from `released.json` (`layoutOn`, `sectionLayout`); "Differs from the release" must list a page whose site entry holds a whole section order, because a site that has moved anything names every section and so will not follow a release that later switches one off.
+- U11: the wording check's time-saved rule fires on the ordinary word "Saved"; a failed log insert after a publish leaves override rows missing.
+
 ### U7. Lists of text items, and the questions
 
 - **Goal:** An admin adds, removes and reorders the problem statements, hero steps, control columns, the days of "The week", the first-weeks steps and the questions.

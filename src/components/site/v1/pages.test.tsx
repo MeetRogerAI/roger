@@ -12,6 +12,7 @@ import { firstExample } from "@/data/site/examples";
 import { letter, letterShown } from "@/data/site/letter";
 import { emptyOverlay, type Overlay } from "@/lib/site/content/format";
 import { v1Copy } from "@/lib/site/content/model";
+import { siteRegistry } from "@/lib/site/content/registry";
 import { amountsFrom, hasBareDollar } from "@/lib/site/amounts";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
@@ -522,5 +523,104 @@ describe("the three reading pages together", () => {
       expect(band, name).toMatch(/<a class="btn btn-l" href="\/start">Get two free Cora Curations<\/a>/);
       expect(markup.endsWith(`${band}</div>`), name).toBe(true);
     }
+  });
+});
+
+/**
+ * The sections an admin has switched off or moved (plan U6, R7). Each page prints the sections that are on, in the
+ * stored order; its title is not a section and always comes first. With nothing stored, the markup is unchanged.
+ */
+describe("the three reading pages with their sections switched off or moved (plan U6)", () => {
+  const laid = (page: string, entry: { order?: string[]; off?: string[] }): Overlay => ({ ...emptyOverlay, sections: { [page]: { order: entry.order ?? [], off: entry.off ?? [] } } });
+  const faqWith = (content: Overlay) => faq({ content });
+  const howWith = async (content?: Overlay) => shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={amounts} idea={idea} preface={preface} files={files} content={content} />));
+  const aboutWith = async (content?: Overlay, photo = "") => shell(await pageMarkup(<V1AboutView version="v1" amounts={amounts} photo={photo} signature="" content={content} />));
+  /** The page's sections and what stands between them, in order: "—" for a hairline, "band" for the start band. */
+  const flow = (markup: string) => [...markup.matchAll(/<section\b[^>]*aria-labelledby="([\w-]+)-title"|data-hairline|data-seam|data-start-band/g)].map((m) => m[1] ?? (m[0] === "data-hairline" ? "—" : m[0] === "data-start-band" ? "band" : "="));
+  const GROUPS = copy.questions.map((group) => group.id);
+  const HOW = ["week", "zack", "cora", "anatomy", "firstWeeks", "noAgent", "startBand"];
+
+  it("are the same pages, byte for byte, with no entry and with an entry that changes nothing", async () => {
+    for (const content of [emptyOverlay, laid("faq", {}), laid("faq", { order: [...GROUPS, "startBand"] }), laid("howItWorks", { order: HOW }), laid("about", { order: ["letter", "startBand"] }), laid("about", { order: ["title"], off: ["title"] })]) {
+      expect(await faqWith(content), JSON.stringify(content)).toBe(await faq());
+      expect(await howWith(content), JSON.stringify(content)).toBe(await how());
+      expect(await aboutWith(content), JSON.stringify(content)).toBe(await about());
+      expect(await aboutWith(content, "/peter.jpg"), JSON.stringify(content)).toBe(await about({ photo: "/peter.jpg" }));
+    }
+  });
+
+  it("has every section's anchor from the registry as that section's id on its page", async () => {
+    const pagesMarkup: Record<string, string> = { faq: await faq(), howItWorks: await how(), about: await about() };
+    for (const [pageId, markup] of Object.entries(pagesMarkup)) {
+      for (const section of siteRegistry.pages.find((entry) => entry.id === pageId)!.sections) {
+        if (section.anchor === null) continue;
+        expect(markup, `${pageId}.${section.id}`).toMatch(new RegExp(`<section id="${section.anchor}" aria-labelledby="${section.anchor}-title"`));
+        expect(section.ground, `${pageId}.${section.id}`).toBe("ground");
+      }
+    }
+    // The six of /how-it-works and the four groups of /faq have one each. The start band and the letter have none.
+    const anchors = (pageId: string) => siteRegistry.pages.find((entry) => entry.id === pageId)!.sections.map((section) => section.anchor);
+    expect(anchors("howItWorks")).toEqual([null, "week", "zack", "cora", "anatomy", "first-weeks", "no-agent", null]);
+    expect(anchors("faq")).toEqual([null, ...GROUPS, null]);
+    expect(anchors("about")).toEqual([null, null, null]);
+  });
+
+  it("/faq with one group off shows the other three in order, under the page's one h1", async () => {
+    const markup = await faqWith(laid("faq", { off: ["zack-and-privacy"] }));
+    expect(markup.match(/<h1\b/g)).toHaveLength(1);
+    expect(sections(markup).map((s) => s.name)).toEqual(["page", ...GROUPS.filter((id) => id !== "zack-and-privacy")]);
+    expect(markup).not.toContain('id="zack-and-privacy"');
+    for (const item of copy.questions.find((group) => group.id === "zack-and-privacy")!.items) expect(text(markup)).not.toContain(item.a);
+    // Still one block of ground around the groups, and one name for every question on the page.
+    expect(markup.match(/<div class="bg-ground pb-10 pt-6 md:pb-14 md:pt-10">/g)).toHaveLength(1);
+    expect(new Set([...markup.matchAll(/<details\b[^>]*\sname="([^"]+)"/g)].map((m) => m[1]))).toEqual(new Set(["faq-questions"]));
+  });
+
+  it("/faq follows a stored order, and gives each run of groups its own block when the start band is moved between them", async () => {
+    const turned = await faqWith(laid("faq", { order: [...[...GROUPS].reverse(), "startBand"] }));
+    expect(sections(turned).map((s) => s.name)).toEqual(["page", ...[...GROUPS].reverse()]);
+    const split = await faqWith(laid("faq", { order: [GROUPS[0], "startBand", ...GROUPS.slice(1)] }));
+    expect(flow(split)).toEqual(["page", GROUPS[0], "band", ...GROUPS.slice(1)]);
+    expect(split.match(/<div class="bg-ground pb-10 pt-6 md:pb-14 md:pt-10">/g)).toHaveLength(2);
+    // The band off: the page ends on the last group. Every group off: the title, with room under it, then the band.
+    expect(flow(await faqWith(laid("faq", { off: ["startBand"] })))).toEqual(["page", ...GROUPS]);
+    const bare = await faqWith(laid("faq", { off: GROUPS }));
+    expect(flow(bare)).toEqual(["page", "band"]);
+    expect(bare).toContain('<section aria-labelledby="page-title" class="bg-ground"><div class="wrap py-16 md:py-24">');
+    expect(await faq()).toContain('<section aria-labelledby="page-title" class="bg-ground"><div class="wrap pt-16 md:pt-24">');
+  });
+
+  it("/how-it-works with Zack off has no element with the id zack, and keeps one hairline between each two reading sections that are left", async () => {
+    const markup = await howWith(laid("howItWorks", { off: ["zack"] }));
+    expect(markup).not.toMatch(/\sid="zack"/);
+    expect(text(markup)).not.toContain(copy.howItWorks.zack.title);
+    expect(flow(markup)).toEqual(["page", "week", "—", "cora", "—", "anatomy", "—", "first-weeks", "—", "no-agent", "band"]);
+    expect(flow(await how())).toEqual(["page", "week", "—", "zack", "—", "cora", "—", "anatomy", "—", "first-weeks", "—", "no-agent", "band"]);
+  });
+
+  it("/how-it-works follows a stored order: no hairline beside the night band, wherever it is, and none after the title", async () => {
+    const order = ["cora", "week", "startBand", "zack", "anatomy", "firstWeeks", "noAgent"];
+    expect(flow(await howWith(laid("howItWorks", { order })))).toEqual(["page", "cora", "—", "week", "band", "zack", "—", "anatomy", "—", "first-weeks", "—", "no-agent"]);
+    // The band first: the title gets the room a reading section would have given it.
+    const first = await howWith(laid("howItWorks", { order: ["startBand", ...HOW.filter((id) => id !== "startBand")] }));
+    expect(flow(first).slice(0, 3)).toEqual(["page", "band", "week"]);
+    expect(first).toContain('<section aria-labelledby="page-title" class="bg-ground"><div class="wrap py-16 md:py-24">');
+    // An id the page does not have is ignored. A section the stored order does not name follows the one it follows in code: the band, after the last section.
+    expect(flow(await howWith(laid("howItWorks", { order: ["gone", "noAgent", "week"], off: ["nope"] }))).filter((mark) => mark !== "—")).toEqual(["page", "no-agent", "band", "week", "zack", "cora", "anatomy", "first-weeks"]);
+  });
+
+  it("/about with the letter off keeps its title and the start band, and with the band first prints the letter in a block of its own", async () => {
+    const off = await aboutWith(laid("about", { off: ["letter"] }));
+    expect(off.match(/<h1\b/g)).toHaveLength(1);
+    expect(off).not.toContain("data-letter");
+    expect(text(off)).not.toContain(letter.greeting);
+    expect(flow(off)).toEqual(["about", "band"]);
+    const turned = await aboutWith(laid("about", { order: ["startBand", "letter"] }));
+    expect(flow(turned)).toEqual(["about", "band"]);
+    expect(turned.indexOf("data-start-band")).toBeLessThan(turned.indexOf("data-letter-block"));
+    expect(text(turned)).toContain(letterShown[0].shown);
+    expect(turned.match(/data-claims="letter"/g)).toHaveLength(1);
+    // Both off: the title alone.
+    expect(flow(await aboutWith(laid("about", { off: ["letter", "startBand"] })))).toEqual(["about"]);
   });
 });

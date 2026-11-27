@@ -3,14 +3,15 @@ import { connection } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
 import { amountNames, getAmounts } from "@/lib/site/amounts";
-import { draftChanges, wordingOf } from "@/lib/site/content/check";
-import { PAGES_ADDRESS, REVIEW_ADDRESS, fieldAnchor, fieldLabel, pageBySlug, wordsFor } from "@/lib/site/content/labels";
-import { baseline, textAt } from "@/lib/site/content/model";
+import { draftChanges, linksInto, sectionChanges, wordingOf } from "@/lib/site/content/check";
+import { PAGES_ADDRESS, REVIEW_ADDRESS, fieldAnchor, fieldLabel, pageBySlug, sectionAnchor, sectionNotes, sectionsAnchor, wordsFor } from "@/lib/site/content/labels";
+import { baseline, layoutOn, sameLayout, sectionLayout, textAt } from "@/lib/site/content/model";
 import { readStored } from "@/lib/site/content/store";
 import { amountPlaceholderNames, asPlaceholder } from "@/lib/site/content/text";
 import { PageEditor, type EditorField, type EditorSection, type NameHint } from "../field-editor";
 import { LaunchListLine } from "../launch-list";
 import { Unreadable, count } from "../parts";
+import { SectionControls, type SectionRow } from "../section-controls";
 
 /**
  * One page's editing screen (plan U5, R6, R12): every text of the page, under
@@ -23,6 +24,13 @@ import { Unreadable, count } from "../parts";
  * labels, limits, the original wording, and what each name in braces shows.
  * An item of a list arrives as its place ("Question 3"); the form adds the
  * item's wording as it is typed (src/lib/site/content/caption.ts).
+ *
+ * THE PAGE'S SECTIONS (plan U6, R7). Above the words is one panel that lists
+ * the page's sections in the order the draft has them, each with its switch
+ * and its Move up and Move down. The words below follow the same order, and
+ * a section that is switched off keeps its words on screen, marked as not on
+ * the page. A page's title, and everything under Shared, is not in the panel:
+ * it cannot be moved or switched off, and has no control to say so.
  */
 const BACK = "All pages";
 
@@ -56,6 +64,30 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
   const today: Record<string, string> = amountNames(amounts);
   const waiting = draftChanges(stored);
   const waitingHere = new Set(waiting.filter((change) => change.field.page === page.id).map((change) => change.field.id));
+  const moving = sectionChanges(stored);
+  const movingHere = moving.filter((change) => change.page.id === page.id);
+  const waitingAll = waiting.length + moving.length;
+  const waitingOnPage = waitingHere.size + movingHere.length;
+
+  // The page's sections as the draft has them: the ones an admin may move in the draft's order, each fixed one where it is.
+  const layout = layoutOn(stored.draft, page.id);
+  const original = sectionLayout(baseline, page.id);
+  const inOrder = [...layout.order];
+  const ordered = page.sections.map((section) => {
+    if (section.fixed) return section;
+    const id = inOrder.shift();
+    return page.sections.find((entry) => entry.id === id) ?? section;
+  });
+  const rows: SectionRow[] = ordered
+    .filter((section) => !section.fixed)
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      off: layout.off.includes(section.id),
+      waiting: movingHere.some((change) => change.section.id === section.id),
+      jump: section.fields.length > 0 ? sectionAnchor(page.id, section.id) : null,
+      notes: [...sectionNotes(page.id, section.id), ...linksInto(stored, page.id, section.id).map((link) => `The ${link} lands here.`)],
+    }));
 
   // The sets of names in braces the page's fields may hold. Nearly every field holds the amounts; a caption holds its own two.
   const sets: (readonly string[])[] = [];
@@ -65,7 +97,7 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
   };
   const hint = (name: string): NameHint => ({ name: asPlaceholder(name), shows: wordsFor(name) ?? "an amount from Settings", now: Object.hasOwn(today, name) ? today[name] : null });
 
-  const sections: EditorSection[] = page.sections
+  const sections: EditorSection[] = ordered
     .filter((section) => section.fields.length > 0)
     .map((section) => {
       const groups: EditorSection["groups"] = [];
@@ -86,7 +118,7 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
         if (open && open.title === label.group) open.fields.push(entry);
         else groups.push({ title: label.group, fields: [entry] });
       }
-      return { id: section.id, label: section.label, groups };
+      return { id: section.id, label: section.label, groups, off: layout.off.includes(section.id), anchor: sectionAnchor(page.id, section.id) };
     });
   const names = sets.map((set) => set.map(hint));
   const amountHints = amountPlaceholderNames.map(hint);
@@ -114,9 +146,9 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
             </>
           )}
         </p>
-        {waiting.length > 0 && (
+        {waitingAll > 0 && (
           <p data-waiting className="text-small">
-            {count(waiting.length, "change is", "changes are")} saved as a draft and not published yet{waitingHere.size === waiting.length ? "" : `, ${waitingHere.size} of them on this page`}.{" "}
+            {count(waitingAll, "change is", "changes are")} saved as a draft and not published yet{waitingOnPage === waitingAll ? "" : `, ${waitingOnPage} of them on this page`}.{" "}
             <Link href={REVIEW_ADDRESS} className="tlink">
               Review and publish
             </Link>
@@ -125,14 +157,29 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
         <LaunchListLine page={page.id === "shared" ? "these shared words on each page" : `the ${page.label} page`} />
       </header>
 
+      {rows.length > 0 && (
+        <SectionControls
+          key={`sections-${page.id}`}
+          page={page.id}
+          headingId={sectionsAnchor(page.id)}
+          rows={rows}
+          rearranged={!sameLayout(layout, original)}
+          // "Original" is the last release's. Where that already has a section off, "switch all back on" would not be true.
+          resetLabel={original.off.length === 0 ? "Put the sections back in their original order and switch all back on" : "Put the sections back as they were originally"}
+          waiting={movingHere.length}
+          reviewAddress={REVIEW_ADDRESS}
+        />
+      )}
+
       {sections.length > 1 && (
-        <nav aria-label="Sections of this page" className="text-small">
+        <nav aria-label="Words of this page, by section" className="text-small">
           <p className="text-meta font-[600] text-ink-2">Jump to</p>
           <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
             {sections.map((section) => (
               <li key={section.id}>
-                <a href={`#section-${section.id}`} className="tlink inline-flex min-h-8 items-center">
+                <a href={`#${section.anchor}`} className="tlink inline-flex min-h-8 items-center">
                   {section.label}
+                  {section.off ? " (switched off)" : ""}
                 </a>
               </li>
             ))}

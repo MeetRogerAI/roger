@@ -51,7 +51,7 @@ vi.mock("@/lib/admin-auth", () => ({
   isAdmin: async () => Boolean(admin),
 }));
 
-const { publishAction, savePageAction, undoPublishAction } = await import("./actions");
+const { publishAction, savePageAction, sectionsAction, undoPublishAction } = await import("./actions");
 const { default: PagesScreen } = await import("./page");
 const { default: EditorScreen } = await import("./[page]/page");
 const { default: ReviewScreen } = await import("./review/page");
@@ -465,7 +465,7 @@ describe("review and publish", () => {
     expect(seen).toContain("Publishing is for the whole site, not one page. It puts the 1 change above on the site at once (FAQ)");
     expect(seen).toContain("Publish anyway: this 1 change");
 
-    expect(await publishNow()).toMatchObject({ status: "ok", message: "Published. Visitors see the new wording from their next page view." });
+    expect(await publishNow()).toMatchObject({ status: "ok", message: "Published. Visitors see the changes from their next page view." });
     expect(await faq()).toContain(answer);
     expect(await logged()).toEqual([
       { admin_email: OWNER, action: "site_content_published", detail: { from: "pages", publishedOverWarnings: 1, changed: [REFUND_A] } },
@@ -656,6 +656,213 @@ describe("undo last publish", () => {
   it("is not offered before anything was published", async () => {
     expect(words(await pagesScreen())).not.toContain("Undo last publish");
     expect(words(await reviewScreen())).toContain("There is no publish to undo right now.");
+  });
+});
+
+/**
+ * A page's sections (plan U6, R7): each one switched off or on, or moved up or down, with one press that is saved
+ * as a draft, listed in the review as a plain sentence, and published and undone with everything else.
+ */
+describe("a page's sections", () => {
+  beforeEach(() => {
+    admin = OWNER;
+  });
+  const press = (page: string, op: string, section?: string) => sectionsAction(form({ page, op, ...(section ? { section } : {}) }));
+  const draftSections = async () => (await readStored(current)).draft.sections;
+  /** The names of the sections in the editing screen's panel, in order, each with "off" when it is switched off. */
+  const panel = (markup: string) => [...markup.matchAll(/<li data-section-row="([\w-]+)"( data-off="")?/g)].map((m) => (m[2] ? `${m[1]} off` : m[1]));
+  const HOME = ["hero", "problem", "examples", "compounds", "testimonials", "control", "price", "questions", "closing"];
+  const SWAPPED = HOME.map((id) => (id === "price" ? "questions" : id === "questions" ? "price" : id));
+  const sectionsOf = (markup: string) => [...markup.matchAll(/<section\b[^>]*aria-labelledby="([\w-]+)-title"/g)].map((m) => m[1]);
+  // The shell: the page a visitor with no script reads. The price block for the visitor's country is streamed in after it.
+  const homeMarkup = async () => (await pageMarkup(createElement(V1Home, { version: "v1" }))).split('<div hidden id="S:')[0];
+
+  it("is refused for someone who is not an admin, before the form is read", async () => {
+    admin = null;
+    await expect(sectionsAction(unread())).rejects.toThrow("Not signed in");
+    await expect(press("home", "off", "price")).rejects.toThrow("Not signed in");
+    expect(await stored()).toBeUndefined();
+    expect(cache).toEqual({ tags: [], refreshed: 0 });
+  });
+
+  it("switches a section off as a draft: the page is marked, the review says it in a sentence, and no visitor sees it", async () => {
+    const before = await homeMarkup();
+    const state = await press("home", "off", "compounds");
+    expect(state).toMatchObject({ status: "ok", message: "“It compounds” is switched off. Saved as a draft: visitors see no change until you publish." });
+    expect(await draftSections()).toEqual({ home: { order: [], off: ["compounds"] } });
+    // A draft: nothing public is expired, the admin's own screen is refreshed, and the page is what it was.
+    expect(cache).toEqual({ tags: [], refreshed: 1 });
+    expect(await homeMarkup()).toBe(before);
+    expect(await logged()).toEqual([]);
+
+    expect(row(await pagesScreen(), "home")).toContain("1 draft not published");
+    expect(row(await pagesScreen(), "home")).toContain("Sections changed from the original");
+    expect(row(await pagesScreen(), "faq")).not.toContain("Sections changed");
+    expect(words(await pagesScreen())).toContain("1 change is saved as a draft");
+    const review = await reviewScreen();
+    expect(words(review)).toContain("What will change: 1 change to sections");
+    expect(words(review)).toContain("Home: the “It compounds” section will be switched off.");
+    expect(review).toContain('data-section-change="off"');
+    expect(words(review)).toContain("Publish this 1 change");
+  });
+
+  it("moves a section up and down among the page's sections, and says where it now is", async () => {
+    expect(await press("home", "up", "questions")).toMatchObject({ status: "ok", message: "“Questions” is now above “Price”. Saved as a draft: visitors see no change until you publish." });
+    expect(await draftSections()).toEqual({ home: { order: SWAPPED, off: [] } });
+    expect(words(await reviewScreen())).toContain("Home: “Questions” moves up, above “Price”.");
+    expect(await press("home", "down", "hero")).toMatchObject({ status: "ok", message: expect.stringContaining("“Hero” is now below “The problem”.") });
+    expect(words(await reviewScreen())).toContain("What will change: 2 changes to sections");
+    // Back where it was: one change is left.
+    await press("home", "up", "hero");
+    expect(await draftSections()).toEqual({ home: { order: SWAPPED, off: [] } });
+  });
+
+  it("changes nothing, and says so, for the first section moved up, the last moved down and a switch already where it is", async () => {
+    expect(await press("home", "up", "hero")).toMatchObject({ status: "ok", message: "“Hero” is already the first section." });
+    expect(await press("home", "down", "closing")).toMatchObject({ status: "ok", message: "“Closing band” is already the last section." });
+    expect(await press("home", "on", "price")).toMatchObject({ status: "ok", message: "“Price” is already switched on." });
+    expect(await press("home", "reset")).toMatchObject({ status: "ok", message: "The sections of this page are already as they were originally." });
+    expect(await stored()).toBeUndefined();
+  });
+
+  it("refuses a fixed section, a section of another page, an unknown page, a page with nothing to move and an unknown press, storing nothing", async () => {
+    for (const [page, op, section] of [
+      ["howItWorks", "off", "title"],
+      ["faq", "up", "title"],
+      ["about", "off", "title"],
+      ["home", "off", "zack"],
+      ["home", "off", "constructor"],
+      ["nope", "off", "price"],
+      ["shared", "off", "nav"],
+      ["shared", "reset", ""],
+      ["home", "delete", "price"],
+      ["home", "", "price"],
+      ["home", "off", ""],
+    ]) {
+      expect(await press(page, op, section), `${page} ${op} ${section}`).toMatchObject({ status: "error", message: "This page has changed since you opened it, so nothing was saved. Reload the page and try again." });
+    }
+    expect(await stored()).toBeUndefined();
+    expect(cache.refreshed).toBe(0);
+  });
+
+  it("shows the panel on the editing screen: every section in the draft's order with its switch and its two buttons, and none for a fixed section", async () => {
+    const plain = await editorScreen("home");
+    expect(panel(plain)).toEqual(HOME);
+    // Each row: a switch that says whether the section is shown, and Move up and Move down as buttons.
+    expect(plain.match(/role="switch"/g)).toHaveLength(HOME.length);
+    expect(plain).toMatch(/<button type="button" role="switch" aria-checked="true" aria-label="Show “Price” on the page"/);
+    expect(plain.match(/data-control="up"/g)).toHaveLength(HOME.length);
+    expect(plain.match(/data-control="down"/g)).toHaveLength(HOME.length);
+    // The first cannot go up and the last cannot go down: said to a screen reader, and still a button that keeps the focus.
+    expect(plain.match(/data-control="up" aria-disabled="true"/g)).toHaveLength(1);
+    expect(plain.match(/data-control="down" aria-disabled="true"/g)).toHaveLength(1);
+    expect(plain).not.toMatch(/<button[^>]*data-control[^>]*\sdisabled/);
+    // Nothing to put back yet.
+    expect(plain).not.toContain("data-sections-reset");
+    expect(words(plain)).toContain("The “Pricing” link in the header and in the footer of every page lands here.");
+
+    await press("home", "off", "price");
+    await press("home", "up", "questions");
+    const markup = await editorScreen("home");
+    expect(panel(markup)).toEqual(SWAPPED.map((id) => (id === "price" ? "price off" : id)));
+    expect(markup).toMatch(/aria-checked="false" aria-label="Show “Price” on the page"/);
+    expect(words(markup)).toContain("2 changes to these sections are saved as a draft and not on the site yet.");
+    expect(words(markup)).toContain("Put the sections back in their original order and switch all back on");
+    // The words follow the same order, and the ones of the section that is off stay, marked.
+    const order = [...markup.matchAll(/<section id="section-home-[\w-]+" data-section="([\w-]+)"( data-section-off="")?/g)].map((m) => (m[2] ? `${m[1]} off` : m[1]));
+    expect(order).toEqual(SWAPPED.map((id) => (id === "price" ? "price off" : id)));
+    expect(box(markup, "priceBlock.title")).toContain(`value="${original("priceBlock.title")}"`);
+    expect(words(markup)).toContain("This section is switched off: once that is published, visitors do not see these words. You can still change them.");
+
+    // A reading page: its title is no row, and has no control. Shared has no panel at all.
+    const how = await editorScreen("how-it-works");
+    expect(panel(how)).toEqual(["week", "zack", "cora", "anatomy", "firstWeeks", "noAgent", "startBand"]);
+    expect(how).toContain('id="section-how-it-works-title"');
+    const shared = await editorScreen("shared");
+    expect(shared).not.toContain("data-sections");
+    expect(shared).not.toContain('role="switch"');
+    // /faq says, in the owner's words, what switching a group off does to the homepage.
+    expect(words(await editorScreen("faq"))).toContain("Switched off, this group’s questions leave the FAQ page, and the homepage’s Questions section leaves them out too.");
+  });
+
+  it("gives no two editing screens an id in common: Next keeps the screen a click has left in the document, hidden, beside the one that is shown", async () => {
+    const slugs = ["home", "how-it-works", "use-cases", "faq", "about", "shared"];
+    const ids = new Map<string, string>();
+    for (const slug of slugs) {
+      const markup = await editorScreen(slug);
+      const own = [...markup.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+      expect(own.filter((id, i) => own.indexOf(id) !== i), `${slug}: an id twice on one screen`).toEqual([]);
+      for (const id of own) {
+        expect(ids.get(id), `"${id}" is on ${slug} and on ${ids.get(id)}`).toBeUndefined();
+        ids.set(id, slug);
+      }
+      // Every link within the screen, and every label, finds its target on this screen.
+      for (const [, target] of markup.matchAll(/\shref="#([^"]+)"/g)) expect(own, `${slug}: href="#${target}"`).toContain(target);
+      for (const [, target] of markup.matchAll(/\saria-labelledby="([^"]+)"/g)) for (const id of target.split(" ")) expect(own, `${slug}: aria-labelledby="${id}"`).toContain(id);
+    }
+    // The panel's heading is the page's own, and it is where the review's links to a page's sections land.
+    expect(await editorScreen("home")).toContain('<h2 id="sections-home" tabindex="-1"');
+    expect(await editorScreen("faq")).toContain('<h2 id="sections-faq" tabindex="-1"');
+    await press("faq", "off", "startBand");
+    await press("home", "off", "price");
+    const review = await reviewScreen();
+    expect(review).toContain('href="/admin/pages/faq#sections-faq"');
+    expect(review).toContain('href="/admin/pages/home#sections-home"');
+  });
+
+  it("covers AE3: with Price switched off, the review names the “Pricing” link of the header and the footer, does not block, and logs no override", async () => {
+    await press("home", "off", "price");
+    const review = await reviewScreen();
+    expect(review).toContain('data-link-warning="/#price"');
+    expect(words(review)).toContain("Link warnings: 1");
+    expect(words(review)).toContain("The “Pricing” link in the header and in the footer of every page points at the “Price” section of Home, which is switched off.");
+    expect(words(review)).toContain("Publish anyway: this 1 change");
+    expect(await publishNow()).toMatchObject({ status: "ok", message: "Published. Visitors see the changes from their next page view." });
+    expect((await logged()).map((entry) => entry.action)).toEqual(["site_content_published"]);
+    expect((await logged())[0].detail).toMatchObject({ changed: ["sections.home"] });
+    expect(await homeMarkup()).not.toMatch(/\sid="price"/);
+    // Still true after the publish, so still said: the link is on the site and the section is not.
+    expect(words(await reviewScreen())).toContain("Link warnings: 1");
+    expect(words(await reviewScreen())).toContain("Nothing is waiting to be published.");
+  });
+
+  it("is published with the texts in one publish, undone with them, and put back by the page's reset", async () => {
+    await savePageAction(typed("home", { [HEADLINE]: "A new headline" }));
+    await press("home", "off", "compounds");
+    await press("home", "up", "questions");
+    await press("faq", "off", "zack-and-privacy");
+    const review = words(await reviewScreen());
+    expect(review).toContain("What will change: 1 text and 3 changes to sections");
+    expect(review).toContain("Publish all 4 changes");
+    expect(sectionsOf(await homeMarkup())).toEqual(["hero", "problem", "examples", "compounds", "control", "price", "questions", "closing"]);
+
+    expect(await publishNow()).toMatchObject({ status: "ok" });
+    expect(cache.tags).toEqual([CONTENT_TAG]);
+    expect(sectionsOf(await homeMarkup())).toEqual(["hero", "problem", "examples", "control", "questions", "price", "closing"]);
+    expect(await home()).toContain("A new headline");
+    expect(sectionsOf(await pageMarkup(createElement(V1Faq, { version: "v1" })))).toEqual(["page", "getting-started", "cora-and-the-ideas", "price-and-billing"]);
+    expect(row(await pagesScreen(), "home")).toContain("No drafts waiting");
+    expect(row(await pagesScreen(), "home")).toContain("Sections changed from the original");
+
+    // Undo: the site is what it was, and the drafts are still there.
+    expect(await undoPublishAction()).toMatchObject({ status: "ok" });
+    expect(sectionsOf(await homeMarkup())).toEqual(["hero", "problem", "examples", "compounds", "control", "price", "questions", "closing"]);
+    expect(await draftSections()).toEqual({ home: { order: SWAPPED, off: ["compounds"] }, faq: { order: [], off: ["zack-and-privacy"] } });
+
+    // The page's reset: Home's sections only. The text and the other page's sections stay.
+    expect(await press("home", "reset")).toMatchObject({ status: "ok", message: "The sections of this page are back as they were originally. Saved as a draft: visitors see no change until you publish." });
+    expect(await readStored(current)).toMatchObject({ draft: { text: { [HEADLINE]: "A new headline" }, sections: { faq: { order: [], off: ["zack-and-privacy"] } } } });
+    expect(panel(await editorScreen("home"))).toEqual(HOME);
+    expect(await editorScreen("home")).not.toContain("data-sections-reset");
+  });
+
+  it("publishes only the review that was read: a section switched after the list was made changes nothing (KTD11)", async () => {
+    await press("home", "off", "compounds");
+    const key = await keyNow();
+    await press("home", "off", "price");
+    expect(await publishAction(form({ review: key }))).toMatchObject({ status: "error" });
+    expect((await readStored(current)).published.sections).toEqual({});
+    expect(cache.tags).toEqual([]);
   });
 });
 

@@ -3,8 +3,8 @@ import { connection } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
 import { getAmounts } from "@/lib/site/amounts";
-import { asRead, draftChanges, namesFilled, reviewKey, wordingOf, wordingWarnings } from "@/lib/site/content/check";
-import { PAGES_ADDRESS, editorAddress, fieldAnchor, fieldLabelWith, fieldPlace } from "@/lib/site/content/labels";
+import { asRead, draftChanges, linkWarnings, namesFilled, reviewKey, sectionChanges, wordingOf, wordingWarnings } from "@/lib/site/content/check";
+import { PAGES_ADDRESS, editorAddress, fieldAnchor, fieldLabelWith, fieldPlace, sectionsAnchor } from "@/lib/site/content/labels";
 import { siteRegistry } from "@/lib/site/content/registry";
 import { readStored } from "@/lib/site/content/store";
 import { Unreadable, count } from "../parts";
@@ -21,6 +21,13 @@ import { PublishButton, UndoPublish } from "../publish-controls";
  *
  * The button carries a fingerprint of this list. The server publishes only
  * when the drafts, the site and the warnings are still the ones shown here.
+ *
+ * A PAGE'S SECTIONS (plan U6, R7, R17). A section switched off or on, or
+ * moved, is listed with the page's other changes as one plain sentence, and
+ * counts as one change. Where a link of the site would then point at a
+ * section that is switched off, a second kind of warning says which link.
+ * It does not block either, and is not an override of a wording rule, so it
+ * is not written to the log.
  *
  * EVERY TEXT IS SHOWN AS A VISITOR WILL READ IT: a name in braces is replaced
  * by its amount ("US$200", never "{monthlyUsd}"), and a line under the text
@@ -48,7 +55,10 @@ export default async function ReviewScreen() {
   const warnings = wordingWarnings(changes, amounts);
   /** A field's name, with its item's draft wording as a visitor reads it. */
   const named = (field: Parameters<typeof fieldLabelWith>[0]) => fieldLabelWith(field, (id) => asRead(wordingOf(stored.draft, id), amounts));
-  const pages = siteRegistry.pages.filter((page) => changes.some((change) => change.field.page === page.id));
+  const moves = sectionChanges(stored);
+  const links = linkWarnings(stored);
+  const total = changes.length + moves.length;
+  const pages = siteRegistry.pages.filter((page) => changes.some((change) => change.field.page === page.id) || moves.some((change) => change.page.id === page.id));
   const where = (fieldId: string, pageId: string) => `${editorAddress(pageId)}#${fieldAnchor(fieldId)}`;
 
   return (
@@ -63,18 +73,32 @@ export default async function ReviewScreen() {
         <p className="text-small text-ink-2">Read what will change. Nothing here is on the site until you press the publish button at the foot of this screen.</p>
       </header>
 
-      {changes.length === 0 ? (
+      {total === 0 ? (
         <p data-nothing className="text-small">
           Nothing is waiting to be published. Everything you have saved is on the site.
         </p>
       ) : (
         <div data-changes>
-          <h2 className="text-title">What will change: {count(changes.length, "text", "texts")}</h2>
+          <h2 className="text-title">What will change: {[changes.length > 0 ? count(changes.length, "text", "texts") : "", moves.length > 0 ? count(moves.length, "change to sections", "changes to sections") : ""].filter(Boolean).join(" and ")}</h2>
           <div className="mt-4 space-y-6">
             {pages.map((page) => (
               <div key={page.id}>
                 <h3 className="text-small font-[620]">{page.label}</h3>
                 <ul className="mt-2 space-y-3">
+                  {moves
+                    .filter((change) => change.page.id === page.id)
+                    .map((change) => (
+                      <li key={`${change.kind}:${change.section.id}`} data-section-change={change.kind} className="min-w-0 rounded-[8px] border border-rule bg-surface p-4">
+                        <p className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-small">
+                          <span data-says className={`min-w-0 font-[600] ${wrap}`}>
+                            {change.says}
+                          </span>
+                          <Link href={`${editorAddress(page.id)}#${sectionsAnchor(page.id)}`} className="tlink">
+                            Edit<span className="sr-only">: the sections of {page.label}</span>
+                          </Link>
+                        </p>
+                      </li>
+                    ))}
                   {changes
                     .filter((change) => change.field.page === page.id)
                     .map((change) => {
@@ -160,16 +184,37 @@ export default async function ReviewScreen() {
         </div>
       )}
 
+      {links.length > 0 && (
+        <div data-link-warnings className="rounded-[8px] border border-error bg-surface p-5">
+          <h2 className="text-title">Link warnings: {links.length}</h2>
+          <p className="mt-2 text-small text-ink-2">
+            {links.length === 1 ? "A link of the site points" : "Links of the site point"} at a section that is switched off. You decide: switch the section back on, or publish anyway. Nothing breaks: the link opens the page at its top.
+          </p>
+          <ul className="mt-4 space-y-4">
+            {links.map((warning) => (
+              <li key={warning.href} data-link-warning={warning.href} className={`min-w-0 text-small ${wrap}`}>
+                <p>{warning.says}</p>
+                <p className="mt-1">
+                  <Link href={`${editorAddress(warning.page.id)}#${sectionsAnchor(warning.page.id)}`} className="tlink">
+                    Go to the sections of {warning.page.label}
+                  </Link>
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div data-publish-panel className="space-y-4 rounded-[8px] border border-rule-strong bg-surface p-5">
         <h2 className="text-title">Publish</h2>
-        {changes.length > 0 && (
+        {total > 0 && (
           <p data-all className="text-small">
-            <strong className="font-[620]">Publishing is for the whole site, not one page.</strong> It puts {changes.length === 1 ? "the 1 change" : `all ${changes.length} changes`} above on the site at once ({pages.map((page) => page.label).join(", ")}), for every visitor,
+            <strong className="font-[620]">Publishing is for the whole site, not one page.</strong> It puts {total === 1 ? "the 1 change" : `all ${total} changes`} above on the site at once ({pages.map((page) => page.label).join(", ")}), for every visitor,
             within a few seconds. You can take it back afterwards with Undo last publish.
           </p>
         )}
         {/* Always rendered, so its message stays on screen once the list above is empty. */}
-        <PublishButton review={reviewKey(stored, warnings)} count={changes.length} warnings={warnings.length} />
+        <PublishButton review={reviewKey(stored, warnings)} count={total} warnings={warnings.length + links.length} />
       </div>
 
       <div className="space-y-3">
