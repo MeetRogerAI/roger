@@ -1221,3 +1221,5 @@ alter table picks add column if not exists adoption_seen_at timestamptz;
 -- already runs, and its What's better line. Unused while v3.coraUpgradesOn is off.
 alter table picks add column if not exists kind text not null default 'new' check (kind in ('new', 'upgrade'));
 alter table picks add column if not exists whats_better text;
+-- picks by member (B3 Unit 4 review): the pipeline and measures look up each member's first list.
+create index if not exists picks_user on picks (user_id);

@@ -30,6 +30,7 @@ export async function saveLead(_prev: ActionState, fd: FormData): Promise<Action
   if (!EMAIL.test(email)) return { status: "error", message: "Enter a valid email address." };
   if (!hasDb()) return { status: "error", message: "Sign-ups aren’t switched on yet. Try again soon." };
   const utm = clean(fd.get("utm"), 200);
+  // A re-save moves created_at (last touch) and never first_seen_at (first touch, B3 Unit 4: the pipeline).
   await sql`insert into leads (email, kind, persona, utm) values (${email}, ${kind}, ${persona}, ${utm}) on conflict (email, kind, persona) do update set created_at = now()`;
   if (kind === "pack") {
     (await cookies()).set(`roger-pack-${persona}`, "1", { maxAge: 60 * 60 * 24 * 365, httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production" });

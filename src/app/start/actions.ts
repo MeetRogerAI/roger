@@ -69,6 +69,7 @@ async function leadFrom(fd: FormData, kind: "not_open" | "not_ready"): Promise<S
     const ip = clientIp(await headers());
     if (!(await hit(`lead:ip:${ip}`, limits.leadPerIp))) return { status: "error", message: "Too many tries from here. Try again in an hour." };
     const utm = parseStartParams({ utm: field(fd, "utm", 200) }).utm;
+    // A re-save moves created_at (last touch) and never first_seen_at (first touch, B3 Unit 4: the pipeline).
     await query(`insert into leads (email, kind, persona, utm) values ($1, $2, 'v3', $3) on conflict (email, kind, persona) do update set created_at = now()`, [email, kind, utm]);
     await rememberEmail(email);
   } catch (e) {

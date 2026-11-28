@@ -464,7 +464,7 @@ flowchart LR
 
 **Verification:** Every new run and list row has a version (or null with a logged reason). The memo means each file is hashed once per process.
 
-- [ ] **Unit 3: Loop measures and `/admin/measures`**
+- [x] **Unit 3: Loop measures and `/admin/measures`**
 
 **Goal:** R16, the measures half, with a hand-calculation test (success criterion).
 
@@ -514,7 +514,7 @@ flowchart LR
 
 **Verification:** The seeded test's numbers match the hand arithmetic, and the page is readable at 375px.
 
-- [ ] **Unit 4: The pipeline and `/admin/pipeline`**
+- [x] **Unit 4: The pipeline and `/admin/pipeline`**
 
 **Goal:** R16, the pipeline half: every person from first touch through trial to paying, with dates and source.
 
