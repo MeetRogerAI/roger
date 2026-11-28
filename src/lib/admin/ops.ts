@@ -1,12 +1,14 @@
 import { contributionStatus } from "@/lib/billing/contribution";
 import { closeTrialAt } from "@/lib/billing/claims";
+import { HAS_CARD_SQL } from "@/lib/billing/has-card";
 import { amount, money, moneyCents, type Currency } from "@/lib/billing/prices";
 import { addDays, currentMonday, wallParts, wallToInstant } from "@/lib/clock";
 import { loadUsers } from "@/lib/cora/context";
 import { eligiblePlays } from "@/lib/cora/eligible";
 import type { Query } from "@/lib/db-query";
+import { HELD_WEEK_SQL } from "@/lib/app/held";
 import { nextMonthly } from "@/lib/app/status";
-import { trialClocks } from "@/lib/housekeeping/trial";
+import { noCardClocks, trialClocks } from "@/lib/housekeeping/trial";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -17,13 +19,14 @@ import type { V3Settings } from "@/lib/v3-settings";
  */
 
 /** Why a user needs attention. */
-export type Attention = "no_run" | "flagged_run" | "rejected_run" | "held" | "trial_closing" | "few_eligible";
+export type Attention = "no_run" | "flagged_run" | "rejected_run" | "held" | "held_no_card" | "trial_closing" | "few_eligible";
 
 export const ATTENTION_LABELS: Record<Attention, string> = {
   no_run: "No run by Sunday 8:00 PM",
   flagged_run: "Run flagged",
   rejected_run: "Run rejected",
   held: "Payment held",
+  held_no_card: "First list held, no card",
   trial_closing: "Trial closes within 5 days",
   few_eligible: "Fewer than 3 eligible plays",
 };
@@ -69,6 +72,8 @@ export type OpsRow = {
   currency: Currency | null;
   freeListsUsed: number;
   stripeCustomer: string | null;
+  /** A card is saved (billing/has-card.ts); a trial without one is waiting for it. */
+  hasCard: boolean;
   cancelRequested: boolean;
   /** A switch to one at a time waiting for the paid month's end (also on cancel_requested_at, but not a cancellation). */
   switching: boolean;
@@ -88,10 +93,12 @@ export type OpsRow = {
   eligible: number | null;
   /** When the trial closes, if it is heading that way. */
   closesAt: string | null;
+  /** A trial with no card whose first list is held (app/held.ts HELD_WEEK_SQL): waiting for the card. */
+  heldNoCard: boolean;
   attention: Attention[];
 };
 
-type Facts = Pick<OpsRow, "status" | "holdReason" | "plan" | "sharing" | "order" | "run" | "eligible" | "closesAt" | "freeListsUsed">;
+type Facts = Pick<OpsRow, "status" | "holdReason" | "plan" | "sharing" | "order" | "run" | "eligible" | "closesAt" | "freeListsUsed"> & Partial<Pick<OpsRow, "heldNoCard">>;
 
 /**
  * Who is expected to send a run this week: a live account with Zack on. One
@@ -114,6 +121,8 @@ export function attentionFor(f: Facts, o: { now: Date; week: string; freeRuns: n
   if (f.run?.status === "flagged") out.push("flagged_run");
   if (f.run?.status === "rejected") out.push("rejected_run");
   if (f.status === "held") out.push("held");
+  // Plan 2026-11-26-001, Unit 9 (origin R27): every no-card member with a held list, however recent. No age threshold.
+  if (f.heldNoCard) out.push("held_no_card");
   if (f.closesAt && Date.parse(f.closesAt) - o.now.getTime() <= CLOSING_SOON_DAYS * 86_400_000) out.push("trial_closing");
   if (f.eligible !== null && f.eligible < FEW_ELIGIBLE && (f.status === "trial" || f.status === "active")) out.push("few_eligible");
   return out;
@@ -126,10 +135,10 @@ export function filterOps(rows: OpsRow[], f: OpsFilter): OpsRow[] {
   return rows.filter((r) => (!f.attention || r.attention.length > 0) && (!f.status || statusKey(r) === f.status) && (!f.path || r.path === f.path));
 }
 
-export const STATUS_KEYS = ["signup", "trial", "monthly", "per_run", "switching", "held", "sponsored", "cancelled", "closed"] as const;
+export const STATUS_KEYS = ["signup", "trial", "trial_no_card", "monthly", "per_run", "switching", "held", "sponsored", "cancelled", "closed"] as const;
 
-/** The status column's kind (spec B.12): trial, monthly, one at a time, switching, payment held, sponsored, cancelled. */
-export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "cancelRequested"> & Partial<Pick<OpsRow, "switching" | "switched">>): (typeof STATUS_KEYS)[number] {
+/** The status column's kind (spec B.12): trial (with or without a card), monthly, one at a time, switching, payment held, sponsored, cancelled. */
+export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "cancelRequested"> & Partial<Pick<OpsRow, "switching" | "switched" | "hasCard">>): (typeof STATUS_KEYS)[number] {
   if (r.status === "held") return "held";
   if (r.status === "cancelled" || r.status === "closed" || r.status === "signup") return r.status;
   // Monthly to one at a time, waiting for the paid month's end: a switch, not a cancellation.
@@ -139,6 +148,8 @@ export function statusKey(r: Pick<OpsRow, "status" | "plan" | "sponsored" | "can
   if (r.sponsored) return "sponsored";
   // One at a time to monthly, waiting for the first monthly charge: a paying member, not a trial.
   if (r.status === "trial" && r.switched) return "monthly";
+  // Sign-up ends without a card: a trial waiting for its card (billing/has-card.ts).
+  if (r.status === "trial" && r.hasCard === false) return "trial_no_card";
   if (r.status === "trial") return "trial";
   return r.plan === "per_run" ? "per_run" : "monthly";
 }
@@ -176,6 +187,7 @@ type Row = {
   quote: { totalCents: number; currency: Currency; week: string } | null;
   first_charge_at: string | null;
   trial_started_at: string | null;
+  has_card: boolean;
   admin_note: string;
   order_status: string | null;
   order_cents: number | null;
@@ -188,13 +200,14 @@ type Row = {
   last_signin: string | null;
   last_opened: string | null;
   last_first_week: string | null;
+  held_no_card: boolean;
 };
 
 const ROW_SQL = `
   select u.id, u.email, u.name, u.path, u.not_ready, u.status, u.hold_reason, u.plan, (u.sponsor_id is not null) as sponsored, u.sharing, u.currency,
          u.free_lists_used, u.stripe_customer, u.stripe_subscription, (u.cancel_requested_at is not null) as cancel_requested, u.quote,
          (u.cancel_requested_at is not null and u.plan_change_to = 'per_run') as switching, (u.switched_from_per_run_at is not null) as switched,
-         u.first_charge_at::text, u.trial_started_at::text, u.admin_note,
+         u.first_charge_at::text, u.trial_started_at::text, ${HAS_CARD_SQL("u")} as has_card, u.admin_note,
          o.status as order_status, o.amount_cents as order_cents,
          r.status as run_status, r.route as run_route, r.received_at::text as run_at,
          cw.outcome as cw_outcome,
@@ -202,7 +215,8 @@ const ROW_SQL = `
          (select count(*)::int from picks p where p.user_id = u.id and p.week_of = $1 and not p.dry_run and p.delivered_at is not null) as delivered,
          (select max(s.created_at)::text from sessions s where s.user_id = u.id) as last_signin,
          (select max(p.opened_at)::text from picks p where p.user_id = u.id) as last_opened,
-         (select to_char(c.week_of, 'YYYY-MM-DD') from charge_attempts c where c.user_id = u.id and c.purpose = 'first_charge' order by c.claimed_at desc limit 1) as last_first_week
+         (select to_char(c.week_of, 'YYYY-MM-DD') from charge_attempts c where c.user_id = u.id and c.purpose = 'first_charge' order by c.claimed_at desc limit 1) as last_first_week,
+         exists (select 1 from cora_user_weeks cw join cora_weeks w on w.week_of = cw.week_of where ${HELD_WEEK_SQL}) as held_no_card
   from users u
   left join orders o on o.user_id = u.id and o.week_of = $1
   left join runs r on r.user_id = u.id and r.week_of = $1 and not r.is_test and r.status <> 'deleted'
@@ -231,6 +245,7 @@ async function moneyOf(q: Query, r: Row, s: V3Settings, now: Date): Promise<{ te
   if (r.status === "held") return { text: `Held: ${(r.hold_reason ?? "").replace(/_/g, " ")}`, missesUsed: null };
   if (r.sponsored) return { text: "Sponsored", missesUsed: null };
   if (r.status === "trial") {
+    if (!r.has_card && !r.switched) return { text: "No card yet", missesUsed: null };
     if (r.plan === "per_run") return { text: r.order_status ? `Order: ${r.order_status}` : "One at a time, no order", missesUsed: null };
     const left = s.freeRuns - r.free_lists_used;
     if (left > 0 && !r.switched) return { text: `${left} free list${left === 1 ? "" : "s"} left`, missesUsed: null };
@@ -253,8 +268,16 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
   const rows = await q<Row>(ROW_SQL, [week, o.userId ?? null]);
   const eligible = await eligibleCounts(q, week, o.userId ? [o.userId] : undefined);
   const only = o.userId ? [o.userId] : undefined;
-  const clocks = [...(await trialClocks(q, o.settings, o.now, only)), ...(await trialClocks(q, o.settings, o.now, only, "no_charge"))];
+  const noCard = await noCardClocks(q, o.settings, o.now, only);
+  const clocks = [
+    ...(await trialClocks(q, o.settings, o.now, only)),
+    ...(await trialClocks(q, o.settings, o.now, only, "no_charge")),
+    // Plan 2026-11-26-001, Unit 7: a trial still waiting for its card closes on its own clock.
+    ...noCard,
+  ];
   const noListCloses = new Map(clocks.map((t) => [t.id, t.closesAt]));
+  // Review fixes (Unit 7), F5: a never-teasered close waits while a run is with Cora, so its date is shown but not flagged.
+  const closeWaits = new Set(noCard.filter((t) => !t.firstTeaserAt && t.runWaiting).map((t) => t.id));
   const out: OpsRow[] = [];
   for (const r of rows) {
     const m = await moneyOf(q, r, o.settings, o.now);
@@ -268,6 +291,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       eligible: eligible.has(r.id) ? eligible.get(r.id)! : null,
       closesAt: closesAt(r, o.settings, noListCloses),
       freeListsUsed: r.free_lists_used,
+      heldNoCard: r.held_no_card,
     };
     out.push({
       ...base,
@@ -279,6 +303,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       sponsored: r.sponsored,
       currency: r.currency,
       stripeCustomer: r.stripe_customer,
+      hasCard: r.has_card,
       cancelRequested: r.cancel_requested,
       switching: r.switching,
       switched: r.switched,
@@ -288,7 +313,7 @@ export async function loadOps(q: Query, o: { now: Date; settings: V3Settings; us
       lastSignIn: r.last_signin,
       lastOpened: r.last_opened,
       note: r.admin_note,
-      attention: attentionFor(base, { now: o.now, week, freeRuns: o.settings.freeRuns }),
+      attention: attentionFor(closeWaits.has(r.id) ? { ...base, closesAt: null } : base, { now: o.now, week, freeRuns: o.settings.freeRuns }),
     });
   }
   return { week, rows: out };

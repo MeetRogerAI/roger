@@ -1,5 +1,5 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /** Sent once when the first test run arrives, and once when the first real run arrives. */
 export function zackConnectedEmail(o: { test: boolean; weekOf: string }): Rendered {

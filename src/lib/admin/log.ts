@@ -2,8 +2,7 @@ import type { Query } from "@/lib/db-query";
 
 /**
  * The admin action log (spec B.12, spec check 31). Every admin action, on a
- * user or not, writes one row here with who did it: the admin's email, or
- * "admin (password)" while the shared-password login still exists.
+ * user or not, writes one row here with who did it: the admin's email.
  *
  * Written after the action succeeds, with what it did in `detail`, so the
  * log never claims something that did not happen. Never put a secret (a

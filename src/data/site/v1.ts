@@ -199,8 +199,8 @@ const questions: V1QuestionGroup[] = [
       },
       {
         id: "why-a-card",
-        q: "Why do you need a card for a free trial?",
-        a: "So that nothing changes on your {firstPaidList} Monday. If you don’t want to continue, cancel in one click before then and you pay nothing.",
+        q: "When do you ask for my card?",
+        a: "When your first Cora Curation is ready. It is not charged then: the first charge comes with your {firstPaidList} Cora Curation. If you don’t want to continue, cancel in one click before then and you pay nothing.",
         on: [],
       },
       {
@@ -239,7 +239,8 @@ export const v1 = {
     signIn: "Sign in",
     openApp: "Open Roger",
   },
-  cardLine: "Card required. Charged only with your {firstPaidList} Cora Curation.",
+  // Payment at the first Cora Curation (main, plan 2026-11-26-001, Peter): no card at sign-up. The agreed trial line, in this site's naming.
+  cardLine: "We ask for your card when your first Cora Curation is ready.",
   /** Under the price (Peter's words, November 27, 2026). The week is the one of the first paid Cora Curation, from the settings. */
   trialLine: "Your first {freeLists} Cora Curations are free. Payment starts in week {firstPaidWeek}.",
   price: {
@@ -446,9 +447,9 @@ export const v1 = {
     firstWeeks: {
       title: "Your first {freeLists} weeks",
       steps: [
-        { id: "start", text: "You start, and we ask for a card. It is not charged." },
+        { id: "start", text: "You start. No card is needed yet." },
         { id: "zack-runs", text: "Zack runs on Sunday." },
-        { id: "arrive", text: "Your first {freeLists} Cora Curations arrive, one each Monday. They are free." },
+        { id: "arrive", text: "Your first {freeLists} Cora Curations arrive, one each Monday. They are free. We ask for your card when the first one is ready, and it is not charged then." },
         { id: "email", text: "After your {lastFreeList} Cora Curation, we email you with what happens next." },
         { id: "charged", text: "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing." },
         { id: "closes", text: "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge." },

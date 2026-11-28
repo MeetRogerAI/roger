@@ -18,18 +18,21 @@ import {
 import type Stripe from "stripe";
 import { syncStripeEmails } from "@/lib/auth/email-change";
 import { stripe } from "@/lib/billing/stripe";
-import { stripeGateway } from "@/lib/billing/gateway";
+import { stripeGateway, type CardGateway } from "@/lib/billing/gateway";
 import { handleStripeEvent } from "@/lib/billing/webhook";
-import { closeFailedWeekOrders, sendOrderPrompts, voidLeftoverInvoices } from "@/lib/billing/orders";
+import { closeFailedWeekOrders, voidLeftoverInvoices } from "@/lib/billing/orders";
 import { purgeFreeRuns } from "@/lib/site/free-run";
 import { relabelOrphanContributors } from "@/lib/cora/contributors";
-import { applyRetention, cleanUpExpired } from "./retention";
-import { closeTrialsWithNoList, sendTrialNudges, sendUploadReminders } from "./trial";
+import { applyIdleRetention, applyRetention, cleanUpExpired, purgeOldRecords } from "./retention";
+import { closeNoCardTrials, closeTrialsWithNoList, sendHeldReminders, sendTrialNudges, sendUploadReminders } from "./trial";
+import { noCardClocks, type NoCardClock } from "./clocks";
+import { sendUnsentWelcomes } from "@/lib/signup/finish";
 import { finishCancellations } from "@/lib/billing/cancel";
 import { endDueSubscriptions, holdUnpaidRenewals } from "@/lib/billing/renewals";
 import { applyDueSwitches } from "@/lib/billing/switch";
 import { sendFirstChargeReminders } from "@/lib/billing/quote";
-import { deliverLate } from "@/lib/cora/send-job";
+import { deliverLate, sendUnsentTeasers } from "@/lib/cora/send-job";
+import { sendPendingUnlocks } from "@/lib/cora/unlock";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from "@/lib/billing/first-charge";
 
 /**
@@ -42,7 +45,18 @@ import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from 
  * by then is left to the next pass. Cheap database-only tasks run first.
  */
 export const PASS_SECONDS = 240;
-export type PassContext = { /** Epoch ms. */ deadline: number; /** The real clock (tests that simulate time pass their own); defaults to now. */ realNow?: Date };
+export type PassContext = {
+  /** Epoch ms. */ deadline: number;
+  /** The real clock (tests that simulate time pass their own); defaults to now. */ realNow?: Date;
+  /** Reads shared by several tasks of one pass (runHourly makes one per pass). */ shared?: Map<string, Promise<unknown>>;
+};
+/**
+ * What the paid-cycle tasks are given: the charge's gateways, plus Stripe's
+ * card gateway for the no-card close (review fixes Unit 10, T1). `card`
+ * absent: the task asks `stripeGateway()` (null without a key); `null`: Stripe
+ * is not set up. The route passes it; scenarios pass their fake Stripe.
+ */
+export type FullDeps = ChargeDeps & { card?: CardGateway | null };
 /**
  * A task marked `always` needs neither the paid cycle nor Stripe, and runs in
  * its place in the list even when the cycle is not live or Stripe is not set
@@ -50,14 +64,37 @@ export type PassContext = { /** Epoch ms. */ deadline: number; /** The real cloc
  * when both are there.
  */
 export type AlwaysDeps = Pick<ChargeDeps, "settings" | "now">;
+// The plan tasks (switches, cancellations) are handed no card gateway, as before this seam: only the no-card close reads it.
 export type HourlyTask =
-  | { name: string; always?: false; run: (q: Query, d: ChargeDeps, ctx: PassContext) => Promise<unknown> }
+  | { name: string; always?: false; run: (q: Query, d: FullDeps, ctx: PassContext) => Promise<unknown> }
   | { name: string; always: true; run: (q: Query, d: AlwaysDeps, ctx: PassContext) => Promise<unknown> };
 /** What a pass is given: the full set, or the same with no gateway when Stripe is not set up. */
-export type HourlyDeps = ChargeDeps | (Omit<ChargeDeps, "gw"> & { gw: null });
+export type HourlyDeps = FullDeps | (Omit<FullDeps, "gw"> & { gw: null });
 
 export const CYCLE_NOT_LIVE = "The cycle is not live.";
 export const STRIPE_NOT_SET_UP = "Stripe is not configured.";
+
+/** The card gateway a task uses: the one given, else Stripe's own. */
+export const hourlyCard = (d: FullDeps): CardGateway | null => (d.card === undefined ? stripeGateway() : d.card);
+
+/**
+ * The no-card clocks, read once per pass and shared by the nudges, the held
+ * reminders and the close (review fixes Unit 7, F3). Each close re-checks the
+ * account when it writes, and each email goes through the notifications
+ * claim, so a read from earlier in the pass is safe. Without a pass map (a
+ * task run on its own) each task reads its own.
+ */
+function passClocks(q: Query, d: ChargeDeps, c: PassContext): () => Promise<NoCardClock[]> {
+  return () => {
+    if (!c.shared) return noCardClocks(q, d.settings, d.now);
+    let p = c.shared.get("noCardClocks") as Promise<NoCardClock[]> | undefined;
+    if (!p) {
+      p = noCardClocks(q, d.settings, d.now);
+      c.shared.set("noCardClocks", p);
+    }
+    return p;
+  };
+}
 
 export const HOURLY_TASKS: HourlyTask[] = [
   // Expired links, sessions, Google sign-in states and rate counters (the database's clock, never "as of"). It only
@@ -74,16 +111,30 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // say "unknown author". Deleting an account does this itself, so this pass is the backfill for accounts deleted
   // before that and the safety net after. It reads no setting and needs neither the paid cycle nor Stripe: always.
   { name: "unknown_authors", always: true, run: (q) => relabelOrphanContributors(q) },
+  // Runs of one-at-a-time and held members idle for a year (privacy P3). Never ahead of the real clock.
+  { name: "idle_retention", run: (q, d) => applyIdleRetention(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
+  // Old sign-up interest, notification and Stripe event records (privacy P6). Never ahead of the real clock.
+  { name: "old_records", run: (q, d) => purgeOldRecords(q, { now: new Date(Math.min(d.now.getTime(), Date.now())) }) },
   // Claims left open past 15 minutes: looked up by claim id, then repeated with the same key (the reconcile's first step).
   { name: "charge_takeover", run: (q, d) => settleOpenClaims(q, d) },
   // Retries on days 1, 3 and 7, and amount-changed charges after 24 hours.
   { name: "charge_retries", run: (q, d) => dueRetries(q, d) },
   // After the retries, so a day-7 attempt runs before its trial closes.
   { name: "close_unpaid_trials", run: (q, d) => closeUnpaidTrials(q, d) },
-  // Unit 18. A trial with no run: "Zack hasn't sent a report yet" on days 3, 10 and 17.
-  { name: "trial_nudges", run: (q, d, c) => sendTrialNudges(q, { ...d, deadline: c.deadline }) },
+  // Plan 2026-11-26-001, Unit 2. A welcome that failed when sign-up ended (a server action has no retry): the free-tool
+  // claim re-run and the welcome sent, for trials with no card that consented since this flow shipped.
+  { name: "welcome_unsent", run: (q, d, c) => sendUnsentWelcomes(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
+  // Unit 18. A trial with no run: "Zack hasn't sent a report yet" on days 3, 10 and 17 (from the card, or for a
+  // no-card trial with no teaser yet, from consent: plan 2026-11-26-001, Unit 7).
+  { name: "trial_nudges", run: (q, d, c) => sendTrialNudges(q, { ...d, deadline: c.deadline, noCard: passClocks(q, d, c) }) },
   // Day 21 with no first list (weeks with no list because of Roger not counted): closed, no charge, one email.
   { name: "trial_no_list_close", run: (q, d, c) => closeTrialsWithNoList(q, { ...d, deadline: c.deadline }) },
+  // Plan 2026-11-26-001, Unit 7. A no-card trial with a held list: "Your ideas are waiting" on days 2 and 7 after the first teaser.
+  { name: "held_reminders", run: (q, d, c) => sendHeldReminders(q, { ...d, deadline: c.deadline, noCard: passClocks(q, d, c) }) },
+  // Unit 7. No card: closed 14 days after the first teaser, or 21 days after consent with no teaser (failed Cora weeks
+  // and no-eligible weeks extend; held lists never do), one closing email. A card confirmed on the stored Payment
+  // session is saved instead (review fixes Unit 7, F1), so the close is given the pass's card gateway (Stripe's by default).
+  { name: "no_card_close", run: (q, d, c) => closeNoCardTrials(q, { ...d, deadline: c.deadline, noCard: passClocks(q, d, c), card: hourlyCard(d) }) },
   // Sunday 6:00 PM in the member's time zone: upload-route members with no run yet.
   { name: "upload_reminders", run: (q, d, c) => sendUploadReminders(q, { ...d, deadline: c.deadline }) },
   // 48 hours before a first charge: the reminder with the stored date and amount.
@@ -94,6 +145,11 @@ export const HOURLY_TASKS: HourlyTask[] = [
   { name: "close_failed_week_orders", run: (q, d) => closeFailedWeekOrders(q, { query: d.query, transport: d.transport, sleep: d.sleep }) },
   // A list whose charge settled after Monday is delivered then.
   { name: "deliver_late", run: (q, d) => deliverLate(q, { settings: d.settings, now: d.now, gw: d.gw, adjust: d.adjust, query: d.query, transport: d.transport, sleep: d.sleep }) },
+  // Plan 2026-11-26-001, Unit 3. A held list's titles-only teaser (no card yet) that the Monday send could not send.
+  { name: "teaser_unsent", run: (q, d, c) => sendUnsentTeasers(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
+  // Plan 2026-11-26-001, Unit 5. A card saved after a held list whose unlock did not finish (the list undelivered, or
+  // delivered without its email): delivered and emailed now, whatever the list's age (deliver_late stops at 8 days).
+  { name: "unlock_pending", run: (q, d, c) => sendPendingUnlocks(q, { settings: d.settings, now: d.now, query: d.query ?? q, transport: d.transport, sleep: d.sleep, deadline: c.deadline }) },
   // The contributor rule: misses settled (forgiven, or the adjustment), then any Stripe items due (a carried one after its renewal).
   { name: "contributions", run: (q, d) => processContributions(q, d) },
   // Stripe deletes of dropped adjustment items that failed, until Stripe confirms them.
@@ -105,15 +161,17 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // A paid user left held or in trial is made active.
   { name: "repair_paid_users", run: (q, d) => repairPaidUsers(q, d) },
   // Unit 15. A plan switch booked after a Monday cutoff, from the Tuesday.
-  { name: "booked_switches", run: async (q, d) => (d.plans ? applyDueSwitches(q, { ...d, plans: d.plans }) : "Stripe is not set up.") },
+  { name: "booked_switches", run: async (q, d) => (d.plans ? applyDueSwitches(q, { ...d, card: undefined, plans: d.plans }) : "Stripe is not set up.") },
   // A switch to one at a time whose paid month ended without its webhook.
   { name: "ended_subscriptions", run: async (q, d) => (d.plans ? endDueSubscriptions(q, { ...d, plans: d.plans }) : "Stripe is not set up.") },
   // A renewal still unpaid on day 7: lists are held until it is paid.
   { name: "renewal_holds", run: (q, d) => holdUnpaidRenewals(q, d) },
   // A cancellation whose card removal or confirmation email failed.
-  { name: "finish_cancellations", run: async (q, d) => (d.plans ? finishCancellations(q, { ...d, plans: d.plans }) : "Stripe is not set up.") },
-  // Fridays: "Want a list this Monday?" to one-at-a-time users without an order (switchable in settings).
-  { name: "order_prompts", run: (q, d) => sendOrderPrompts(q, d) },
+  { name: "finish_cancellations", run: async (q, d) => (d.plans ? finishCancellations(q, { ...d, card: undefined, plans: d.plans }) : "Stripe is not set up.") },
+  // Fridays' "Want a list this Monday?" to one-at-a-time users is no longer sent (whole-branch review W2): ordering is
+  // gone from the app, so the email would point at nothing. The task stays registered, doing nothing; `sendOrderPrompts`
+  // is kept, dormant, with the per-run code until its cleanup after launch.
+  { name: "order_prompts", run: async () => "Ordering is off: monthly is the only plan." },
   // Stripe customers still holding an address the user has since changed (Unit 16).
   {
     name: "stripe_email_sync",
@@ -173,9 +231,9 @@ export async function reconcileStripe(q: Query, d: ChargeDeps, c: PassContext, g
 export async function runHourly(q: Query, d: HourlyDeps, tasks: HourlyTask[] = HOURLY_TASKS, o: { deadline?: number } = {}): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   // The cycle is checked first, as it was when Stripe was the route's own check.
-  const full: ChargeDeps | null = d.gw && d.settings.cycleLive ? d : null;
+  const full: FullDeps | null = d.gw && d.settings.cycleLive ? (d as FullDeps) : null;
   if (!full) out.skipped = d.settings.cycleLive ? STRIPE_NOT_SET_UP : CYCLE_NOT_LIVE;
-  const ctx: PassContext = { deadline: o.deadline ?? Date.now() + PASS_SECONDS * 1000 };
+  const ctx: PassContext = { deadline: o.deadline ?? Date.now() + PASS_SECONDS * 1000, shared: new Map() };
   for (const t of tasks) {
     if (!t.always && !full) continue;
     if (Date.now() >= ctx.deadline) {

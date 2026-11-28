@@ -232,14 +232,15 @@ describe("4 (P2): a first charge held because its amount changed", () => {
 
   it("the status line and the billing page state the new amount and when it is charged; switching says why not", async () => {
     const m = await member({ status: "held", hold: "amount_changed", quote });
-    const facts: StatusFacts = { status: "held", holdReason: "amount_changed", plan: "monthly", sponsored: false, sharing: "share", currency: "USD", freeListsUsed: 2, freeRuns: 2, quote, firstChargeAt: null, orderCents: null, now: SIX_AM };
+    const facts: StatusFacts = { status: "held", holdReason: "amount_changed", plan: "monthly", sponsored: false, sharing: "share", currency: "USD", freeListsUsed: 2, freeRuns: 2, quote, firstChargeAt: null, orderCents: null, hasCard: true, now: SIX_AM };
     const line = statusLine(facts, settings);
     expect(line).toContain("US$240");
     expect(line).toContain("Tuesday, December 15");
     const view = await loadBilling(query, m.id, { settings, now: SIX_AM });
     expect(view?.nextCharge).toContain("US$240");
     expect(view?.nextCharge).toContain("Tuesday, December 15");
-    expect(view?.offer).toMatchObject({ allowed: false, why: expect.stringContaining("amount changed") });
+    // Monthly only (plan 2026-11-26-001, Unit 9): the page offers no switch; switchPlan itself still says why not.
+    expect(view).not.toHaveProperty("offer");
     expect(await switchPlan(query, deps(SIX_AM), { userId: m.id, to: "per_run" })).toMatchObject({ ok: false, message: expect.stringContaining("amount changed") });
   });
 
@@ -341,7 +342,7 @@ describe("7 (P2, decision): no restart path yet", () => {
 
 describe("8 (P3): a renewal that failed, not yet held", () => {
   it("the status line says when lists pause", () => {
-    const f: StatusFacts = { status: "active", plan: "monthly", sponsored: false, sharing: "share", currency: "USD", freeListsUsed: 2, freeRuns: 2, quote: null, firstChargeAt: "2026-12-03T11:05:00Z", orderCents: null, renewalFailedAt: "2027-01-03T12:00:00Z", now: new Date("2027-01-05T12:00:00Z") };
+    const f: StatusFacts = { status: "active", plan: "monthly", sponsored: false, sharing: "share", currency: "USD", freeListsUsed: 2, freeRuns: 2, quote: null, firstChargeAt: "2026-12-03T11:05:00Z", orderCents: null, renewalFailedAt: "2027-01-03T12:00:00Z", hasCard: true, now: new Date("2027-01-05T12:00:00Z") };
     expect(statusLine(f, settings)).toBe("Your payment didn’t go through; Cora Curations pause on Sunday, January 10 unless it’s paid.");
   });
 });
@@ -424,6 +425,31 @@ describe("C (scenario tests): the Monday crons and the webhook's clock", () => {
     expect(await handleStripeEvent(query, fakeGateway(), event, { getSettings: async () => settings, query, transport, now: SIX_AM })).toBe("handled");
     const [u] = await query<{ status: string; first: string }>(`select status, to_char(first_charge_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as first from users where id = $1`, [m.id]);
     expect(u).toEqual({ status: "active", first: "2026-12-14T11:05:00Z" });
+  });
+});
+
+// S18 point a review: the receipt's tax goes with the amount paid only when the whole total was paid.
+describe("the receipt from a replayed invoice.paid", () => {
+  const paid = async (inv: Record<string, unknown>) => {
+    const m = await member({ status: "trial" });
+    const [c] = await query<{ id: string }>("insert into charge_attempts (user_id, purpose, week_of, attempt, outcome) values ($1, 'first_charge', $2, 1, 'unknown') returning id", [m.id, WEEK]);
+    const event = {
+      id: `evt_${c.id}`,
+      type: "invoice.paid",
+      data: { object: { id: "in_1", billing_reason: "subscription_create", currency: "usd", lines: { data: [] }, parent: { subscription_details: { subscription: `sub_${c.id}`, metadata: { claim_id: c.id } } }, ...inv } },
+    } as unknown as Stripe.Event;
+    sent = [];
+    expect(await handleStripeEvent(query, fakeGateway(), event, { getSettings: async () => settings, query, transport, now: SIX_AM })).toBe("handled");
+    return sent.find((x) => x.subject === "You’re subscribed")!.text;
+  };
+
+  it("gives the price plus the tax when the whole total was paid", async () => {
+    expect(await paid({ amount_paid: 22600, total: 22600, total_taxes: [{ amount: 2600 }] })).toContain("We charged US$226 (US$200 plus US$26 tax).");
+  });
+
+  it("says the amount in total with a credit balance (paid below the total), or with no tax given", async () => {
+    expect(await paid({ amount_paid: 12600, total: 22600, total_taxes: [{ amount: 2600 }] })).toContain("We charged US$126 in total.");
+    expect(await paid({ amount_paid: 22600, total: 22600 })).toContain("We charged US$226 in total.");
   });
 });
 

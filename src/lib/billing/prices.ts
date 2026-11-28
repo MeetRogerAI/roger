@@ -92,3 +92,33 @@ export function moneyCents(cents: number, currency: Currency): string {
 export function taxPhrase(currency: Currency): string {
   return currency === "CAD" ? "plus HST" : "plus tax where it applies";
 }
+
+/** The tax's name in a stated amount: "HST" for CAD, as in `taxPhrase`; "tax" otherwise. */
+export function taxName(currency: Currency): string {
+  return currency === "CAD" ? "HST" : "tax";
+}
+
+/**
+ * A charge total that includes tax, said as the price plus the tax (Peter,
+ * 2026-11-27, S18 point a): "CA$316.40 (CA$280 plus CA$36.40 HST)". With no
+ * tax collected (a US member) just the amount: "US$200". Never "tax
+ * included". When the tax in it is not known (an amount told before the tax
+ * was kept), "CA$316.40 in total".
+ */
+export function chargeWords(totalCents: number, currency: Currency, taxCents: number | null | undefined): string {
+  const total = moneyCents(totalCents, currency);
+  if (taxCents == null) return `${total} in total`;
+  if (taxCents <= 0) return total;
+  return `${total} (${moneyCents(totalCents - taxCents, currency)} plus ${moneyCents(taxCents, currency)} ${taxName(currency)})`;
+}
+
+/**
+ * A monthly amount from Stripe's preview, said as the price plus the tax
+ * (S18 point a): "CA$280 a month plus HST", or "US$200 a month" with no tax
+ * collected.
+ */
+export function monthlyWords(totalCents: number, currency: Currency, taxCents: number | null | undefined): string {
+  if (taxCents == null) return `${moneyCents(totalCents, currency)} a month in total`;
+  if (taxCents <= 0) return `${moneyCents(totalCents, currency)} a month`;
+  return `${moneyCents(totalCents - taxCents, currency)} a month plus ${taxName(currency)}`;
+}

@@ -22,7 +22,7 @@ vi.mock("@/lib/admin-auth", () => ({
 }));
 vi.mock("@/lib/db", () => ({ hasDb: () => who.hasDb }));
 // The layout's forms name these actions; none is called here.
-vi.mock("@/app/admin/actions", () => ({ signOutAction: async () => {}, signInAction: async () => ({ status: "idle" }) }));
+vi.mock("@/app/admin/actions", () => ({ signOutAction: async () => {} }));
 
 const { default: AdminLayout, instant } = await import("./layout");
 const { adminGroups } = await import("@/components/admin-ui");
@@ -41,15 +41,15 @@ beforeEach(() => {
   who.admin = false;
   who.hasDb = true;
   who.asked = [];
-  vi.stubEnv("ADMIN_PASSWORD", "hunter2");
   vi.stubEnv("ADMIN_EMAILS", "peter@example.com");
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_x");
 });
 
 describe("the admin layout", () => {
-  it("shows a visitor who is not an admin the two ways to sign in, and nothing that belongs to the admin", async () => {
+  it("shows a visitor who is not an admin the email-link sign-in only, and nothing that belongs to the admin", async () => {
     const markup = await render();
-    expect(markup).toContain('type="password"');
+    // The shared-password login is gone (launch list g-password): no password field.
+    expect(markup).not.toContain('type="password"');
     expect(markup).toContain('href="/signin?next=/admin"');
     for (const part of adminOnly) expect(markup, part).not.toContain(part);
   });

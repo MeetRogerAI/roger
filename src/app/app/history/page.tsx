@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { bricks, history } from "@/lib/app/week";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Every idea" };
 

@@ -50,13 +50,13 @@ export function confirmNewEmail(token: string): Rendered {
   });
 }
 
-/** Sign-up, step 2: confirm the address, then carry on to the plan step. */
+/** Sign-up, step 2: confirm the address, then carry on to Step 3 (Product and Pricing). */
 export function startConfirmEmail(token: string): Rendered {
   return renderEmail({
     subject: "Confirm your email to start Roger",
-    preview: "One click, then confirm your plan.",
+    preview: "One click, then the last step.",
     heading: "Confirm your email",
-    paragraphs: ["Use the button to confirm this address and carry on to your plan. The link works once, for the next 15 minutes."],
+    paragraphs: ["Use the button to confirm this address and carry on to the last step. The link works once, for the next 15 minutes."],
     button: { label: "Confirm and continue", url: appUrl(`/auth/confirm?t=${encodeURIComponent(token)}`) },
     after: ["If you didn’t start signing up for Roger, ignore this email."],
   });

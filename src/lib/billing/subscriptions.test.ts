@@ -1,0 +1,136 @@
+import Stripe from "stripe";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { isCouponGone } from "./gateway";
+import { classify, receiptTaxOf, stripeBilling, taxOf } from "./subscriptions";
+
+/**
+ * The first charge's Stripe calls with the promo locked in at card save
+ * (plan 2026-11-26-001, Unit 8): `discounts: [{coupon}]` on the preview and
+ * on subscription create, and Stripe's coupon errors as the Unit 4 spike
+ * recorded them (deleted → `resource_missing` on `discounts[0][coupon]`;
+ * expired → `coupon_expired` on `discounts`).
+ */
+function stubStripe(o: { createError?: unknown; previewError?: unknown; invoice?: Record<string, unknown> } = {}) {
+  const calls: { method: string; params: Record<string, unknown>; opts?: unknown }[] = [];
+  const s = {
+    prices: { retrieve: async (id: string) => ({ id, product: "prod_roger_monthly", tax_behavior: "exclusive" }) },
+    invoices: {
+      createPreview: async (params: Record<string, unknown>) => {
+        calls.push({ method: "invoices.createPreview", params });
+        if (o.previewError) throw o.previewError;
+        return {
+          total: params.discounts ? 25312 : 31640,
+          currency: "cad",
+          total_discount_amounts: params.discounts ? [{ amount: 5600, discount: "di_1" }] : [],
+          total_taxes: [{ amount: params.discounts ? 2912 : 3640 }],
+        };
+      },
+    },
+    subscriptions: {
+      create: async (params: Record<string, unknown>, opts: unknown) => {
+        calls.push({ method: "subscriptions.create", params, opts });
+        if (o.createError) throw o.createError;
+        return { id: "sub_1", billing_cycle_anchor: 1_800_000_000, latest_invoice: { amount_paid: 25312, total: 25312, total_taxes: [{ amount: 2912 }], currency: "cad", ...o.invoice } };
+      },
+    },
+  };
+  return { s: s as unknown as Stripe, calls };
+}
+
+const invalid = (code: string, param: string, message: string) => new Stripe.errors.StripeInvalidRequestError({ type: "invalid_request_error", code, param, message });
+const create = { customer: "cus_1", price: "price_monthly_cad", claimId: "claim_1", userId: "u1", idempotencyKey: "first_charge:claim_1:1" };
+
+describe("stripeBilling with a locked-in coupon", () => {
+  it("previews and subscribes with discounts [{coupon}], and reads the discount off the preview", async () => {
+    const { s, calls } = stubStripe();
+    const gw = stripeBilling(s)!;
+    expect(await gw.preview({ customer: "cus_1", price: "price_monthly_cad", coupon: "co_20" })).toEqual({ totalCents: 25312, currency: "CAD", discountCents: 5600, taxCents: 2912 });
+    expect(await gw.createSubscription({ ...create, coupon: "co_20" })).toMatchObject({ kind: "succeeded", amountCents: 25312, currency: "CAD" });
+    expect(calls.map((c) => c.params.discounts)).toEqual([[{ coupon: "co_20" }], [{ coupon: "co_20" }]]);
+    expect(calls[1].opts).toEqual({ idempotencyKey: "first_charge:claim_1:1" });
+  });
+
+  it("sends no discounts without a coupon (unchanged)", async () => {
+    const { s, calls } = stubStripe();
+    const gw = stripeBilling(s)!;
+    expect(await gw.preview({ customer: "cus_1", price: "price_monthly_cad", coupon: null })).toEqual({ totalCents: 31640, currency: "CAD", discountCents: 0, taxCents: 3640 });
+    await gw.createSubscription({ ...create });
+    expect(calls.every((c) => !("discounts" in c.params))).toBe(true);
+  });
+
+  it("answers coupon_gone for a deleted or expired coupon on create; the preview throws Stripe's error for the caller", async () => {
+    const deleted = invalid("resource_missing", "discounts[0][coupon]", "No such coupon: 'co_20'");
+    const expired = invalid("coupon_expired", "discounts", "Coupon co_20 is expired and cannot be applied.");
+    for (const e of [deleted, expired]) {
+      expect(await stripeBilling(stubStripe({ createError: e }).s)!.createSubscription({ ...create, coupon: "co_20" })).toEqual({ kind: "coupon_gone", error: e.message });
+      await expect(stripeBilling(stubStripe({ previewError: e }).s)!.preview({ customer: "cus_1", price: "price_monthly_cad", coupon: "co_20" })).rejects.toBe(e);
+    }
+    // Without a coupon in the call, a resource_missing is not a coupon problem.
+    expect(await stripeBilling(stubStripe({ createError: invalid("resource_missing", "customer", "No such customer") }).s)!.createSubscription(create)).toMatchObject({ kind: "error" });
+  });
+
+  // Review F6 (shape assumed, not seen in the sandbox): an amount-off coupon without the invoice's currency.
+  it("answers coupon_gone for an amount-off coupon without the invoice's currency; other invalid requests are not", async () => {
+    const mismatch = invalid("", "discounts[0][coupon]", "Coupon co_10usd does not support the currency cad.");
+    expect(isCouponGone(mismatch)).toBe(true);
+    expect(await stripeBilling(stubStripe({ createError: mismatch }).s)!.createSubscription({ ...create, coupon: "co_10usd" })).toMatchObject({ kind: "coupon_gone" });
+    expect(isCouponGone(invalid("", "currency", "Invalid currency: xyz"))).toBe(false);
+    expect(isCouponGone(Object.assign(new Error("The coupon currency does not match"), {}))).toBe(false);
+  });
+
+  it("maps Endive's failed_tax_calculation on create to a tax address problem (held, admin alert)", async () => {
+    const e = invalid("failed_tax_calculation", "", "We could not calculate tax for this customer.");
+    expect(await stripeBilling(stubStripe({ createError: e }).s)!.createSubscription({ ...create, coupon: "co_20" })).toEqual({ kind: "tax_address", error: e.message });
+    expect(classify(Object.assign(new Error("x"), { code: "failed_tax_calculation" }))).toMatchObject({ kind: "tax_address" });
+    expect(classify(Object.assign(new Error("x"), { code: "customer_tax_location_invalid" }))).toMatchObject({ kind: "tax_address" });
+    // A card decline is still a decline.
+    expect(classify(new Stripe.errors.StripeCardError({ type: "card_error", code: "card_declined", decline_code: "insufficient_funds", message: "declined" }))).toMatchObject({ kind: "declined", hard: false });
+  });
+});
+
+// S18 point c: Stripe names an add_invoice_items line after its product (add_invoice_items takes no description).
+describe("stripeBilling: the first invoice's higher-rate line", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const extra = { amountCents: 28000, currency: "CAD" };
+  const line = (product: string) => ({ currency: "cad", product, unit_amount: 28000, tax_behavior: "exclusive" });
+
+  it("is made on the Higher monthly rate product when STRIPE_PRODUCT_HIGHER_RATE is set, with the plan's tax behaviour, in the preview and the create alike", async () => {
+    vi.stubEnv("STRIPE_PRODUCT_HIGHER_RATE", "prod_higher_rate");
+    const { s, calls } = stubStripe();
+    const gw = stripeBilling(s)!;
+    await gw.preview({ customer: "cus_1", price: "price_monthly_cad", extra });
+    await gw.createSubscription({ ...create, extra });
+    expect(calls[0].params.invoice_items).toEqual([{ price_data: line("prod_higher_rate") }]);
+    expect(calls[1].params.add_invoice_items).toEqual([{ price_data: line("prod_higher_rate"), metadata: { kind: "first_month_higher_rate" } }]);
+    // One create, keyed as before.
+    expect(calls.map((c) => c.method)).toEqual(["invoices.createPreview", "subscriptions.create"]);
+    expect(calls[1].opts).toEqual({ idempotencyKey: "first_charge:claim_1:1" });
+  });
+
+  it("stays on the plan's own product when the variable is unset (today's behaviour)", async () => {
+    vi.stubEnv("STRIPE_PRODUCT_HIGHER_RATE", "");
+    const { s, calls } = stubStripe();
+    const gw = stripeBilling(s)!;
+    await gw.preview({ customer: "cus_1", price: "price_monthly_cad", extra });
+    await gw.createSubscription({ ...create, extra });
+    expect(calls[0].params.invoice_items).toEqual([{ price_data: line("prod_roger_monthly") }]);
+    expect(calls[1].params.add_invoice_items).toEqual([{ price_data: line("prod_roger_monthly"), metadata: { kind: "first_month_higher_rate" } }]);
+  });
+});
+
+describe("the tax read off an invoice (S18 point a review)", () => {
+  it("is null when Stripe gives no total_taxes, so the words fall back to \"in total\"", () => {
+    expect(taxOf({ total_taxes: undefined } as never)).toBeNull();
+    expect(taxOf({ total_taxes: [] } as never)).toBe(0);
+    expect(taxOf({ total_taxes: [{ amount: 3640 }, { amount: 10 }] } as never)).toBe(3650);
+  });
+
+  it("goes with a receipt only when the whole total was paid: a credit balance gives none", async () => {
+    expect(receiptTaxOf({ amount_paid: 31640, total: 31640, total_taxes: [{ amount: 3640 }] } as never)).toBe(3640);
+    expect(receiptTaxOf({ amount_paid: 21640, total: 31640, total_taxes: [{ amount: 3640 }] } as never)).toBeNull();
+    const credit = stubStripe({ invoice: { amount_paid: 21640, total: 31640, total_taxes: [{ amount: 3640 }] } });
+    expect(await stripeBilling(credit.s)!.createSubscription(create)).toMatchObject({ kind: "succeeded", amountCents: 21640, taxCents: null });
+    const missing = stubStripe({ invoice: { total_taxes: undefined } });
+    expect(await stripeBilling(missing.s)!.createSubscription(create)).toMatchObject({ kind: "succeeded", taxCents: null });
+  });
+});

@@ -30,6 +30,8 @@ export async function createSession(q: Query, userId: string, method: SessionMet
     now.toISOString(),
     expiresAt.toISOString(),
   ]);
+  // A sign-in counts as activity for idle retention (privacy P3), even if the session is never used again.
+  await q(`update users set last_seen_at = $2 where id = $1`, [userId, now.toISOString()]);
   return { token, expiresAt };
 }
 

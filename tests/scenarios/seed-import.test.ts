@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { linkContributor } from "@/lib/admin/users";
 import { importSeedRun, SeedRunExists } from "@/lib/cora/seed-import";
-import { delivered, newWorld, play, report, signUp, weeksWithRuns, type Member, type World } from "./helpers";
+import { delivered, firstList, newWorld, play, report, signUp, weeksWithRuns, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -56,8 +56,10 @@ describe("after the seed import", () => {
       pilots.push([label, m]);
     }
     // Three Mondays: two free lists and the first paid one. Pilots' own runs carry new plays, which they are never sent either.
+    // Pilots sign up with no card: the first list is held and unlocked by the card that Wednesday (plan 2026-11-26-001).
     const weeks = ["2026-12-07", "2026-12-14", "2026-12-21"];
-    await weeksWithRuns(w, pilots.map(([, m]) => m), weeks);
+    await firstList(w, pilots.map(([, m]) => m), weeks[0]);
+    await weeksWithRuns(w, pilots.map(([, m]) => m), weeks.slice(1));
     for (const [label, m] of pilots) {
       const own = new Set(titlesBy.get(label));
       const got = (await Promise.all(weeks.map((wk) => delivered(w, m.id, wk)))).flat();

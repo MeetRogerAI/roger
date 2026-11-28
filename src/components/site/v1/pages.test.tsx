@@ -162,7 +162,7 @@ describe("/faq on v1", () => {
     // Closed until asked for: no details element carries the open attribute.
     expect(markup).not.toMatch(/<details[^>]*\sopen(?:[\s=>])/);
     expect(hrefs(markup)).toEqual(["/start"]);
-    expect(text(startBand(markup))).toBe("Get two free Cora Curations Card required. Charged only with your third Cora Curation.");
+    expect(text(startBand(markup))).toBe("Get two free Cora Curations We ask for your card when your first Cora Curation is ready.");
   });
 
   it("keeps one answer open at a time on the whole page: all eighteen, in every group, share one native name", async () => {
@@ -352,8 +352,8 @@ describe("/how-it-works on v1", () => {
   it("your first two weeks: the trial step by step, with the card and the charge date stated again", async () => {
     const first = sectionMarkup(await how(), "first-weeks");
     expect(first.match(/<li/g)).toHaveLength(6);
-    expect(text(first)).toContain("You start, and we ask for a card. It is not charged.");
-    expect(text(first)).toContain("Your first two Cora Curations arrive, one each Monday. They are free.");
+    expect(text(first)).toContain("You start. No card is needed yet.");
+    expect(text(first)).toContain("Your first two Cora Curations arrive, one each Monday. They are free. We ask for your card when the first one is ready, and it is not charged then.");
     expect(text(first)).toContain("After your second Cora Curation, we email you with what happens next.");
     expect(text(first)).toContain("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
     expect(text(first)).toContain("If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge.");
@@ -446,7 +446,7 @@ describe("/about on v1", () => {
 
   it("ends on the start button", async () => {
     const markup = await about();
-    expect(text(startBand(markup))).toBe("Get two free Cora Curations Card required. Charged only with your third Cora Curation.");
+    expect(text(startBand(markup))).toBe("Get two free Cora Curations We ask for your card when your first Cora Curation is ready.");
     expect(hrefs(markup)).toEqual(["/start"]);
   });
 });

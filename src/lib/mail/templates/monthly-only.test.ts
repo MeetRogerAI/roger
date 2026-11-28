@@ -33,7 +33,7 @@ const status = "Free Cora Curation 1 of 2.";
 /** Every email a monthly member, or someone signing up, can be sent. */
 const monthlyMail = () => ({
   startConfirm: startConfirmEmail("tok"),
-  welcome: welcomeEmail({ name: "Ana Diaz", plan: "monthly", currency: "USD", path: "running", settings, firstChargeNoEarlier: WEEK }),
+  welcome: welcomeEmail({ name: "Ana Diaz", currency: "USD", path: "running", settings }),
   nudgeNoRun: nudgeEmail("no_run", { week: WEEK }),
   nudgeConnect: nudgeEmail("connect_zack", { week: WEEK }),
   nudgeFinish: nudgeEmail("finish_signup", { week: WEEK }),
@@ -73,7 +73,6 @@ const monthlyMail = () => ({
 
 /** The emails of the one-at-a-time plan, which only an account already on it can be sent. */
 const oneAtATimeMail = () => ({
-  welcome: welcomeEmail({ name: "Ana Diaz", plan: "per_run", currency: "USD", path: "running", settings, firstChargeNoEarlier: WEEK }),
   orderNext: orderNextEmail({ price: "US$200" }),
   orderPrompt: orderPromptEmail({ week: WEEK, price: "US$200 plus tax where it applies", monthlyLine: "Monthly is US$200 for every Monday." }),
   ordered: listOrderedEmail({ week: WEEK, price: "US$200" }),
@@ -108,13 +107,11 @@ describe("the emails, with monthly the only plan (Peter, November 26, 2026)", ()
     }
   });
 
-  it("the second-miss email offers the fix and cancelling, not a switch of plan, while one at a time is not offered", () => {
+  it("the second-miss email offers the fix and cancelling, not a switch of plan", () => {
     const off = secondMissEmail(owed);
-    expect(off.text).toContain("If you cancel before that invoice on the billing page (");
+    expect(off.text).toContain("If you cancel on the billing page (");
     expect(off.text).toContain("the difference isn’t collected.");
     expect(off.text).not.toMatch(/switch/i);
-    offer.on = true;
-    expect(secondMissEmail(owed).text).toContain("you can switch to one Cora Curation at a time on the billing page");
   });
 
   it("an account still on one at a time is never told to order again while nothing can be ordered", () => {
@@ -147,10 +144,10 @@ describe("the emails, with monthly the only plan (Peter, November 26, 2026)", ()
 
   it("say when the first charge comes in the words the site uses", () => {
     const m = monthlyMail();
-    expect(m.welcome.text).toContain("Your first two Cora Curations are free, one each Monday. Your card is charged only with the third.");
-    expect(m.welcome.text).toContain("After that, Roger is US$200 a month, plus tax where it applies.");
+    expect(m.welcome.text).toContain("Your first two Cora Curations are free.");
+    expect(m.welcome.text).toContain("After that, Roger is US$200 / CA$280 a month plus tax where it applies. Your first charge comes with your third Cora Curation");
     expect(m.firstPaidNext.subject).toBe("Your next Cora Curation is your first paid one");
-    expect(m.firstChargeReminder.text).toContain("your third Cora Curation comes on Monday, December 14 and we’ll charge US$226, tax included, for your first month");
+    expect(m.firstChargeReminder.text).toContain("your third Cora Curation comes on Monday, December 14 and we’ll charge US$226 in total for your first month");
     expect(m.subscribed.text).toContain("Your third Cora Curation is ready now, and a new one arrives every Monday.");
     expect(m.mondayWithReceipt.subject).toBe("Your Cora Curation, and your receipt");
     expect(m.renewalHeld.subject).toBe("Your Cora Curations are paused");

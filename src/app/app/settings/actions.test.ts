@@ -25,6 +25,7 @@ vi.mock("@/lib/auth/access", () => ({
 vi.mock("@/lib/admin-auth", () => ({
   requireAdmin: async () => {
     if (!admin) throw new Error("Not signed in");
+    return "peter@example.com";
   },
 }));
 vi.mock("@/lib/rate-limit", async (orig) => ({ ...(await orig<typeof import("@/lib/rate-limit")>()), hit: async () => true }));

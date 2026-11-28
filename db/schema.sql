@@ -706,3 +706,82 @@ create index if not exists oauth_states_expiry on oauth_states (expires_at);
 -- (shown on the settings page). Cleared with google_sub on unlink and on any
 -- change of the Roger email address.
 alter table users add column if not exists google_email text;
+
+-- 2026-11-26, payment at first list, Unit 1: sign-up ends without a card. A
+-- trial with trial_started_at null has no card yet ("has card" is
+-- trial_started_at not null, or sponsor_id set). first_teaser_at is when the
+-- first held list's teaser was sent (the no-card close counts from it).
+-- setup_session is the open embedded card session, reused until complete or
+-- expired. promo_code, promo_coupon and promo_label hold the promotion code
+-- locked in at card save (Stripe has no customer-level discounts since
+-- Basil, so the coupon is applied at preview and at subscription create).
+alter table users add column if not exists first_teaser_at timestamptz;
+alter table users add column if not exists setup_session text;
+alter table users add column if not exists promo_code text;
+alter table users add column if not exists promo_coupon text;
+alter table users add column if not exists promo_label text;
+
+-- 2026-11-26, payment at first list, Unit 1: a held week replaced by a newer
+-- one for a no-card trial. Superseded weeks are never delivered (not late,
+-- not at the unlock).
+alter table cora_user_weeks add column if not exists superseded_at timestamptz;
+
+-- 2026-11-26, payment at first list, Unit 1: Roger counts promotion code uses
+-- itself, because a coupon applied directly never counts a redemption in
+-- Stripe. One row per code and member, written in the card-save claim. The
+-- unique (promotion_code, user_id) index also serves lookups by code alone.
+create table if not exists promo_reservations (
+  id bigserial primary key,
+  promotion_code text not null,
+  user_id uuid not null references users (id) on delete cascade,
+  card_fingerprint text,
+  reserved_at timestamptz not null,
+  unique (promotion_code, user_id)
+);
+
+-- 2026-11-26, payment at first list, Unit 5: the last use of a limited code
+-- is taken by one member only. A reservation for a code with a limit takes
+-- the next slot number; two members saving at once both ask for the same
+-- slot and the unique index lets one of them have it (a code with no limit
+-- leaves slot null, which never conflicts). promo_refused_at is when a
+-- pending code could not be applied at card save (used up, or first-time
+-- only); the card is saved at the regular price and the return page says so.
+alter table promo_reservations add column if not exists slot integer;
+create unique index if not exists promo_reservations_slot on promo_reservations (promotion_code, slot);
+create index if not exists promo_reservations_fingerprint on promo_reservations (card_fingerprint) where card_fingerprint is not null;
+alter table users add column if not exists promo_refused_at timestamptz;
+
+-- 2026-11-26, payment at first list, Unit 5 review fixes: when the hourly
+-- unlock_pending sweep last tried to unlock this member's list (job clock).
+-- The sweep takes members never tried first, then the longest since their
+-- last try, and skips those tried in the last 50 minutes, so members whose
+-- unlock keeps failing cannot take every place in a pass.
+alter table users add column if not exists unlock_attempted_at timestamptz;
+
+-- 2026-11-26, payment at first list, Unit 8 review fixes: charge_attempts.coupon
+-- is the coupon the claimed subscription create was sent with, so a takeover
+-- repeats exactly that call (same parameters, same idempotency key) even if
+-- the member's promo_coupon changed meanwhile. users.promo_ended_label names
+-- a locked-in discount Stripe stopped applying (dropped at a preview), kept
+-- until the amount-changed hold or the first charge, so the email can say the
+-- discount ended even if the hold comes on a later pass. promo_duration
+-- (once, repeating or forever) and promo_duration_months are the coupon's
+-- duration, stored with the pending code and at card save, for the Price Box
+-- and the first-charge emails.
+alter table charge_attempts add column if not exists coupon text;
+alter table users add column if not exists promo_ended_label text;
+alter table users add column if not exists promo_duration text;
+alter table users add column if not exists promo_duration_months integer;
+
+-- 2026-11-26, payment at first list, whole-branch review: signup_finished_at
+-- is when Step 3 moved the account to a trial (job clock, stamped once by
+-- finishSignup). A legacy sign-up resumed at Step 3 keeps its first, older
+-- consent, so the never-teasered no-card clock, its nudges and the welcome
+-- retry count from this stamp instead (rows without it fall back to
+-- consent_at). card_fingerprint is the member's saved card (Stripe's
+-- fingerprint, the same card number gives the same value), written at every
+-- card save and card update, so a first-time-only promo code refuses a card
+-- another member has saved.
+alter table users add column if not exists signup_finished_at timestamptz;
+alter table users add column if not exists card_fingerprint text;
+create index if not exists users_card_fingerprint on users (card_fingerprint) where card_fingerprint is not null;

@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import type { QuizAnswers } from "@/lib/signup/quiz";
 import { submitQuiz, type StartFormState } from "@/app/start/actions";
 import type { StartParams } from "@/lib/signup/params";
 import { agentLevels } from "@/data/agent-levels";
@@ -17,11 +18,12 @@ type Option = { value: string; label: string };
  * Every question is a real fieldset with a visible legend; errors show inline
  * and are announced.
  */
-export function QuizForm({ params, agents, categories }: { params: StartParams; agents: Option[]; categories: readonly string[] }) {
+/** `initial`: the answers already given (coming back from Step 2), so nothing has to be typed again. */
+export function QuizForm({ params, agents, categories, initial }: { params: StartParams; agents: Option[]; categories: readonly string[]; initial?: QuizAnswers | null }) {
   const [state, action, pending] = useActionState(submitQuiz, idle);
   // Question 3: ticked agents in the order they were ticked, and the one picked as primary.
-  const [ticked, setTicked] = useState<string[]>([]);
-  const [chosen, setChosen] = useState<string | null>(null);
+  const [ticked, setTicked] = useState<string[]>(initial?.agents ?? []);
+  const [chosen, setChosen] = useState<string | null>(initial?.primary || null);
   const primary = chosen && ticked.includes(chosen) ? chosen : (ticked.find((v) => v !== "not_sure") ?? "");
   const toggle = (v: string, on: boolean) => setTicked((t) => (on ? [...t.filter((x) => x !== v), v] : t.filter((x) => x !== v)));
   const agentOptions = [...agents, { value: "other", label: "Another one" }, { value: "not_sure", label: "Not sure yet" }];
@@ -118,7 +120,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
       <Question n={1} at={step} legend="What do you do?" error={e.work ?? e.role}>
         <Radios
           name="work"
-          defaultValue={params.path === "re" ? "real_estate" : undefined}
+          defaultValue={initial?.work ?? (params.path === "re" ? "real_estate" : undefined)}
           options={[
             { value: "real_estate", label: "I work in real estate" },
             { value: "other", label: "Something else" },
@@ -132,6 +134,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
           name="role"
           maxLength={120}
           placeholder="e.g. Broker, residential resale"
+          defaultValue={initial?.role}
           className={field}
           // Typing a role with neither choice made means "Something else"; a choice already made is left alone.
           onChange={(ev) => {
@@ -144,6 +147,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
       <Question n={2} at={step} legend="Do you use AI agents for work today?" error={e.uses}>
         <Radios
           name="uses"
+          defaultValue={initial?.uses}
           options={[
             { value: "not_yet", label: "Not yet" },
             { value: "most_weeks", label: "Most weeks" },
@@ -167,7 +171,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
             return (
               <div key={o.value} className={`${choice} justify-between`}>
                 <label className="flex min-h-10 flex-1 cursor-pointer items-center gap-3">
-                  <input type="checkbox" name="agent" value={o.value} onChange={(ev) => toggle(o.value, ev.currentTarget.checked)} className="size-4 accent-accent" />
+                  <input type="checkbox" name="agent" value={o.value} defaultChecked={isTicked} onChange={(ev) => toggle(o.value, ev.currentTarget.checked)} className="size-4 accent-accent" />
                   {o.label}
                 </label>
                 {canLead &&
@@ -196,7 +200,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
             <label htmlFor={`${id}-other`} className="mt-4 block text-small font-[560]">
               Which one?
             </label>
-            <input id={`${id}-other`} name="agentOther" maxLength={60} className={field} />
+            <input id={`${id}-other`} name="agentOther" maxLength={60} defaultValue={initial?.agentOther} className={field} />
           </>
         )}
       </Question>
@@ -204,6 +208,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
       <Question n={4} at={step} legend="How many agents, bots or scheduled routines do you run?" error={e.count}>
         <Radios
           name="count"
+          defaultValue={initial?.count}
           options={[
             { value: "none", label: "None" },
             { value: "1-2", label: "1 or 2" },
@@ -217,7 +222,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         <div className="grid gap-2">
           {agentLevels.map((l) => (
             <label key={l.level} className={`${choice} items-start py-3`}>
-              <input type="radio" name="level" value={l.level} className="mt-1 size-4 shrink-0 accent-accent" />
+              <input type="radio" name="level" value={l.level} defaultChecked={initial?.level === l.level} className="mt-1 size-4 shrink-0 accent-accent" />
               <span>
                 <span className="block font-[560] text-ink">
                   <span className="tabular">Level {l.level}</span> · {l.name}
@@ -234,7 +239,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
         <div className="grid gap-2 sm:grid-cols-2">
           {categories.map((c) => (
             <label key={c} className={choice}>
-              <input type="checkbox" name="help" value={c} className="size-4 accent-accent" />
+              <input type="checkbox" name="help" value={c} defaultChecked={initial?.help.includes(c as (typeof initial.help)[number])} className="size-4 accent-accent" />
               {c}
             </label>
           ))}
@@ -244,6 +249,7 @@ export function QuizForm({ params, agents, categories }: { params: StartParams; 
       <Question n={7} at={step} legend="How do you feel about trying new software for work?" error={e.software}>
         <Radios
           name="software"
+          defaultValue={initial?.software}
           options={[
             { value: "avoid", label: "I avoid it" },
             { value: "if_shown", label: "I’ll try it if someone shows me" },

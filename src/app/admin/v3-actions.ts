@@ -3,6 +3,7 @@
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { stripeGateway } from "@/lib/billing/gateway";
 import { closeFailedWeekOrders } from "@/lib/billing/orders";
 import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/lib/billing/subscriptions";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -10,6 +11,7 @@ import { moveTestimonial, saveTestimonial, setTestimonialCleared, TESTIMONIALS_T
 import { chargeAndSendNow } from "@/lib/admin/cora";
 import { approvePlay, EDITABLE_FIELDS, editPlay, rejectPlay } from "@/lib/admin/flags";
 import { audited, logAdminAction } from "@/lib/admin/log";
+import { setSwitch, type LaunchSwitch } from "@/lib/admin/launch-switches";
 import { opsWeek } from "@/lib/admin/ops";
 import { addRunForUser, changeUserEmail, closeAccount, deleteAccount, giveExtraFreeList, isMonday, linkContributor, saveNote, sendNudge, type Done } from "@/lib/admin/users";
 import { excuseWeek, undoExcuseForEveryone } from "@/lib/billing/contribution";
@@ -134,7 +136,7 @@ export async function undoExcuseAction(_p: V3State, fd: FormData): Promise<V3Sta
   return { status: "ok", message: `Excuse for the week of ${week} undone: ${n} week${n === 1 ? "" : "s"} counted again.`, at: Date.now() };
 }
 
-/** R11: a new account and the pilot link that opens at the plan step. The link is shown once. */
+/** R11: a new account and the pilot link that opens at Product and Pricing (Step 3). The link is shown once. */
 export async function pilotLinkAction(_p: V3State, fd: FormData): Promise<V3State> {
   const by = await requireAdmin();
   const r = await createPilotLink(query, { email: field(fd, "email", 254), name: field(fd, "name", 80), createdBy: by });
@@ -165,7 +167,7 @@ export async function closeAccountAction(_p: V3State, fd: FormData): Promise<V3S
   if (!userId) return bad("No such user.");
   if (field(fd, "confirm", 5) !== "yes") return bad("Tick the box to confirm.");
   const settings = await readV3Settings();
-  const r = await closeAccount(query, { settings, now: new Date(), adjust: stripeAdjustments() ?? undefined, gw: stripeBilling(), ...mail }, by, userId);
+  const r = await closeAccount(query, { settings, now: new Date(), adjust: stripeAdjustments() ?? undefined, gw: stripeBilling(), card: stripeGateway(), ...mail }, by, userId);
   refresh();
   return state(r);
 }
@@ -300,6 +302,36 @@ export async function runJobAction(_p: V3State, fd: FormData): Promise<V3State> 
   });
   refresh();
   return { status: "ok", message: `${job} for the week of ${week}: ${summary(result)}`, at: Date.now() };
+}
+
+/**
+ * The go-live switches (launch list g-open): `v3.cycleLive`, then
+ * `v3.signupOpen`. Turning either on needs the confirm box; the order rules
+ * live in setSwitch. Logged with who did it.
+ */
+class SwitchRefused extends Error {}
+
+export async function launchSwitchAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const name = field(fd, "name", 20);
+  if (name !== "cycleLive" && name !== "signupOpen") return bad("Unknown switch.");
+  const on = field(fd, "on", 5) === "true";
+  if (on && field(fd, "confirm", 5) !== "yes") return bad("Tick the box to confirm.");
+  // A refusal throws inside `audited`, so the log records it as an error, not as a change that happened.
+  try {
+    await audited(query, { by, action: "launch_switch", detail: { name, on } }, async () => {
+      const r = await setSwitch(query, name as LaunchSwitch, on);
+      if (!r.ok) throw new SwitchRefused(r.reason);
+      return r.state;
+    });
+  } catch (e) {
+    if (!(e instanceof SwitchRefused)) throw e;
+    refresh();
+    return bad(e.message);
+  }
+  refresh();
+  const what = name === "cycleLive" ? "The weekly cycle" : "Sign-up";
+  return { status: "ok", message: `${what} is now ${on ? "on" : "off"}.`, at: Date.now() };
 }
 
 /** The recovery button: charge first, then send, for a week Cora finished. */

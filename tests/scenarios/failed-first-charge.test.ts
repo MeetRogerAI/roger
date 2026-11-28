@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { delivered, newWorld, passHours, seedPool, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
+import { delivered, firstList, newWorld, passHours, seedPool, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -18,7 +18,9 @@ beforeEach(async () => {
   await seedPool(w, { contributors: 6, playsEach: 3, ranOn: "2026-11-26" });
   await w.at("2026-12-02T16:00:00Z");
   m = await signUp(w, { email: "dana@example.ca", currency: "CAD", country: "CA" });
-  await weeksWithRuns(w, [m], ["2026-12-07", "2026-12-14"]);
+  // Sign-up with no card; the first list held on December 7 and unlocked by the card that Wednesday; the second on the 14th.
+  await firstList(w, [m], "2026-12-07");
+  await weeksWithRuns(w, [m], ["2026-12-14"]);
   expect((await userRow(w, m.id)).free_lists_used).toBe(2);
 });
 

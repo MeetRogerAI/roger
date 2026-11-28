@@ -204,7 +204,7 @@ describe("the v1 homepage's sections", () => {
     // Nothing follows the button inside the left column: the column ends with it.
     expect(hero.slice(hero.indexOf(actions) + actions.length)).toMatch(/^<\/div><\/div><div data-hero-steps/);
     // The card line itself still exists, for the reading pages' start band.
-    expect(copy.cardLine).toBe("Card required. Charged only with your third Cora Curation.");
+    expect(copy.cardLine).toBe("We ask for your card when your first Cora Curation is ready.");
     expect(text(await view())).not.toContain(copy.cardLine);
   });
 

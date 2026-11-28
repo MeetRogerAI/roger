@@ -1,36 +1,20 @@
-import { amount, money, taxPhrase, type Currency, type Plan } from "@/lib/billing/prices";
+import { amount, money, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { V3Settings } from "@/lib/v3-settings";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 
-/** "Monday, December 7" for a "YYYY-MM-DD" Monday. */
-export function longDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
-}
-
 /**
- * Email 2 (spec B.13): welcome, with the terms restated and the next step
- * for the user's path. For monthly it also states the contributor rule
- * (spec B.9, "telling the user", step 1).
+ * Email 2 (spec B.13): welcome, sent when sign-up ends at Step 3 (plan
+ * 2026-11-26-001, Unit 2). No card has been asked for yet, and the email
+ * does not say when it will be (Peter's wording sign-off, 2026-11-26). Monthly is the only plan; the higher-rate
+ * rule lives in the terms and FAQ, not here (origin R6).
  */
-export function welcomeEmail(o: {
-  name: string;
-  plan: Plan;
-  currency: Currency;
-  path: string;
-  settings: V3Settings;
-  firstChargeNoEarlier: string;
-}): Rendered {
-  const price = money(amount(o.settings, o.plan, o.currency), o.currency);
-  const higher = money(amount(o.settings, "monthly", o.currency, "higher"), o.currency);
-  const tax = taxPhrase(o.currency);
-  const terms =
-    o.plan === "monthly"
-      ? [
-          `After that, Roger is ${price} a month, ${tax}. Your first charge will be no earlier than ${longDate(o.firstChargeNoEarlier)}. We’ll email you the exact date and amount before it happens. You can cancel any time in one click.`,
-          `Roger works because everyone’s Zack sends a report each week. If Zack misses two weeks in one month, that month is ${higher}. We always tell you first.`,
-        ]
-      : [`After your two free Cora Curations, you’re charged ${price}, ${tax}, only when you order one. Nothing is charged automatically.`];
+export function welcomeEmail(o: { name: string; currency: Currency; path: string; settings: V3Settings }): Rendered {
+  // Both prices for every member, whatever their currency (Peter, 2026-11-27), each from the settings; then the
+  // member's own tax words, as the price plus the tax (S18 point a).
+  const price = (["USD", "CAD"] as const).map((c) => money(amount(o.settings, "monthly", c), c)).join(" / ");
+  const terms = [
+    `After that, Roger is ${price} a month ${taxPhrase(o.currency)}. Your first charge comes with your third Cora Curation, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.`,
+  ];
   const next =
     o.path === "running"
       ? { line: "Your next step is to connect Zack to your AI agent. It takes a few minutes.", label: "Connect Zack" }
@@ -39,7 +23,7 @@ export function welcomeEmail(o: {
     subject: "Welcome to Roger",
     preview: "Your first two Cora Curations are free.",
     heading: `Welcome, ${o.name.split(" ")[0] || "there"}.`,
-    paragraphs: ["Your first two Cora Curations are free, one each Monday. Your card is charged only with the third.", ...terms, next.line],
+    paragraphs: ["Your first two Cora Curations are free.", ...terms, next.line],
     button: { label: next.label, url: appUrl("/app") },
   });
 }

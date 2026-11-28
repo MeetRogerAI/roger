@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays } from "@/lib/clock";
 import { excuseWeek } from "@/lib/billing/contribution";
-import { delivered, dollars, monday, newWorld, passHours, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
+import { delivered, dollars, firstList, monday, newWorld, passHours, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -23,7 +23,10 @@ beforeEach(async () => {
   await seedPool(w, { contributors: 10, playsEach: 4, ranOn: "2026-11-26" });
   await w.at("2026-12-02T16:00:00Z");
   m = await signUp(w, { email: "mia@example.ca", currency: "CAD", country: "CA" });
-  await weeksWithRuns(w, [m], ["2026-12-07", "2026-12-14", "2026-12-21"]);
+  // Sign-up with no card; the first list held on December 7 and unlocked by the card that Wednesday; then the second
+  // free list, and the subscription with the third list on December 21.
+  await firstList(w, [m], "2026-12-07");
+  await weeksWithRuns(w, [m], ["2026-12-14", "2026-12-21"]);
   expect(await userRow(w, m.id)).toMatchObject({ status: "active" });
 });
 

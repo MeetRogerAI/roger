@@ -25,7 +25,13 @@ export default function GetStartedPage() {
           <Step id="install" title="Install your AI agent.">
             <p className="mt-3 text-ink-2">Grok Bot is the AI agent we recommend if you are starting from nothing.</p>
             <ol className="mt-4 list-decimal space-y-1 pl-6">
-              <li>Go to the Grok Bot site and download it.</li>
+              <li>
+                Go to the{" "}
+                <a href="https://x.ai/bot" target="_blank" rel="noopener noreferrer" className="tlink">
+                  Grok Bot site
+                </a>{" "}
+                and download it.
+              </li>
               <li>Open it.</li>
               <li>Upgrade to a paid plan of your choice.</li>
               <li>Name your Chief of Staff.</li>

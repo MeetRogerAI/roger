@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deliverWeek } from "@/lib/cora/deliver";
 import type { Query } from "@/lib/db-query";
-import { runHourly } from "@/lib/housekeeping/job";
+import { HOURLY_TASKS, runHourly } from "@/lib/housekeeping/job";
 import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
@@ -55,7 +55,7 @@ function fakeBilling() {
     subs,
     declining: false,
     extras: [],
-    preview: async ({ extra }) => ({ totalCents: total(extra), currency: "USD" }),
+    preview: async ({ extra }) => ({ totalCents: total(extra), currency: "USD", taxCents: total(extra) - 20000 - (extra?.amountCents ?? 0) }),
     subscriptions: async () => subs,
     async createSubscription({ claimId, extra }) {
       g.extras.push(extra?.amountCents ?? 0);
@@ -102,8 +102,8 @@ const charges = () => billing.created() + orders.paid.length;
 async function member(o: { status: string; plan: string; sub?: string; free?: number; first?: string }) {
   const customer = `cus_${Math.random().toString(36).slice(2, 8)}`;
   const [u] = await query<{ id: string }>(
-    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor)
-     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7) returning id`,
+    `insert into users (email, status, plan, currency, sharing, stripe_customer, stripe_subscription, free_lists_used, first_charge_at, billing_anchor, trial_started_at)
+     values ($1, $2, $3, 'USD', 'share', $4, $5, $6, $7, $7, '2026-11-02T15:00:00Z') returning id`,
     [`${customer}@example.com`, o.status, o.plan, customer, o.sub ?? null, o.free ?? 2, o.first ?? null],
   );
   if (o.sub) plans.add(o.sub, customer, PERIOD_END);
@@ -211,7 +211,7 @@ describe("one list at a time to monthly", () => {
     expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "monthly" })).toMatchObject({ ok: true });
     expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly", quote: { totalCents: 22600 } });
     expect(subjects()).toEqual(["Your plan is now monthly"]);
-    expect(sent[0].text).toContain("US$226, tax included");
+    expect(sent[0].text).toContain("we’ll charge US$226 (US$200 plus US$26 tax) for your first month");
     await ready(id);
     await runChargeJob(query, chargeDeps(SIX_AM), { week: WEEK });
     await runChargeJob(query, chargeDeps(new Date("2026-12-14T11:15:00Z")), { week: WEEK });
@@ -301,6 +301,16 @@ describe("the Friday order prompt (spec B.13 email 23)", () => {
       { recipient: plain, status: "sent" },
       { recipient: off, status: "skipped" },
     ]);
+  });
+
+  it("is no longer sent by the hourly pass: ordering is gone from the app (whole-branch review W2)", async () => {
+    await member({ status: "active", plan: "per_run" });
+    sent = [];
+    const task = HOURLY_TASKS.find((t) => t.name === "order_prompts")!;
+    const r = await runHourly(query, { gw: {} as BillingGateway, settings, now: FRIDAY, query, transport }, [task]);
+    expect(r.order_prompts).toBe("Ordering is off: monthly is the only plan.");
+    expect(sent).toEqual([]);
+    expect(await query("select 1 from notifications where kind = 'order_prompt'")).toEqual([]);
   });
 });
 
