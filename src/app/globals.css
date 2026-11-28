@@ -125,6 +125,11 @@
       scroll-padding-top: 136px;
     }
   }
+  /* An admin's preview of the drafts pins its bar to the foot of the window (preview-bar.tsx): 66px wide, up to 122px
+     on a phone, where it wraps. Without the room a link or field brought into view by Tab lands under the bar. */
+  html:has([data-preview-bar]) {
+    scroll-padding-bottom: 136px;
+  }
   body {
     background: var(--color-ground);
     color: var(--color-ink);

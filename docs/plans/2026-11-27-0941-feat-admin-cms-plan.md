@@ -665,6 +665,14 @@ getSiteContent():
   - Link warnings never add an override row to the admin log.
 - **Verification:** In a browser on a production build: a signed-out window shows the old headline while the admin's preview shows the new one at the real address with the real header and footer; after "Exit preview" the admin sees published content; a client click from a previewed page to another keeps the preview and leaves no stale styling.
 
+### Notes for U10 from the U9 build and review (November 27, 2026)
+
+- Read published content through `publishedOverlay()` in `read.ts`: it throws when the published content cannot be read (answer 503) and has no draft branch. Never read Draft Mode, cookies or the admin inside a cached function (`docs/solutions/runtime-errors/draft-mode-read-inside-use-cache-is-the-prerenders-answer-on-navigation-2026-11-27.md`).
+- Tests of the export route need the `draftMode` stand-in in `src/test-helpers/next-fakes.ts` (`DRAFT_COOKIE`).
+- Preview is entered and left through route handlers (`/admin/pages/preview`, `/admin/pages/preview/exit`); sign-out ends it.
+- After deploying, check on preview.meetroger.ai that `/` in preview shows drafts in the page shell: Vercel's bypass of its page cache for the Draft Mode cookie cannot be tested locally.
+- U11: a second tab still in preview after sign-out keeps the bar and drafted header labels until a reload (the root layout is not re-rendered on client navigation; the page body is published).
+
 ### U10. Release snapshot, and "Differs from the release"
 
 - **Goal:** One command folds preview's published content into the repo for the release, and each site's Pages lists what still differs from the release with one action to reset it.

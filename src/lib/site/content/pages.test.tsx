@@ -15,7 +15,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
-import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
+import { DRAFT_COOKIE, nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { testDb } from "@/test-helpers/pglite-db";
 import { at, renderSitePages, type RenderedPage } from "@/test-helpers/site-pages";
 
@@ -34,6 +34,9 @@ vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 vi.mock("next/font/google", () => ({ Mona_Sans: () => ({ variable: "font-mona-test" }) }));
 vi.mock("@/lib/watches", () => ({ confirmWatch: async () => null, stopWatch: async () => null }));
+// Whether the viewer is an admin: asked by the content reader only in Draft Mode (the preview, plan U9).
+const who = vi.hoisted(() => ({ admin: false }));
+vi.mock("@/lib/admin-auth", () => ({ isAdmin: async () => who.admin }));
 
 let current: Query;
 // The one switch every reader asks, and the one query the content goes through. The settings and the library read
@@ -76,6 +79,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   ({ query: current } = await testDb());
   db.on = true;
+  who.admin = false;
 });
 
 const sameAsPlain = (pages: RenderedPage[], why: string) => {
@@ -231,6 +235,48 @@ describe("what is published", () => {
     } finally {
       errors.mockRestore();
     }
+  });
+});
+
+/**
+ * An admin's preview of the drafts (plan U9, R14, AE1, KTD7): with Draft Mode on and the viewer an admin, every
+ * page is rendered from the drafts, header and footer and sections included, with the bar that says so. With Draft
+ * Mode on and anyone else viewing, every page is the published one, byte for byte.
+ */
+describe("the preview of the drafts", () => {
+  const drafts = async () => {
+    expect(await saveDraft(current, [{ field: "home.hero.headline", text: "A drafted headline." }, { field: "buttons.start", text: "A drafted button" }, { field: "nav.faq.label", text: "Questions asked" }])).toMatchObject({ ok: true });
+    expect(await saveSections(current, { page: "home", op: "off", section: "price" })).toMatchObject({ ok: true });
+  };
+  const renderIn = async (cookies: Record<string, string>) => {
+    resetNextFakes(cookies, { "x-vercel-ip-country": "US" });
+    return renderSitePages("v1");
+  };
+
+  it("shows every page with the drafts and the bar to an admin in Draft Mode", async () => {
+    await drafts();
+    who.admin = true;
+    const pages = await renderIn({ [DRAFT_COOKIE]: "bypass" });
+    for (const p of pages) {
+      expect(p.markup, p.path).toContain("data-preview-bar");
+      expect(text(p.markup), p.path).toContain("Preview: you are seeing unpublished drafts. Visitors see the published site.");
+      expect(text(p.markup), p.path).toContain("Questions asked");
+      expect(text(p.markup), p.path).toContain("A drafted button");
+    }
+    const home = page(pages, "/").markup;
+    expect(text(home)).toContain("A drafted headline.");
+    expect(home).not.toMatch(/\sid="price"/);
+    // The one bar, at the foot of the page, after the footer.
+    expect(home.match(/data-preview-bar/g)).toHaveLength(1);
+    expect(home.indexOf("data-preview-bar")).toBeGreaterThan(home.indexOf("<footer"));
+  });
+
+  it("shows the published pages, byte for byte, for Draft Mode without an admin, and for an admin without Draft Mode", async () => {
+    await drafts();
+    who.admin = false;
+    sameAsPlain(await renderIn({ [DRAFT_COOKIE]: "bypass" }), "with the Draft Mode cookie and no admin");
+    who.admin = true;
+    sameAsPlain(await renderIn({}), "for an admin outside Draft Mode");
   });
 });
 

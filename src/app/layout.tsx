@@ -9,7 +9,9 @@ import { ClientBoot, CodeBanner } from "@/components/client-boot";
 import { Reveals } from "@/components/reveals";
 import { SettingsProvider } from "@/components/settings-provider";
 import { getSettings } from "@/lib/settings";
+import { PreviewBar } from "@/components/site/preview-bar";
 import { getSiteChrome, siteMeta } from "@/lib/site/chrome";
+import { getSiteContentView } from "@/lib/site/content/read";
 import { bySite, getServedSite, isBuiltVersion, isKnownNonProduction } from "@/lib/site/version";
 import "./globals.css";
 
@@ -85,6 +87,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const s = await getSettings();
   // Circles and the legacy site keep their own header and footer and read nothing more.
   const chrome = isBuiltVersion(site) ? await getSiteChrome(site) : null;
+  // An admin's preview of the drafts (plan U9): the content reader says so, from Draft Mode and the admin check.
+  // While a page is prerendered Draft Mode is off, so this is false in every stored page.
+  const preview = isBuiltVersion(site) ? (await getSiteContentView()).preview : false;
   return (
     <html lang="en-CA" className={mona.variable} suppressHydrationWarning>
       <head>
@@ -102,6 +107,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             {children}
           </main>
           <FooterSwitch sketches={sketches} full={<SiteFooter site={site} chrome={chrome} />} minimal={<MinimalFooter site={site} />} />
+          {preview && <PreviewBar />}
         </SettingsProvider>
       </body>
     </html>

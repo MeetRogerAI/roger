@@ -3,12 +3,13 @@ import { connection } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
 import { getAmounts } from "@/lib/site/amounts";
-import { asRead, draftChanges, linkWarnings, listChanges, namesFilled, reviewKey, sectionChanges, wordingWarnings } from "@/lib/site/content/check";
-import { PAGES_ADDRESS, destinationName, editorAddress, fieldAnchor, fieldLabelWith, fieldPlace, listAnchor, placesIn, sectionsAnchor } from "@/lib/site/content/labels";
+import { asRead, draftChanges, headingWarnings, linkWarnings, listChanges, namesFilled, reviewKey, sectionChanges, wordingWarnings } from "@/lib/site/content/check";
+import { PAGES_ADDRESS, destinationName, editorAddress, fieldAnchor, fieldLabelWith, fieldPlace, listAnchor, listWords, placesIn, sectionsAnchor } from "@/lib/site/content/labels";
 import { applyOverlay, baseline, readField } from "@/lib/site/content/model";
 import { TOGGLE_ON, resolveField, siteRegistry } from "@/lib/site/content/registry";
 import { readStored } from "@/lib/site/content/store";
 import { Unreadable, count } from "../parts";
+import { PreviewButton } from "../preview-button";
 import { PublishButton, UndoPublish } from "../publish-controls";
 
 /**
@@ -36,6 +37,15 @@ import { PublishButton, UndoPublish } from "../publish-controls";
  * under its sentence, and are read by the wording rules like any text that
  * is new to the site. The texts of a removed item are not listed: they are
  * on no page.
+ *
+ * PREVIEW AND THE OTHER WARNINGS (plan U9, R14, R17). The publish panel has
+ * a Preview button for each page a change is on: the real page, with every
+ * draft on it, in a new tab. The link warnings cover every link the drafts
+ * would draw, typed or built in, that lands on a section they switch off or
+ * leave empty, or on an item they remove ("/#examples-paper"). A page left
+ * without its main heading (Home with its Hero off, Use cases with its
+ * introduction off) is a page warning. Neither kind blocks or is logged; each
+ * turns the button into "Publish anyway".
  *
  * EVERY TEXT IS SHOWN AS A VISITOR WILL READ IT: a name in braces is replaced
  * by its amount ("US$200", never "{monthlyUsd}"), and a line under the text
@@ -84,6 +94,7 @@ export default async function ReviewScreen() {
   const moves = sectionChanges(stored);
   const lists = listChanges(stored, baseline, siteRegistry, (text) => asRead(text, amounts));
   const links = linkWarnings(stored);
+  const headings = headingWarnings(stored);
   const total = changes.length + moves.length + lists.length;
   const pages = siteRegistry.pages.filter((page) => changes.some((change) => change.field.page === page.id) || moves.some((change) => change.page.id === page.id) || lists.some((change) => change.page.id === page.id));
   /** A switch as words: what it is, on or off. */
@@ -94,6 +105,9 @@ export default async function ReviewScreen() {
     return name ? `${name} (${href})` : href;
   };
   const where = (fieldId: string, pageId: string) => `${editorAddress(pageId)}#${fieldAnchor(fieldId)}`;
+  // One Preview button for each page a change is on. Shared's words are on every page: its preview is the homepage,
+  // which needs no second button when Home has one.
+  const previewPages = pages.filter((page) => page.id !== "shared" || !pages.some((other) => other.id === "home"));
 
   return (
     <section className="max-w-[56rem] space-y-8">
@@ -256,16 +270,45 @@ export default async function ReviewScreen() {
         <div data-link-warnings className="rounded-[8px] border border-error bg-surface p-5">
           <h2 className="text-title">Link warnings: {links.length}</h2>
           <p className="mt-2 text-small text-ink-2">
-            {links.length === 1 ? "A link of the site points" : "Links of the site point"} at a section that is switched off. You decide: switch the section back on, or publish anyway. Nothing breaks: the link opens the page at its top.
+            {links.length === 1 ? "A link of the site would point" : "Links of the site would point"} at something the drafts take off the page. You decide: put it back, change the link, or publish anyway. Nothing breaks: the link opens the page at its top.
           </p>
           <ul className="mt-4 space-y-4">
-            {links.map((warning, i) => (
-              // Two links may point at one section: the header's and the footer's, worded apart.
-              <li key={`${i}:${warning.href}`} data-link-warning={warning.href} className={`min-w-0 text-small ${wrap}`}>
+            {links.map((warning, i) => {
+              // What takes the owner to the fix: the page's sections for a section switched off, the list for an item removed or a list left empty.
+              const list = warning.kind === "removed" || (warning.kind === "empty" && warning.item) ? warning.item!.list : warning.kind === "empty" ? [...siteRegistry.lists.values()].find((entry) => entry.page === warning.page.id && entry.section === warning.section.id) : undefined;
+              const fix = list ? { href: `${editorAddress(warning.page.id)}#${listAnchor(list.id)}`, text: `Edit ${listWords(list).title.toLowerCase()}` } : { href: `${editorAddress(warning.page.id)}#${sectionsAnchor(warning.page.id)}`, text: `Edit the sections of ${warning.page.label}` };
+              return (
+                // Two links may point at one section: the header's and the footer's, worded apart.
+                <li key={`${i}:${warning.href}`} data-link-warning={warning.href} data-link-kind={warning.kind} className={`min-w-0 text-small ${wrap}`}>
+                  <p>{warning.says}</p>
+                  <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                    <Link href={fix.href} className="tlink">
+                      {fix.text}
+                    </Link>
+                    {warning.field && (
+                      <Link href={where(warning.field.id, warning.field.page)} className="tlink">
+                        Edit the link<span className="sr-only">: “{warning.link}”</span>
+                      </Link>
+                    )}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {headings.length > 0 && (
+        <div data-heading-warnings className="rounded-[8px] border border-error bg-surface p-5">
+          <h2 className="text-title">Page warnings: {headings.length}</h2>
+          <p className="mt-2 text-small text-ink-2">You decide: switch the section back on, or publish anyway.</p>
+          <ul className="mt-4 space-y-4">
+            {headings.map((warning) => (
+              <li key={warning.page.id} data-heading-warning={warning.page.id} className={`min-w-0 text-small ${wrap}`}>
                 <p>{warning.says}</p>
                 <p className="mt-1">
                   <Link href={`${editorAddress(warning.page.id)}#${sectionsAnchor(warning.page.id)}`} className="tlink">
-                    Go to the sections of {warning.page.label}
+                    Edit the sections of {warning.page.label}
                   </Link>
                 </p>
               </li>
@@ -282,8 +325,18 @@ export default async function ReviewScreen() {
             within a few seconds. You can take it back afterwards with Undo last publish.
           </p>
         )}
+        {total > 0 && (
+          <div data-preview-line className="space-y-2">
+            <p className="text-small text-ink-2">See the pages with all saved drafts on them before you publish. Each opens in a new tab, exactly as it will look; only you see it.</p>
+            <div className="flex flex-wrap gap-3">
+              {previewPages.map((page) => (
+                <PreviewButton key={page.id} page={page.id} label={page.id === "shared" ? "Preview the homepage" : `Preview ${page.label}`} note={page.id === "shared" ? "the homepage, with every draft" : `the ${page.label} page, with every draft`} />
+              ))}
+            </div>
+          </div>
+        )}
         {/* Always rendered, so its message stays on screen once the list above is empty. */}
-        <PublishButton review={reviewKey(stored, warnings)} count={total} warnings={warnings.length + links.length} />
+        <PublishButton review={reviewKey(stored, warnings)} count={total} warnings={warnings.length + links.length + headings.length} />
       </div>
 
       <div className="space-y-3">

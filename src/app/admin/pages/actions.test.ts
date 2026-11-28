@@ -11,7 +11,7 @@ import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builtInQuestions } from "@/data/site/v1";
 import type { Query } from "@/lib/db-query";
-import { Redirected, nextHeaders, nextNavigation, outcome, resetNextFakes } from "@/test-helpers/next-fakes";
+import { DRAFT_COOKIE, Redirected, jar, nextHeaders, nextNavigation, outcome, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
 import { testDb } from "@/test-helpers/pglite-db";
 
@@ -49,6 +49,9 @@ vi.mock("@/lib/admin-auth", () => ({
     return admin;
   },
   isAdmin: async () => Boolean(admin),
+  // The admin's own sign-in and sign-out (src/app/admin/actions.ts): the password cookie is not this test's subject.
+  signIn: async () => false,
+  signOut: async () => {},
 }));
 
 const { listAction, publishAction, savePageAction, sectionsAction, undoPublishAction } = await import("./actions");
@@ -57,6 +60,9 @@ const { default: EditorScreen } = await import("./[page]/page");
 const { default: ReviewScreen } = await import("./review/page");
 const { default: QuestionsPage } = await import("../questions/page");
 const { LAUNCH_LIST_URL } = await import("./launch-list");
+const { POST: previewRoute, GET: previewGet } = await import("./preview/route");
+const { POST: exitRoute, GET: exitGet } = await import("./preview/exit/route");
+const { signOutAction } = await import("../actions");
 const { CONTENT_TAG, getSiteContent } = await import("@/lib/site/content/read");
 const { CONTENT_KEY, LEGACY_QUESTIONS_KEY, readStored } = await import("@/lib/site/content/store");
 const { DESTINATION_REFUSAL, draftChanges, reviewKey, wordingWarnings } = await import("@/lib/site/content/check");
@@ -336,8 +342,9 @@ describe("the editing screen", () => {
     // A line gets a one-line box, a paragraph gets room.
     expect(headline).toMatch(/<input [^>]*type="text"/);
     expect(box(markup, HERO_SUB)).toContain("<textarea");
-    // One Save for the page.
-    expect(markup.match(/<button type="submit"/g)).toHaveLength(1);
+    // One Save for the page. The other button that submits is Preview's, in a form of its own (plan U9).
+    expect(markup.match(/<button type="submit"/g)).toHaveLength(2);
+    expect(markup.match(/<form[^>]*data-preview="home"[^>]*>(?:(?!<\/form>)[\s\S])*<button type="submit"/g)).toHaveLength(1);
     expect(words(markup)).toContain("Save draft");
   });
 
@@ -1302,5 +1309,191 @@ describe("the header's and the footer's links, and the examples (plan U8)", () =
     const broken = words(box(await editorScreen("home"), "examples.video.playbook"));
     expect(broken).toContain("The card cannot find this playbook’s parts.");
     expect(broken).toContain("This playbook does not have them, so that page shows the notes in a list beside the whole playbook.");
+  });
+});
+
+/**
+ * Preview (plan U9, R14, AE1, KTD7): the Preview buttons post a page's id to a route that checks the admin, switches
+ * on Draft Mode and sends the browser to the page's public address; the pages then show the drafts to that admin,
+ * and to nobody else. Exit and sign-out switch it off.
+ */
+describe("preview (plan U9, R14, AE1)", () => {
+  beforeEach(() => {
+    admin = OWNER;
+  });
+  const SITE = "https://meetroger.ai";
+  const post = (path: string, body?: FormData | string, headers: Record<string, string> = { origin: SITE, host: "meetroger.ai" }) => new Request(`${SITE}${path}`, { method: "POST", headers, ...(body === undefined ? {} : { body }) });
+  const enter = (page: string | null, headers?: Record<string, string>) => previewRoute(post("/admin/pages/preview", page === null ? undefined : form({ page }), headers));
+  const exit = (from: string | null, headers: Record<string, string> = { origin: SITE, host: "meetroger.ai" }) => exitRoute(post("/admin/pages/preview/exit", undefined, from === null ? headers : { ...headers, referer: `${SITE}${from}` }));
+  const inPreview = () => jar.has(DRAFT_COOKIE);
+
+  it("refuses someone who is not an admin before the form is read, and switches nothing on", async () => {
+    admin = null;
+    const req = new Request(`${SITE}/admin/pages/preview`, { method: "POST", headers: { origin: SITE, host: "meetroger.ai" } });
+    Object.defineProperty(req, "formData", {
+      value: () => {
+        throw new Error("the form was read before the admin check");
+      },
+    });
+    const res = await previewRoute(req);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/admin");
+    expect(inPreview()).toBe(false);
+  });
+
+  it("sends an admin to the page's own address with Draft Mode on, for each covered page; Shared opens the homepage", async () => {
+    for (const [page, address] of [["home", "/"], ["howItWorks", "/how-it-works"], ["library", "/library"], ["faq", "/faq"], ["about", "/about"], ["shared", "/"]]) {
+      resetNextFakes();
+      const res = await enter(page);
+      expect(res.status, page).toBe(303);
+      expect(res.headers.get("location"), page).toBe(address);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(inPreview(), page).toBe(true);
+    }
+  });
+
+  it("takes a page id only: an unknown id, an address, or no form enables nothing and stays in the admin", async () => {
+    for (const page of ["nope", "/", "https://evil.test", "//evil.test", "/admin", "javascript:alert(1)", "", null]) {
+      resetNextFakes();
+      const res = await enter(page);
+      expect(res.status, String(page)).toBe(303);
+      expect(res.headers.get("location"), String(page)).toBe("/admin/pages");
+      expect(inPreview(), String(page)).toBe(false);
+    }
+    // Not a form at all.
+    resetNextFakes();
+    const res = await previewRoute(post("/admin/pages/preview", "page=home", { origin: SITE, host: "meetroger.ai", "content-type": "text/plain" }));
+    expect(res.headers.get("location")).toBe("/admin/pages");
+    expect(inPreview()).toBe(false);
+  });
+
+  it("answers only a POST from a page of this site", async () => {
+    const res = await enter("home", { origin: "https://evil.test", host: "meetroger.ai" });
+    expect(res.status).toBe(403);
+    expect(inPreview()).toBe(false);
+    expect(previewGet().status).toBe(405);
+    expect(exitGet().status).toBe(405);
+  });
+
+  it("covers AE1: a draft headline is on the homepage for the admin in preview, and the published one for a visitor, for the cookie alone, and after the preview ends", async () => {
+    await savePageAction(typed("home", { [HEADLINE]: "The drafted headline" }));
+    const published = original(HEADLINE);
+    expect(await home()).toContain(published);
+    expect(await home()).not.toContain("The drafted headline");
+
+    await enter("home");
+    expect(await home()).toContain("The drafted headline");
+    expect(await home()).not.toContain(published);
+    // The header and the footer take the drafts too, in the same render.
+    await savePageAction(typed("shared", { "nav.faq.label": "Questions asked" }));
+    expect((await (await import("@/lib/site/chrome")).getSiteChrome("v1")).links.map((link) => link.label)).toContain("Questions asked");
+
+    // The cookie on its own: a copied cookie, or an admin whose session has ended.
+    admin = null;
+    expect(await home()).toContain(published);
+    expect(await home()).not.toContain("The drafted headline");
+    admin = OWNER;
+
+    const res = await exit("/faq");
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/faq");
+    expect(inPreview()).toBe(false);
+    expect(await home()).toContain(published);
+    // Publishing is still a separate step: nothing was published by previewing.
+    expect(await logged()).toEqual([]);
+    expect((await readStored(current)).published).toEqual(newOverlay());
+  });
+
+  it("lands Exit on the page it was pressed on when that is a covered page, and on the homepage for anything else", async () => {
+    for (const [from, to] of [["/how-it-works", "/how-it-works"], ["/library", "/library"], ["/about", "/about"], ["/", "/"], ["/zack", "/"], ["/admin/pages", "/"], ["/faq?x=1", "/faq"], [null, "/"]] as const) {
+      resetNextFakes();
+      jar.set(DRAFT_COOKIE, "bypass");
+      const res = await exit(from);
+      expect(res.headers.get("location"), String(from)).toBe(to);
+      expect(inPreview()).toBe(false);
+    }
+    // Another site's address in the header is only compared, never sent back.
+    resetNextFakes();
+    const res = await exitRoute(post("/admin/pages/preview/exit", undefined, { origin: SITE, host: "meetroger.ai", referer: "https://evil.test/faq" }));
+    expect(res.headers.get("location")).toBe("/faq");
+    expect((await exit("/faq", { origin: "https://evil.test", host: "meetroger.ai" })).status).toBe(403);
+  });
+
+  it("ends when the admin signs out of the admin", async () => {
+    jar.set(DRAFT_COOKIE, "bypass");
+    expect(await outcome(() => signOutAction())).toEqual({ redirect: "/admin" });
+    expect(inPreview()).toBe(false);
+  });
+
+  it("puts a Preview button on each page's editing screen and in the review's publish panel, each a form that sends the page's id and opens a new tab", async () => {
+    for (const page of ["home", "faq", "shared"]) {
+      const screen = await editorScreen(page);
+      const button = /<form[^>]*data-preview="([^"]+)"[\s\S]*?<\/form>/.exec(screen)!;
+      expect(button[1]).toBe(page === "faq" ? "faq" : page);
+      expect(button[0]).toContain('method="post"');
+      expect(button[0]).toContain('action="/admin/pages/preview"');
+      expect(button[0]).toContain('target="_blank"');
+      expect(button[0]).toContain(`<input type="hidden" name="page" value="${page}"/>`);
+    }
+    // Nothing waiting: nothing to preview from the review.
+    expect(await reviewScreen()).not.toContain("data-preview=");
+    await savePageAction(typed("home", { [HEADLINE]: "The drafted headline" }));
+    await sectionsAction(form({ page: "faq", op: "off", section: "startBand" }));
+    const panel = /<div data-publish-panel[\s\S]*?<\/div>\s*<div class="space-y-3">/.exec(await reviewScreen())![0];
+    expect([...panel.matchAll(/data-preview="([^"]+)"/g)].map((m) => m[1])).toEqual(["home", "faq"]);
+    expect(words(panel)).toContain("Preview Home");
+    expect(words(panel)).toContain("Preview FAQ");
+  });
+});
+
+/** The link and page warnings of the review (plan U9, R17, AE3): what the drafts would take off a page that a link of the site still points at. */
+describe("the review's link and page warnings (plan U9, R17)", () => {
+  beforeEach(() => {
+    admin = OWNER;
+  });
+  const sections = (page: string, op: string, section: string) => sectionsAction(form({ page, op, section }));
+  const lists = (page: string, list: string, op: string, more: Record<string, string> = {}) => listAction(form({ page, list, op, ...more }));
+
+  it("warns that Home has no main heading with its Hero off, and the Use cases page with its introduction off, each with a way to the sections", async () => {
+    await sections("home", "off", "hero");
+    let review = await reviewScreen();
+    expect(review).toContain('data-heading-warning="home"');
+    expect(words(review)).toContain("Page warnings: 1");
+    expect(words(review)).toContain("The homepage would have no main heading: its “Hero” section, which holds the page’s headline, is switched off.");
+    expect(review).toMatch(/data-heading-warning="home"[\s\S]*?href="\/admin\/pages\/home#sections-home"/);
+    expect(words(review)).toContain("Publish anyway: this 1 change");
+
+    await sections("library", "off", "intro");
+    review = await reviewScreen();
+    expect(words(review)).toContain("Page warnings: 2");
+    expect(words(review)).toContain("The Use cases page would have no main heading: its “Introduction” section");
+    // Not an override of a wording rule: published, it logs the publish only.
+    expect(await publishNow()).toMatchObject({ status: "ok" });
+    expect((await logged()).map((entry) => entry.action)).toEqual(["site_content_published"]);
+  });
+
+  it("covers AE3 for a typed address: a header link typed as /#price with Price off is named, with a way to the sections and to the link", async () => {
+    const added = await lists("shared", "nav", "add", { "new:label": "Our price", "new:href": "/#price" });
+    expect(added).toMatchObject({ status: "ok" });
+    await sections("home", "off", "price");
+    const review = await reviewScreen();
+    expect(words(review)).toContain("Link warnings: 2");
+    expect(words(review)).toContain("The “Our price” link in the header of every page points at the “Price” section of Home, which is switched off.");
+    const item = /<li[^>]*data-link-warning="\/#price"[^>]*>(?:(?!<\/li>)[\s\S])*Our price[\s\S]*?<\/li>/.exec(review)![0];
+    expect(item).toContain('href="/admin/pages/home#sections-home"');
+    expect(item).toContain(`href="/admin/pages/shared#field-nav.${added.added}.href"`);
+    expect(await publishNow()).toMatchObject({ status: "ok" });
+    expect((await logged()).map((entry) => entry.action)).toEqual(["site_content_published"]);
+  });
+
+  it("names a link to an example that the drafts remove, and says nothing of a link to a page or to another site", async () => {
+    await savePageAction(typed("shared", { "footer.links.faq.href": "/#examples-paper", "footer.links.about.href": "https://example.test/about" }));
+    expect(await reviewScreen()).not.toContain("data-link-warnings");
+    await lists("home", "examples", "remove", { item: "paper" });
+    const review = await reviewScreen();
+    expect(review).toContain('data-link-kind="removed"');
+    expect(words(review)).toContain("Link warnings: 1");
+    expect(words(review)).toMatch(/The “FAQ” link in the footer of every page points at the example “[^”]+” on Home, which is removed from the list\./);
+    expect(review).toMatch(/data-link-kind="removed"[\s\S]*?href="\/admin\/pages\/home#list-examples"/);
   });
 });

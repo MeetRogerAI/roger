@@ -29,7 +29,18 @@ export const nextHeaders = {
     delete: (name: string) => void jar.delete(name),
   }),
   headers: async () => new Headers(Object.fromEntries(headerValues)),
+  /** Draft Mode as Next keeps it: on while this browser holds the bypass cookie. */
+  draftMode: async () => ({
+    get isEnabled() {
+      return jar.has(DRAFT_COOKIE);
+    },
+    enable: () => void jar.set(DRAFT_COOKIE, "bypass"),
+    disable: () => void jar.delete(DRAFT_COOKIE),
+  }),
 };
+
+/** The cookie Next's Draft Mode sets (node_modules/next/dist/docs, draftMode). */
+export const DRAFT_COOKIE = "__prerender_bypass";
 
 export const nextNavigation = {
   redirect: (url: string): never => {
