@@ -830,6 +830,23 @@ export function linkTargets(registry: Registry = siteRegistry): LinkTarget[] {
   return out;
 }
 
+/**
+ * The public address a page's preview opens (plan U9): the page's own, and the homepage for Shared, whose words are
+ * on every page. Null for an id that is no page's. The only addresses the preview ever sends a browser to.
+ */
+export function previewAddress(pageId: string, registry: Registry = siteRegistry): string | null {
+  const page = registry.pages.find((entry) => entry.id === pageId);
+  return page ? page.path : null;
+}
+
+/**
+ * Where "Exit preview" lands: the page it was pressed on when that is one of the covered pages, the homepage for
+ * anything else. `pathname` comes from the browser, so it is only ever compared with the registry, never sent back.
+ */
+export function exitAddress(pathname: string | null, registry: Registry = siteRegistry): string {
+  return registry.pages.find((page) => page.path === pathname)?.path ?? "/";
+}
+
 // ---------------------------------------------------------------------------
 // What a field can hold
 // ---------------------------------------------------------------------------

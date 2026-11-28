@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { headers } from "next/headers";
+import { draftMode, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { clientIp, hit } from "@/lib/rate-limit";
 import { logAdminAction } from "@/lib/admin/log";
@@ -41,6 +41,9 @@ export async function signOutAction() {
   await signOut();
   // Also end an email-link session, if that is how this admin signed in.
   await endCurrentSession();
+  // And the preview of the drafts (plan U9). Without an admin session it would show nothing but the published
+  // site anyway (the content reader checks the admin on every previewed render); this takes the cookie away too.
+  (await draftMode()).disable();
   redirect("/admin");
 }
 

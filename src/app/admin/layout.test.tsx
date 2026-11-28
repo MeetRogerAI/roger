@@ -78,11 +78,15 @@ describe("the admin layout", () => {
   it("is not the only check: every admin page and download still asks who is there before it reads anything", () => {
     // A layout is not rendered again on a navigation between its pages, so each page checks for itself.
     const under = (dir: string): string[] => readdirSync(dir).flatMap((name) => (statSync(path.join(dir, name)).isDirectory() ? under(path.join(dir, name)) : [path.join(dir, name)]));
-    const entries = under(__dirname).filter((file) => /[\\/](page\.tsx|route\.ts)$/.test(file));
+    // "Exit preview" (plan U9) is the one exception: anyone may switch Draft Mode off in their own browser, and it reads nothing.
+    const exit = path.join(__dirname, "pages", "preview", "exit", "route.ts");
+    const entries = under(__dirname).filter((file) => /[\\/](page\.tsx|route\.ts)$/.test(file) && file !== exit);
+    expect(readFileSync(exit, "utf8")).not.toMatch(/query|readStored|getSiteContent|formData/);
     expect(entries.length).toBeGreaterThanOrEqual(adminGroups.flatMap((group) => group.screens).length + 2);
     for (const file of entries) {
       const body = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
-      const check = /\n  if \(!\(await isAdmin\(\)\)\) return (null|new Response\("Not signed in", \{ status: 401 \}\));\n/.exec(body);
+      // A route a form posts to in a new tab (Preview) sends anyone else to the sign-in instead of a bare 401.
+      const check = /\n  if \(!\(await isAdmin\(\)\)\) return (null|new Response\("Not signed in", \{ status: 401 \}\)|to\("\/admin"\));\n/.exec(body);
       expect(check, file).not.toBeNull();
       // The check opens the function it sits in: waiting for the request may come first, and nothing else is awaited before it.
       const start = body.lastIndexOf("async function ", check!.index);
