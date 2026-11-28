@@ -11,7 +11,7 @@ A library of real things people's AI agents do, collected from public posts ever
 | `/companies` | AI and automation for family-owned companies |
 | `/for/[slug]` | Unlisted pitch pages for one company (noindex) |
 | `/watch/confirm`, `/watch/stop` | Links from watch emails |
-| `/admin` | Peter's admin: library, sign-ups, watches, connections, settings (password) |
+| `/admin` | Peter's admin: library, sign-ups, watches, connections, settings (admins in `ADMIN_EMAILS` sign in by email link) |
 | `/api/push` | Webhook: Peter's own agent sends post links here (token in Admin → Connections) |
 | `/api/cron/ingest`, `/api/cron/watches` | Daily jobs (Vercel Cron, see `vercel.json`) |
 | `/terms`, `/privacy`, `/refunds`, `/workshops` | Supporting pages |
@@ -36,8 +36,8 @@ Set these in the Vercel project (Settings → Environment Variables), for Produc
 | Name | Needed for |
 |---|---|
 | `DATABASE_URL` | Everything that saves: library, sign-ups, watches, admin, webhook. Add Neon from the Vercel Marketplace and it is set for you. |
-| `ADMIN_PASSWORD` | Signing in to `/admin` |
-| `ADMIN_SECRET` | Signs the admin session and encrypts keys saved in admin. Any long random string; keep it stable. |
+| `ADMIN_EMAILS` | Who can use `/admin`: a comma-separated list of addresses. They sign in with an email link. |
+| `ADMIN_SECRET` | Encrypts keys saved in admin. Any long random string; keep it stable. |
 | `CRON_SECRET` | Lets Vercel Cron run the daily jobs. Any long random string. |
 | `RESEND_API_KEY` | Watch emails. Optional here: can be pasted in Admin → Connections instead, or set by the Resend integration. |
 | `X_BEARER_TOKEN`, `XAI_API_KEY` | Optional X sources for the daily intake. Can also be pasted in Admin → Connections. |
