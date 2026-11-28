@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useActionState } from "react";
-import { addUseCase, runIngestAction, saveSecretAction, saveSettingsAction, signInAction, updateUseCase, type AdminState } from "@/app/admin/actions";
+import { addUseCase, runIngestAction, saveSecretAction, saveSettingsAction, updateUseCase, type AdminState } from "@/app/admin/actions";
 import { categories } from "@/data/library";
 
 const idle: AdminState = { status: "idle" };
@@ -16,26 +16,6 @@ function Msg({ s }: { s: AdminState }) {
     <p role={s.status === "error" ? "alert" : "status"} className={`text-small ${s.status === "error" ? "text-error" : "text-ink"}`}>
       {s.message}
     </p>
-  );
-}
-
-export function LoginForm() {
-  const [s, action, pending] = useActionState(signInAction, idle);
-  return (
-    <form action={action} className="mx-auto mt-24 max-w-sm rounded-[var(--radius-object)] border border-rule bg-surface p-8">
-      <h1 className="text-h3">Roger admin</h1>
-      <p className="mt-2 text-small text-ink-2">Sign in to manage the library, sign-ups and settings.</p>
-      <label htmlFor="pw" className={`${label} mt-6`}>
-        Password
-      </label>
-      <input id="pw" name="password" type="password" required autoComplete="current-password" className={field} />
-      <button type="submit" disabled={pending} className="btn btn-m btn-ink mt-5 w-full">
-        {pending ? "Signing in…" : "Sign in"}
-      </button>
-      <div className="mt-3">
-        <Msg s={s} />
-      </div>
-    </form>
   );
 }
 
