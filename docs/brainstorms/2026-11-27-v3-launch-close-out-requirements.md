@@ -60,6 +60,41 @@ All work happens in git worktrees (this project: `../roger-launch`, branch `laun
 **Moved to the roadmap (confirm or add, then remove the row)**
 - R24. S11 (session day, time and link) and D5 and D6 (referral and sponsor defaults) go to B2. S12 (demo video and "one real week" figures) goes to A2. S23 (Levels files) and S24 (Zack 2.1) go to B4. Cora changes 8, 11 and 15 go per R6, and admin-read logging per R7 P2. For each one, the destination plan names it, or the item is added there.
 
+**Decisions settled 2026-11-27 and 2026-11-28: the last item (g-pilot-runs / S14)**
+
+All 18 pilot runs are on production (R15 counted 13 when it was written): 26 plays are in the pool and 38 are held. R26, R28 and R29 replace the "linked to the pilots" part of R15. R25 and R27 are launch work Peter added on 2026-11-27. The state of the work is in `docs/handoffs/2026-11-28-launch-close-out.md`. Where the handoff and this section differ, this section wins.
+- R25. **No manual flag review** (Peter, 2026-11-27). Every shared play is admitted with a safeguard, or dropped:
+  - A missing playbook is drafted by the model and marked as drafted. If drafting fails, the play is admitted as an outline only.
+  - A privacy flag redacts the play, or keeps it as an outline only.
+  - Harm is dropped and logged.
+  - A one-time pass applies the same rules to the 38 held plays. The 26 pooled plays passed intake with no flag, so they are not checked again. Like every play, they carry the safeguard preamble in lists.
+  - `/admin/flags` becomes a log of what was auto-fixed or dropped. Approve and Reject go; Edit stays.
+  - This is the safety boundary for text that other members' agents run. No play is admitted unless its harm check has completed, so a check that cannot run never admits a play. Drafted setup steps go through the same harm checks as a member's own text. The drafting and review prompts treat run text as data, so run text cannot steer them.
+  - The branch merges after a security review and an adversarial review, as well as a green suite. Branch `feat/auto-admit-plays`.
+- R26. **Seed runs link to accounts by email.** A seed contributor can carry the person's email address. Every contributor with that address links to the account when the account is made, when the address is set, and when the account's email changes. Branch `feat/auto-link-pilots`.
+- R27. **Admins are members, with extra powers.** Peter: "admins should have all member actions, and then also have additional actions." Admin addresses can use every member feature. Admin powers still need an email-link session. One admin cannot close, delete or re-address another admin's account from `/admin`. The branch merges after a security review of sessions, as well as a green suite. Branch `feat/admins-are-members`.
+- R28. **Pilots join as regular members** (Peter, 2026-11-28). Each pilot signs up at meetroger.ai/start, the same way any member does: the quiz, the account, the plan, a trial, and a card when the first list is ready. Pilots do not use pilot links, and they get no special pricing and no email exclusions. Every email on their path reaches them, so Peter can ask them whether Roger's emails are right. Peter sends them the /start address himself. Their contributor emails are set first, so their seed runs link when they sign up.
+- R29. **The pilot emails Peter gave are set on production with a script.** They are private: `.context/pilot-emails.md` in the main checkout, git-ignored.
+  - The script runs after R26 is deployed on production.
+  - It calls `setContributorEmail`, the same function `/admin/cora` uses. An existing account is linked at once, and running it again is safe.
+  - Its dry run lists each label and whether a contributor and an account were found for it.
+  - It prints labels and counts, never addresses. Commit messages, PR text and the launch list also use counts only.
+
+  Grace's address is in the file, but she has no contributor record yet. If her runs are imported later, the import passes `--email`. The six pilots with no email on file stay unlinked; each links when an address is set later. S14 closes once all of these are true:
+  - R25's pass has run on production, and `/admin/flags` has nothing pending.
+  - An admin has read a Cora dry run after the pass (from R15).
+  - R26 is merged.
+  - The known emails are set.
+
+  S14 does not wait for the pilots to sign up.
+- R30. **Working rule for these branches** (refines R3 and the Key Decisions for this pass). Each branch goes through these steps in order:
+  1. Rebase it onto `main`, so the schema it applies is never older than production's.
+  2. Read the branch's `db/schema.sql` diff, then apply it to production without a separate yes. R25's change adds two columns. R26's adds a column and two indexes, and drops the rule that a contributor links to one account only. Old code does not rely on that rule, but it cannot be put back once one account links two contributors.
+  3. Merge, and wait for the Vercel deploy.
+  4. Only then run the branch's production data write: dry run, Peter's yes, apply. These writes are the pilot emails (R26) and R25's one-time pass.
+
+  This replaces the handoff's order for `feat/auto-admit-plays` (merge, then schema). That order would break intake and the Cora job until the columns exist.
+
 ## Success Criteria
 - The published launch list has no checklist items and no Reference rows. Every removal is traceable to a commit that says where the item went.
 - Each roadmap-bound item can be found by name in its destination plan.
@@ -67,17 +102,18 @@ All work happens in git worktrees (this project: `../roger-launch`, branch `laun
 
 ## Scope Boundaries
 - No building of the marketing site (other session), B2, A2 or B4 work.
-- No new features beyond the R7 privacy behaviour (P3 idle erasure, P6 purge) and R16 code removal.
+- No new features beyond the R7 privacy behaviour (P3 idle erasure, P6 purge), R16 code removal, and R25 to R28, which Peter added on 2026-11-27 and 2026-11-28.
 - The page chrome stays as Peter trimmed it. No headings, intros or footers get added back.
 
 ## Key Decisions
 - Launch = A1 + B1. Anything else is moved off the list rather than finished.
-- Claude merges green PRs. Production data changes and live Stripe writes wait for Peter's yes.
+- Claude merges green PRs. Production data changes and live Stripe writes wait for Peter's yes. R30 sets the order and the schema exception for the last item.
 - Privacy defaults lean toward disclosure over new machinery, except two small retention jobs (P3, P6).
 
 ## Dependencies / Assumptions
 - R11 waits for Peter to place the live secret key in Vercel Production.
 - R15 and R16 wait for R19. R22 waits for R11, R13, R15 and R23.
+- R22 ran on 2026-11-28 at 02:29 UTC with S14 still open. The pilot runs were imported; linking and the held plays remained (R25 to R29).
 - Unverified: S4 is not on the current Reference tab. The accountant item may refer to a row already removed.
 
 ## Outstanding Questions

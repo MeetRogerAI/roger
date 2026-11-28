@@ -1,3 +1,4 @@
+import { autoLinkContributor, SIGNUP_ACTOR } from "@/lib/admin/contributors";
 import { logAdminAction } from "@/lib/admin/log";
 import { adminEmails } from "@/lib/auth/admin-emails";
 import { issueToken } from "@/lib/auth/login-link";
@@ -15,7 +16,8 @@ import { appUrl } from "@/lib/mail/layout";
  * The link is single-use, lasts 7 days, opens the same confirm page as every
  * sign-in link, and is shown to the admin once (only its hash is stored). It
  * cannot be made for an admin address, and who made it is recorded on the
- * token and in the admin log.
+ * token and in the admin log. A new account is linked to the seed
+ * contributor carrying its address (R25).
  */
 export type PilotResult = { ok: true; link: string; userId: string } | { ok: false; reason: "invalid" | "admin_address" | "already_signed_up" };
 
@@ -29,13 +31,15 @@ export async function createPilotLink(
   if (!isEmail(email) || !name) return { ok: false, reason: "invalid" };
   if (adminEmails().includes(email)) return { ok: false, reason: "admin_address" };
 
-  const rows = await q<{ id: string; status: string }>(
+  // xmax = 0: this statement inserted the row (it is not an account that existed already).
+  const rows = await q<{ id: string; status: string; created: boolean }>(
     `insert into users (email, name, path, signup_step, created_by) values ($1, $2, 'running', 'plan', $3)
      on conflict (email) do update set email = excluded.email
-     returning id, status`,
+     returning id, status, (xmax = 0) as created`,
     [email, name, o.createdBy],
   );
   const user = rows[0];
+  if (user.created) await autoLinkContributor(q, SIGNUP_ACTOR, user.id);
   if (user.status !== "signup") return { ok: false, reason: "already_signed_up" };
 
   const token = await issueToken(q, { email, purpose: "pilot", userId: user.id, nextPath: "/start/plan", createdBy: o.createdBy }, now);

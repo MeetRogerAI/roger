@@ -9,6 +9,7 @@ import { stripeAdjustments, stripeBilling, stripeOrders, stripePlans } from "@/l
 import { requireAdmin } from "@/lib/admin-auth";
 import { chooseSample, clearSample, moveTestimonial, saveTestimonial, setTestimonialCleared, TESTIMONIALS_TAG } from "@/lib/admin/content";
 import { chargeAndSendNow } from "@/lib/admin/cora";
+import { setContributorEmail } from "@/lib/admin/contributors";
 import { approvePlay, EDITABLE_FIELDS, editPlay, rejectPlay } from "@/lib/admin/flags";
 import { audited, logAdminAction } from "@/lib/admin/log";
 import { setSwitch, type LaunchSwitch } from "@/lib/admin/launch-switches";
@@ -21,7 +22,7 @@ import { gatewayFitModel } from "@/lib/cora/fit";
 import { runCoraJob } from "@/lib/cora/job";
 import { gatewayMergeModel } from "@/lib/cora/merge";
 import { SAMPLE_PLAY_TAG } from "@/lib/cora/sample";
-import { importSeedRun, SeedRunExists } from "@/lib/cora/seed-import";
+import { importSeedRun, SeedEmailRefused, SeedRunExists } from "@/lib/cora/seed-import";
 import { runSendJob } from "@/lib/cora/send-job";
 import { databaseMarkedNonProduction } from "@/lib/db-environment";
 import { query } from "@/lib/db-query";
@@ -158,6 +159,16 @@ export async function linkContributorAction(_p: V3State, fd: FormData): Promise<
   const userId = raw ? idOf(fd, "userId") : null;
   if (raw && !userId) return bad("No such user.");
   const r = await linkContributor(query, by, contributorId, userId);
+  refresh();
+  return state(r);
+}
+
+/** R25: set or clear a seed contributor's email (Cora page); an account with it is linked at once. */
+export async function contributorEmailAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const contributorId = idOf(fd, "contributorId");
+  if (!contributorId) return bad("No such contributor.");
+  const r = await setContributorEmail(query, by, contributorId, field(fd, "email", 254));
   refresh();
   return state(r);
 }
@@ -390,18 +401,18 @@ export async function seedImportAction(_p: V3State, fd: FormData): Promise<V3Sta
   const text = typeof fd.get("text") === "string" ? String(fd.get("text")) : "";
   if (!text.trim()) return bad("Paste the run file.");
   if (text.length > 80_000) return bad("The file is over 80,000 characters.");
-  const input = { label: field(fd, "label", 80), agent: field(fd, "agent", 40), ranOn: field(fd, "ranOn", 10), text, replace: fd.get("replace") === "on" };
+  const input = { label: field(fd, "label", 80), agent: field(fd, "agent", 40), ranOn: field(fd, "ranOn", 10), text, replace: fd.get("replace") === "on", email: field(fd, "email", 254), by };
   try {
     const r = await audited(
       query,
-      { by, action: "seed_import", detail: { label: input.label, agent: input.agent, ranOn: input.ranOn, replace: input.replace } },
+      { by, action: "seed_import", detail: { label: input.label, agent: input.agent, ranOn: input.ranOn, replace: input.replace, ...(input.email ? { email: input.email } : {}) } },
       () => importSeedRun(query, input, { model: gatewayModel, merge: gatewayMergeModel, ...mail }),
       (r) => ({ runId: r.runId, contributorId: r.contributorId, week: r.weekOf, replaced: r.replaced, intake: r.intake }),
     );
     refresh();
-    return { status: "ok", message: `Imported for the week of ${r.weekOf}${r.replaced ? " (replaced)" : ""}. Intake: ${r.intake}. Merge: ${summary(r.merge)}.`, at: Date.now() };
+    return { status: "ok", message: `Imported for the week of ${r.weekOf}${r.replaced ? " (replaced)" : ""}. Intake: ${r.intake}. Merge: ${summary(r.merge)}.${r.email ? ` ${r.email}` : ""}`, at: Date.now() };
   } catch (e) {
-    if (e instanceof SeedRunExists) return bad(e.message);
+    if (e instanceof SeedRunExists || e instanceof SeedEmailRefused) return bad(e.message);
     if (e instanceof Error && /seed run needs|must be YYYY/.test(e.message)) return bad(e.message);
     throw e;
   }

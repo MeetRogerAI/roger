@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SIGNUP_ACTOR, setContributorEmail } from "@/lib/admin/contributors";
 import { linkContributor } from "@/lib/admin/users";
 import { importSeedRun, SeedRunExists } from "@/lib/cora/seed-import";
 import { delivered, firstList, newWorld, play, report, signUp, weeksWithRuns, type Member, type World } from "./helpers";
@@ -71,5 +72,47 @@ describe("after the seed import", () => {
     const [rob] = await w.query<{ eligible_count: number }>(`select eligible_count from cora_user_weeks where user_id = $1 and week_of = '2026-12-07'`, [pilots[0][1].id]);
     const [ana] = await w.query<{ eligible_count: number }>(`select eligible_count from cora_user_weeks where user_id = $1 and week_of = '2026-12-07'`, [pilots[2][1].id]);
     expect(ana.eligible_count - rob.eligible_count).toBe(titlesBy.get("Rob")!.length - titlesBy.get("Ana")!.length);
+  });
+
+  it("links pilots by email at sign-up, all of one person's records, and never picks them a play from any of those records", async () => {
+    // One person, two records (their name written two ways), imported with their address in two cases.
+    const chrisTitles: string[] = [];
+    for (const [label, agent, email] of [["Chris M", "hark", "CMarinakos@RoyalLepage.ca"], ["Christopher", "claude", "cmarinakos@royallepage.ca"]]) {
+      const plays = [play(`${label} ${agent} idea 1`), play(`${label} ${agent} idea 2`)];
+      const r = await importSeedRun(w.query, { label, agent, text: report(plays), ranOn: "2026-11-13", email, by: "ehab@example.com" }, { model: w.cora.intake, merge: w.cora.merge, query: w.query, transport: w.cora.transport, sleep: async () => {} });
+      expect(r.intake).toBe("accepted");
+      chrisTitles.push(...plays.map((p) => p.title));
+    }
+    expect(await setContributorEmail(w.query, "ehab@example.com", contributor.get("Rob")!, "Rob@Pilot.example.com")).toMatchObject({ ok: true });
+
+    await w.at("2026-12-02T16:00:00Z");
+    const c = await signUp(w, { email: "cmarinakos@royallepage.ca", currency: "CAD", country: "CA", byLink: true });
+    const rob = await signUp(w, { email: "rob@pilot.example.com", currency: "CAD", country: "CA", byLink: true });
+    const ana = await signUp(w, { email: "ana@pilot.example.com", currency: "CAD", country: "CA", byLink: true });
+    const links = await w.query<{ label: string; user_id: string | null }>(`select label, user_id from seed_contributors where user_id is not null order by label`);
+    expect(links).toEqual([
+      { label: "Chris M", user_id: c.id },
+      { label: "Christopher", user_id: c.id },
+      { label: "Rob", user_id: rob.id },
+    ]);
+    expect(await w.query(`select distinct admin_email from admin_actions where action = 'link_contributor'`)).toEqual([{ admin_email: SIGNUP_ACTOR }]);
+
+    const pilots: [string[], Member][] = [[chrisTitles, c], [titlesBy.get("Rob")!, rob], [titlesBy.get("Ana")!, ana]];
+    const weeks = ["2026-12-07", "2026-12-14", "2026-12-21"];
+    await firstList(w, pilots.map(([, m]) => m), weeks[0]);
+    await weeksWithRuns(w, pilots.map(([, m]) => m), weeks.slice(1));
+    const gotBy = new Map<string, string[]>();
+    for (const [, m] of pilots) gotBy.set(m.id, (await Promise.all(weeks.map((wk) => delivered(w, m.id, wk)))).flat());
+    for (const [own, m] of pilots.slice(0, 2)) {
+      const got = gotBy.get(m.id)!;
+      expect(got).toHaveLength(9);
+      expect(got.filter((t) => own.includes(t))).toEqual([]);
+    }
+    // Ana is not linked (no address on her record): the seed plays of others are open to her, Chris's included.
+    expect(gotBy.get(ana.id)).toHaveLength(9);
+    const [cw] = await w.query<{ eligible_count: number }>(`select eligible_count from cora_user_weeks where user_id = $1 and week_of = '2026-12-07'`, [c.id]);
+    const [aw] = await w.query<{ eligible_count: number }>(`select eligible_count from cora_user_weeks where user_id = $1 and week_of = '2026-12-07'`, [ana.id]);
+    // Both of Chris's records are left out of his eligible count, not just one.
+    expect(aw.eligible_count - cw.eligible_count).toBe(chrisTitles.length);
   });
 });

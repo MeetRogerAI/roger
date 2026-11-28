@@ -230,6 +230,15 @@ describe("the callback", () => {
     expect(u).toEqual({ email: "ana@gmail.com", name: "Ana Google", path: "running", agent: "hark", currency: "CAD", signup_step: "plan", google_sub: "g-111", google_email: "ana@gmail.com", verified: true });
   });
 
+  it("links the seed contributor carrying the address when Google makes the account (R25)", async () => {
+    const [sc] = await query<{ id: string }>("insert into seed_contributors (label, email) values ('Ana', 'ana@gmail.com') returning id");
+    const out = await (await roundTrip({ newAccount: signupDetails })).run();
+    expect(out).toMatchObject({ kind: "signed_in", created: true });
+    const [u] = await query<{ id: string }>("select id from users");
+    expect(await query("select user_id from seed_contributors where id = $1", [sc.id])).toEqual([{ user_id: u.id }]);
+    expect(await query("select admin_email, action from admin_actions")).toEqual([{ admin_email: "system (sign-up)", action: "link_contributor" }]);
+  });
+
   it("never links or signs in an admin address with Google, and a Google session is never admin", async () => {
     await query("insert into users (email, signup_step) values ('ana@gmail.com', 'done')");
     expect(await (await roundTrip({ admins: ["ana@gmail.com"] })).run()).toEqual({ kind: "refused", reason: "admin" });

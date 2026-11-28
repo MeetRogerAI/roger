@@ -1,3 +1,4 @@
+import { autoLinkContributor, EMAIL_CHANGE_ACTOR } from "@/lib/admin/contributors";
 import type { Query } from "@/lib/db-query";
 import { isEmail } from "@/lib/form";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps, type SendResult } from "@/lib/mail/send";
@@ -103,7 +104,8 @@ export async function approveEmailChange(q: Query, t: UsedToken, deps: MailDeps 
  * Step 3, after the new address's link was used: applies the change if the
  * account still has the address it had at the request, the approval was
  * really used, and nobody else has the new address. Stripe's customer is
- * marked as needing the new address.
+ * marked as needing the new address. A seed contributor carrying the new
+ * address is linked to the account (R25; never unlinked).
  */
 export async function confirmEmailChange(q: Query, t: UsedToken, now = new Date()): Promise<{ id: string; email: string; oldEmail: string } | null> {
   const d = changeData(t);
@@ -119,7 +121,9 @@ export async function confirmEmailChange(q: Query, t: UsedToken, now = new Date(
        returning u.id, u.email`,
       [t.userId, d.from, d.to, now.toISOString()],
     );
-    return rows[0] ? { ...rows[0], oldEmail: d.from } : null;
+    if (!rows[0]) return null;
+    await autoLinkContributor(q, EMAIL_CHANGE_ACTOR, rows[0].id);
+    return { ...rows[0], oldEmail: d.from };
   } catch (e) {
     // Taken by someone else between the check and the update.
     if (/unique|duplicate/i.test((e as Error).message)) return null;
