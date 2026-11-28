@@ -1,0 +1,196 @@
+{
+  "name": "level-2-self-only-core",
+  "description": "Level 1's evidence, plus a self-report of 1 for every item of Level 2 and no Zack or Roger evidence added for it: self-reports don't settle Level 2's 3 Zack- or Roger-settled core items, so it scores 1.",
+  "receivedOn": "2026-11-29",
+  "roger": {
+    "distinct_play_categories": 3,
+    "week_run_has_play": 0,
+    "past_ideas_listed": 0,
+    "adopters_any_play": 0,
+    "adopters_one_play": 0
+  },
+  "expect": {
+    "level": 1,
+    "live": [
+      "1.01",
+      "1.02",
+      "1.03",
+      "1.04",
+      "1.05",
+      "1.06",
+      "1.07",
+      "1.08",
+      "1.10",
+      "1.D1",
+      "2.04",
+      "2.05",
+      "2.06",
+      "2.08",
+      "2.09",
+      "2.11",
+      "2.12",
+      "2.D2",
+      "3.01",
+      "3.04",
+      "3.12"
+    ],
+    "verifiedCoreByLevel": [
+      3,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "block": {
+    "zack_version": "2.1",
+    "platform": "claude",
+    "inventory": {
+      "agents": [],
+      "routines": [],
+      "skills": [],
+      "memory": [],
+      "memory_last_cleanup": "none",
+      "pages_dashboards": 0,
+      "models_used": [],
+      "scripts": 0
+    },
+    "activity_7d": {
+      "active_days": 1,
+      "multi_step_completions": 1,
+      "agent_to_agent_handoffs": 0,
+      "proactive_starts": 0,
+      "voice_inputs": 1,
+      "approvals": {
+        "parked": 0,
+        "approved": 0,
+        "batched": 0,
+        "sent_after_approval": 0
+      },
+      "exceptions_escalated": 0,
+      "others_served_directly": 0,
+      "browser_only_tasks": 0,
+      "longest_chat_size": 0,
+      "chat_resets": 0,
+      "verify_reports": {
+        "pass": 0,
+        "fail": 0
+      },
+      "self_change_proposals": {
+        "proposed": 0,
+        "adopted": 0
+      },
+      "design_activity": {
+        "directions_generated": 1,
+        "iterations": 0,
+        "playground_built": 0,
+        "screenshot_check": 0
+      }
+    },
+    "history_flags": {
+      "promotions": 0,
+      "demotions": 0,
+      "retirements": 0,
+      "rule_fixes_after_error": 0,
+      "usage_cuts": 0,
+      "access_reviews": 0
+    },
+    "self_report": [
+      {
+        "item": "1.04",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.05",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.06",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.08",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.01",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.02",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.03",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.04",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.05",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.06",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.07",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.08",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.09",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.10",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.11",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.12",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.D1",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.D2",
+        "answer": 1,
+        "date": "2026-11-29"
+      }
+    ],
+    "domains": []
+  }
+}

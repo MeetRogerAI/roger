@@ -522,7 +522,7 @@ flowchart LR
 - **The exception list** (`src/test-helpers/switch-off-exceptions.ts`) is explicit and reviewed in the PR: each entry names the path, the difference and why. It starts with: (1) the `roger-level` fence cut out of a profile at receipt, and its submission write, for inputs carrying a fence (privacy; Unit 5); (2) one settings read in `processProfile` when receipt reports a level block (Unit 7); (3) retention's erase of level rows, which runs whatever the switch because intake captures whatever the switch (Unit 14); (4) the hourly task list gaining tasks that return at once while off (Units 7, 11). A trace difference not on the list fails the test.
 - Page and email units compare rendered output against the existing snapshots.
 
-- [ ] **Unit 1: The frozen `roger-level` contract v1 and its fixtures**
+- [x] **Unit 1: The frozen `roger-level` contract v1 and its fixtures**
 
 **Goal:** Freeze build spec 1.1 as a versioned, typed contract with limits, document it for Zack 2.1, and generate a fixture set from it covering every contract edge case.
 
@@ -564,7 +564,7 @@ flowchart LR
 
 **Switch-off proof:** new modules; nothing in `src/app` or `src/lib` imports them yet.
 
-- [ ] **Unit 2: The levels data file, its check vocabulary, and per-level fixtures**
+- [x] **Unit 2: The levels data file, its check vocabulary, and per-level fixtures**
 
 **Goal:** One data file with the ten levels, all 148 items and every threshold, matching the levels file word for word, with the contract fields that settle each item as declarative checks. Plus fixtures that put a member at each level 0 to 9, and at each boundary.
 
@@ -1258,6 +1258,8 @@ From this plan:
 22. **`user_levels.peak`** (B.16a) is `level_earned`, plus a separate `live_level`.
 23. **A wrongly earned level is reset by one email admin with a logged reason** (then rescored from current evidence), not by two-person approval. Every other decrease is refused by a database trigger.
 24. **9.01 counts as a verified core item** when live, because its ZA part is required (levels file line ~372); a mixed S + Z item is verified when its Z evidence is present.
+25. **"Last 4 weeks" and "last week" items use the run window, not a horizon**: 1.02, 3.04, 5.03, 6.05, 8.02 and 9.01 are read from the latest 4 accepted runs within 8 weeks (each run's `activity_7d` is its own last week), rather than a 4-week or 1-week lookback of their own. *For Peter / S23 to confirm.*
+26. **The cadence grace figures** (daily 2 days, weekly 9 days, monthly 5 weeks; weekdays 4, hourly and several-daily 2, `other` 7) are this plan's reading of rule 2.2's "inside its cadence", not numbers rule 2.2 gives. *For Peter to sign off.*
 
 ## System-Wide Impact
 

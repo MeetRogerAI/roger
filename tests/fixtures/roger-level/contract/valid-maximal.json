@@ -1,0 +1,380 @@
+{
+  "receivedOn": "2026-11-29",
+  "validate": "text",
+  "name": "valid-maximal",
+  "description": "Every field, every enum value used at least once. The contract document's example.",
+  "block": {
+    "zack_version": "2.1",
+    "platform": "grok-bot",
+    "inventory": {
+      "agents": [
+        {
+          "name": "Chief of staff",
+          "job_sentence": "Chief of staff owns one job.",
+          "fields_present": [
+            "owns",
+            "inputs",
+            "may",
+            "must_ask",
+            "done_when"
+          ],
+          "autonomy": "observe",
+          "connections": [
+            "Gmail",
+            "Google Calendar",
+            "Slack"
+          ],
+          "created": "2026-11-22",
+          "created_by": "me",
+          "rules": [
+            "do_ask_stop",
+            "stop_when_unsure",
+            "untrusted_content",
+            "no_raw_errors",
+            "usage_rules",
+            "rules_in_description",
+            "general_rule_on_correction",
+            "fetch_live_facts",
+            "loop_cap"
+          ],
+          "role": "coordinator",
+          "needs_own": [
+            "routines"
+          ]
+        },
+        {
+          "name": "Inbox",
+          "job_sentence": "Inbox owns one job.",
+          "fields_present": [
+            "owns",
+            "done_when"
+          ],
+          "autonomy": "prepare",
+          "connections": [
+            "Gmail"
+          ],
+          "created": "2026-11-15",
+          "created_by": "system",
+          "rules": [
+            "do_ask_stop",
+            "stop_when_unsure"
+          ],
+          "role": "chat",
+          "needs_own": [
+            "logins"
+          ]
+        },
+        {
+          "name": "Listings",
+          "job_sentence": "Listings owns one job.",
+          "fields_present": [
+            "owns",
+            "done_when"
+          ],
+          "autonomy": "approve",
+          "connections": [
+            "Listing site"
+          ],
+          "created": "2026-11-08",
+          "created_by": "installed",
+          "rules": [
+            "do_ask_stop",
+            "stop_when_unsure"
+          ],
+          "role": "specialist",
+          "needs_own": [
+            "private_context"
+          ]
+        },
+        {
+          "name": "Checker",
+          "job_sentence": "Checker owns one job.",
+          "fields_present": [
+            "owns",
+            "done_when"
+          ],
+          "autonomy": "schedule",
+          "connections": [],
+          "created": "2026-11-01",
+          "created_by": "me",
+          "rules": [
+            "do_ask_stop",
+            "stop_when_unsure"
+          ],
+          "role": "checker",
+          "needs_own": [
+            "channel"
+          ]
+        },
+        {
+          "name": "Routines host",
+          "job_sentence": "Routines host owns one job.",
+          "fields_present": [
+            "owns",
+            "done_when"
+          ],
+          "autonomy": "coordinate",
+          "connections": [],
+          "created": "2026-10-25",
+          "created_by": "system",
+          "rules": [
+            "do_ask_stop",
+            "stop_when_unsure"
+          ],
+          "role": "routines_only",
+          "needs_own": [
+            "routines"
+          ]
+        },
+        {
+          "name": "Catch-all",
+          "job_sentence": "Catch-all owns one job.",
+          "fields_present": [
+            "owns",
+            "done_when"
+          ],
+          "autonomy": "own",
+          "connections": [],
+          "created": "2026-10-18",
+          "created_by": "installed",
+          "rules": [
+            "do_ask_stop",
+            "stop_when_unsure"
+          ],
+          "role": "catch_all",
+          "needs_own": [
+            "logins"
+          ]
+        }
+      ],
+      "routines": [
+        {
+          "name": "Routine hourly",
+          "owner_agent": "Routines host",
+          "trigger": "event",
+          "cadence": "hourly",
+          "last_run": "2026-11-28",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "end_condition",
+            "change_check",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": "narrow",
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine several_daily",
+          "owner_agent": null,
+          "trigger": "event",
+          "cadence": "several_daily",
+          "last_run": "2026-11-28",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit"
+          ],
+          "away_rule": "draft",
+          "event_scope": "broad",
+          "delivers_to": "phone"
+        },
+        {
+          "name": "Routine daily",
+          "owner_agent": "Routines host",
+          "trigger": "schedule",
+          "cadence": "daily",
+          "last_run": "2026-11-28",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit"
+          ],
+          "away_rule": "none",
+          "event_scope": null,
+          "delivers_to": "email"
+        },
+        {
+          "name": "Routine weekdays",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "weekdays",
+          "last_run": "2026-11-28",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "text"
+        },
+        {
+          "name": "Routine weekly",
+          "owner_agent": "Routines host",
+          "trigger": "schedule",
+          "cadence": "weekly",
+          "last_run": "2026-11-28",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit"
+          ],
+          "away_rule": "draft",
+          "event_scope": null,
+          "delivers_to": "slack"
+        },
+        {
+          "name": "Routine monthly",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "monthly",
+          "last_run": "2026-11-28",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit"
+          ],
+          "away_rule": "none",
+          "event_scope": null,
+          "delivers_to": "page"
+        },
+        {
+          "name": "Routine other",
+          "owner_agent": "Routines host",
+          "trigger": "schedule",
+          "cadence": "other",
+          "last_run": null,
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        }
+      ],
+      "skills": [
+        {
+          "name": "Skill me",
+          "origin": "me",
+          "used_by": [
+            "Inbox",
+            "Routine daily"
+          ]
+        },
+        {
+          "name": "Skill system",
+          "origin": "system",
+          "used_by": [
+            "Chief of staff"
+          ]
+        },
+        {
+          "name": "Skill installed",
+          "origin": "installed",
+          "used_by": []
+        }
+      ],
+      "memory": [
+        "instructions",
+        "profile_file",
+        "project_pages",
+        "decisions_log",
+        "knowledge_base"
+      ],
+      "memory_last_cleanup": "2026-11-19",
+      "pages_dashboards": 1,
+      "models_used": [
+        "Model A",
+        "Model B"
+      ],
+      "scripts": 2
+    },
+    "activity_7d": {
+      "active_days": 6,
+      "multi_step_completions": 12,
+      "agent_to_agent_handoffs": 4,
+      "proactive_starts": 9,
+      "voice_inputs": 3,
+      "approvals": {
+        "parked": 2,
+        "approved": 5,
+        "batched": 1,
+        "sent_after_approval": 5
+      },
+      "exceptions_escalated": 1,
+      "others_served_directly": 2,
+      "browser_only_tasks": 1,
+      "longest_chat_size": 140,
+      "chat_resets": 1,
+      "verify_reports": {
+        "pass": 7,
+        "fail": 1
+      },
+      "self_change_proposals": {
+        "proposed": 2,
+        "adopted": 1
+      },
+      "design_activity": {
+        "directions_generated": 5,
+        "iterations": 4,
+        "playground_built": 1,
+        "screenshot_check": 1
+      }
+    },
+    "history_flags": {
+      "promotions": 1,
+      "demotions": 1,
+      "retirements": 1,
+      "rule_fixes_after_error": 2,
+      "usage_cuts": 1,
+      "access_reviews": 1
+    },
+    "self_report": [
+      {
+        "item": "1.04",
+        "answer": 1,
+        "date": "2026-11-15"
+      },
+      {
+        "item": "6.07",
+        "answer": 0,
+        "date": "2026-11-29"
+      }
+    ],
+    "domains": [
+      {
+        "name": "Listings marketing",
+        "kind": "work",
+        "stages_covered": [
+          "intake",
+          "work",
+          "delivery",
+          "follow_up"
+        ]
+      },
+      {
+        "name": "Family logistics",
+        "kind": "home",
+        "stages_covered": [
+          "intake",
+          "work"
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "ok": true
+  }
+}

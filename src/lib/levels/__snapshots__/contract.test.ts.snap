@@ -1,0 +1,694 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`roger-level contract v1: the frozen shape > matches the stored JSON Schema snapshot (a failure here means the contract changed: bump LEVEL_CONTRACT_VERSION and add levelBlockV2 instead) 1`] = `
+{
+  "limits": {
+    "agents": 60,
+    "blockChars": 30000,
+    "connectionsPerAgent": 40,
+    "count": 10000,
+    "domains": 12,
+    "earliestDate": "2020-01-01",
+    "enumList": 20,
+    "issues": 20,
+    "modelsUsed": 20,
+    "routines": 200,
+    "selfReport": 160,
+    "skills": 200,
+    "string": 120,
+    "usedBy": 40,
+  },
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "activity_7d": {
+        "additionalProperties": false,
+        "properties": {
+          "active_days": {
+            "maximum": 7,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "agent_to_agent_handoffs": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "approvals": {
+            "additionalProperties": false,
+            "properties": {
+              "approved": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "batched": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "parked": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "sent_after_approval": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "parked",
+              "approved",
+              "batched",
+              "sent_after_approval",
+            ],
+            "type": "object",
+          },
+          "browser_only_tasks": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "chat_resets": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "design_activity": {
+            "additionalProperties": false,
+            "properties": {
+              "directions_generated": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "iterations": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "playground_built": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "screenshot_check": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "directions_generated",
+              "iterations",
+              "playground_built",
+              "screenshot_check",
+            ],
+            "type": "object",
+          },
+          "exceptions_escalated": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "longest_chat_size": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "multi_step_completions": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "others_served_directly": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "proactive_starts": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "self_change_proposals": {
+            "additionalProperties": false,
+            "properties": {
+              "adopted": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "proposed": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "proposed",
+              "adopted",
+            ],
+            "type": "object",
+          },
+          "verify_reports": {
+            "additionalProperties": false,
+            "properties": {
+              "fail": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "pass": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "pass",
+              "fail",
+            ],
+            "type": "object",
+          },
+          "voice_inputs": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "active_days",
+          "multi_step_completions",
+          "agent_to_agent_handoffs",
+          "proactive_starts",
+          "voice_inputs",
+          "approvals",
+          "exceptions_escalated",
+          "others_served_directly",
+          "browser_only_tasks",
+          "longest_chat_size",
+          "chat_resets",
+          "verify_reports",
+          "self_change_proposals",
+          "design_activity",
+        ],
+        "type": "object",
+      },
+      "domains": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "work",
+                "home",
+              ],
+              "type": "string",
+            },
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string",
+            },
+            "stages_covered": {
+              "items": {
+                "enum": [
+                  "intake",
+                  "work",
+                  "delivery",
+                  "follow_up",
+                ],
+                "type": "string",
+              },
+              "maxItems": 20,
+              "type": "array",
+            },
+          },
+          "required": [
+            "name",
+            "kind",
+            "stages_covered",
+          ],
+          "type": "object",
+        },
+        "maxItems": 12,
+        "type": "array",
+      },
+      "history_flags": {
+        "additionalProperties": false,
+        "properties": {
+          "access_reviews": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "demotions": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "promotions": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "retirements": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "rule_fixes_after_error": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "usage_cuts": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "promotions",
+          "demotions",
+          "retirements",
+          "rule_fixes_after_error",
+          "usage_cuts",
+          "access_reviews",
+        ],
+        "type": "object",
+      },
+      "inventory": {
+        "additionalProperties": false,
+        "properties": {
+          "agents": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "autonomy": {
+                  "enum": [
+                    "observe",
+                    "prepare",
+                    "approve",
+                    "schedule",
+                    "coordinate",
+                    "own",
+                  ],
+                  "type": "string",
+                },
+                "connections": {
+                  "items": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "maxItems": 40,
+                  "type": "array",
+                },
+                "created": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                      "type": "string",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "created_by": {
+                  "enum": [
+                    "me",
+                    "system",
+                    "installed",
+                  ],
+                  "type": "string",
+                },
+                "fields_present": {
+                  "items": {
+                    "enum": [
+                      "owns",
+                      "inputs",
+                      "may",
+                      "must_ask",
+                      "done_when",
+                    ],
+                    "type": "string",
+                  },
+                  "maxItems": 20,
+                  "type": "array",
+                },
+                "job_sentence": {
+                  "maxLength": 120,
+                  "type": "string",
+                },
+                "name": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "needs_own": {
+                  "items": {
+                    "enum": [
+                      "routines",
+                      "logins",
+                      "private_context",
+                      "channel",
+                    ],
+                    "type": "string",
+                  },
+                  "maxItems": 20,
+                  "type": "array",
+                },
+                "role": {
+                  "enum": [
+                    "chat",
+                    "routines_only",
+                    "catch_all",
+                    "coordinator",
+                    "checker",
+                    "specialist",
+                  ],
+                  "type": "string",
+                },
+                "rules": {
+                  "items": {
+                    "enum": [
+                      "do_ask_stop",
+                      "stop_when_unsure",
+                      "untrusted_content",
+                      "no_raw_errors",
+                      "usage_rules",
+                      "rules_in_description",
+                      "general_rule_on_correction",
+                      "fetch_live_facts",
+                      "loop_cap",
+                    ],
+                    "type": "string",
+                  },
+                  "maxItems": 20,
+                  "type": "array",
+                },
+              },
+              "required": [
+                "name",
+                "job_sentence",
+                "fields_present",
+                "autonomy",
+                "connections",
+                "created",
+                "created_by",
+                "rules",
+                "role",
+                "needs_own",
+              ],
+              "type": "object",
+            },
+            "maxItems": 60,
+            "type": "array",
+          },
+          "memory": {
+            "items": {
+              "enum": [
+                "instructions",
+                "profile_file",
+                "project_pages",
+                "decisions_log",
+                "knowledge_base",
+              ],
+              "type": "string",
+            },
+            "maxItems": 20,
+            "type": "array",
+          },
+          "memory_last_cleanup": {
+            "anyOf": [
+              {
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                "type": "string",
+              },
+              {
+                "const": "none",
+                "type": "string",
+              },
+            ],
+          },
+          "models_used": {
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string",
+            },
+            "maxItems": 20,
+            "type": "array",
+          },
+          "pages_dashboards": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "routines": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "away_rule": {
+                  "enum": [
+                    "allow",
+                    "draft",
+                    "none",
+                  ],
+                  "type": "string",
+                },
+                "cadence": {
+                  "enum": [
+                    "hourly",
+                    "several_daily",
+                    "daily",
+                    "weekdays",
+                    "weekly",
+                    "monthly",
+                    "other",
+                  ],
+                  "type": "string",
+                },
+                "delivers_to": {
+                  "enum": [
+                    "app",
+                    "phone",
+                    "email",
+                    "text",
+                    "slack",
+                    "page",
+                  ],
+                  "type": "string",
+                },
+                "event_scope": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "narrow",
+                        "broad",
+                      ],
+                      "type": "string",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "has": {
+                  "items": {
+                    "enum": [
+                      "receipt",
+                      "nothing_today_rule",
+                      "source_check",
+                      "retry_limit",
+                      "end_condition",
+                      "change_check",
+                      "verify_checklist",
+                    ],
+                    "type": "string",
+                  },
+                  "maxItems": 20,
+                  "type": "array",
+                },
+                "last_run": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                      "type": "string",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "name": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "owner_agent": {
+                  "anyOf": [
+                    {
+                      "maxLength": 120,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "trigger": {
+                  "enum": [
+                    "schedule",
+                    "event",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "name",
+                "owner_agent",
+                "trigger",
+                "cadence",
+                "last_run",
+                "has",
+                "away_rule",
+                "event_scope",
+                "delivers_to",
+              ],
+              "type": "object",
+            },
+            "maxItems": 200,
+            "type": "array",
+          },
+          "scripts": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "skills": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "origin": {
+                  "enum": [
+                    "me",
+                    "system",
+                    "installed",
+                  ],
+                  "type": "string",
+                },
+                "used_by": {
+                  "items": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "maxItems": 40,
+                  "type": "array",
+                },
+              },
+              "required": [
+                "name",
+                "origin",
+                "used_by",
+              ],
+              "type": "object",
+            },
+            "maxItems": 200,
+            "type": "array",
+          },
+        },
+        "required": [
+          "agents",
+          "routines",
+          "skills",
+          "memory",
+          "memory_last_cleanup",
+          "pages_dashboards",
+          "models_used",
+          "scripts",
+        ],
+        "type": "object",
+      },
+      "platform": {
+        "enum": [
+          "claude",
+          "grok-bot",
+          "hark",
+          "duet",
+          "other",
+        ],
+        "type": "string",
+      },
+      "self_report": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "answer": {
+              "anyOf": [
+                {
+                  "const": 0,
+                  "type": "number",
+                },
+                {
+                  "const": 1,
+                  "type": "number",
+                },
+              ],
+            },
+            "date": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string",
+            },
+            "item": {
+              "pattern": "^[1-9]\\.(\\d{2}|D\\d)$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "item",
+            "answer",
+            "date",
+          ],
+          "type": "object",
+        },
+        "maxItems": 160,
+        "type": "array",
+      },
+      "zack_version": {
+        "const": "2.1",
+        "type": "string",
+      },
+    },
+    "required": [
+      "zack_version",
+      "platform",
+      "inventory",
+      "activity_7d",
+      "history_flags",
+      "self_report",
+      "domains",
+    ],
+    "type": "object",
+  },
+  "version": 1,
+  "zackVersion": "2.1",
+}
+`;

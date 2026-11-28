@@ -4,7 +4,7 @@ import { startTransition, useActionState, useEffect, useId, useRef, useState, ty
 import type { QuizAnswers } from "@/lib/signup/quiz";
 import { submitQuiz, type StartFormState } from "@/app/start/actions";
 import type { StartParams } from "@/lib/signup/params";
-import { LEVEL_QUIZ_VERSION, rogerLevels } from "@/data/roger-levels";
+import { LEVEL_QUIZ_VERSION, rogerLevels } from "@/data/roger-levels-quiz";
 
 const idle: StartFormState = { status: "idle" };
 

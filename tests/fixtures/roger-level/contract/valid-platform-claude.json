@@ -1,0 +1,65 @@
+{
+  "receivedOn": "2026-11-29",
+  "validate": "text",
+  "name": "valid-platform-claude",
+  "description": "A minimal block from platform claude.",
+  "block": {
+    "zack_version": "2.1",
+    "platform": "claude",
+    "inventory": {
+      "agents": [],
+      "routines": [],
+      "skills": [],
+      "memory": [],
+      "memory_last_cleanup": "none",
+      "pages_dashboards": 0,
+      "models_used": [],
+      "scripts": 0
+    },
+    "activity_7d": {
+      "active_days": 0,
+      "multi_step_completions": 0,
+      "agent_to_agent_handoffs": 0,
+      "proactive_starts": 0,
+      "voice_inputs": 0,
+      "approvals": {
+        "parked": 0,
+        "approved": 0,
+        "batched": 0,
+        "sent_after_approval": 0
+      },
+      "exceptions_escalated": 0,
+      "others_served_directly": 0,
+      "browser_only_tasks": 0,
+      "longest_chat_size": 0,
+      "chat_resets": 0,
+      "verify_reports": {
+        "pass": 0,
+        "fail": 0
+      },
+      "self_change_proposals": {
+        "proposed": 0,
+        "adopted": 0
+      },
+      "design_activity": {
+        "directions_generated": 0,
+        "iterations": 0,
+        "playground_built": 0,
+        "screenshot_check": 0
+      }
+    },
+    "history_flags": {
+      "promotions": 0,
+      "demotions": 0,
+      "retirements": 0,
+      "rule_fixes_after_error": 0,
+      "usage_cuts": 0,
+      "access_reviews": 0
+    },
+    "self_report": [],
+    "domains": []
+  },
+  "expect": {
+    "ok": true
+  }
+}

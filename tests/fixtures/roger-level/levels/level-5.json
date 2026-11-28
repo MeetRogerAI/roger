@@ -1,0 +1,616 @@
+{
+  "name": "level-5",
+  "description": "Every core item and the needed electives of Levels 1 to 5, and no more evidence than that: Level 5.",
+  "receivedOn": "2026-11-29",
+  "roger": {
+    "distinct_play_categories": 3,
+    "week_run_has_play": 0,
+    "past_ideas_listed": 0,
+    "adopters_any_play": 0,
+    "adopters_one_play": 0
+  },
+  "expect": {
+    "level": 5,
+    "live": [
+      "1.01",
+      "1.02",
+      "1.03",
+      "1.04",
+      "1.05",
+      "1.06",
+      "1.07",
+      "1.08",
+      "1.10",
+      "1.D1",
+      "2.01",
+      "2.02",
+      "2.03",
+      "2.04",
+      "2.05",
+      "2.07",
+      "2.09",
+      "2.10",
+      "2.12",
+      "2.D1",
+      "3.01",
+      "3.02",
+      "3.03",
+      "3.04",
+      "3.05",
+      "3.06",
+      "3.07",
+      "3.09",
+      "3.11",
+      "3.12",
+      "3.13",
+      "3.14",
+      "3.16",
+      "3.D1",
+      "4.01",
+      "4.02",
+      "4.03",
+      "4.04",
+      "4.05",
+      "4.06",
+      "4.07",
+      "4.08",
+      "4.09",
+      "4.10",
+      "4.11",
+      "4.12",
+      "4.14",
+      "4.16",
+      "4.17",
+      "4.18",
+      "4.19",
+      "5.01",
+      "5.02",
+      "5.03",
+      "5.04",
+      "5.05",
+      "5.06",
+      "5.07",
+      "5.09",
+      "5.11",
+      "5.12",
+      "5.14",
+      "5.15",
+      "5.17",
+      "5.18",
+      "5.D1",
+      "6.01",
+      "6.04",
+      "6.05",
+      "6.12",
+      "7.03",
+      "8.01"
+    ],
+    "verifiedCoreByLevel": [
+      3,
+      3,
+      6,
+      5,
+      5,
+      3,
+      1,
+      1,
+      0
+    ]
+  },
+  "block": {
+    "zack_version": "2.1",
+    "platform": "claude",
+    "inventory": {
+      "agents": [
+        {
+          "name": "Agent 1",
+          "job_sentence": "",
+          "fields_present": [
+            "owns",
+            "inputs",
+            "may",
+            "must_ask",
+            "done_when"
+          ],
+          "autonomy": "observe",
+          "connections": [
+            "Service 1",
+            "Service 2",
+            "Agent 1 only"
+          ],
+          "created": "2026-11-08",
+          "created_by": "me",
+          "rules": [],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 2",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 2 source 1",
+            "Agent 2 only"
+          ],
+          "created": "2026-11-29",
+          "created_by": "me",
+          "rules": [],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 3",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 3 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [
+            "do_ask_stop"
+          ],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 4",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 4 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [
+            "stop_when_unsure"
+          ],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 5",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 5 only"
+          ],
+          "created": null,
+          "created_by": "installed",
+          "rules": [],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 6",
+          "job_sentence": "Agent 6 owns one job.",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 6 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 7",
+          "job_sentence": "Agent 7 owns one job.",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 7 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 8",
+          "job_sentence": "Agent 8 owns one job.",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 8 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 9",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 9 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [],
+          "role": "coordinator",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 10",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 10 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [],
+          "role": "checker",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 11",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 11 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [
+            "usage_rules",
+            "loop_cap"
+          ],
+          "role": "chat",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 12",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 12 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [],
+          "role": "routines_only",
+          "needs_own": []
+        },
+        {
+          "name": "Agent 13",
+          "job_sentence": "",
+          "fields_present": [],
+          "autonomy": "observe",
+          "connections": [
+            "Agent 13 only"
+          ],
+          "created": null,
+          "created_by": "me",
+          "rules": [],
+          "role": "catch_all",
+          "needs_own": []
+        }
+      ],
+      "routines": [
+        {
+          "name": "Routine 1",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "other",
+          "last_run": "2026-11-29",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 2",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "other",
+          "last_run": "2026-11-29",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 3",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "other",
+          "last_run": "2026-11-29",
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 4",
+          "owner_agent": null,
+          "trigger": "event",
+          "cadence": "other",
+          "last_run": null,
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": "narrow",
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 5",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "hourly",
+          "last_run": null,
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 6",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "weekly",
+          "last_run": null,
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 7",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "other",
+          "last_run": null,
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "phone"
+        },
+        {
+          "name": "Routine 8",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "other",
+          "last_run": null,
+          "has": [
+            "end_condition",
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 9",
+          "owner_agent": null,
+          "trigger": "schedule",
+          "cadence": "hourly",
+          "last_run": null,
+          "has": [
+            "change_check",
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        },
+        {
+          "name": "Routine 10",
+          "owner_agent": "Agent 12",
+          "trigger": "schedule",
+          "cadence": "other",
+          "last_run": null,
+          "has": [
+            "receipt",
+            "nothing_today_rule",
+            "source_check",
+            "retry_limit",
+            "verify_checklist"
+          ],
+          "away_rule": "allow",
+          "event_scope": null,
+          "delivers_to": "app"
+        }
+      ],
+      "skills": [
+        {
+          "name": "Skill 1",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "Skill 2",
+          "origin": "me",
+          "used_by": [
+            "Agent 1"
+          ]
+        }
+      ],
+      "memory": [
+        "instructions",
+        "project_pages"
+      ],
+      "memory_last_cleanup": "none",
+      "pages_dashboards": 1,
+      "models_used": [],
+      "scripts": 0
+    },
+    "activity_7d": {
+      "active_days": 3,
+      "multi_step_completions": 1,
+      "agent_to_agent_handoffs": 1,
+      "proactive_starts": 1,
+      "voice_inputs": 1,
+      "approvals": {
+        "parked": 1,
+        "approved": 0,
+        "batched": 0,
+        "sent_after_approval": 0
+      },
+      "exceptions_escalated": 0,
+      "others_served_directly": 0,
+      "browser_only_tasks": 1,
+      "longest_chat_size": 0,
+      "chat_resets": 0,
+      "verify_reports": {
+        "pass": 1,
+        "fail": 0
+      },
+      "self_change_proposals": {
+        "proposed": 0,
+        "adopted": 0
+      },
+      "design_activity": {
+        "directions_generated": 1,
+        "iterations": 3,
+        "playground_built": 1,
+        "screenshot_check": 0
+      }
+    },
+    "history_flags": {
+      "promotions": 0,
+      "demotions": 0,
+      "retirements": 0,
+      "rule_fixes_after_error": 1,
+      "usage_cuts": 1,
+      "access_reviews": 0
+    },
+    "self_report": [
+      {
+        "item": "1.04",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.05",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.06",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.08",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.04",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.05",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.12",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.06",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "4.03",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "5.06",
+        "answer": 1,
+        "date": "2026-11-29"
+      }
+    ],
+    "domains": [
+      {
+        "name": "Domain 1",
+        "kind": "work",
+        "stages_covered": []
+      },
+      {
+        "name": "Domain 2",
+        "kind": "work",
+        "stages_covered": []
+      },
+      {
+        "name": "Domain 3",
+        "kind": "work",
+        "stages_covered": []
+      },
+      {
+        "name": "Domain 4",
+        "kind": "home",
+        "stages_covered": []
+      }
+    ]
+  }
+}

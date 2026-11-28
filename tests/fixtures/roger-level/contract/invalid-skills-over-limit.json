@@ -1,0 +1,1076 @@
+{
+  "receivedOn": "2026-11-29",
+  "name": "invalid-skills-over-limit",
+  "description": "inventory.skills with 201 entries: one over.",
+  "block": {
+    "zack_version": "2.1",
+    "platform": "claude",
+    "inventory": {
+      "agents": [],
+      "routines": [],
+      "skills": [
+        {
+          "name": "S1",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S2",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S3",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S4",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S5",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S6",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S7",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S8",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S9",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S10",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S11",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S12",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S13",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S14",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S15",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S16",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S17",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S18",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S19",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S20",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S21",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S22",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S23",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S24",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S25",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S26",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S27",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S28",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S29",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S30",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S31",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S32",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S33",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S34",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S35",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S36",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S37",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S38",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S39",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S40",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S41",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S42",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S43",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S44",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S45",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S46",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S47",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S48",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S49",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S50",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S51",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S52",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S53",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S54",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S55",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S56",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S57",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S58",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S59",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S60",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S61",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S62",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S63",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S64",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S65",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S66",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S67",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S68",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S69",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S70",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S71",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S72",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S73",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S74",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S75",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S76",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S77",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S78",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S79",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S80",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S81",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S82",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S83",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S84",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S85",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S86",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S87",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S88",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S89",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S90",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S91",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S92",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S93",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S94",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S95",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S96",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S97",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S98",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S99",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S100",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S101",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S102",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S103",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S104",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S105",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S106",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S107",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S108",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S109",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S110",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S111",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S112",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S113",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S114",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S115",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S116",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S117",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S118",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S119",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S120",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S121",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S122",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S123",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S124",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S125",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S126",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S127",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S128",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S129",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S130",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S131",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S132",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S133",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S134",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S135",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S136",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S137",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S138",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S139",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S140",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S141",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S142",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S143",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S144",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S145",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S146",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S147",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S148",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S149",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S150",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S151",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S152",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S153",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S154",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S155",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S156",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S157",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S158",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S159",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S160",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S161",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S162",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S163",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S164",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S165",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S166",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S167",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S168",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S169",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S170",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S171",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S172",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S173",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S174",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S175",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S176",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S177",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S178",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S179",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S180",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S181",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S182",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S183",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S184",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S185",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S186",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S187",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S188",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S189",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S190",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S191",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S192",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S193",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S194",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S195",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S196",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S197",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S198",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S199",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S200",
+          "origin": "me",
+          "used_by": []
+        },
+        {
+          "name": "S201",
+          "origin": "me",
+          "used_by": []
+        }
+      ],
+      "memory": [],
+      "memory_last_cleanup": "none",
+      "pages_dashboards": 0,
+      "models_used": [],
+      "scripts": 0
+    },
+    "activity_7d": {
+      "active_days": 0,
+      "multi_step_completions": 0,
+      "agent_to_agent_handoffs": 0,
+      "proactive_starts": 0,
+      "voice_inputs": 0,
+      "approvals": {
+        "parked": 0,
+        "approved": 0,
+        "batched": 0,
+        "sent_after_approval": 0
+      },
+      "exceptions_escalated": 0,
+      "others_served_directly": 0,
+      "browser_only_tasks": 0,
+      "longest_chat_size": 0,
+      "chat_resets": 0,
+      "verify_reports": {
+        "pass": 0,
+        "fail": 0
+      },
+      "self_change_proposals": {
+        "proposed": 0,
+        "adopted": 0
+      },
+      "design_activity": {
+        "directions_generated": 0,
+        "iterations": 0,
+        "playground_built": 0,
+        "screenshot_check": 0
+      }
+    },
+    "history_flags": {
+      "promotions": 0,
+      "demotions": 0,
+      "retirements": 0,
+      "rule_fixes_after_error": 0,
+      "usage_cuts": 0,
+      "access_reviews": 0
+    },
+    "self_report": [],
+    "domains": []
+  },
+  "expect": {
+    "ok": false,
+    "issues": [
+      {
+        "path": "inventory.skills",
+        "code": "too_big"
+      }
+    ]
+  }
+}

@@ -1,0 +1,243 @@
+{
+  "name": "level-3-self-only-core",
+  "description": "Level 2's evidence, plus a self-report of 1 for every item of Level 3 and no Zack or Roger evidence added for it: self-reports don't settle Level 3's 6 Zack- or Roger-settled core items, so it scores 2.",
+  "receivedOn": "2026-11-29",
+  "roger": {
+    "distinct_play_categories": 3,
+    "week_run_has_play": 0,
+    "past_ideas_listed": 0,
+    "adopters_any_play": 0,
+    "adopters_one_play": 0
+  },
+  "expect": {
+    "level": 2,
+    "live": [
+      "1.01",
+      "1.02",
+      "1.03",
+      "1.04",
+      "1.05",
+      "1.06",
+      "1.07",
+      "1.08",
+      "1.10",
+      "1.D1",
+      "2.01",
+      "2.02",
+      "2.03",
+      "2.04",
+      "2.05",
+      "2.07",
+      "2.09",
+      "2.10",
+      "2.12",
+      "2.D1",
+      "3.01",
+      "3.04",
+      "3.06",
+      "3.08",
+      "3.10",
+      "3.12",
+      "3.15",
+      "3.D1",
+      "6.04"
+    ],
+    "verifiedCoreByLevel": [
+      3,
+      3,
+      2,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0
+    ]
+  },
+  "block": {
+    "zack_version": "2.1",
+    "platform": "claude",
+    "inventory": {
+      "agents": [],
+      "routines": [],
+      "skills": [
+        {
+          "name": "Skill 1",
+          "origin": "me",
+          "used_by": []
+        }
+      ],
+      "memory": [
+        "instructions",
+        "project_pages"
+      ],
+      "memory_last_cleanup": "none",
+      "pages_dashboards": 0,
+      "models_used": [],
+      "scripts": 0
+    },
+    "activity_7d": {
+      "active_days": 3,
+      "multi_step_completions": 1,
+      "agent_to_agent_handoffs": 0,
+      "proactive_starts": 0,
+      "voice_inputs": 1,
+      "approvals": {
+        "parked": 0,
+        "approved": 0,
+        "batched": 0,
+        "sent_after_approval": 0
+      },
+      "exceptions_escalated": 0,
+      "others_served_directly": 0,
+      "browser_only_tasks": 0,
+      "longest_chat_size": 0,
+      "chat_resets": 0,
+      "verify_reports": {
+        "pass": 0,
+        "fail": 0
+      },
+      "self_change_proposals": {
+        "proposed": 0,
+        "adopted": 0
+      },
+      "design_activity": {
+        "directions_generated": 1,
+        "iterations": 3,
+        "playground_built": 0,
+        "screenshot_check": 0
+      }
+    },
+    "history_flags": {
+      "promotions": 0,
+      "demotions": 0,
+      "retirements": 0,
+      "rule_fixes_after_error": 1,
+      "usage_cuts": 0,
+      "access_reviews": 0
+    },
+    "self_report": [
+      {
+        "item": "1.04",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.05",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.06",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "1.08",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.04",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.05",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "2.12",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.01",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.02",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.03",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.04",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.05",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.06",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.07",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.08",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.09",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.10",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.11",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.12",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.13",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.14",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.15",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.16",
+        "answer": 1,
+        "date": "2026-11-29"
+      },
+      {
+        "item": "3.D1",
+        "answer": 1,
+        "date": "2026-11-29"
+      }
+    ],
+    "domains": []
+  }
+}

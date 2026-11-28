@@ -1,0 +1,16 @@
+{
+  "receivedOn": "2026-11-29",
+  "validate": "text",
+  "name": "invalid-json",
+  "description": "Truncated JSON.",
+  "text": "{\"zack_version\":\"2.1\",\"platform\":\"claude\",\"inventory\":{\"agen",
+  "expect": {
+    "ok": false,
+    "issues": [
+      {
+        "path": "(block)",
+        "code": "json"
+      }
+    ]
+  }
+}

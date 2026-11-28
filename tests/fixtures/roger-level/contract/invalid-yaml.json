@@ -1,0 +1,16 @@
+{
+  "receivedOn": "2026-11-29",
+  "validate": "text",
+  "name": "invalid-yaml",
+  "description": "The build spec 1.1 layout written as YAML, not JSON.",
+  "text": "roger-level:\n  zack_version: 2.1\n  platform: claude\n  inventory:\n    agents:\n      - name: Inbox, job_sentence: Sorts my email",
+  "expect": {
+    "ok": false,
+    "issues": [
+      {
+        "path": "(block)",
+        "code": "json"
+      }
+    ]
+  }
+}

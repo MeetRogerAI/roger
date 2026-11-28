@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { categories } from "@/data/categories";
-import { LEVEL_QUIZ_VERSION, rogerLevels } from "@/data/roger-levels";
+import { LEVEL_QUIZ_VERSION, rogerLevels } from "@/data/roger-levels-quiz";
 import { isZackAgent } from "@/lib/zack/agents";
 
 /**
@@ -24,7 +24,7 @@ export const quizSchema = z
     // The one ticked agent marked primary: the first ticked unless the person picks another.
     primary: z.string().trim().max(40).default(""),
     count: z.enum(agentCounts),
-    // Question 5: their AI agent level, 0 to 9 (src/data/roger-levels.ts, levels v1.1).
+    // Question 5: their AI agent level, 0 to 9 (src/data/roger-levels-quiz.ts, levels v1.1).
     level: z.coerce.number().int().min(rogerLevels[0].level).max(rogerLevels[rogerLevels.length - 1].level),
     // Which levels list the answer was given on. Answers saved before v1.1 have no
     // marker: their level is on the v1.0 list, 0 to 8 ("artifacts/Roger AI Agent
