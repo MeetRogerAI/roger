@@ -82,8 +82,12 @@ describe("navFor", () => {
     for (const p of ["/admin", "/admin/users", "/start", "/signin", "/app/zack", "/rlpsignature", "/for/x"]) {
       expect(navFor(p, "v1"), p).toEqual(navFor(p, "circles"));
     }
-    expect(navFor("/admin", "v1").links.map((l) => l.href)).toEqual(["/#how", "/zack", "/library", "/#questions", "/#letter"]);
-    expect(navFor("/admin", "v1").cta).toBeNull();
+    // The admin's header is the logo alone under every site: its sidebar is its navigation (Peter, November 28, 2026).
+    for (const site of ["v1", "v2", "v3", "circles", "legacy"] as const) {
+      for (const p of ["/admin", "/admin/users", "/admin/pages/home", "/admin/zzz"]) expect(navFor(p, site), `${site} ${p}`).toEqual({ links: [], cta: null });
+    }
+    // Only the admin itself: an address that merely starts with the same letters is an ordinary page.
+    expect(navFor("/administer", "v1").links.length).toBeGreaterThan(0);
   });
 
   it("links to no Circles or legacy offer page under a version", () => {
@@ -100,7 +104,6 @@ describe("navFor", () => {
   it("keeps the legacy site's header as it was", () => {
     expect(navFor("/", "legacy").cta).toEqual({ href: "/packs/solopreneur", label: "Get the free pack", short: "Free pack" });
     expect(navFor("/companies", "legacy").cta?.kind).toBe("companyCall");
-    expect(navFor("/admin", "legacy").cta).toBeNull();
     expect(navFor("/thanks/work", "legacy").links.length).toBeGreaterThan(0);
   });
 });

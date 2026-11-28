@@ -158,15 +158,14 @@ describe("a site version before its pages are built", () => {
     expect(markup).toContain("document.documentElement.setAttribute('data-signed-in','')");
   });
 
-  it("shows no header links or button on sign-up, sign-in and the app, and keeps the admin's header", async () => {
-    for (const at of ["/start/plan", "/signin", "/app"]) {
+  it("shows no header links or button on sign-up, sign-in, the app and the admin (its sidebar is its navigation)", async () => {
+    for (const at of ["/start/plan", "/signin", "/app", "/admin", "/admin/pages"]) {
       path = at;
       const header = (await pageMarkup(<RootLayout params={Promise.resolve({})}>{null}</RootLayout>)).match(/<header[\s\S]*?<\/header>/)![0];
       expect(hrefs(header), at).toEqual(["#main", "/"]);
+      // No phone menu button either.
+      expect(header, at).not.toContain("<button");
     }
-    path = "/admin";
-    const admin = (await pageMarkup(<RootLayout params={Promise.resolve({})}>{null}</RootLayout>)).match(/<header[\s\S]*?<\/header>/)![0];
-    expect(hrefs(admin)).toEqual(["#main", "/", "/#how", "/zack", "/library", "/#questions", "/#letter"]);
   });
 
   it("puts eight items in the footer, Pricing to the homepage's price section, with no Circles, refunds or /agents link", async () => {

@@ -129,17 +129,17 @@ export function useShownPath(): string {
 /** `chrome` is a site version's own header content; Circles, the legacy site and the pages that keep their header need none. */
 export function navFor(path: string, site: ServedSite, chrome?: SiteChrome | null): NavSet {
   if (accountPages.some((p) => path === p || path.startsWith(`${p}/`))) return { links: [], cta: null };
+  // The admin's own sidebar is its navigation: the site header is the logo alone, whichever site is served (Peter, November 28, 2026).
+  if (path === "/admin" || path.startsWith("/admin/")) return { links: [], cta: null };
   if (site === "legacy") {
     if (path.startsWith("/companies")) return company;
     // A page prepared for one company or group: no navigation, nothing to sell around it
     if (isUnlisted(path)) return { links: [], cta: null };
     // After paying, the only job left is booking: no button competing with it
-    if (path.startsWith("/thanks") || path.startsWith("/admin")) return { ...library, cta: null };
+    if (path.startsWith("/thanks")) return { ...library, cta: null };
     return library;
   }
   if (isUnlisted(path)) return { links: [], cta: null };
-  // The admin keeps the header it has under Circles whichever site is served (plan R4).
-  if (path.startsWith("/admin")) return { ...circles, cta: null };
   if (site === "circles") return path.startsWith("/apply") ? { ...circles, cta: null } : circles;
   return built(chrome);
 }
