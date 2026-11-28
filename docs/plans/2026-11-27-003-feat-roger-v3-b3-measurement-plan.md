@@ -862,7 +862,7 @@ Tests: `src/lib/review/job.test.ts` (22), `src/app/api/cron/review/route.test.ts
 
 Tests: `src/lib/review/approve.test.ts` (56, 9 from the review fixes), `src/lib/review/github.test.ts` (16, 3 from the review fixes), `src/app/admin/review/actions.test.ts` (11, 6 new), `src/lib/review/job.test.ts` (26, the sync's 1 replaced by 4), `src/lib/review/hunks.test.ts` (3 new), `src/lib/housekeeping/job.test.ts` (3 new), `src/app/api/cron/review/route.test.ts` (1 new).
 
-- [ ] **Unit 10: `/admin/review`**
+- [x] **Unit 10: `/admin/review`**
 
 **Goal:** The review surface: proposals with diff and evidence, approve or reject, statuses and PR links, rejected history, and before/after measures for merged proposals (R20).
 
@@ -910,6 +910,15 @@ Tests: `src/lib/review/approve.test.ts` (56, 9 from the review fixes), `src/lib/
 - Error path: a non-admin gets nothing.
 
 **Verification:** The whole loop works on preview in dry-run: Run now, then a proposal, then approve, then the dry-run payload. Readable at 375px.
+
+*Unit 10 as built (2026-11-27):* `src/app/admin/review/page.tsx` (extended from Unit 8's), `src/components/admin/review-proposal.tsx` (client: `ReviewMessages`, `ReviewJobButton`, `ApproveButton`, `RejectForm`), `src/lib/review/before-after.ts` (`beforeAfter`, `TOO_FEW` 3, `WEEKS_EACH_SIDE` 4) and `src/lib/review/evidence-view.ts` (`resolveEvidence`, `EVIDENCE_GONE`). Where the build adds to or differs from the text above:
+- **Evidence is closed until opened, one proposal at a time** (`?evidence={public_id}`, a link to `#evidence-{id}`, which takes focus). Only then are the references read live and the read logged with `readsLogged` (page `/admin/review`): feedback and cancellation reasons as `read_feedback`, plays and runs as `read_runs`, Cora lists as `read_picks`; a source that is gone reads nobody. If the log write fails the evidence block shows `READ_NOT_LOGGED` and nothing else; the rest of the page (no member text) still shows. A deleted run counts as gone. Counts references are recomputed with `loadEvidence`'s own definitions for the cited week. Malformed references are never queried.
+- **Sections:** Waiting (`pending`, `first_read`, `approving`), Blocked, Open pull requests, Merged, and "Rejected, stale, dry runs and closed" (`rejected`, `stale`, `dry_run`, `closed`, `superseded`), each with its count. Approve shows for `pending`, `first_read` and `dry_run` (a dry run can be approved again, Unit 9); Reject for those and `blocked`. The approve label says which read it is ("Give the first read", "Give the second read and …").
+- **One message area.** A card can move to another section when its status changes, unmounting its form, so every action's result goes to one message area under the banner (`ReviewMessages`, which stays mounted), prefixed with the proposal id and focused when it arrives (an alert for errors). A pull request link is shown only when it is a `https://github.com/` URL. The reject note is controlled and empties only once rejected. Run now moved from `ActionButton` (whose `runReview` option is removed) to `ReviewJobButton`.
+- **Before/after:** per Zack file, members' non-test, non-deleted runs on the agent whose file it is (other agents count on the Grok Bot file, as `zackFileFor` does), stamped from a fetch; the merge week and the 3 list weeks before it for "before", the merge week and the 3 after for "after", with the stamp deciding the side. "From the block" is a share of runs read (block or model); plays per accepted run. A proposal touching only `cora.md` shows "No before and after" with the Document only label; a mixed proposal (if one ever exists) measures only its Zack files. A merged proposal with no `merged_at` says so. Too few to compare still shows the numbers.
+- **The overlap warning** is computed with `overlapWarning` against the deployed files for waiting, dry-run and open-PR cards.
+
+Tests: `src/app/admin/review/page.test.tsx` (9), `src/lib/review/before-after.test.ts` (9), `src/lib/review/evidence-view.test.ts` (3), `src/components/admin/review-proposal.dom.test.tsx` (5). Not done here: the preview walk-through and the 375px check (needs a deploy).
 
 - [ ] **Unit 11: Cora change 15, adoption counts from the next profile**
 
