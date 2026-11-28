@@ -13,6 +13,8 @@ import { mergePending, type MergeModel } from "./merge";
 import { pickThree, type Fitted } from "./pick";
 import { scorePool, WEIGHTS, type Figures, type Scored } from "./score";
 import { whoGetsAList } from "./who-gets-a-list";
+import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
+import { FIRST_LIST_PENDING_SQL } from "./deliver";
 
 /**
  * The Monday Cora job (spec B.7 "The job", plan Unit 11). It takes the week's
@@ -210,10 +212,7 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
   }
 
   if (phase === "picked") {
-    const rows = await q(
-      `update cora_weeks set phase = 'ready', status = 'ready', finished_at = now() where week_of = $1 and holder = $2 and status = 'running' returning week_of`,
-      [o.week, o.holder],
-    );
+    const rows = await q(SUPERSEDE_AT_READY_SQL, [o.week, o.holder, o.now.toISOString()]);
     return rows.length ? "ready" : phase;
   }
   throw new Error(`Unknown Cora phase: ${phase}`);
@@ -272,20 +271,65 @@ async function rebuildContent(q: Query, week: string) {
   );
 }
 
-/** One user's picks, or the reason there are none, in one statement: exactly one set per user per week. */
-async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, scored: Scored[], byId: Map<string, PoolRow>, breaker: { failures: number }) {
-  const record = async (outcome: string, eligible: number, picks: { position: number; id: string; personal: number; fit: number; reason: string }[], note = "") => {
-    await q(
-      `with cw as (
+/**
+ * One user's picks, or the reason there are none, in one statement: exactly one set per user per week.
+ *
+ * The statement writes only while this worker holds the week's lease (holder and kind of run), like every
+ * other write here. It supersedes nothing: a held list is replaced only once the newer week is ready
+ * (SUPERSEDE_AT_READY_SQL), so a week that fails after its picks never takes the older held list away.
+ */
+export const RECORD_PICKS_SQL = `with lease as (
+         select 1 from cora_weeks where week_of = $2::date and holder = $9::text and status = 'running' and dry_run = $7::boolean
+       ),
+       cw as (
          insert into cora_user_weeks (user_id, week_of, outcome, eligible_count, picked_count, note, dry_run)
-         values ($1, $2, $3, $4, $5, $6, $7) on conflict (user_id, week_of) do nothing returning user_id
+         select $1::uuid, $2::date, $3::text, $4::int, $5::int, $6::text, $7::boolean where exists (select 1 from lease)
+         on conflict (user_id, week_of) do nothing returning user_id
        )
        insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run)
        select $1, $2, p.position, p.id, p.personal, p.fit, p.reason, $7
        from cw, jsonb_to_recordset($8::jsonb) as p(position int, id uuid, personal int, fit int, reason text)
-       on conflict do nothing`,
-      [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks)],
-    );
+       on conflict do nothing`;
+
+/**
+ * The week becomes ready, and held lists are replaced, in one statement (plan 2026-11-26-001, Unit 3 review).
+ *
+ * Only the lease holder of a running week moves it to ready ($1 week, $2 holder). In the same statement, for
+ * every unsponsored trial still waiting for its first list (FIRST_LIST_PENDING_SQL: every trial with no card,
+ * and one whose card was saved since its list was held), each undelivered picked or short week older than the
+ * member's newest picked or short week of a ready (or sent) Cora week is stamped `superseded_at` with the job
+ * clock ($3). The member is left with at most one held list, the newest one Cora finished:
+ *
+ * - a newer week that fails after its picks never becomes ready, so it supersedes nothing;
+ * - an older week re-run after a newer one (JobOptions.week) is itself superseded as it becomes ready;
+ * - week W ready at about 01:00 supersedes W-1 then, so a card saved before the 07:00 send unlocks W.
+ *
+ * This week's own row is counted as ready (the update above is not visible to the other parts of the
+ * statement). Nothing is superseded unless this statement moved the week, and never for a dry run.
+ */
+export const SUPERSEDE_AT_READY_SQL = `with r as (
+         update cora_weeks set phase = 'ready', status = 'ready', finished_at = now()
+         where week_of = $1::date and holder = $2::text and status = 'running' returning week_of, dry_run
+       ),
+       newest as (
+         select nw.user_id, max(nw.week_of) as week_of
+         from cora_user_weeks nw join cora_weeks nk on nk.week_of = nw.week_of
+         where not nw.dry_run and not nk.dry_run and nw.outcome in ('picked', 'short') and (nk.status in ('ready', 'sent') or nk.week_of = $1::date)
+         group by nw.user_id
+       ),
+       s as (
+         update cora_user_weeks cw set superseded_at = coalesce($3::timestamptz, now())
+         from newest n, users u
+         where exists (select 1 from r where not r.dry_run)
+           and cw.user_id = n.user_id and u.id = cw.user_id and cw.week_of < n.week_of
+           and not cw.dry_run and cw.outcome in ('picked', 'short') and cw.delivered_at is null and cw.superseded_at is null
+           and (${NO_CARD_TRIAL_SQL("u")} or ${FIRST_LIST_PENDING_SQL("u")})
+       )
+       select week_of from r`;
+
+async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, scored: Scored[], byId: Map<string, PoolRow>, breaker: { failures: number }) {
+  const record = async (outcome: string, eligible: number, picks: { position: number; id: string; personal: number; fit: number; reason: string }[], note = "") => {
+    await q(RECORD_PICKS_SQL, [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks), o.holder]);
   };
 
   const eligible = eligiblePlays(

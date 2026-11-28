@@ -43,7 +43,7 @@ export async function placeOrder(q: Query, o: { userId: string; week: string; no
   );
   if (!rows.length) return { ok: true }; // already ordered
   const cur = u.currency ?? "USD";
-  await sendToUser({ id: o.userId, email: u.email }, "list_ordered", o.week, listOrderedEmail({ week: o.week, price: money(amount(o.settings, "per_run", cur), cur) }), o).catch(() => {});
+  await sendToUser({ id: o.userId, email: u.email }, "list_ordered", o.week, listOrderedEmail({ week: o.week, price: `${money(amount(o.settings, "per_run", cur), cur)} ${taxPhrase(cur)}` }), o).catch(() => {});
   return { ok: true };
 }
 

@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import { linkContributor } from "./users";
-import { attentionFor, eligibleCounts, excuseDefaultWeek, filterOps, loadOps, opsWeek } from "./ops";
+import { ATTENTION_LABELS, attentionFor, eligibleCounts, excuseDefaultWeek, filterOps, loadOps, opsWeek, STATUS_KEYS, statusKey } from "./ops";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
@@ -131,6 +131,35 @@ describe("needs attention (spec check 30)", () => {
     expect(row(listed).closesAt).toBeNull();
   });
 
+  it("shows the no-card clocks (plan 2026-11-26-001, Unit 7): teaser + 14 days, consent + 21 days; a held list never moves them", async () => {
+    // First teaser Monday 2026-11-30, 7:05 AM Toronto; a newer held week since does not extend.
+    const teasered = await user("teasered@example.com", { consent_at: "2026-11-20T12:00:00Z", first_teaser_at: "2026-11-30T12:05:00Z" });
+    await query("insert into cora_weeks (week_of, status) values ('2026-12-07', 'sent')");
+    await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2026-12-07', 'picked')", [teasered]);
+    const fresh = await user("fresh@example.com", { consent_at: "2026-12-10T12:00:00Z" });
+    const sponsored = await user("sponsored@example.com", { consent_at: "2026-11-01T12:00:00Z", sponsor_id: "00000000-0000-4000-8000-000000000001" });
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const row = (id: string) => rows.find((r) => r.id === id)!;
+    expect(row(teasered).closesAt).toBe("2026-12-14T12:05:00.000Z");
+    expect(row(teasered).attention).toContain("trial_closing");
+    expect(row(fresh).closesAt).toBe("2026-12-31T12:00:00.000Z");
+    expect(row(fresh).attention).not.toContain("trial_closing");
+    expect(row(sponsored).closesAt).toBeNull();
+  });
+
+  it("does not flag a never-teasered no-card close while its run waits on Cora, even a run for a later week (review fixes Unit 7, F5)", async () => {
+    // Consent + 21 days = Thursday 2026-12-17: within 5 days of Sunday evening.
+    const waiting = await user("waiting-nocard@example.com", { consent_at: "2026-11-26T12:00:00Z" });
+    // An admin-added run for a week after the coming one, Cora not started.
+    await query("insert into runs (user_id, week_of, route, agent, sharing, raw_text, status) values ($1, '2026-12-21', 'connector', 'hark', 'share', 'x', 'accepted')", [waiting]);
+    const plain = await user("plain-nocard@example.com", { consent_at: "2026-11-26T12:00:00Z" });
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const row = (id: string) => rows.find((r) => r.id === id)!;
+    expect(row(waiting).closesAt).toBe("2026-12-17T12:00:00.000Z");
+    expect(row(waiting).attention).not.toContain("trial_closing");
+    expect(row(plain).attention).toContain("trial_closing");
+  });
+
   it("does not show a trial as closing while its run for the coming week waits on Cora", async () => {
     const waiting = await user("waiting@example.com", { trial_started_at: "2026-11-25T12:00:00Z" });
     await run(waiting, "accepted");
@@ -167,5 +196,86 @@ describe("eligible plays (R16, R25)", () => {
     const [{ id: other }] = await query<{ id: string }>("insert into seed_contributors (label) values ('Kim') returning id");
     await linkContributor(query, "admin@example.com", contributor, a);
     expect(await linkContributor(query, "admin@example.com", other, a)).toMatchObject({ ok: false });
+  });
+});
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  it("has its own status kind and filter, and no money words beyond 'No card yet'", async () => {
+    const noCard = await user("nocard@example.com", { stripe_customer: "cus_n" });
+    const carded = await user("card@example.com", { trial_started_at: "2026-11-30T15:00:00Z" });
+    const sponsored = await user("sponsored@example.com", { sponsor_id: "00000000-0000-4000-8000-000000000001" });
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const by = (id: string) => rows.find((r) => r.id === id)!;
+    expect(by(noCard)).toMatchObject({ hasCard: false, money: "No card yet" });
+    expect(statusKey(by(noCard))).toBe("trial_no_card");
+    expect(statusKey(by(carded))).toBe("trial");
+    expect(statusKey(by(sponsored))).toBe("sponsored");
+    expect(filterOps(rows, { status: "trial_no_card" }).map((r) => r.id)).toEqual([noCard]);
+    expect(STATUS_KEYS).toContain("trial_no_card");
+  });
+
+  it("'Needs attention' includes every no-card member with a held list, however recent (Unit 9, origin R27)", async () => {
+    await query("insert into cora_weeks (week_of, status) values ('2026-12-07', 'sent')");
+    // Teasered minutes ago: no age threshold.
+    const fresh = await user("fresh-held@example.com", { consent_at: "2026-12-06T12:00:00Z", first_teaser_at: "2026-12-07T12:05:00Z", sharing: "off" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-12-07', 'short', 2)", [fresh]);
+    const older = await user("older-held@example.com", { consent_at: "2026-12-01T12:00:00Z", first_teaser_at: "2026-12-07T12:05:00Z" });
+    await run(older, "accepted");
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-12-07', 'picked', 3)", [older]);
+    // Not held: a card saved (delivered list), sponsored, a superseded week only, a dry run, or nothing picked.
+    const carded = await user("carded-held@example.com", { trial_started_at: "2026-12-08T12:00:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, delivered_at) values ($1, '2026-12-07', 'picked', 3, '2026-12-08T12:00:00Z')", [carded]);
+    const sponsored = await user("sponsored-held@example.com", { sponsor_id: "00000000-0000-4000-8000-000000000002" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count) values ($1, '2026-12-07', 'picked', 3)", [sponsored]);
+    const superseded = await user("superseded@example.com", { consent_at: "2026-12-01T12:00:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, superseded_at) values ($1, '2026-12-07', 'picked', 3, '2026-12-08T06:00:00Z')", [superseded]);
+    const dry = await user("dry@example.com", { consent_at: "2026-12-01T12:00:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, dry_run) values ($1, '2026-12-07', 'picked', 3, true)", [dry]);
+    const none = await user("none@example.com", { consent_at: "2026-12-01T12:00:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2026-12-07', 'none')", [none]);
+
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const by = (id: string) => rows.find((r) => r.id === id)!;
+    expect(by(fresh)).toMatchObject({ heldNoCard: true });
+    expect(by(fresh).attention).toEqual(["held_no_card"]);
+    expect(by(older).attention).toContain("held_no_card");
+    for (const id of [carded, sponsored, superseded, dry, none]) expect(by(id).attention).not.toContain("held_no_card");
+    expect(by(superseded).heldNoCard).toBe(false);
+    const needs = filterOps(rows, { attention: true }).map((r) => r.id);
+    expect(needs).toEqual(expect.arrayContaining([fresh, older]));
+    expect(ATTENTION_LABELS.held_no_card).toBe("First list held, no card");
+    expect(statusKey(by(fresh))).toBe("trial_no_card");
+  });
+
+  it("held_no_card is false for a no-card member whose only weeks are delivered or superseded (review fixes Unit 9, F7)", async () => {
+    await query("insert into cora_weeks (week_of, status) values ('2026-11-30', 'sent'), ('2026-12-07', 'sent') on conflict do nothing");
+    const delivered = await user("delivered-nc@example.com", { consent_at: "2026-11-25T12:00:00Z", first_teaser_at: "2026-11-30T12:05:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, delivered_at) values ($1, '2026-12-07', 'picked', 3, '2026-12-08T12:00:00Z')", [delivered]);
+    const both = await user("both-nc@example.com", { consent_at: "2026-11-25T12:00:00Z", first_teaser_at: "2026-11-30T12:05:00Z" });
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, superseded_at) values ($1, '2026-11-30', 'picked', 3, '2026-12-07T12:05:00Z')", [both]);
+    await query("insert into cora_user_weeks (user_id, week_of, outcome, picked_count, delivered_at) values ($1, '2026-12-07', 'picked', 3, '2026-12-08T12:00:00Z')", [both]);
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    for (const id of [delivered, both]) {
+      const r = rows.find((x) => x.id === id)!;
+      expect(r.heldNoCard).toBe(false);
+      expect(r.attention).not.toContain("held_no_card");
+    }
+  });
+
+  it("a leftover one-at-a-time account still has a row, with no error (Unit 9)", async () => {
+    const p = await user("perrun@example.com", { status: "active", plan: "per_run", stripe_customer: "cus_p", free_lists_used: 2 });
+    await query("insert into orders (user_id, week_of, status) values ($1, $2, 'ordered')", [p, WEEK]);
+    const { rows } = await loadOps(query, { now: SUNDAY_EVENING, settings });
+    const r = rows.find((x) => x.id === p)!;
+    expect(statusKey(r)).toBe("per_run");
+    expect(r).toMatchObject({ heldNoCard: false, money: "Order: ordered" });
+  });
+
+  it("statusKey: active, held and cancelled accounts are never 'no card'", () => {
+    const r = { plan: "monthly" as const, sponsored: false, cancelRequested: false, hasCard: false };
+    expect(statusKey({ ...r, status: "active" })).toBe("monthly");
+    expect(statusKey({ ...r, status: "held" })).toBe("held");
+    expect(statusKey({ ...r, status: "cancelled" })).toBe("cancelled");
+    expect(statusKey({ ...r, status: "trial", switched: true })).toBe("monthly");
   });
 });

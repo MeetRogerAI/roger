@@ -12,8 +12,8 @@ import { SESSION_COOKIE, SESSION_DAYS } from "@/lib/auth/session";
  *   (spec B.3, "renewed on use"). The proxy cannot tell a live session from a
  *   dead one; the stored session decides, and a dead cookie is removed by
  *   /auth/clear when a page checks it.
- * - /admin is left to its own gate, which still offers the shared password
- *   until the email check is confirmed on production.
+ * - /admin is left to its own gate, which shows the email-link sign-in to
+ *   anyone who is not an admin.
  */
 export function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;

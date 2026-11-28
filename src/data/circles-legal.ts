@@ -1,4 +1,4 @@
-import type { LegalDoc } from "./legal";
+import { rogerMonthlyTerms, type LegalDoc } from "./legal";
 import { siteConfig } from "./config";
 
 // Draft marketing terms from Circles spec 6.8. Review before opening intake.
@@ -37,6 +37,7 @@ export const circlesTerms: LegalDoc = {
         "Candid: share what failed as well as what worked. A Circle is for trading what works, not selling to other members.",
       ],
     },
+    rogerMonthlyTerms,
     {
       heading: "Before launch",
       body: [

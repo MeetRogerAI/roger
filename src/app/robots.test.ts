@@ -13,13 +13,16 @@ afterEach(() => {
   site = "circles";
 });
 
+/** The header rules other than the Payment page's CSP (tested in src/lib/payment-csp.test.ts). */
+const robotsHeaders = async () => (await nextConfig.headers!()).filter((r) => !r.source.startsWith("/start/payment"));
+
 describe("indexing", () => {
   it("blocks every crawler on previews, whichever site is served", async () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     for (site of ["circles", "v1", "v2", "v3", "legacy"] as const) {
       expect(robots(), site).toEqual({ rules: { userAgent: "*", disallow: "/" } });
     }
-    expect(await nextConfig.headers!()).toEqual([{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]);
+    expect(await robotsHeaders()).toEqual([{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]);
   });
 
   it("leaves production indexable with its sitemap", async () => {
@@ -27,7 +30,7 @@ describe("indexing", () => {
     const r = robots();
     expect(r.rules).toMatchObject({ userAgent: "*", allow: "/" });
     expect(r.sitemap).toMatch(/sitemap\.xml$/);
-    expect(await nextConfig.headers!()).toEqual([]);
+    expect(await robotsHeaders()).toEqual([]);
   });
 
   it("keeps the Circles disallow list in production", () => {

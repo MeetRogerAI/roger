@@ -1,6 +1,6 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
 import { orderAgainLine } from "./charges";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /** An order closed because Roger's week failed (closeFailedWeekOrders): nothing charged. */
 export function orderClosedRogerFailedEmail(o: { week: string }): Rendered {

@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { draftMode, headers } from "next/headers";
+import { draftMode } from "next/headers";
 import { redirect } from "next/navigation";
-import { clientIp, hit } from "@/lib/rate-limit";
 import { logAdminAction } from "@/lib/admin/log";
-import { requireAdmin, signIn, signOut } from "@/lib/admin-auth";
+import { requireAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
 import { endCurrentSession } from "@/lib/auth/cookies";
 import { sql } from "@/lib/db";
@@ -24,22 +23,8 @@ const str = (fd: FormData, k: string, max = 500) => {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
 };
 
-/** Password guesses: five per IP, and thirty in all, every five minutes (counted before the check, right or wrong). */
-const SIGNIN_PER_IP = { limit: 5, windowSeconds: 5 * 60 };
-const SIGNIN_GLOBAL = { limit: 30, windowSeconds: 5 * 60 };
-
-export async function signInAction(_p: AdminState, fd: FormData): Promise<AdminState> {
-  const ip = clientIp(await headers());
-  const allowed = (await hit(`admin-signin:ip:${ip}`, SIGNIN_PER_IP)) && (await hit("admin-signin:all", SIGNIN_GLOBAL));
-  if (!allowed) return { status: "error", message: "Too many tries. Wait a few minutes." };
-  const ok = await signIn(str(fd, "password", 200));
-  if (!ok) return { status: "error", message: "That password isn’t right." };
-  redirect("/admin");
-}
-
+/** Admins sign in by email link, so signing out ends that session. */
 export async function signOutAction() {
-  await signOut();
-  // Also end an email-link session, if that is how this admin signed in.
   await endCurrentSession();
   // And the preview of the drafts (plan U9). Without an admin session it would show nothing but the published
   // site anyway (the content reader checks the admin on every previewed render); this takes the cookie away too.

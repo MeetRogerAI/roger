@@ -108,3 +108,29 @@ Tally: **34 pass**, **7 need the live environment**, **0 fail**. Check 12 is rea
 - `npx vitest run` (after merging PR #42): 90 files passed, 1 skipped; 947 tests passed, 13 skipped (the live model and seed-run tests). The 8 scenario files hold 23 of those tests, all passing.
 - `npx eslint src tests`: no errors; 6 warnings, all in existing `src/` files, none in `tests/`.
 - Dependencies were not changed.
+
+## Live checks on preview, November 27, 2026 (launch close-out, Unit 6)
+
+Run on a branch deployment of `main` (`launch/u6b-switches`), with the preview database and Stripe test mode, by Claude Code driving Peter's signed-in Chrome. preview.meetroger.ai itself serves the `preview` branch, which the site sessions use and which was 68 commits behind `main`, so it was not used.
+
+- **AI Gateway (S15):** a seed import of Ehab's prose run (no `roger-run` block) was read by the model through the Gateway: plays extracted with titles, categories and descriptions. Every play from prose pilot runs is flagged "its playbook could not be found in the report" (`src/lib/intake/process.ts`: the model found under 50 characters of playbook). That is correct: the 1.8/1.9 runs describe what ran, not how to set it up. At the production import, an admin edits a playbook in or rejects each one; approving as is gives ideas with no install steps.
+- **Crons (S15):** all seven show in Vercel (`vercel crons ls`), including the 10-minute Monday schedules.
+- **Cora dry run (S15):** completes ("week of 2026-11-30: ready").
+- **The new hourly tasks:** `idle_retention` and `old_records` (PR #63) ran in a real hourly pass without error.
+- **Member journey (replaces the sandbox scenario run; checks 2, 21, 24, 26):** pilot account, Product and Pricing step, Zack off (so a list every Monday, D2), then Cora, charge and send "as of" each Monday:
+  - Nov 30: list held for the card; `/app` showed the blurred picks and "Add your card to see them"; card saved on the Payment page (CAD, Ontario); list 1 unlocked ("Free list 1 of 2").
+  - Dec 7: the pool (2 plays) had nothing new, so a note and no list; the free list was not used up.
+  - Dec 14: free list 2 delivered.
+  - Dec 21: first charge, one invoice, paid: CA$280 plan line + CA$280 higher-rate line (Zack off) + **HST 13% (Canada) as its own tax row, CA$72.80**; total CA$632.80. List 3 delivered.
+- **Legacy and public pages (check 35):** `/rlpsignature`, `/rlp`, `/hampton`, `/founders`, `/library`, `/getstarted`, `/start`, `/privacy`, `/terms` all answer 200.
+- **Not done here:** check 1 and check 40 (the `/start` walk at 390px and 1440px, and the public pages) move to the merge of `feat/site-v1`, which restyles them; check 6 (a real agent's run reaching `/app/zack` and `/admin/runs` within a minute) is watched with the first real run at go-live; the renewal invoice with a difference line is watched on the first real renewal (Peter, 2026-11-27).
+
+Found and fixed on the way:
+- No admin control could switch `v3.cycleLive` or `v3.signupOpen`: go-live switches added to `/admin/cora` (PR #67).
+- Changing sharing on `/app/zack` confirmed the old setting, so no member could change it (React 19 form reset of a controlled radio): fixed with a DOM test (PR #68).
+- A plain `.btn` had no side padding ("Add your card to see them" and eight more): fixed (PR #69).
+
+Noted for the wording sign-off (S18):
+- The higher-rate line on the first invoice is named "Roger Monthly", like the plan line, so the member sees two lines that read the same.
+- With Zack off, the getting-started card still says the first list comes "once Zack has sent a report".
+- On preview, sign-in emails link to the deployment's own address, so a link requested on preview.meetroger.ai opens on a vercel.app address (`APP_URL` is not set on Preview).

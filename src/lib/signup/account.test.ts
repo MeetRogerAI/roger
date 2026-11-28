@@ -4,7 +4,7 @@ import type { Transport } from "@/lib/mail/send";
 import { counterFor, type Counter } from "@/lib/rate-limit";
 import { consumeToken, userForToken } from "@/lib/auth/login-link";
 import { testDb } from "@/test-helpers/pglite-db";
-import { startAccount } from "./account";
+import { startAccount, stepPaths } from "./account";
 import type { SignupDraft } from "./draft";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -71,6 +71,13 @@ describe("startAccount", () => {
     expect(u).toEqual({ name: "Ana", path: "running" });
     expect(sent[0].subject).toBe("Your Roger sign-in link");
     expect((await consumeToken(query, linkIn(sent[0])))?.nextPath).toBe("/app");
+  });
+
+  it("resumes an old account left at the removed card step at Step 3, Product and Pricing (plan 2026-11-26-001, Unit 2)", async () => {
+    expect(stepPaths).toMatchObject({ plan: "/start/plan", card: "/start/plan", done: "/app" });
+    await query("insert into users (email, name, path, email_verified_at, signup_step) values ('ana@example.com', 'Ana', 'running', now(), 'card')");
+    await startAccount(query, { name: "Ana", email: "ana@example.com", draft, ip: "1.2.3.4" }, deps());
+    expect((await consumeToken(query, linkIn(sent[0])))?.nextPath).toBe("/start/plan");
   });
 
   it("keeps the not-ready tag when someone chose to start anyway", async () => {

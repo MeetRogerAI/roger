@@ -26,7 +26,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
 
       <div>
         <h2 className="text-title">New pilot account</h2>
-        <p className="mt-1 text-small text-ink-2">Makes the account and a sign-in link that opens at the plan step, so they add a card and start their free lists.</p>
+        <p className="mt-1 text-small text-ink-2">Makes the account and a sign-in link that opens at Product and Pricing. They agree to Zack there, and add a card when their first list is ready, like everyone else.</p>
         <div className="mt-4 max-w-[48rem]">
           <PilotLinkForm />
         </div>

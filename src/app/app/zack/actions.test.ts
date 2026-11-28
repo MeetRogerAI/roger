@@ -14,6 +14,7 @@ let allowed = true;
 let current: Query;
 let signedIn: string | null = null;
 const mailed: string[] = [];
+const mailedText: string[] = [];
 vi.mock("@/lib/db-query", () => ({ query: (t: string, p?: unknown[]) => current(t, p) }));
 vi.mock("@/lib/auth/access", () => ({
   requireUserForAction: async () => {
@@ -25,8 +26,9 @@ vi.mock("@/lib/rate-limit", async (orig) => ({ ...(await orig<typeof import("@/l
 vi.mock("@/lib/v3-settings", async (orig) => ({ ...(await orig<typeof import("@/lib/v3-settings")>()), readV3Settings: async () => mergeV3([]) }));
 vi.mock("@/lib/mail/send", async (orig) => ({
   ...(await orig<typeof import("@/lib/mail/send")>()),
-  sendToUser: async (_u: unknown, kind: string) => {
+  sendToUser: async (_u: unknown, kind: string, _ref: unknown, m: { text: string }) => {
     mailed.push(kind);
+    mailedText.push(m.text);
     return "sent";
   },
 }));
@@ -53,6 +55,7 @@ beforeEach(async () => {
   ({ query: current } = await testDb());
   resetNextFakes({}, { "x-vercel-forwarded-for": "1.2.3.4" });
   mailed.length = 0;
+  mailedText.length = 0;
   refreshed = 0;
   allowed = true;
   offer.on = false;
@@ -100,6 +103,29 @@ describe("changeSharing", () => {
     await current("insert into pending_adjustments (user_id, period_start, amount_cents, currency) select id, '2026-12-03', 28000, 'CAD' from users");
     expect(await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "off", confirm: "yes" })))).toMatchObject({ value: { status: "saved" } });
     expect(await current("select status from pending_adjustments")).toEqual([{ status: "pending" }]);
+  });
+
+  // Peter's wording, 2026-11-27: the sharing-changed email for turning sharing off, in the trial and paying.
+  it("emails Peter's explanation with the member's own higher price when sharing is turned off", async () => {
+    const offLines = [
+      "Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.",
+      "/app/zack) and change it back. Your price depends on whether your Zack runs share what you learn about AI agents with the network.",
+    ];
+    // In the trial (the first-charge variant): the same words, no first-charge sentence.
+    await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "match_only", confirm: "yes" })));
+    for (const l of offLines) expect(mailedText[0]).toContain(l);
+    // "Zack page" links to the Zack page (the plain text names the address after the words).
+    expect(mailedText[0]).toMatch(/If you didn’t make this change, open the Zack page \(https?:\/\/[^)]+\/app\/zack\) and change it back\./);
+    expect(mailedText[0]).not.toMatch(/the rate for members whose Zack|then write to us/);
+    // Paying, in US dollars, straight to off.
+    await current("update users set sharing = 'share', status = 'active', currency = 'USD', stripe_customer = 'cus_1', stripe_subscription = 'sub_1', first_charge_at = '2026-12-03T11:05:00Z'");
+    await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "off", confirm: "yes" })));
+    expect(mailedText[1]).toContain("but your price doubles, to US$400 a month.");
+    expect(mailedText[1]).not.toContain("With sharing off at a Sunday cutoff");
+    // Back to sharing: the price line as before, and the contact line.
+    await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "share", confirm: "yes" })));
+    expect(mailedText[2]).toContain("A month with sharing on at every Sunday cutoff is US$200.");
+    expect(mailedText[2]).toContain("open the Zack page and change it back, then write to us.");
   });
 
   it("refuses a value that is not one of the three, and says when nothing changes", async () => {

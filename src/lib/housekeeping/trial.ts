@@ -1,9 +1,35 @@
-import { addDays, currentMonday, cutoffInstant, torontoDate, wallParts, wallToInstant, weekOf } from "@/lib/clock";
+import { heldTeaser } from "@/lib/app/held";
+import { PAYMENT_PATH } from "@/lib/app/status";
+import { completeStoredSession, discardSetupSession } from "@/lib/billing/card-setup";
+import type { CardGateway } from "@/lib/billing/gateway";
+import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
+import { addDays, currentMonday, cutoffInstant, torontoDate, wallToInstant, weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
-import { sendToUser, type MailDeps } from "@/lib/mail/send";
+import { appUrl, type Rendered } from "@/lib/mail/layout";
+import { MAX_ATTEMPTS, sendToUser, type MailDeps } from "@/lib/mail/send";
+import { heldReminderEmail } from "@/lib/mail/templates/held-reminder";
 import { uploadReminderEmail } from "@/lib/mail/templates/upload-reminder";
-import { trialNoChargeClosedEmail, trialNoListClosedEmail, zackNotYetEmail } from "@/lib/mail/templates/zack-not-yet";
-import { CYCLE_LIVE_SINCE, type V3Settings } from "@/lib/v3-settings";
+import { trialNoCardClosedEmail, trialNoChargeClosedEmail, trialNoListClosedEmail, zackNotYetEmail } from "@/lib/mail/templates/zack-not-yet";
+import type { V3Settings } from "@/lib/v3-settings";
+import {
+  CLOSED_NO_CARD,
+  CLOSED_NO_LIST,
+  closeMoment,
+  comingWeeks,
+  DAY_MS,
+  HELD_REMINDER_DAYS,
+  HELD_REMINDER_KIND,
+  LIVE_SINCE,
+  LIVE_SINCE_CTE,
+  noCardClocks,
+  ROGER_FAILURE_WEEKS_SQL,
+  runWaiting,
+  runWaitingFrom,
+  wallDayReached,
+  type NoCardClock,
+} from "./clocks";
+
+export { CLOSED_NO_CARD, CLOSED_NO_LIST, closeMoment, comingWeeks, HELD_CLOSE_DAYS, HELD_REMINDER_DAYS, HELD_REMINDER_KIND, noCardClocks, type NoCardClock } from "./clocks";
 
 /**
  * The trial with no first list (spec B.9, plan Unit 18): nudges on days 3, 10
@@ -26,9 +52,7 @@ import { CYCLE_LIVE_SINCE, type V3Settings } from "@/lib/v3-settings";
  * pass's deadline; the next pass carries on.
  */
 
-const DAY_MS = 86_400_000;
 export const NUDGE_DAYS = [3, 10, 17] as const;
-export const CLOSED_NO_LIST = "no_first_list";
 export const MAX_SENDS = 50;
 
 export type TrialClock = {
@@ -68,47 +92,13 @@ const CLOCK = (kind: ClockKind, s: Pick<V3Settings, "freeRuns">) =>
     ? { on: ON_CLOCK, start: "u.trial_started_at", reason: CLOSED_NO_LIST }
     : { on: `${WAITING(s.freeRuns)} and ${LAST_LIST} is not null`, start: LAST_LIST, reason: CLOSED_NO_CHARGE };
 
-/**
- * A real run for one of the coming weeks (`$n`, a date array) whose week is
- * not finished: Cora's week not yet sent or failed, or no decision for this
- * member yet. Its list may still go out, so the trial waits.
- */
-const runWaiting = (user: string, weeks: string) => `exists (
-  select 1 from runs r where r.user_id = ${user} and not r.is_test and r.status <> 'deleted' and r.week_of = any(${weeks}::date[])
-    and not (exists (select 1 from cora_weeks w where w.week_of = r.week_of and not w.dry_run and w.status in ('sent', 'failed'))
-             and exists (select 1 from cora_user_weeks cw where cw.user_id = r.user_id and cw.week_of = r.week_of and not cw.dry_run)))`;
-
-/** The Mondays a run arriving now could still be for: the coming one, and on a Monday also today's. */
-export function comingWeeks(now: Date, s: Pick<V3Settings, "runCutoff">): string[] {
-  const next = weekOf(now, s.runCutoff);
-  return wallParts(now).dow === 1 ? [currentMonday(now), next] : [next];
-}
-
-/**
- * The close moment: `days` after the start, plus a week for each Monday with
- * no list because of Roger whose send falls before the close as it stands then.
- */
-export function closeMoment(start: Date, days: number, rogerWeeks: string[], sendAt: string): Date {
-  let close = start.getTime() + days * DAY_MS;
-  for (const w of [...new Set(rogerWeeks)].sort()) {
-    const sent = wallToInstant(w, sendAt).getTime();
-    if (sent >= start.getTime() && sent < close) close += 7 * DAY_MS;
-  }
-  return new Date(close);
-}
-
 /** Every trial on the clock (or only the named ones), with its start and close. */
 export async function trialClocks(q: Query, s: V3Settings, now: Date, onlyIds?: string[], kind: ClockKind = "no_list"): Promise<TrialClock[]> {
   const c = CLOCK(kind, s);
   const rows = await q<{ id: string; email: string; started_at: string; start: string; has_run: boolean; roger_weeks: string[] | null; undelivered: string[] | null }>(
-    `with live as (
-       select coalesce(
-         (select (value #>> '{}')::timestamptz from settings where key = '${CYCLE_LIVE_SINCE}'),
-         -- Went live before the first go-live was recorded: the setting's own save time.
-         (select max(updated_at) from settings where key = 'v3.cycleLive' and value = 'true'::jsonb)) as since
-     ),
+    `with ${LIVE_SINCE_CTE},
      t as (
-       select u.id, u.email, coalesce(u.trial_started_at, ${c.start}) as trial_started_at, greatest(${c.start}, (select since from live)) as start
+       select u.id, u.email, coalesce(u.trial_started_at, ${c.start}) as trial_started_at, greatest(${c.start}, ${LIVE_SINCE}) as start
        from users u
        where ${c.on} and ($1::uuid[] is null or u.id = any($1::uuid[])) and not ${runWaiting("u.id", "$3")}
      )
@@ -116,13 +106,7 @@ export async function trialClocks(q: Query, s: V3Settings, now: Date, onlyIds?: 
        to_char(t.trial_started_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as started_at,
        to_char(t.start at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as start,
        exists (select 1 from runs r where r.user_id = t.id and not r.is_test and r.status <> 'deleted') as has_run,
-       (select array_agg(distinct to_char(w, 'YYYY-MM-DD')) from (
-          select week_of as w from cora_weeks where status = 'failed' and not dry_run
-            and week_of >= (t.start at time zone 'America/Toronto')::date and week_of <= $2::date
-          union
-          select week_of from cora_user_weeks where user_id = t.id and outcome = 'none' and not dry_run
-            and week_of >= (t.start at time zone 'America/Toronto')::date and week_of <= $2::date
-        ) x) as roger_weeks,
+       ${ROGER_FAILURE_WEEKS_SQL("t.id", "t.start", "$2")} as roger_weeks,
        -- Picked but never delivered: Roger's failure once that Monday's send has passed (checked below).
        (select array_agg(to_char(week_of, 'YYYY-MM-DD')) from cora_user_weeks
          where user_id = t.id and outcome in ('picked', 'short') and not dry_run and delivered_at is null
@@ -144,9 +128,31 @@ export async function trialClocks(q: Query, s: V3Settings, now: Date, onlyIds?: 
   });
 }
 
-export type TrialDeps = { settings: V3Settings; now: Date; /** The pass's deadline (epoch ms): stop and leave the rest to the next pass. */ deadline?: number } & MailDeps;
+export type TrialDeps = {
+  settings: V3Settings;
+  now: Date;
+  /** The pass's deadline (epoch ms): stop and leave the rest to the next pass. */
+  deadline?: number;
+  /**
+   * The no-card clocks for this pass (review fixes Unit 7, F3): the hourly
+   * pass loads them once and shares them between the nudges, the reminders
+   * and the close. Each close re-checks the account at write time, so a
+   * clock read a few tasks earlier is safe. Absent: read here.
+   */
+  noCard?: () => Promise<NoCardClock[]>;
+  /**
+   * Stripe's card gateway, for the no-card close (review fixes Unit 7, F1): a
+   * card confirmed on the stored Payment session is saved instead of the
+   * account being closed, and the session is closed after a close. Absent
+   * (Stripe not set up): nobody could have confirmed a card. The hourly pass
+   * hands it its own (`HourlyDeps.card`, Stripe's by default; review fixes
+   * Unit 10, T1), so the scenarios run the real task with their fake Stripe.
+   */
+  card?: CardGateway | null;
+} & MailDeps;
 
 const outOfTime = (d: TrialDeps) => d.deadline != null && Date.now() >= d.deadline;
+const clocksFor = (q: Query, d: TrialDeps) => (d.noCard ? d.noCard() : noCardClocks(q, d.settings, d.now));
 
 /**
  * Days 3, 10 and 17 with no run: "Zack hasn't sent a report yet", once each
@@ -168,7 +174,109 @@ export async function sendTrialNudges(q: Query, d: TrialDeps): Promise<number> {
     );
     if (r !== "already") sent++;
   }
+  // Unit 7: the same nudges for a no-card trial that has had no teaser, counted from the end of sign-up (Toronto
+  // calendar days) and keyed by it (`finishedAt`: signup_finished_at, else consent for older rows, whole-branch
+  // review W1). A teaser (which needs a run) moves the member to the held reminders; a saved card takes them off.
+  for (const t of await clocksFor(q, d)) {
+    if (sent >= MAX_SENDS || outOfTime(d)) break;
+    if (t.firstTeaserAt || t.hasRun || d.now >= t.closesAt) continue;
+    const day = wallDayReached(NUDGE_DAYS, t.start, d.now);
+    if (day == null) continue;
+    const r = await sendToUser({ id: t.id, email: t.email }, "zack_not_yet", `${t.finishedAt.toISOString()}:${day}`, zackNotYetEmail({ day, closesOn: torontoDate(t.closesAt) }), d).catch(
+      () => "failed" as const,
+    );
+    if (r !== "already") sent++;
+  }
   return sent;
+}
+
+/**
+ * Unit 7: "Your ideas are waiting" on days 2 and 7 after a no-card trial's
+ * first teaser (Toronto calendar days, same wall time), titles only, with a
+ * link to Payment. Once each, keyed by the first teaser and the day (kind
+ * `held_reminder`); only the latest day reached is sent, so a late pass never
+ * sends two. A failed send is tried on the next pass until the next day.
+ * Nothing once the card is saved or the trial has closed, and nothing while
+ * no list is held. A reminder already sent is known from the clock itself.
+ */
+export async function sendHeldReminders(q: Query, d: TrialDeps): Promise<number> {
+  let sent = 0;
+  for (const t of await clocksFor(q, d)) {
+    if (sent >= MAX_SENDS || outOfTime(d)) break;
+    if (!t.firstTeaserAt || d.now >= t.closesAt) continue;
+    const day = wallDayReached(HELD_REMINDER_DAYS, t.firstTeaserAt, d.now);
+    if (day == null) continue;
+    const ref = `${t.firstTeaserAt.toISOString()}:${day}`;
+    if (t.reminded.includes(ref)) continue;
+    const held = await heldTeaser(q, t.id);
+    if (!held) continue;
+    const message = heldReminderEmail({ week: held.week, titles: held.titles, closesOn: torontoDate(t.closesAt), paymentUrl: appUrl(PAYMENT_PATH) });
+    const r = await sendToUser({ id: t.id, email: t.email }, HELD_REMINDER_KIND, ref, message, d).catch(() => "failed" as const);
+    if (r !== "already") sent++;
+  }
+  return sent;
+}
+
+/**
+ * Unit 7: the no-card closes. A teasered trial closes at its first teaser +
+ * 14 days (`no_card`), a never-teasered one at consent + 21 days
+ * (`no_first_list`), each plus a week per Monday Roger failed. One statement
+ * per account re-checks, at the moment it writes, that the account is still a
+ * no-card, unsponsored trial in the same state (so a card saved, or a first
+ * teaser sent, since the clock was read stops it). The closing email goes
+ * through the same retried sweep as the card-saved closes.
+ *
+ * Review fixes (Unit 7), F1: with Stripe set up (`d.card`), a stored Payment
+ * session the member has already confirmed is completed first (the card saved
+ * and the list unlocked, Unit 5) and the account is not closed; a Stripe read
+ * that fails leaves the close to the next pass. After a close, the stored
+ * session is closed in Stripe and cleared (best effort); if the member
+ * confirmed it in the meantime, the completion reopens the trial (card-setup.ts).
+ */
+export async function closeNoCardTrials(q: Query, d: TrialDeps): Promise<number> {
+  let closed = 0;
+  const mail = { getSettings: async () => d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep };
+  for (const t of await clocksFor(q, d)) {
+    if (closed >= MAX_SENDS || outOfTime(d)) break;
+    if (d.now < t.closesAt) continue;
+    const teasered = t.firstTeaserAt != null;
+    if (!teasered && t.runWaiting) continue;
+    if (d.card) {
+      const saved = await completeStoredSession(q, d.card, t.id, mail).catch((e) => {
+        console.error("[trial] stored session before the no-card close", t.id, e instanceof Error ? e.message : e);
+        return "error" as const;
+      });
+      // Saved (or Stripe could not be read: try again next pass, never close over a card that may be there).
+      if (saved === "done" || saved === "error") continue;
+    }
+    const rows = await q(
+      `update users u set status = 'closed', closed_reason = $2, hold_reason = null, quote = null, access_ends_at = coalesce(u.access_ends_at, $3::timestamptz)
+       where u.id = $1 and ${NO_CARD_TRIAL_SQL("u")} and u.consent_at is not null
+         and ${teasered ? "u.first_teaser_at is not null" : `u.first_teaser_at is null and not ${runWaitingFrom("u.id", "$4")}`}
+       returning u.id`,
+      [t.id, teasered ? CLOSED_NO_CARD : CLOSED_NO_LIST, d.now.toISOString(), ...(teasered ? [] : [currentMonday(d.now)])],
+    );
+    if (!rows.length) continue;
+    closed++;
+    if (d.card) await retireStoredSession(q, d.card, t.id, mail);
+  }
+  await sendClosingEmails(q, d);
+  return closed;
+}
+
+/**
+ * After a no-card close: the stored Payment session is expired in Stripe and
+ * cleared, so an open tab cannot confirm a card on a closed account. If the
+ * member confirmed it before the expiry landed, the completion runs (and
+ * reopens the trial). Best effort: a failure is logged; the webhook still
+ * completes a card confirmed later.
+ */
+async function retireStoredSession(q: Query, card: CardGateway, userId: string, mail: Parameters<typeof completeStoredSession>[3]): Promise<void> {
+  try {
+    if ((await discardSetupSession(q, card, userId)) === "complete") await completeStoredSession(q, card, userId, mail);
+  } catch (e) {
+    console.warn("[trial] stored session after the no-card close", userId, e instanceof Error ? e.message : e);
+  }
 }
 
 /**
@@ -204,26 +312,53 @@ export async function closeTrialsWithNoList(q: Query, d: TrialDeps): Promise<num
       if (rows.length) closed++;
     }
   }
-  // Every account these closes ended in the last week whose email has not gone yet.
-  const due = await q<{ id: string; email: string; ended: string; reason: string }>(
-    `with x as (
-       select id, email, closed_reason as reason, to_char(access_ends_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as ended from users
-       where status = 'closed' and closed_reason in ($1, $4) and access_ends_at > $2::timestamptz - interval '7 days'
-     )
-     select * from x where not exists (
-       select 1 from notifications n where n.recipient = x.id::text and n.kind = 'trial_closed' and n.status = 'sent'
-         and n.ref like (case when x.reason = $1 then 'no_list:' else 'no_charge:' end) || x.ended || '%')
-     limit $3`,
-    [CLOSED_NO_LIST, d.now.toISOString(), MAX_SENDS, CLOSED_NO_CHARGE],
-  );
+  await sendClosingEmails(q, d);
+  return closed;
+}
+
+/** The trial closes' emails, by closed_reason: the ref prefix and the email. */
+const CLOSING_EMAILS: Record<string, { prefix: string; email: () => Rendered }> = {
+  [CLOSED_NO_LIST]: { prefix: "no_list", email: trialNoListClosedEmail },
+  [CLOSED_NO_CHARGE]: { prefix: "no_charge", email: trialNoChargeClosedEmail },
+  [CLOSED_NO_CARD]: { prefix: "no_card", email: trialNoCardClosedEmail },
+};
+
+/**
+ * Every account a trial close ended in the last week whose closing email has
+ * not gone yet: decided from stored state (closed, the reason, access_ends_at),
+ * so every pass of either close task retries it until one is sent. The key
+ * carries the Toronto date, so each day gets fresh attempts beyond the mail
+ * layer's three; a sent email with any date ends it. Newest closes first, and
+ * an email whose attempts for today are used up waits for tomorrow's key, so
+ * a few addresses that always fail never starve newer closes (review fixes
+ * Unit 7, F4).
+ */
+async function sendClosingEmails(q: Query, d: TrialDeps): Promise<void> {
+  const reasons = Object.keys(CLOSING_EMAILS);
   const today = torontoDate(d.now);
+  const due = await q<{ id: string; email: string; ended: string; reason: string }>(
+    `with r as (select * from unnest($1::text[], $4::text[]) as r(reason, prefix)),
+     x as (
+       select u.id, u.email, u.closed_reason as reason, r.prefix, u.access_ends_at, to_char(u.access_ends_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as ended
+       from users u join r on r.reason = u.closed_reason
+       where u.status = 'closed' and u.access_ends_at > $2::timestamptz - interval '7 days'
+     )
+     select x.id, x.email, x.reason, x.ended from x
+     where not exists (
+       select 1 from notifications n where n.recipient = x.id::text and n.kind = 'trial_closed' and n.status = 'sent'
+         and n.ref like x.prefix || ':' || x.ended || '%')
+       and not exists (
+       select 1 from notifications n where n.recipient = x.id::text and n.kind = 'trial_closed' and n.attempts >= $6
+         and n.ref = x.prefix || ':' || x.ended || ':' || $5)
+     order by x.access_ends_at desc, x.id
+     limit $3`,
+    [reasons, d.now.toISOString(), MAX_SENDS, reasons.map((k) => CLOSING_EMAILS[k].prefix), today, MAX_ATTEMPTS],
+  );
   for (const u of due) {
     if (outOfTime(d)) break;
-    const noList = u.reason === CLOSED_NO_LIST;
-    const ref = `${noList ? "no_list" : "no_charge"}:${u.ended}:${today}`;
-    await sendToUser({ id: u.id, email: u.email }, "trial_closed", ref, noList ? trialNoListClosedEmail() : trialNoChargeClosedEmail(), d).catch(() => {});
+    const c = CLOSING_EMAILS[u.reason];
+    await sendToUser({ id: u.id, email: u.email }, "trial_closed", `${c.prefix}:${u.ended}:${today}`, c.email(), d).catch(() => {});
   }
-  return closed;
 }
 
 /**

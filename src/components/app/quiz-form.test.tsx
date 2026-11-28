@@ -25,3 +25,39 @@ describe("QuizForm, one question per screen", () => {
     expect(html).not.toContain('type="submit"');
   });
 });
+
+describe("QuizForm, back from Step 2", () => {
+  const initial = {
+    work: "other",
+    role: "Broker, residential resale",
+    uses: "most_weeks",
+    agents: ["claude"],
+    agentOther: "",
+    primary: "claude",
+    count: "1-2",
+    level: 3,
+    help: ["Listings"],
+    software: "often",
+  } as const;
+  const html = renderToStaticMarkup(
+    <QuizForm
+      params={{ path: null, cur: "USD", ref: null, zack: null, utm: "" } as never}
+      agents={[{ value: "claude", label: "Claude" }]}
+      categories={["Listings"]}
+      initial={initial as never}
+    />,
+  );
+  const checked = (name: string, value: string) => (html.match(/<input[^>]*>/g) ?? []).some((t) => t.includes(`name="${name}"`) && t.includes(`value="${value}"`) && t.includes("checked"));
+
+  it("fills in every answer already given, so nothing is typed again", () => {
+    expect(html).toContain('value="Broker, residential resale"');
+    expect(checked("work", "other")).toBe(true);
+    expect(checked("uses", "most_weeks")).toBe(true);
+    expect(checked("agent", "claude")).toBe(true);
+    expect(html).toContain('name="primary" value="claude"');
+    expect(checked("count", "1-2")).toBe(true);
+    expect(checked("level", "3")).toBe(true);
+    expect(checked("help", "Listings")).toBe(true);
+    expect(checked("software", "often")).toBe(true);
+  });
+});

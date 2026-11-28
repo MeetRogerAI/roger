@@ -1,5 +1,5 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /** The fix for a missed week, shared by both miss notices. */
 export const MISSED_FIX =

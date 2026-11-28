@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { ActionButton, CoraButtons, SeedImportForm } from "@/components/app/admin-v3";
+import { ActionButton, CoraButtons, LaunchSwitches, SeedImportForm } from "@/components/app/admin-v3";
 import { isAdmin } from "@/lib/admin-auth";
 import { notReadyReason, userPicks, weekState } from "@/lib/admin/cora";
 import { when } from "@/lib/admin/format";
@@ -75,6 +75,14 @@ export default async function CoraPage({ searchParams }: PageProps<"/admin/cora"
           <dt className="text-ink-2">Charge and send</dt>
           <dd>{reason ?? "Ready: “Charge and send now” charges first, then sends."}</dd>
         </dl>
+      </div>
+
+      <div>
+        <h2 className="text-title">Go-live switches</h2>
+        <p className="mt-1 text-small text-ink-2">The weekly cycle goes on first, then sign-up. Sign-up cannot open while the cycle is off, and the cycle cannot stop while sign-up is open.</p>
+        <div className="mt-4">
+          <LaunchSwitches cycleLive={settings.cycleLive} signupOpen={settings.signupOpen} />
+        </div>
       </div>
 
       <div>

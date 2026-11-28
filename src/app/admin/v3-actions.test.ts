@@ -36,7 +36,7 @@ beforeEach(async () => {
   ({ query: current } = await testDb());
   resetNextFakes();
   admin = null;
-  [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used) values ('ana@example.com', 'Ana', 'trial', 2) returning id");
+  [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used, trial_started_at) values ('ana@example.com', 'Ana', 'trial', 2, now()) returning id");
 });
 
 describe("every v3 admin action refuses a signed-in non-admin", () => {
@@ -54,6 +54,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["deleteAccount", () => actions.deleteAccountAction(idle, form({ userId: "x" }))],
     ["changeEmail", () => actions.changeEmailAction(idle, form({ userId: "x", email: "z@example.com" }))],
     ["flag", () => actions.flagAction(idle, form({ playId: "x", decision: "approve" }))],
+    ["launchSwitch", () => actions.launchSwitchAction(idle, form({ name: "cycleLive", on: "true", confirm: "yes" }))],
     ["saveTestimonial", () => actions.saveTestimonialAction(idle, form({ person: "X", quote: "Q" }))],
     ["testimonialSwitch", () => actions.testimonialSwitchAction(form({ id: "x", cleared: "off" }))],
     ["runJob", () => actions.runJobAction(idle, form({ job: "dry" }))],
@@ -81,11 +82,41 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
   });
 });
 
+describe("the go-live switches (launch list g-open)", () => {
+  it("turn the cycle on only with the box ticked, then sign-up, and log each", async () => {
+    admin = "admin@example.com";
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "cycleLive", on: "true" }))).toMatchObject({ status: "error", message: "Tick the box to confirm." });
+    expect(await current("select 1 from settings where key = 'v3.cycleLive'")).toEqual([]);
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "cycleLive", on: "true", confirm: "yes" }))).toMatchObject({ status: "ok", message: "The weekly cycle is now on." });
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "signupOpen", on: "true", confirm: "yes" }))).toMatchObject({ status: "ok", message: "Sign-up is now on." });
+    expect(await current("select action, detail from admin_actions order by id")).toMatchObject([
+      { action: "launch_switch", detail: expect.objectContaining({ name: "cycleLive", on: true }) },
+      { action: "launch_switch", detail: expect.objectContaining({ name: "signupOpen", on: true }) },
+    ]);
+  });
+
+  it("says why when the order is wrong, and refuses an unknown switch", async () => {
+    admin = "admin@example.com";
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "signupOpen", on: "true", confirm: "yes" }))).toMatchObject({ status: "error", message: expect.stringContaining("weekly cycle first") });
+    expect(await actions.launchSwitchAction({ status: "idle" }, form({ name: "retentionDays", on: "true", confirm: "yes" }))).toMatchObject({ status: "error", message: "Unknown switch." });
+    // The refused flip is in the log as an error, never as a change that happened.
+    expect(await current("select detail->>'outcome' as outcome, detail->>'name' as name from admin_actions")).toEqual([{ outcome: "error", name: "signupOpen" }]);
+  });
+});
+
 describe("for an admin", () => {
   it("acts and logs who did it", async () => {
     admin = "admin@example.com";
     expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: uid }))).toMatchObject({ status: "ok" });
     expect(await current("select admin_email, action from admin_actions")).toEqual([{ admin_email: "admin@example.com", action: "extra_free_list" }]);
+  });
+
+  it("refuses an extra free list for a no-card trial posted anyway (the button is hidden), changing nothing (review fixes Unit 9, F7)", async () => {
+    admin = "admin@example.com";
+    const [nc] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used) values ('nc@example.com', 'Nc', 'trial', 1) returning id");
+    expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: nc.id }))).toMatchObject({ status: "error", message: "Waiting for the member’s card." });
+    expect(await current<{ free_lists_used: number }>("select free_lists_used from users where id = $1", [nc.id])).toEqual([{ free_lists_used: 1 }]);
+    expect(await current("select 1 from admin_actions")).toEqual([]);
   });
 
   it("excuses everyone for a week not recorded yet only with the confirmation tick", async () => {

@@ -1,11 +1,10 @@
 import { addDays, torontoDate } from "@/lib/clock";
-import { amount, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
+import { amount, chargeWords, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { ContributionStatus } from "@/lib/billing/contribution";
-import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered } from "@/lib/billing/offered";
 import { holdDate } from "@/lib/billing/period";
 import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
 import { carriedMissText, notSharingText, secondMissText } from "@/lib/mail/templates/second-miss";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -22,11 +21,11 @@ export type StatusFacts = {
   freeListsUsed: number;
   freeRuns: number;
   /** The told quote for the first charge (monthly trial; held for a changed amount: the new amount and when it was told). */
-  quote: { totalCents: number; currency: Currency; week: string; at?: string } | null;
+  quote: { totalCents: number; currency: Currency; week: string; at?: string; /** The tax in the total (absent on a quote told before it was kept). */ taxCents?: number } | null;
   /** A monthly renewal Stripe could not collect (first failure), not yet held. */
   renewalFailedAt?: string | null;
   firstChargeAt: string | null;
-  /** One at a time: what this week's list cost, with tax. */
+  /** One at a time: what this week's list cost, tax in it. */
   orderCents: number | null;
   /** Cancelled: when access ends. */
   accessEndsAt?: string | null;
@@ -40,11 +39,26 @@ export type StatusFacts = {
   endingAt?: string | null;
   /** A paying one-at-a-time member who switched to monthly and awaits the first charge (status trial, but not a trial). */
   switchedFromPerRun?: boolean;
+  /** A card is saved (billing/has-card.ts `hasCard`). A trial without one has had no list delivered yet. */
+  hasCard: boolean;
+  /** No card: when the first held list's teaser was sent (a held list is waiting for the card). */
+  firstTeaserAt?: string | null;
   now: Date;
 };
 
-/** For an account still on one at a time while that plan is not offered: nothing can be ordered, and the billing page offers monthly. */
-export const STAYS_ON_ONE_AT_A_TIME = `${ONE_AT_A_TIME_NOT_OFFERED} You can switch to monthly on the billing page; nothing is charged unless you do.`;
+/** The close of a leftover per-run account's status line: monthly is the only plan, and nothing can be ordered. */
+export const PLAN_QUESTIONS = "Monthly is now the only plan. Write to us if you have questions about yours.";
+
+/** Where a trial with no card saves it (Step 4, Payment). */
+export const PAYMENT_PATH = "/start/payment";
+
+/** A trial waiting for its card (not sponsored, not a switched one-at-a-time member). */
+const waitingForCard = (f: StatusFacts) => f.status === "trial" && !f.hasCard && !f.sponsored && !f.switchedFromPerRun;
+
+/** The link that goes with the status line, when it asks for something: a held list's Payment page. */
+export function statusLink(f: StatusFacts): { href: string; label: string } | null {
+  return waitingForCard(f) && f.firstTeaserAt ? { href: PAYMENT_PATH, label: "Add your card" } : null;
+}
 
 /** The next monthly anniversary of the first charge, on or after today (Toronto dates). */
 export function nextMonthly(firstChargeAt: string, now: Date): string {
@@ -82,34 +96,33 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
       : "Your plan is cancelled, and nothing more will be charged.";
   }
   if (f.status === "trial" && f.switchedFromPerRun) {
-    const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
+    const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${chargeWords(f.quote.totalCents, f.quote.currency, f.quote.taxCents)}` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
     return `Monthly starts with your next Cora Curation: ${next}.`;
   }
+  // Leftover per-run states (preview only). One at a time is retired (plan 2026-11-26-001, Unit 9) and nothing can be
+  // ordered any more, so these lines promise no order (review fixes Unit 9, F2).
   if (f.plan === "monthly" && f.switchingAt) {
-    return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a Cora Curation every Monday. After that you order them one at a time.`;
+    return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a Cora Curation every Monday. ${PLAN_QUESTIONS}`;
   }
   if (f.sponsored) return "Your Cora Curations are covered by your sponsor.";
-  // An account still on one at a time while that plan is not offered (billing/offered.ts): no order can be placed, and monthly is the way on.
-  const offered = oneAtATimeOffered();
+  // No card yet (sign-up ends without one): the first list is held until the card is saved.
+  if (waitingForCard(f)) {
+    if (f.firstTeaserAt) return "Your first ideas are ready — add a card to see them.";
+    return f.sharing === "off" ? "Your first Cora Curation arrives on Monday." : "Your first Cora Curation arrives after Zack’s first report.";
+  }
   if (f.status === "trial") {
     if (f.freeListsUsed === 0) return `Your first ${f.freeRuns} Cora Curations are free.`;
     const n = Math.min(f.freeListsUsed, f.freeRuns);
     if (n < f.freeRuns) return `Free Cora Curation ${n} of ${f.freeRuns}.`;
-    if (f.plan === "per_run" && !offered) return `Free Cora Curation ${n} of ${f.freeRuns}. ${STAYS_ON_ONE_AT_A_TIME}`;
-    if (f.plan === "per_run") return `Free Cora Curation ${n} of ${f.freeRuns}. Order your next one whenever you want it: ${money(amount(s, "per_run", cur), cur)} ${tax}.`;
+    if (f.plan === "per_run") return `Free Cora Curation ${n} of ${f.freeRuns}. ${PLAN_QUESTIONS}`;
     const next = f.quote
-      ? `${longDate(f.quote.week)}, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax`
+      ? `${longDate(f.quote.week)}, ${chargeWords(f.quote.totalCents, f.quote.currency, f.quote.taxCents)}`
       : `${money(amount(s, "monthly", cur, f.sharing === "share" ? "standard" : "higher"), cur)} ${tax}`;
     return `Free Cora Curation ${n} of ${f.freeRuns}. Your next Cora Curation is your first paid one: ${next}.`;
   }
-  if (f.plan === "per_run" && !offered) {
-    // What an order placed before the option was withdrawn cost, when there is one for this week; then the way on.
-    return f.orderCents != null ? `This Cora Curation: ${moneyCents(f.orderCents, cur)} with tax. ${STAYS_ON_ONE_AT_A_TIME}` : STAYS_ON_ONE_AT_A_TIME;
-  }
   if (f.plan === "per_run") {
-    const paid = f.orderCents != null ? `${moneyCents(f.orderCents, cur)} with tax` : `${money(amount(s, "per_run", cur), cur)} ${tax}`;
-    // Spec B.9: every email to a one-at-a-time user says what monthly costs.
-    return `This Cora Curation: ${paid}. Order next Monday’s whenever you want one. Monthly is ${money(amount(s, "monthly", cur), cur)} for every Monday.`;
+    const paid = f.orderCents != null ? chargeWords(f.orderCents, cur, null) : `${money(amount(s, "per_run", cur), cur)} ${tax}`;
+    return `This Cora Curation: ${paid}. ${PLAN_QUESTIONS}`;
   }
   // A renewal Stripe could not collect: Cora Curations continue for now, and pause on the hold date unless it is paid.
   if (f.status === "active" && f.renewalFailedAt) return `Your payment didn’t go through; Cora Curations pause on ${longDate(holdDate(f.renewalFailedAt))} unless it’s paid.`;
@@ -144,7 +157,7 @@ export function changedAmountChargeDate(quote: Pick<NonNullable<StatusFacts["quo
 function amountChangedLine(quote: StatusFacts["quote"]): string {
   const when = changedAmountChargeDate(quote);
   if (!quote || !when) return "Your first charge amount changed, so your Cora Curation waits a day while we tell you the new amount.";
-  return `Your first charge is now ${moneyCents(quote.totalCents, quote.currency)} with tax, not the amount we told you before. We charge it on ${longDate(when)}, and your Cora Curation comes straight after; if you’d rather not, cancel on the billing page before then.`;
+  return `Your first charge is now ${chargeWords(quote.totalCents, quote.currency, quote.taxCents)}, not the amount we told you before. We charge it on ${longDate(when)}, and your Cora Curation comes straight after; if you’d rather not, cancel on the billing page before then.`;
 }
 
 /** What sharing off means under the contributor rule (the strip, and the sharing confirmation on /app/zack). */

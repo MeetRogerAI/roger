@@ -40,6 +40,8 @@ return <SettingsFields key={`${JSON.stringify(shown)}:${state.at ?? ""}`} shown=
 
 A controlled field (here the extra-rules textarea) is not reset, which is why the bug showed up everywhere except there.
 
+**Correction, 2026-11-27:** a controlled *radio* is reset in the DOM all the same. The sharing form kept `picked` in state, but after the first step the reset put the starting radio back as checked while the state did not change, so React never re-rendered it, and the second submit sent the old value ("That’s already your setting"). Do not trust the DOM of a controlled radio or checkbox inside a form action: send the value in a hidden input bound to state, and remount the group after each answer (key it on a stamp the action returns). See `src/components/app/sharing-form.dom.test.tsx` (PR #68).
+
 ## Why This Works
 The reset restores `defaultValue`. Making the defaults equal to what should be on screen (saved or typed) turns the reset into a no-op from the user's point of view, and the key remounts the fields when those defaults change.
 

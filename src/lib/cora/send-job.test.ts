@@ -23,7 +23,7 @@ const WEEK = "2026-12-14";
 const SEVEN_AM = new Date("2026-12-14T12:05:00Z");
 const settings = mergeV3([{ key: "v3.cycleLive", value: true }]);
 const gw: BillingGateway = {
-  preview: async () => ({ totalCents: 22600, currency: "USD" }),
+  preview: async () => ({ totalCents: 22600, currency: "USD", taxCents: 2600 }),
   subscriptions: async () => [],
   createSubscription: async () => ({ kind: "error", error: "unused" }),
 };
@@ -33,8 +33,8 @@ let plays: string[];
 async function member(email: string, o: Record<string, unknown> = {}) {
   const v = { status: "trial", plan: "monthly", sharing: "share", free_lists_used: 0, stripe_customer: `cus_${email}`, email_prefs: {}, ...o };
   const [u] = await query<{ id: string }>(
-    "insert into users (email, status, plan, sharing, free_lists_used, stripe_customer, email_prefs, currency) values ($1, $2, $3, $4, $5, $6, $7, 'USD') returning id",
-    [email, v.status, v.plan, v.sharing, v.free_lists_used, v.stripe_customer, JSON.stringify(v.email_prefs)],
+    "insert into users (email, status, plan, sharing, free_lists_used, stripe_customer, email_prefs, currency, trial_started_at) values ($1, $2, $3, $4, $5, $6, $7, 'USD', $8) returning id",
+    [email, v.status, v.plan, v.sharing, v.free_lists_used, v.stripe_customer, JSON.stringify(v.email_prefs), "trial_started_at" in o ? o.trial_started_at : "2026-11-16T15:00:00Z"],
   );
   return u.id;
 }
@@ -143,16 +143,24 @@ describe("the Monday send", () => {
     expect(await user(a)).toEqual({ free_lists_used: 1 });
   });
 
+  it("a leftover per-run trial's second free list sends no 'order your next list' email (whole-branch review W2)", async () => {
+    const a = await member("a@example.com", { plan: "per_run", free_lists_used: 1 });
+    await picked(a);
+    await runSendJob(query, deps(), { week: WEEK });
+    expect(await user(a)).toEqual({ free_lists_used: 2 });
+    expect(to("a@example.com").map((m) => m.subject)).not.toContain("Your free Cora Curations are done");
+    expect(await query("select 1 from notifications where kind = 'order_next'")).toEqual([]);
+    // The list itself still goes.
+    expect(await delivered(a)).toBe(3);
+  });
+
   it("sends a charged order one 'Your Cora Curation, and your receipt' email", async () => {
     const a = await member("a@example.com", { status: "active", plan: "per_run", free_lists_used: 2 });
     await picked(a);
     await query("insert into orders (user_id, week_of, status, amount_cents, currency) values ($1, $2, 'charged', 5650, 'USD')", [a, WEEK]);
     await runSendJob(query, deps(), { week: WEEK });
     expect(to("a@example.com").map((m) => m.subject)).toEqual(["Your Cora Curation, and your receipt"]);
-    expect(to("a@example.com")[0].text).toContain("This Cora Curation: US$56.50 with tax.");
-    // One at a time is not offered at launch, so the line does not invite another order; it names monthly instead.
-    expect(to("a@example.com")[0].text).not.toMatch(/Order next Monday/);
-    expect(to("a@example.com")[0].text).toContain("You can switch to monthly on the billing page");
+    expect(to("a@example.com")[0].text).toContain("This Cora Curation: US$56.50 in total.");
     expect((await query<{ status: string }>("select status from orders"))[0].status).toBe("sent");
   });
 
@@ -189,7 +197,7 @@ describe("the Monday send", () => {
     const subjects = to("a@example.com").map((m) => m.subject);
     expect(subjects).toEqual(["Your next Cora Curation is your first paid one", "Your three ideas for the week of Monday, December 14"]);
     // Both emails state the same date and the same told amount.
-    expect(to("a@example.com")[1].text).toContain("Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 21, US$226 with tax.");
+    expect(to("a@example.com")[1].text).toContain("Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 21, US$226 (US$200 plus US$26 tax).");
     expect(to("a@example.com")[0].text).toContain("US$226");
   });
 

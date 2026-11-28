@@ -101,7 +101,7 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
       <Section title="Actions">
         <div className="space-y-6">
           <ExcuseForm userId={r.id} week={excuseDefaultWeek(now)} />
-          {r.status === "trial" && !r.switched && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
+          {r.status === "trial" && !r.switched && (r.hasCard || r.sponsored) && <ActionButton action="extra" values={{ userId: r.id }} label="Give one extra free list" />}
           <NudgeForm userId={r.id} templates={NUDGES} />
         </div>
       </Section>

@@ -1,5 +1,5 @@
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * A monthly renewal that did not go through (spec B.9: "retried by Stripe;

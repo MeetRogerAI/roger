@@ -5,52 +5,42 @@ vi.mock("@/app/start/billing-actions", () => ({ savePlan: async () => ({ status:
 
 const { PlanForm } = await import("./plan-form");
 
-const flat = (html: string) => html.replace(/\s+/g, " ");
+describe("PlanForm (Step 3, Product and Pricing; plan 2026-11-26-001 Unit 2)", () => {
+  const html = renderToStaticMarkup(<PlanForm usd="US$200" cad="CA$280" zackLink="/start/zack/hark" />);
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
-describe("PlanForm (spec B.4 screen 3, 1.3)", () => {
-  describe("at launch: monthly only (one at a time not offered, so no price for it is passed)", () => {
-    const html = flat(renderToStaticMarkup(<PlanForm monthly="US$200" perRun={null} higher="US$400" zackLink="/zack" />));
-
-    it("shows monthly as the plan, in terms of Cora Curations, with nothing to choose", () => {
-      expect(html).toContain("Monthly, US$200 a month");
-      expect(html).toContain("A Cora Curation every Monday. Charged once a month, starting with your third Cora Curation.");
-      expect(html).not.toContain('type="radio"');
-      expect(html).not.toContain('name="plan"');
-      expect(html).not.toContain("Most people choose this");
-    });
-
-    it("names no other way to pay, and never calls the delivery a list", () => {
-      expect(html).not.toMatch(/one at a time|per_run|each<|Order a/i);
-      expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(/\blists?\b/i);
-    });
-
-    it("still asks for the consent, unticked, and states the higher rate for two missed weeks", () => {
-      const consent = html.match(/<input[^>]*name="consent"[^>]*>/)?.[0] ?? "";
-      expect(consent).toContain('type="checkbox"');
-      expect(consent).toContain('value="yes"');
-      expect(html).not.toContain("checked");
-      expect(html).toContain("If Zack misses two weeks in a month, that month is US$400. We always tell you first.");
-      expect(html).toContain("Continue to your card");
-    });
+  it("has a Product paragraph, then the consent and the Zack link under it, then Pricing", () => {
+    const product = text.indexOf("Product");
+    const consent = text.indexOf("I agree that Zack");
+    const link = text.indexOf("Read what Zack does first");
+    const pricing = text.indexOf("Pricing");
+    expect(product).toBeGreaterThanOrEqual(0);
+    expect(product).toBeLessThan(consent);
+    expect(consent).toBeLessThan(link);
+    expect(link).toBeLessThan(pricing);
+    expect(html).toContain('href="/start/zack/hark"');
+    expect(text).toContain("Cora curates three ideas picked for you, every Monday.");
   });
 
-  describe("with one at a time offered (the switch on)", () => {
-    const html = flat(renderToStaticMarkup(<PlanForm monthly="US$200" perRun="US$200" higher="US$400" zackLink="/zack" />));
+  it("states both prices and the trial in lists, not weeks", () => {
+    expect(text).toContain("Roger is US$200 a month or CA$280 a month, plus tax.");
+    expect(text).toContain("We’ll ask for your card before your first full Cora Curation is shown.");
+    expect(text).toContain("Your free trial includes your first two Cora Curations, two Mondays.");
+  });
 
-    it("shows both prices, monthly first, selected and marked", () => {
-      expect(html).toContain("Monthly, US$200 a month");
-      expect(html).toContain("One Cora Curation at a time, US$200 each");
-      expect(html.indexOf("Most people choose this")).toBeLessThan(html.indexOf("One Cora Curation at a time"));
-      const radios = html.match(/<input[^>]*type="radio"[^>]*>/g) ?? [];
-      expect(radios).toHaveLength(2);
-      expect(radios[0]).toContain('value="monthly"');
-      expect(radios[0]).toContain("checked");
-      expect(radios[1]).toContain('value="per_run"');
-      expect(radios[1]).not.toContain("checked");
-    });
+  it("offers no plan picker, no higher rate and no one-at-a-time; the consent box starts unticked", () => {
+    expect(html).not.toContain('type="radio"');
+    expect(html).not.toContain('name="plan"');
+    expect(text).not.toMatch(/US\$400|CA\$560|one list at a time/i);
+    const box = html.match(/<input type="checkbox"[^>]*>/g) ?? [];
+    expect(box).toHaveLength(1);
+    expect(box[0]).toContain('name="consent"');
+    expect(box[0]).not.toContain("checked");
+  });
 
-    it("says monthly costs the same and brings one every Monday", () => {
-      expect(html).toContain("Monthly costs the same and brings one every Monday.");
-    });
+  it("drops the removed card wording and says Continue", () => {
+    expect(text).not.toMatch(/Nothing is charged today|no earlier than|Roger never sees the number/);
+    expect(text).toContain("Continue");
+    expect(text).not.toContain("Continue to your card");
   });
 });

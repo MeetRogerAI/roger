@@ -9,7 +9,6 @@ import { unlinkGoogleAction } from "./actions";
 import { requireUser } from "@/lib/auth/access";
 import { adminEmails } from "@/lib/auth/admin-emails";
 import { googleEnabled } from "@/lib/auth/google";
-import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { query } from "@/lib/db-query";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -57,7 +56,6 @@ async function SettingsPage({ searchParams }: { searchParams: PageProps<"/app/se
           <ProfileForm
             values={{ name: u.name, displayName: u.display_name, timezone: u.timezone, prefs: { monday: prefs.monday !== false, friday_prompt: prefs.friday_prompt !== false } }}
             zones={COMMON_ZONES}
-            perRun={u.plan === "per_run" && oneAtATimeOffered()}
           />
         </div>
       </section>

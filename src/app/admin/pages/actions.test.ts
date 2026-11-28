@@ -49,9 +49,6 @@ vi.mock("@/lib/admin-auth", () => ({
     return admin;
   },
   isAdmin: async () => Boolean(admin),
-  // The admin's own sign-in and sign-out (src/app/admin/actions.ts): the password cookie is not this test's subject.
-  signIn: async () => false,
-  signOut: async () => {},
 }));
 
 const { listAction, publishAction, savePageAction, sectionsAction, undoPublishAction } = await import("./actions");
