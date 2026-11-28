@@ -10,8 +10,8 @@ import { resolveField, siteRegistry } from "@/lib/site/content/registry";
 import { getAmounts } from "@/lib/site/amounts";
 import { asRead } from "@/lib/site/content/check";
 import { releaseDifferences } from "@/lib/site/content/differs";
-import { questionsSavedByTheOldScreen, readStoredAsWritten } from "@/lib/site/content/store";
-import { LaunchListNote } from "./launch-list";
+import { baseline, shownOverlay } from "@/lib/site/content/model";
+import { questionsSavedByTheOldScreen, readStoredAsWritten, sameOverlay } from "@/lib/site/content/store";
 import { Unreadable, count } from "./parts";
 import { UndoPublish } from "./publish-controls";
 import { ReleasePanel } from "./release-panel";
@@ -21,6 +21,11 @@ import { ReleasePanel } from "./release-panel";
  * owner can change, each with whether it has drafts that are not published
  * and whether its wording differs from the original, and the way into the
  * review that publishes them.
+ *
+ * Kept short (Peter, November 28, 2026): the Publish card shows only when a draft would change what visitors see
+ * (the review's own "nothing is waiting" rule), and with nothing to publish only Undo last publish remains, when
+ * there is a publish to undo. "Differs from the release" is the release step's tool on production (plan U10,
+ * AE10): it shows only there, and only when something differs. On preview and locally it never shows.
  *
  * Who can open it: whoever the admin area lets in, which is the layout's
  * gate. The page checks again itself, and so does every action.
@@ -45,41 +50,47 @@ export default async function PagesScreen() {
   const waiting = draftCount(stored);
   const amounts = await getAmounts();
   const differences = releaseDifferences(stored.published, { written: stored.written, read: (text) => asRead(text, amounts) });
+  // What the draft SHOWS against what is live: the same test as Publish itself (./actions.ts).
+  const toPublish = !sameOverlay(shownOverlay(baseline, stored.draft), stored.published);
+  const canUndo = stored.previous !== null;
+  // Something of this site's own differs: a row of the list, or an item of its own a release pushed out. An item the
+  // release itself took out is a note about the release, not a difference, and alone shows nothing.
+  const releaseShown = process.env.VERCEL_ENV === "production" && (differences.count > 0 || differences.pushedOut.length > 0);
 
   return (
     <section className="max-w-[56rem] space-y-8">
       <header>
         <h1 className="text-h3">Pages</h1>
-        <p className="mt-2 text-small text-ink-2">Change the words on the website, switch a page’s sections off or move them, and add to, remove from and reorder its lists. What you save is kept as a draft: visitors do not see it until you publish.</p>
       </header>
-
-      <LaunchListNote />
 
       {oldScreen.length > 0 && <OldScreenNote saved={oldScreen} read={(text) => asRead(text, amounts)} />}
 
-      <div data-publish-panel className="space-y-4 rounded-[8px] border border-rule bg-surface p-5">
-        <h2 className="text-title">Publish</h2>
-        {waiting > 0 ? (
-          <>
-            <p className="text-small">
-              <strong className="font-[620]">{count(waiting, "change is", "changes are")} saved as a draft</strong> and not on the site yet. Publishing sends every draft live at once, on all pages.
-            </p>
-            <Link href={REVIEW_ADDRESS} className="btn btn-m btn-ink">
-              Review and publish
-            </Link>
-          </>
-        ) : (
-          <p className="text-small text-ink-2">Nothing is waiting. Everything you have saved is on the site.</p>
-        )}
-        {last && (
-          <p data-last className="text-small text-ink-2">
-            {last.action === "site_content_published" ? "Last publish" : last.action === "site_content_reset_to_release" ? "Last reset to the release" : "Last publish undone"}: {when(last.createdAt)}, by {last.adminEmail}.
+      {toPublish ? (
+        <div data-publish-panel className="space-y-4 rounded-[8px] border border-rule bg-surface p-5">
+          <h2 className="text-title">Publish</h2>
+          <p className="text-small">
+            <strong className="font-[620]">{count(waiting, "change is", "changes are")} saved as a draft</strong> and not on the site yet. Publishing sends every draft live at once, on all pages.
           </p>
-        )}
-        <UndoPublish available={stored.previous !== null} />
-      </div>
+          <Link href={REVIEW_ADDRESS} className="btn btn-m btn-ink">
+            Review and publish
+          </Link>
+          {last && (
+            <p data-last className="text-small text-ink-2">
+              {last.action === "site_content_published" ? "Last publish" : last.action === "site_content_reset_to_release" ? "Last reset to the release" : "Last publish undone"}: {when(last.createdAt)}, by {last.adminEmail}.
+            </p>
+          )}
+          <UndoPublish available={canUndo} />
+        </div>
+      ) : (
+        // Nothing to publish: the button alone, no card, and nothing at all when there is no publish to undo.
+        canUndo && (
+          <div data-undo-only>
+            <UndoPublish available />
+          </div>
+        )
+      )}
 
-      <ReleasePanel differences={differences} stored={stored} drafts={waiting} amounts={amounts} />
+      {releaseShown && <ReleasePanel differences={differences} stored={stored} drafts={waiting} amounts={amounts} />}
 
       <div>
         <h2 className="text-title">The pages</h2>

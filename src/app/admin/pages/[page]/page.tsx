@@ -4,15 +4,14 @@ import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
 import { amountNames, getAmounts } from "@/lib/site/amounts";
 import { shortened } from "@/lib/site/content/caption";
-import { asRead, draftChanges, draftCount, linksInto, listChanges, pageStatus, sectionChanges, wordingOf } from "@/lib/site/content/check";
+import { asRead, draftChanges, linksInto, listChanges, sectionChanges, wordingOf } from "@/lib/site/content/check";
 import { PAGES_ADDRESS, REVIEW_ADDRESS, destinationOptions, fieldAnchor, fieldLabel, listAnchor, listWords, pageBySlug, placesIn, sectionAnchor, sectionNotes, sectionsAnchor, toggleHint, wordsFor } from "@/lib/site/content/labels";
 import { applyOverlay, baseline, layoutOn, listItems, readField, sameLayout, sectionLayout, textAt } from "@/lib/site/content/model";
 import { fieldsOfItem, siteRegistry, type Field, type List } from "@/lib/site/content/registry";
 import { readStored } from "@/lib/site/content/store";
 import { amountPlaceholderNames, asPlaceholder } from "@/lib/site/content/text";
 import { PageEditor, type EditorBlock, type EditorField, type EditorList, type EditorSection, type NameHint } from "../field-editor";
-import { LaunchListLine } from "../launch-list";
-import { Unreadable, count } from "../parts";
+import { Unreadable } from "../parts";
 import { PreviewButton } from "../preview-button";
 import { SectionControls, type SectionRow } from "../section-controls";
 
@@ -95,13 +94,10 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
   const moving = sectionChanges(stored);
   const movingHere = moving.filter((change) => change.page.id === page.id);
   const listing = listChanges(stored).filter((change) => change.page.id === page.id);
-  const waitingAll = draftCount(stored);
-  const waitingOnPage = pageStatus(stored).get(page.id)?.drafts ?? 0;
   // The page's words as the draft would print them: which items each list has, and in which order.
   const draftModel = applyOverlay(baseline, stored.draft);
   const places = placesIn(draftModel);
   const listsOf = (sectionId: string) => [...siteRegistry.lists.values()].filter((list) => list.page === page.id && list.section === sectionId);
-  const hasLists = [...siteRegistry.lists.values()].some((list) => list.page === page.id);
 
   // The page's sections as the draft has them: the ones an admin may move in the draft's order, each fixed one where it is.
   const layout = layoutOn(stored.draft, page.id);
@@ -227,8 +223,6 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
     });
   const names = sets.map((set) => set.map(hint));
   const amountHints = amountPlaceholderNames.map(hint);
-  // The page as visitors see it. Shared has no page of its own.
-  const live = page.id === "shared" ? null : page.path;
 
   return (
     <section className="max-w-[56rem] space-y-8">
@@ -240,33 +234,10 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
           </Link>
         </p>
         <h1 className="text-h3">{page.label}</h1>
-        <p className="text-small text-ink-2">
-          Change the words, then press Save draft at the foot of the screen.{hasLists ? " Where the words are a list, you can also move, remove and add its items." : ""} A draft is not on
-          the site: visitors see it only after you publish.
-          {live && (
-            <>
-              {" "}
-              <a href={live} target="_blank" rel="noopener noreferrer" className="tlink">
-                See the page as it is now (opens in a new tab)
-              </a>
-            </>
-          )}
-        </p>
+        {/* Only the Preview button under the heading (Peter, November 28, 2026). */}
         <div data-preview-line className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <PreviewButton page={page.id} note={page.id === "shared" ? "the homepage, with every draft" : `the ${page.label} page, with every draft`} />
-          <p className="min-w-0 text-small text-ink-2">
-            Opens {page.id === "shared" ? "the homepage" : "this page"} in a new tab with all saved drafts on it, exactly as it will look. Only you see it; visitors see the published site.
-          </p>
         </div>
-        {waitingAll > 0 && (
-          <p data-waiting className="text-small">
-            {count(waitingAll, "change is", "changes are")} saved as a draft and not published yet{waitingOnPage === waitingAll ? "" : `, ${waitingOnPage} of them on this page`}.{" "}
-            <Link href={REVIEW_ADDRESS} className="tlink">
-              Review and publish
-            </Link>
-          </p>
-        )}
-        <LaunchListLine page={page.id === "shared" ? "these shared words on each page" : `the ${page.label} page`} />
       </header>
 
       {rows.length > 0 && (

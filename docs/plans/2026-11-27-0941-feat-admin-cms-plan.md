@@ -100,7 +100,7 @@ Peter's way of working is fixed: build and edit on preview.meetroger.ai until it
 
 **Launch list**
 
-- R25. The Pages screen shows a note at its top, on every site: each page must be read and its checks ticked on the launch list before a release, with a link to https://claude.ai/artifact/3A2CqfXuFDnr7PDYq776Wj that opens in a new tab. Each covered page's own editing screen repeats the link. The address is one setting in code, so it can be changed in one place. (Peter, November 27, 2026.)
+- R25. The Pages screen shows a note at its top, on every site: each page must be read and its checks ticked on the launch list before a release, with a link to https://claude.ai/artifact/3A2CqfXuFDnr7PDYq776Wj that opens in a new tab. Each covered page's own editing screen repeats the link. The address is one setting in code, so it can be changed in one place. (Peter, November 27, 2026.) **Removed by Peter on November 28, 2026:** the note, the line on each editing screen and the component are gone.
 
 **Header**
 
@@ -500,7 +500,7 @@ docs/site/content-release.md
   - `/admin/questions` answers with a redirect to the FAQ editor.
 - **Verification:** In a browser, change the hero headline, see Home marked, publish, see it on the homepage within a few seconds, undo, and see the old headline with the draft still in the editor.
 
-- **Added November 27, 2026 (R25):** a note at the top of the Pages screen, and a one-line link on each page's editing screen, pointing at the launch list. Plain text and one external link (`target="_blank"`, `rel="noopener noreferrer"`); the address lives in one constant. Test: the note and link render on the Pages screen and on a page's editing screen; the link has the address and both attributes.
+- **Added November 27, 2026 (R25), removed November 28, 2026 (Peter):** a note at the top of the Pages screen, and a one-line link on each page's editing screen, pointing at the launch list. Plain text and one external link (`target="_blank"`, `rel="noopener noreferrer"`); the address lives in one constant. Test: the note and link render on the Pages screen and on a page's editing screen; the link has the address and both attributes.
 
 ### U6. Sections on, off and order
 
@@ -684,7 +684,7 @@ getSiteContent():
   2. The route answers `GET` only, with that overlay and the format number. It reads published content through the cached function that throws, so a failed read answers 503 with no overlay, and Draft Mode cannot make it read the draft. It sets `Cache-Control: no-store` and `X-Robots-Tag: noindex`, and has no other method.
   3. The script takes the site's address (default `https://preview.meetroger.ai`), requires `https` unless the host is localhost, fetches with a timeout and a size bound, requires a 200 answer that is an object with a numeric format, and writes `src/data/site/released.json` with sorted keys so the commit's diff is readable. It writes no other path and prints a count of what changed.
   4. `released.test.ts` holds the real file to KTD13's strict parse and renders every covered page with it. The strict homepage, pages and claims tests that render through the server components replace the released file with an empty overlay, so a snapshot never breaks a test that pins the code copy.
-  5. The Pages index gains "Differs from the release": every field, section and list where this site's published content differs from the baseline, each with its label, the release's wording and the site's. It is empty on a site with no edits since its last release.
+  5. The Pages index gains "Differs from the release": every field, section and list where this site's published content differs from the baseline, each with its label, the release's wording and the site's. It is empty on a site with no edits since its last release. Since November 28, 2026 (Peter) the card shows only on production, and only when something differs (a row of the list, or a site item a release pushed out); preview and local runs never show it. The same day the Pages index dropped its intro and showed the Publish card only while something is waiting (Undo last publish stays, on its own, when there is a publish to undo), and each editing screen kept only the Preview button under its heading.
   6. "Reset all to the release" is one server action: one statement sets `previous` to the published content and empties `published` and `draft`, then logs, expires the tag and refreshes. The panel states how many unpublished drafts it will discard.
   7. `docs/site/content-release.md` is the release checklist: run the snapshot, read the diff, run the tests, commit with the release, and after go-live read the list on production. It also says that a later code change to a released field's wording means changing or deleting that field's entry in `released.json`.
 - **Patterns to follow:** `db/setup.mjs` for a plain Node script in this repo; `src/app/api/library/search/route.ts` for a public `GET` handler.
