@@ -6,7 +6,7 @@ import { staleClaims, takeOver } from "./claims";
 import { takeOverFirstCharge, type ChargeDeps } from "./first-charge";
 import { takeOverOrder } from "./orders";
 import { renewalPaid, syncSubscription, type RenewalDeps } from "./renewals";
-import { isLive, type BillingGateway, type PlanGateway } from "./subscriptions";
+import { FIRST_EXTRA_KIND, isLive, type BillingGateway, type PlanGateway } from "./subscriptions";
 
 /**
  * The reconcile: Stripe is read back and the database brought into line
@@ -69,6 +69,10 @@ export async function reconcilePendingItems(
       const items = await d.adjust.pendingInvoiceItems(customer);
       out.checked += items.length;
       for (const item of items) {
+        // A first charge's higher-rate item (S18 point c) is Roger's own, looked after by the charge: it goes on the
+        // subscription's first invoice, or the charge removes it. Never touched here: deleting it while a claim is
+        // unknown would let the takeover's repeat charge without it.
+        if (item.kind === FIRST_EXTRA_KIND) continue;
         if (!item.adjustmentId) {
           out.foreign++;
           await alertAdmins("pending_item_not_ours", item.id, adminAlert("A pending invoice item Roger did not make", [`Customer ${customer}, item ${item.id}. It will go on the next invoice unless removed in Stripe.`]), d).catch(() => {});

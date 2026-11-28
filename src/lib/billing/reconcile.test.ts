@@ -97,6 +97,14 @@ describe("the pending-item reconcile", () => {
     expect(stripe.items.has(theirs)).toBe(true);
     expect(sent.map((m) => m.subject)).toEqual(["[Roger] A pending invoice item Roger did not make"]);
   });
+
+  // S18 point c: the first charge's named higher-rate item waits pending for the subscription; the charge looks after it.
+  it("leaves a first charge's higher-rate item alone, with no alert", async () => {
+    const first = stripe.stray("cus_1", "sub_1", { kind: "first_month_higher_rate", claim_id: "claim_1" });
+    expect(await reconcilePendingItems(query, deps())).toMatchObject({ foreign: 0, deleted: 0 });
+    expect(stripe.items.has(first)).toBe(true);
+    expect(sent).toEqual([]);
+  });
 });
 
 describe("missed Stripe events", () => {

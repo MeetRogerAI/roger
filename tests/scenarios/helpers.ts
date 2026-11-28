@@ -439,7 +439,9 @@ export function fakeStripe(now: () => Date): FakeStripe {
       return "deleted";
     },
     async pendingInvoiceItems(customer) {
-      return [...items.values()].filter((i) => i.customer === customer && !i.invoice).map((i) => ({ id: i.id, adjustmentId: i.metadata.adjustment_id ?? null, subscription: i.subscription }));
+      return [...items.values()]
+        .filter((i) => i.customer === customer && !i.invoice)
+        .map((i) => ({ id: i.id, adjustmentId: i.metadata.adjustment_id ?? null, subscription: i.subscription, kind: i.metadata.kind ?? null }));
     },
     async previewRenewal({ customer, subscription }) {
       const s = subs.get(subscription)!;

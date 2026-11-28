@@ -249,7 +249,13 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
  * id (the subscription itself always stays at the standard price); the
  * itemised email reads Stripe's preview of the coming renewal invoice.
  */
-export type PendingItem = { id: string; adjustmentId: string | null; subscription: string | null };
+export type PendingItem = {
+  id: string;
+  adjustmentId: string | null;
+  subscription: string | null;
+  /** The metadata kind: FIRST_EXTRA_KIND for a first charge's higher-rate item (the charge looks after it). */
+  kind?: string | null;
+};
 export type RenewalPreview = {
   totalCents: number;
   taxCents: number;
@@ -330,7 +336,7 @@ export function stripeAdjustments(s: Stripe | null = stripe()): AdjustmentGatewa
       const out: PendingItem[] = [];
       for await (const i of s.invoiceItems.list({ customer, pending: true, limit: 100 })) {
         const sub = i.parent?.subscription_details?.subscription ?? null;
-        out.push({ id: i.id, adjustmentId: i.metadata?.adjustment_id ?? null, subscription: typeof sub === "string" ? sub : null });
+        out.push({ id: i.id, adjustmentId: i.metadata?.adjustment_id ?? null, subscription: typeof sub === "string" ? sub : null, kind: i.metadata?.kind ?? null });
       }
       return out;
     },
