@@ -2,14 +2,14 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { CopyTextButton } from "@/components/app/copy-text-button";
 import { SimpleMarkdown } from "@/components/app/simple-markdown";
-import { firstExample } from "@/data/site/examples";
+import { examplesFrom, firstExample } from "@/data/site/examples";
 import { zackAgents } from "@/data/zack";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import type { Overlay } from "@/lib/site/content/format";
 import { sectionsShown, v1Copy } from "@/lib/site/content/model";
 import { getSiteContent } from "@/lib/site/content/read";
-import { playbookParts } from "@/lib/site/playbook";
-import { getPlaybookPreface, publicIdeaView, type IdeaView } from "@/lib/site/sample";
+import { annotate, playbookParts } from "@/lib/site/playbook";
+import { getPlaybookPreface, publicIdeaView } from "@/lib/site/sample";
 import type { BuiltVersion } from "@/lib/site/version";
 import { PageHead, ReadingSection, StartBand } from "./blocks/reading";
 import { InOrder, pageParts } from "./blocks/sections";
@@ -57,29 +57,14 @@ export function zackFiles(agents: readonly { name: string; file: string; availab
     .sort((a, b) => a.name.localeCompare(b.name, "en"));
 }
 
-export { playbookParts };
+export { annotate, playbookParts };
 
 type Note = { id: string; part: string; note: string };
-
-/**
- * Each playbook part beside its note, when the playbook has exactly the parts
- * the notes name, in the notes' order. A play may be
- * written another way: then there is no pairing, and the page shows the notes
- * as a list above the whole playbook, so no note sits beside the wrong part.
- */
-export function annotate(md: string, notes: Note[]): { note: Note; part: string }[] | null {
-  const parts = playbookParts(md);
-  if (parts.length !== notes.length) return null;
-  const heading = (part: string) => part.split("\n")[0].toLowerCase();
-  if (!notes.every((n, i) => /^#/.test(parts[i]) && heading(parts[i]).includes(n.part.toLowerCase()))) return null;
-  return notes.map((note, i) => ({ note, part: parts[i] }));
-}
 
 /** Reads what the page shows, all of it cached, so the page keeps its static shell. */
 export async function V1HowItWorks({ version }: { version: BuiltVersion }) {
   const [amounts, preface, content] = await Promise.all([getAmounts(), getPlaybookPreface(), getSiteContent()]);
-  // The idea taken apart is the first of the homepage's examples.
-  return <V1HowItWorksView version={version} amounts={amounts} content={content} idea={publicIdeaView(firstExample.play, preface)} preface={preface} files={zackFiles()} />;
+  return <V1HowItWorksView version={version} amounts={amounts} content={content} preface={preface} files={zackFiles()} />;
 }
 
 const partBox = "rounded-[8px] border border-rule bg-surface p-5 sm:p-6";
@@ -88,7 +73,6 @@ export function V1HowItWorksView({
   version,
   amounts,
   content,
-  idea,
   preface,
   files,
 }: {
@@ -97,15 +81,18 @@ export function V1HowItWorksView({
   amounts: Amounts;
   /** Everything stored that the page should show, as one overlay on the code copy (getSiteContent). Left out, the page prints the code copy alone. */
   content?: Overlay;
-  /** The sample idea, built with publicIdeaView. */
-  idea: IdeaView;
   /** The line added to the top of every playbook, from the settings. */
   preface: string;
   /** The public Zack files (zackFiles). Empty leaves the links out. */
   files: ZackFile[];
 }) {
-  const { copy } = v1Copy(amounts, content);
+  const { copy, examples } = v1Copy(amounts, content);
   const how = copy.howItWorks;
+  // The idea taken apart is the first of the homepage's examples, as published (plan U8). With every example
+  // removed, it is the first built-in one, as the code has it. A playbook whose parts are not the notes' (a first
+  // example changed or put first in Pages) is shown whole, with the notes beside it (annotate).
+  const [first] = examplesFrom(examples);
+  const idea = publicIdeaView((first ?? firstExample).play, preface);
   // The last note is for the install prompt, which is not part of the playbook.
   const playbookNotes = how.anatomy.notes.slice(0, -1);
   const installNote = how.anatomy.notes.at(-1)!;

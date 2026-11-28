@@ -23,6 +23,13 @@ export type Question = { id?: string; q: string; a: string };
  */
 export type TextItem = { id: string; text: string };
 
+/**
+ * A link of the header or the footer. `id` is its name in the copy, which never changes once it is live: wording
+ * edited in the admin is stored under it. `href` is a path on this site ("/faq", "/#price"), an "https://" address
+ * or a "mailto:" address (src/lib/site/content/text.ts, usableDestination).
+ */
+export type NavLinkCopy = { id: string; label: string; href: string };
+
 /** One heading on /faq with its questions. */
 export type QuestionGroup = { id: string; title: string; items: Question[] };
 
@@ -54,13 +61,12 @@ export type SharedCopy = {
   /** The questions, in the groups /faq shows. Answers name amounts. */
   questions: QuestionGroup[];
   /**
-   * The labels of the header's links, which the footer repeats. The header and
-   * footer are one component for every version, and src/lib/site/chrome.ts
-   * holds their addresses.
+   * The header's links, in order: each its words and where it goes. The Sign in and start buttons are not among
+   * them (`buttons`). The header and footer are one component for every version (src/lib/site/chrome.ts).
    */
-  nav: { howItWorks: string; pricing: string; library: string; faq: string; about: string };
-  /** The footer's own labels, and the place named beside the contact email. */
-  footer: { place: string; privacy: string; terms: string };
+  nav: NavLinkCopy[];
+  /** The footer's links, in order, its own labels for the small print, and the place named beside the contact email. */
+  footer: { place: string; privacy: string; terms: string; links: NavLinkCopy[] };
   /** The not-found page: what happened, and the link home. The start button follows. */
   notFound: { title: string; line: string; home: string };
   /** The browser title and the description search and shared links show. */

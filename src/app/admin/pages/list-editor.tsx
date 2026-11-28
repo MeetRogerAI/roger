@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { itemTitle } from "@/lib/site/content/caption";
 import { listAction, type ListState } from "./actions";
+import { DestinationBox, type DestinationOption } from "./link-editor";
+import { PlaybookCheck } from "./playbook-check";
 
 /**
  * One list of a page, inside the page's form (plan U7, R8): its items in the
@@ -61,11 +63,15 @@ export type NewItemField = {
   name: string;
   /** "Question". */
   label: string;
-  kind: "text" | "toggle";
+  kind: "text" | "toggle" | "destination";
   rows: number;
   max: number;
   /** For a switch: what it does. */
   hint: string | null;
+  /** For where a link goes: the places it can be pointed at by name. */
+  options?: DestinationOption[];
+  /** For an example's playbook: what the card will make of it (playbook-check.tsx). `pairs` when the new example will be the first. */
+  playbook?: { pairs: string[] | null };
 };
 
 export type ListProps = {
@@ -80,6 +86,8 @@ export type ListProps = {
   many: string;
   /** How many the list can hold, and why, in a sentence. */
   limits: string;
+  /** What else the owner should know about this list, in a sentence or two. Null for none. */
+  note?: string | null;
   /** False when the list holds as many as it can; false when it holds as few as it must; true when it can only be reordered. */
   canAdd: boolean;
   canRemove: boolean;
@@ -113,7 +121,9 @@ type Press = { op: "up" | "down" | "remove" | "back"; item: string } | { op: "ad
 type Back = { to: "control"; item: string; control: string } | { to: "removed"; item: string } | { to: "heading" } | { to: "new" };
 
 export function ListBlock(props: ListProps) {
-  const { page, id, anchor, title, one, many, limits, canAdd, canRemove, fixed, items, removed, fresh, changed, waiting, reviewAddress, adding, onAdding } = props;
+  const { page, id, anchor, title, one, many, limits, note, canAdd, canRemove, fixed, items, removed, fresh, changed, waiting, reviewAddress, adding, onAdding } = props;
+  /** "a link", "an example". */
+  const aOne = `${/^[aeiou]/i.test(one) ? "an" : "a"} ${one}`;
   const [state, setState] = useState<ListState>(idle);
   const [pending, start] = useTransition();
   const panel = useRef<HTMLDivElement>(null);
@@ -204,6 +214,11 @@ export function ListBlock(props: ListProps) {
         {fixed ? "Move one up or down to change the order." : `Move one up or down, remove one, or add a new ${one} at the foot of the list.`} Each of those is saved straight away as a draft: visitors see no change until you publish. The words
         themselves are saved with Save draft. {limits}
       </p>
+      {note && (
+        <p data-list-about className="mt-2 text-small text-ink">
+          {note}
+        </p>
+      )}
 
       <ol aria-busy={pending} className="mt-4 space-y-4">
         {items.map((item, i) => {
@@ -279,7 +294,7 @@ export function ListBlock(props: ListProps) {
                 }}
                 className={control}
               >
-                Add a {one}
+                Add {aOne}
               </button>
               {!canAdd && (
                 <span data-list-full className="text-meta text-ink-2">
@@ -311,12 +326,35 @@ export function ListBlock(props: ListProps) {
                       </div>
                     );
                   }
+                  if (field.kind === "destination") {
+                    return (
+                      <div key={field.name} data-new-field={field.name} className="min-w-0">
+                        <label htmlFor={`${input}-pick`} className="text-meta font-[600] text-ink-2">
+                          {field.label}
+                        </label>
+                        <DestinationBox
+                          id={input}
+                          value={value}
+                          options={field.options ?? []}
+                          onChange={(text) => type(field.name, text)}
+                          describedBy={error ? `${input}-error` : ""}
+                          invalid={Boolean(error)}
+                          className={`block w-full rounded-[var(--radius-control)] border bg-surface px-3 text-small focus:border-ink ${clear} ${error ? "border-error" : "border-rule-strong"}`}
+                        />
+                        {error && (
+                          <p id={`${input}-error`} data-error className="mt-1.5 text-small text-error">
+                            {error}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
                   const over = value.length - field.max;
                   const shared = {
                     id: input,
                     value,
                     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => type(field.name, e.target.value),
-                    "aria-describedby": [`${input}-count`, error ? `${input}-error` : ""].filter(Boolean).join(" "),
+                    "aria-describedby": [`${input}-count`, field.playbook ? `${input}-parts` : "", error ? `${input}-error` : ""].filter(Boolean).join(" "),
                     "aria-invalid": error ? true : undefined,
                     autoComplete: "off",
                     // The form was opened by a press: the first box is where the typing starts.
@@ -334,6 +372,7 @@ export function ListBlock(props: ListProps) {
                         </span>
                       </div>
                       {field.rows > 1 ? <textarea {...shared} rows={field.rows} className={`${shared.className} py-2`} /> : <input {...shared} type="text" className={`${shared.className} h-11`} />}
+                      {field.playbook && <PlaybookCheck id={`${input}-parts`} value={value} pairs={field.playbook.pairs} />}
                       {error && (
                         <p id={`${input}-error`} data-error className="mt-1.5 text-small text-error">
                           {error}

@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { query } from "@/lib/db-query";
 import { getAmounts } from "@/lib/site/amounts";
 import { asRead, draftChanges, linkWarnings, listChanges, namesFilled, reviewKey, sectionChanges, wordingWarnings } from "@/lib/site/content/check";
-import { PAGES_ADDRESS, editorAddress, fieldAnchor, fieldLabelWith, fieldPlace, listAnchor, placesIn, sectionsAnchor } from "@/lib/site/content/labels";
+import { PAGES_ADDRESS, destinationName, editorAddress, fieldAnchor, fieldLabelWith, fieldPlace, listAnchor, placesIn, sectionsAnchor } from "@/lib/site/content/labels";
 import { applyOverlay, baseline, readField } from "@/lib/site/content/model";
 import { TOGGLE_ON, resolveField, siteRegistry } from "@/lib/site/content/registry";
 import { readStored } from "@/lib/site/content/store";
@@ -88,6 +88,11 @@ export default async function ReviewScreen() {
   const pages = siteRegistry.pages.filter((page) => changes.some((change) => change.field.page === page.id) || moves.some((change) => change.page.id === page.id) || lists.some((change) => change.page.id === page.id));
   /** A switch as words: what it is, on or off. */
   const switched = (text: string) => (text === TOGGLE_ON ? "On" : "Off");
+  /** Where a link goes, by the name the owner picked it by, with the address: "Home — Price section (/#price)". */
+  const address = (href: string) => {
+    const name = destinationName(href);
+    return name ? `${name} (${href})` : href;
+  };
   const where = (fieldId: string, pageId: string) => `${editorAddress(pageId)}#${fieldAnchor(fieldId)}`;
 
   return (
@@ -153,7 +158,7 @@ export default async function ReviewScreen() {
                               <div key={field.id}>
                                 <dt className="text-meta font-[600] text-ink-2">{field.name}</dt>
                                 <dd data-new-text className={`whitespace-pre-wrap ${wrap}`}>
-                                  {field.kind === "toggle" ? switched(text) : asRead(text, amounts)}
+                                  {field.kind === "toggle" ? switched(text) : field.kind === "destination" ? address(text) : asRead(text, amounts)}
                                 </dd>
                               </div>
                             ))}
@@ -181,13 +186,13 @@ export default async function ReviewScreen() {
                             <div>
                               <dt className="text-meta font-[600] text-ink-2">On the site now</dt>
                               <dd data-from className={`whitespace-pre-wrap text-ink-2 ${wrap}`}>
-                                {toggle ? switched(change.from) : asRead(change.from, amounts)}
+                                {toggle ? switched(change.from) : change.field.kind === "destination" ? address(change.from) : asRead(change.from, amounts)}
                               </dd>
                             </div>
                             <div>
                               <dt className="text-meta font-[600] text-ink-2">After publishing{change.toOriginal ? (toggle ? " (back to the original)" : " (back to the original wording)") : ""}</dt>
                               <dd data-to className={`whitespace-pre-wrap ${wrap}`}>
-                                {toggle ? switched(change.to) : asRead(change.to, amounts)}
+                                {toggle ? switched(change.to) : change.field.kind === "destination" ? address(change.to) : asRead(change.to, amounts)}
                               </dd>
                               {filled.length > 0 && (
                                 <dd data-filled className={`mt-1 text-meta text-ink-2 ${wrap}`}>
@@ -254,8 +259,9 @@ export default async function ReviewScreen() {
             {links.length === 1 ? "A link of the site points" : "Links of the site point"} at a section that is switched off. You decide: switch the section back on, or publish anyway. Nothing breaks: the link opens the page at its top.
           </p>
           <ul className="mt-4 space-y-4">
-            {links.map((warning) => (
-              <li key={warning.href} data-link-warning={warning.href} className={`min-w-0 text-small ${wrap}`}>
+            {links.map((warning, i) => (
+              // Two links may point at one section: the header's and the footer's, worded apart.
+              <li key={`${i}:${warning.href}`} data-link-warning={warning.href} className={`min-w-0 text-small ${wrap}`}>
                 <p>{warning.says}</p>
                 <p className="mt-1">
                   <Link href={`${editorAddress(warning.page.id)}#${sectionsAnchor(warning.page.id)}`} className="tlink">

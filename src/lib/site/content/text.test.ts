@@ -170,8 +170,21 @@ describe("the address a link may point at", () => {
       `/faq${String.fromCodePoint(0xe0041)}`,
       `https://x.test${char(0x3164)}`,
       `/faq${char(0xd800)}`,
+      // Plan U8: a name or password before the host makes an address read as another one.
+      "https://good.test@evil.test",
+      "https://user:pass@x.test/",
+      "https://x.test:pw@evil.test",
+      // Braces would be read as an amount's name where the header's words are filled.
+      "/faq{monthlyUsd}",
+      "https://x.test/{a}",
+      // An email address has an "@", and nothing that makes it a path.
+      "mailto:nobody",
+      "mailto:a@b@c.test",
+      "mailto:/a@b.test",
     ];
     for (const bad of refused) expect(usableDestination(bad), JSON.stringify(bad)).toBe(false);
+    // An email address may carry a subject, and an address another site's own "@" after its host.
+    for (const ok of ["mailto:peter@roger.test?subject=Hello", "https://x.test/@someone", "https://x.test/?q=a@b"]) expect(usableDestination(ok), ok).toBe(true);
   });
 
   it("is text, and not longer than an address may be", () => {

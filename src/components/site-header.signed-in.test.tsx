@@ -164,3 +164,51 @@ describe("a site version's menu on a phone", () => {
     }
   });
 });
+
+describe("the header's links as an admin leaves them (plan U8)", () => {
+  const withRow = (row: "lg" | "xl" | "menu", extra: { id: string; href: string; label: string }[] = []) => ({ ...chrome, navRow: row, links: [...chrome.links, ...extra] });
+
+  it("draws the built-in header class for class as it was: the row from 1024, the menu button below it", async () => {
+    const markup = await header("out");
+    expect(markup).toContain('<nav aria-label="Main" class="ml-auto hidden lg:block">');
+    expect(markup).toContain('class="ml-auto flex items-center gap-2 lg:ml-0 "');
+    expect(markup).toContain('class="-mr-2 grid size-11 shrink-0 place-items-center rounded-full text-ink lg:hidden"');
+  });
+
+  it("starts the row at 1280 when the links do not fit at 1024, and keeps the menu up to 1280", async () => {
+    const markup = await pageMarkup(<SiteHeader site="v1" chrome={withRow("xl", [{ id: "x-zack", href: "/zack", label: "Run Zack" }])} />);
+    expect(markup).toContain('<nav aria-label="Main" class="ml-auto hidden xl:block">');
+    expect(markup).toContain('class="ml-auto flex items-center gap-2 xl:ml-0 "');
+    expect(markup).toContain("text-ink xl:hidden");
+    expect(markup).not.toMatch(/\blg:(?:block|hidden|ml-0)\b/);
+    expect(links(markup).at(-3)).toEqual(["/zack", "Run Zack"]);
+  });
+
+  it("draws no row at all when the links do not fit at 1280 either: they are in the menu at every width", async () => {
+    const markup = await pageMarkup(<SiteHeader site="v1" chrome={withRow("menu")} />);
+    expect(markup).not.toContain('<nav aria-label="Main"');
+    expect(markup).toContain('class="-mr-2 grid size-11 shrink-0 place-items-center rounded-full text-ink"');
+  });
+
+  it("opens an address on another site, or an email address, as a plain link in the same tab, in the row and in the menu", async () => {
+    const out = [
+      { id: "x-help", href: "https://help.example.test", label: "Help" },
+      { id: "x-mail", href: "mailto:hello@example.test", label: "Write" },
+    ];
+    const markup = await pageMarkup(<SiteHeader site="v1" chrome={withRow("lg", out)} />);
+    for (const link of out) {
+      const tag = new RegExp(`<a href="${link.href}"[^>]*>${link.label}</a>`).exec(markup)?.[0];
+      expect(tag, link.href).toBeDefined();
+      expect(tag).not.toContain("target=");
+    }
+    const menu = await pageMarkup(<PhoneMenu nav={navFor("/", "v1", withRow("lg", out))} onNavigate={() => {}} />);
+    expect(hrefs(menu)).toEqual([...chrome.links.map((link) => link.href), ...out.map((link) => link.href), "/signin"]);
+    // A label that is one long word breaks inside its row of the menu.
+    expect(menu).toContain("[overflow-wrap:anywhere]");
+  });
+
+  it("keys each link by its id, so two links with the same address are both drawn", async () => {
+    const twice = await pageMarkup(<SiteHeader site="v1" chrome={withRow("xl", [{ id: "x-faq", href: "/faq", label: "Questions" }])} />);
+    expect(links(twice).filter(([href]) => href === "/faq").map(([, label]) => label)).toEqual(["FAQ", "Questions"]);
+  });
+});

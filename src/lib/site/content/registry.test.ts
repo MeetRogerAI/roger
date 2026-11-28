@@ -46,6 +46,11 @@ describe("the ids of the built-in copy (KTD3)", () => {
       "questions.zack-and-privacy.items": ["zack-reads", "what-leaves", "see-and-change", "who-sees", "competitors", "delete-sent"],
       "questions.cora-and-the-ideas.items": ["what-is-a-curation", "how-chosen", "does-not-fit", "other-agent"],
       "questions.price-and-billing.items": ["cost", "card-charged", "why-a-card", "missed-week", "refund"],
+      // The header's and the footer's links (plan U8): named by the keys their labels had before they were lists, so
+      // the edits saved under those keys are read under these (format.ts, legacyText).
+      nav: ["howItWorks", "pricing", "library", "faq", "about"],
+      "footer.links": ["pricing", "howItWorks", "faq", "about", "library"],
+      examples: ["video", "prospects", "paper"],
     });
   });
 
@@ -76,8 +81,9 @@ describe("the ids of the built-in copy (KTD3)", () => {
       }
     };
     walk(codeModel, "");
-    // The five lists of Home and How it works, the groups and their four lists of questions, and the three that are text only.
-    expect(arrays).toBe(13);
+    // The five lists of Home and How it works, the groups and their four lists of questions, the three that are text
+    // only, the header's and the footer's links, and the examples.
+    expect(arrays).toBe(16);
   });
 
   it("fails the walk on a list whose items have no ids, share one, or have one that cannot be used", () => {
@@ -231,10 +237,13 @@ describe("the covered pages and their sections (R5)", () => {
       "faq.price-and-billing: Questions (Question)",
       "faq.zack-and-privacy: Questions (Question)",
       "home.control: Control points (Point)",
+      "home.examples: Cora Curation examples (Example)",
       "home.hero: Hero steps (Step)",
       "home.problem: Problem statements (Statement)",
       "howItWorks.firstWeeks: First-weeks steps (Step)",
       "howItWorks.week: Days of the week (Day)",
+      "shared.footer: Footer links (Link)",
+      "shared.nav: Header links (Link)",
     ]);
   });
 
@@ -290,8 +299,9 @@ describe("what the registry says about a field", () => {
     for (const entry of page("home").sections[3].fields) expect(entry.claims, entry.id).toEqual({ path: "/", zones: ["compounding"] });
     expect(field("bricks.caption.week").placeholders).toEqual(captionNames);
     expect(field("bricks.caption.bricks").placeholders).toEqual(captionNames);
-    // A switch holds no words, so no name in braces either.
-    const others = fields.filter((f) => !f.id.startsWith("bricks.caption.") && f.kind !== "toggle");
+    // A switch holds no words, so no name in braces either. Nor does a play: it holds no amounts (plan U8).
+    const others = fields.filter((f) => !f.id.startsWith("bricks.caption.") && !f.id.startsWith("examples.") && f.kind !== "toggle");
+    for (const entry of fields.filter((f) => f.id.startsWith("examples."))) expect(entry.placeholders, entry.id).toEqual([]);
     for (const entry of others) expect(entry.placeholders, entry.id).toEqual(amountPlaceholderNames);
     for (const entry of fields.filter((f) => f.kind === "toggle")) expect(entry.placeholders, entry.id).toEqual([]);
   });
@@ -312,9 +322,11 @@ describe("what the registry says about a field", () => {
       expect(text.length, entry.id).toBeLessThanOrEqual(entry.max);
       expect(usableValue(entry, text), entry.id).toBe(true);
     }
-    // Every field of the site is one line of text today, or a question's "Show on the homepage" switch (plan U7).
-    // Fields that keep their lines, and addresses, come with the examples and the links.
-    expect(new Set(fields.map((f) => f.kind))).toEqual(new Set(["line", "toggle"]));
+    // Every field of the site is one line of text, a question's "Show on the homepage" switch (plan U7), a link's
+    // address, or an example's playbook, the one text that keeps its lines (plan U8).
+    expect(new Set(fields.map((f) => f.kind))).toEqual(new Set(["line", "toggle", "destination", "block"]));
+    expect(fields.filter((f) => f.kind === "block").map((f) => f.id)).toEqual(["examples.video.playbook", "examples.prospects.playbook", "examples.paper.playbook"]);
+    expect(fields.filter((f) => f.kind === "destination").map((f) => f.id)).toEqual([...codeModel.nav.map((l) => `nav.${l.id}.href`), ...codeModel.footer.links.map((l) => `footer.links.${l.id}.href`)]);
     expect(fields.filter((f) => f.kind === "toggle").map((f) => f.id)).toEqual(codeModel.questions.flatMap((group) => group.items.map((item) => `questions.${group.id}.items.${item.id}.home`)));
   });
 

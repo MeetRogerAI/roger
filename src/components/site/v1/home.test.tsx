@@ -85,7 +85,7 @@ const shell = (markup: string) => markup.split(STREAMED)[0];
 const streamed = (markup: string) => markup.slice(shell(markup).length);
 
 const full = (over: { testimonials?: Testimonial[]; content?: Overlay } = {}) =>
-  pageMarkup(<V1HomeView version="v1" amounts={amounts} examples={shown} testimonials={over.testimonials ?? []} content={over.content} />);
+  pageMarkup(<V1HomeView version="v1" amounts={amounts} preface={v3Defaults.playbookPreface} testimonials={over.testimonials ?? []} content={over.content} />);
 const view = async (over: Parameters<typeof full>[0] = {}) => shell(await full(over));
 const served = async (version: "v1" | "v2" | "v3" = "v1") => shell(await pageMarkup(<V1Home version={version} />));
 

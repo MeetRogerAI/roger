@@ -9,7 +9,6 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { v3Defaults } from "@/data/config";
-import { examples, firstExample } from "@/data/site/examples";
 import { emptyOverlay, type Overlay } from "@/lib/site/content/format";
 import { codeLayout } from "@/lib/site/content/model";
 import { siteRegistry } from "@/lib/site/content/registry";
@@ -26,15 +25,12 @@ vi.hoisted(() => {
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 
-const { exampleViews, publicIdeaView } = await import("@/lib/site/sample");
 const { V1HomeView } = await import("./home");
 const { V1FaqView } = await import("./faq");
 const { V1HowItWorksView } = await import("./how-it-works");
 const { V1AboutView } = await import("./about");
 
 const amounts = amountsFrom(v3Defaults);
-const shown = exampleViews(examples, v3Defaults.playbookPreface);
-const idea = publicIdeaView(firstExample.play, v3Defaults.playbookPreface);
 const quotes: Testimonial[] = [{ id: "a", person: "Sample P.", attribution: "Made-up attribution", quote: "A made-up quote, to place the section.", saidOn: null, audience: "re", position: 0, cleared: true }];
 
 /** The page a visitor with no script reads: what is streamed in afterwards follows it. */
@@ -95,7 +91,7 @@ function ruled(pageId: string, printed: readonly string[]): string[] {
 describe("the homepage, for every set of sections switched off and many orders (plan U6)", () => {
   const HOME = codeLayout("home").order;
   const names: Record<string, string> = { hero: "hero", problem: "problem", examples: "examples", compounds: "compounds", say: "testimonials", control: "control", price: "price", questions: "questions", closing: "closing" };
-  const home = async (order: string[], off: string[], testimonials: Testimonial[]) => shell(await pageMarkup(<V1HomeView version="v1" amounts={amounts} examples={shown} testimonials={testimonials} content={laid("home", order, off)} />));
+  const home = async (order: string[], off: string[], testimonials: Testimonial[]) => shell(await pageMarkup(<V1HomeView version="v1" amounts={amounts} preface={v3Defaults.playbookPreface} testimonials={testimonials} content={laid("home", order, off)} />));
   const held = (markup: string, order: readonly string[], off: readonly string[], testimonials: Testimonial[], label: string) => {
     sound(markup, label);
     const printed = order.filter((id) => !off.includes(id) && (id !== "testimonials" || testimonials.length > 0));
@@ -161,7 +157,7 @@ describe("the reading pages, for every set of sections switched off in every ord
   it("/how-it-works: all 128 sets, and 200 orders, keep one h1 and a hairline only between two reading sections", async () => {
     const HOW = codeLayout("howItWorks").order;
     const names: Record<string, string> = { week: "week", zack: "zack", cora: "cora", anatomy: "anatomy", "first-weeks": "firstWeeks", "no-agent": "noAgent" };
-    const how = async (order: string[], off: string[]) => shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={amounts} idea={idea} preface={v3Defaults.playbookPreface} files={[]} content={laid("howItWorks", order, off)} />));
+    const how = async (order: string[], off: string[]) => shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={amounts} preface={v3Defaults.playbookPreface} files={[]} content={laid("howItWorks", order, off)} />));
     const held = (markup: string, order: readonly string[], off: readonly string[], label: string) => {
       sound(markup, label);
       expect(markup.match(/<h1\b/g), label).toHaveLength(1);

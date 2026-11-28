@@ -59,6 +59,28 @@ export function isEmptyOverlay(overlay: Overlay): boolean {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
+/**
+ * Field ids an earlier release stored, and the ids the same words have now (plan U8). Until November 27, 2026 the
+ * header's links were five labels, `nav.<key>`, which the footer repeated; they are now two lists whose items are
+ * named by those keys, so an edited "Pricing" is the label of the header's "pricing" link and of the footer's. Both
+ * sites may hold such entries (preview has been edited), and nothing may be lost: the reader takes each old entry
+ * as the new ones it stands for, unless the new one is stored too. The next save stores the new ids only.
+ */
+export const legacyText: Readonly<Record<string, readonly string[]>> = Object.fromEntries(
+  ["howItWorks", "pricing", "library", "faq", "about"].map((key) => [`nav.${key}`, [`nav.${key}.label`, `footer.links.${key}.label`]]),
+);
+
+/** A stored `text` with each old id's entry under the ids it stands for now (legacyText). The old ids are left in, and dropped as unknown. */
+function withLegacyText(text: Record<string, unknown>): Record<string, unknown> {
+  if (!Object.keys(legacyText).some((id) => Object.hasOwn(text, id))) return text;
+  const out: Record<string, unknown> = { ...text };
+  for (const [old, now] of Object.entries(legacyText)) {
+    if (!Object.hasOwn(text, old)) continue;
+    for (const id of now) if (!Object.hasOwn(text, id)) out[id] = text[old];
+  }
+  return out;
+}
+
 /** The usable ids of a stored array, each once, in the order written, and no more than a list may hold. */
 function idsOf(value: unknown, keep: (id: string) => boolean = () => true): string[] {
   if (!Array.isArray(value)) return [];
@@ -93,7 +115,7 @@ export function parseOverlay(value: unknown, registry: Registry = siteRegistry):
 
   if (isRecord(value.text)) {
     let kept = 0;
-    for (const [id, text] of Object.entries(value.text)) {
+    for (const [id, text] of Object.entries(withLegacyText(value.text))) {
       if (kept >= TEXT_ENTRIES_MAX) break;
       const field = resolveField(id, registry);
       if (!field || !usableValue(field, text) || text.length > TEXT_MAX) continue;

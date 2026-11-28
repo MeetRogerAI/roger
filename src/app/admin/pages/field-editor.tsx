@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { fullName, itemTitle } from "@/lib/site/content/caption";
 import { savePageAction, type SaveState } from "./actions";
+import { DestinationBox, type DestinationOption } from "./link-editor";
 import { ListBlock, type ListProps } from "./list-editor";
+import { PlaybookCheck } from "./playbook-check";
 
 /**
  * One page's words, as one form with one Save (plan U5).
@@ -51,8 +53,12 @@ export type EditorField = {
   anchor: string;
   /** "Headline". */
   name: string;
-  /** A box of text, or a switch of an item ("Show on the homepage"), which holds "yes" or "no". */
-  kind: "text" | "toggle";
+  /** A box of text, a switch of an item ("Show on the homepage"), which holds "yes" or "no", or where a link goes (link-editor.tsx). */
+  kind: "text" | "toggle" | "destination";
+  /** For where a link goes: the places it can be pointed at by name. */
+  options?: DestinationOption[];
+  /** For an example's playbook: say what the card makes of it as it is typed (playbook-check.tsx). `pairs` for the first example only. */
+  playbook?: { pairs: string[] | null };
   /** For a switch: what it does, in a sentence. */
   hint: string | null;
   /** A paragraph's box, or one line's. */
@@ -514,10 +520,42 @@ function FieldBox({
       </div>
     );
   }
+  // Where a link goes: a place picked from the list, or an address typed (link-editor.tsx).
+  if (field.kind === "destination") {
+    return (
+      <div id={field.anchor} data-field data-destination data-edited={differs ? "" : undefined} className="min-w-0 scroll-mt-4">
+        <label htmlFor={`${input}-pick`} className="text-meta font-[600] text-ink-2">
+          {field.name}
+          <span className="sr-only">: {full}</span>
+        </label>
+        <DestinationBox
+          id={input}
+          value={value}
+          options={field.options ?? []}
+          onChange={onType}
+          describedBy={error ? `${input}-error` : ""}
+          invalid={Boolean(error)}
+          className={`block w-full rounded-[var(--radius-control)] border bg-surface px-3 text-small focus:border-ink ${clear} ${error ? "border-error" : "border-rule-strong"}`}
+        />
+        {error && (
+          <p id={`${input}-error`} data-error className="mt-1.5 text-small text-error">
+            {error}
+          </p>
+        )}
+        {marks}
+        {differs && (
+          <p data-original className={`mt-2 text-small text-ink-2 ${wrap}`}>
+            Originally: {field.options?.find((option) => option.href === field.original)?.label ?? field.original} ({field.original})
+          </p>
+        )}
+      </div>
+    );
+  }
+
   const used = namesIn(value);
   // The text as a visitor reads it today: each name that stands for an amount replaced by that amount.
   const reads = value.replace(/\{(\w+)\}/g, (typedName) => hints.find((entry) => entry.name === typedName)?.now ?? typedName);
-  const described = [`${input}-count`, used.length > 0 ? `${input}-names` : "", error ? `${input}-error` : ""].filter(Boolean).join(" ");
+  const described = [`${input}-count`, field.playbook ? `${input}-parts` : "", used.length > 0 ? `${input}-names` : "", error ? `${input}-error` : ""].filter(Boolean).join(" ");
   const shared = {
     id: input,
     value,
@@ -540,6 +578,7 @@ function FieldBox({
         </span>
       </div>
       {field.rows > 1 ? <textarea {...shared} rows={field.rows} className={`${shared.className} py-2`} /> : <input {...shared} type="text" className={`${shared.className} h-11`} />}
+      {field.playbook && <PlaybookCheck id={`${input}-parts`} value={value} pairs={field.playbook.pairs} />}
 
       {error && (
         <p id={`${input}-error`} data-error className="mt-1.5 text-small text-error">
