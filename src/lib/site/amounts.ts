@@ -6,8 +6,8 @@
  * braces, such as "{monthlyUsd} a month", and fillAmounts puts the value in.
  */
 import { cacheLife, cacheTag } from "next/cache";
-import { getV3SettingsForDisplay } from "@/lib/v3-settings-display";
-import type { V3Settings } from "@/lib/v3-settings";
+import { cachedV3SettingsForDisplay } from "@/lib/v3-settings-display";
+import { mergeV3, type V3Settings } from "@/lib/v3-settings";
 import { captionNames } from "./compounding";
 
 export type Currency = "USD" | "CAD";
@@ -57,11 +57,28 @@ export function amountsFrom(s: AmountSettings): Amounts {
  * (cacheLife, "Prerendering behavior"). Saving a price in the admin still
  * clears this entry through the "settings" tag.
  */
-export async function getAmounts(): Promise<Amounts> {
+async function cachedAmounts(): Promise<Amounts> {
   "use cache";
   cacheLife({ stale: 300, revalidate: 300, expire: 86400 });
   cacheTag("settings");
-  return amountsFrom(await getV3SettingsForDisplay());
+  return amountsFrom(await cachedV3SettingsForDisplay());
+}
+
+/**
+ * The cached read throws when the database does not answer, so nothing is
+ * stored and the next render asks again; the defaults stand in for that one
+ * render only, from out here. Caught inside, the defaults would be the stored
+ * answer for the entry's whole lifetime: the public price wrong for minutes
+ * after one dropped connection
+ * (docs/solutions/runtime-errors/catch-inside-use-cache-stores-the-fallback-2026-11-27.md).
+ */
+export async function getAmounts(): Promise<Amounts> {
+  try {
+    return await cachedAmounts();
+  } catch (e) {
+    console.error("[site] amounts: the database did not answer, showing the defaults", e instanceof Error ? e.message : e);
+    return amountsFrom(mergeV3([]));
+  }
 }
 
 /** "US$200" or "CA$280": the dollar sign never appears without its country. */

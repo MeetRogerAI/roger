@@ -41,7 +41,7 @@ vi.mock("@/lib/db-query", () => ({ query: (t: string, p?: unknown[]) => current(
 // The settings the amounts come from are not this test's subject: the defaults, whatever the database holds.
 vi.mock("@/lib/v3-settings-display", async () => {
   const { mergeV3 } = await import("@/lib/v3-settings");
-  return { getV3SettingsForDisplay: async () => mergeV3([]) };
+  return { getV3SettingsForDisplay: async () => mergeV3([]), cachedV3SettingsForDisplay: async () => mergeV3([]) };
 });
 vi.mock("@/lib/admin-auth", () => ({
   requireAdmin: async () => {
