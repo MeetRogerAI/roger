@@ -94,6 +94,10 @@ describe("trial to the third-list charge", () => {
     expect(paidNext(ca.email).text).toContain(dollars(told.ca, "CAD"));
     expect(paidNext(ca.email).text).toContain("December 21");
     expect(paidNext(us.email).text).toContain(dollars(told.us, "USD"));
+    // S18 point a: the price plus the HST for the Ontario member; no tax collected for the US one, so just the amount.
+    expect(paidNext(ca.email).text).toContain("we’ll charge CA$316.40 (CA$280 plus CA$36.40 HST) for your first month.");
+    expect(paidNext(us.email).text).toContain("we’ll charge US$200 for your first month.");
+    for (const e of [ca.email, us.email]) expect(paidNext(e).text).not.toContain("tax included");
     expect((await userRow(w, ca.id)).quote).toMatchObject({ totalCents: told.ca, currency: "CAD", price: "price_monthly_cad" });
     expect((await userRow(w, us.id)).quote).toMatchObject({ totalCents: told.us, currency: "USD", price: "price_monthly_usd" });
 
@@ -136,6 +140,8 @@ describe("trial to the third-list charge", () => {
     }
     const subscribed = w.mail(ca.email).find((m) => m.subject === "You’re subscribed")!;
     expect(subscribed.text).toContain(dollars(told.ca, "CAD"));
+    expect(subscribed.text).toContain("We charged CA$316.40 (CA$280 plus CA$36.40 HST).");
+    expect(w.mail(us.email).find((m) => m.subject === "You’re subscribed")!.text).toContain("We charged US$200. ");
 
     // A fourth Monday: the subscription covers it; no second charge.
     await w.at(toronto("2026-12-27", "15:00"));
@@ -211,14 +217,15 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Units 5, 8 and 10
     const m = await promoMember("dee@example.ca");
     // CA$280 less 20% = CA$224, plus 13% HST = CA$253.12.
     const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
-    expect(paidNext.text).toContain("CA$253.12");
-    expect(paidNext.text).toContain("That includes your promo code WELCOME20: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included.");
+    // The price plus the tax, never "tax included" (S18 point a).
+    expect(paidNext.text).toContain("we’ll charge CA$253.12 (CA$224 plus CA$29.12 HST) for your first month.");
+    expect(paidNext.text).toContain("That includes your promo code WELCOME20: CA$56 off your first month. After that, it’s CA$280 a month plus HST.");
     await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
     await sendRun(w, m);
     expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ charged: 1 });
     expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon)).toEqual(["co_20"]);
     expect(w.stripe.invoicesFor(m.customer)[0]).toMatchObject({ status: "paid", totalCents: 25312, discountCents: 5600 });
-    expect(w.mail(m.email).find((x) => x.subject === "You’re subscribed")!.text).toContain("CA$253.12");
+    expect(w.mail(m.email).find((x) => x.subject === "You’re subscribed")!.text).toContain("We charged CA$253.12 (CA$224 plus CA$29.12 HST).");
   });
 
   it("a coupon deleted before the third Monday: held and told the full price, charged it the next day", async () => {

@@ -17,7 +17,12 @@ function stubStripe(o: { createError?: unknown; previewError?: unknown } = {}) {
       createPreview: async (params: Record<string, unknown>) => {
         calls.push({ method: "invoices.createPreview", params });
         if (o.previewError) throw o.previewError;
-        return { total: params.discounts ? 25312 : 31640, currency: "cad", total_discount_amounts: params.discounts ? [{ amount: 5600, discount: "di_1" }] : [] };
+        return {
+          total: params.discounts ? 25312 : 31640,
+          currency: "cad",
+          total_discount_amounts: params.discounts ? [{ amount: 5600, discount: "di_1" }] : [],
+          total_taxes: [{ amount: params.discounts ? 2912 : 3640 }],
+        };
       },
     },
     subscriptions: {
@@ -38,7 +43,7 @@ describe("stripeBilling with a locked-in coupon", () => {
   it("previews and subscribes with discounts [{coupon}], and reads the discount off the preview", async () => {
     const { s, calls } = stubStripe();
     const gw = stripeBilling(s)!;
-    expect(await gw.preview({ customer: "cus_1", price: "price_monthly_cad", coupon: "co_20" })).toEqual({ totalCents: 25312, currency: "CAD", discountCents: 5600 });
+    expect(await gw.preview({ customer: "cus_1", price: "price_monthly_cad", coupon: "co_20" })).toEqual({ totalCents: 25312, currency: "CAD", discountCents: 5600, taxCents: 2912 });
     expect(await gw.createSubscription({ ...create, coupon: "co_20" })).toMatchObject({ kind: "succeeded", amountCents: 25312, currency: "CAD" });
     expect(calls.map((c) => c.params.discounts)).toEqual([[{ coupon: "co_20" }], [{ coupon: "co_20" }]]);
     expect(calls[1].opts).toEqual({ idempotencyKey: "first_charge:claim_1:1" });
@@ -47,7 +52,7 @@ describe("stripeBilling with a locked-in coupon", () => {
   it("sends no discounts without a coupon (unchanged)", async () => {
     const { s, calls } = stubStripe();
     const gw = stripeBilling(s)!;
-    expect(await gw.preview({ customer: "cus_1", price: "price_monthly_cad", coupon: null })).toEqual({ totalCents: 31640, currency: "CAD", discountCents: 0 });
+    expect(await gw.preview({ customer: "cus_1", price: "price_monthly_cad", coupon: null })).toEqual({ totalCents: 31640, currency: "CAD", discountCents: 0, taxCents: 3640 });
     await gw.createSubscription({ ...create });
     expect(calls.every((c) => !("discounts" in c.params))).toBe(true);
   });

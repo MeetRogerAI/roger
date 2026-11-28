@@ -23,7 +23,7 @@ const WEEK = "2026-12-14";
 const SEVEN_AM = new Date("2026-12-14T12:05:00Z");
 const settings = mergeV3([{ key: "v3.cycleLive", value: true }]);
 const gw: BillingGateway = {
-  preview: async () => ({ totalCents: 22600, currency: "USD" }),
+  preview: async () => ({ totalCents: 22600, currency: "USD", taxCents: 2600 }),
   subscriptions: async () => [],
   createSubscription: async () => ({ kind: "error", error: "unused" }),
 };
@@ -160,7 +160,7 @@ describe("the Monday send", () => {
     await query("insert into orders (user_id, week_of, status, amount_cents, currency) values ($1, $2, 'charged', 5650, 'USD')", [a, WEEK]);
     await runSendJob(query, deps(), { week: WEEK });
     expect(to("a@example.com").map((m) => m.subject)).toEqual(["Your list, and your receipt"]);
-    expect(to("a@example.com")[0].text).toContain("This list: US$56.50 with tax.");
+    expect(to("a@example.com")[0].text).toContain("This list: US$56.50 in total.");
     expect((await query<{ status: string }>("select status from orders"))[0].status).toBe("sent");
   });
 
@@ -197,7 +197,7 @@ describe("the Monday send", () => {
     const subjects = to("a@example.com").map((m) => m.subject);
     expect(subjects).toEqual(["Your next list is your first paid one", "Your three ideas for the week of Monday, December 14"]);
     // Both emails state the same date and the same told amount.
-    expect(to("a@example.com")[1].text).toContain("Free list 2 of 2. Your next list is your first paid one: Monday, December 21, US$226 with tax.");
+    expect(to("a@example.com")[1].text).toContain("Free list 2 of 2. Your next list is your first paid one: Monday, December 21, US$226 (US$200 plus US$26 tax).");
     expect(to("a@example.com")[0].text).toContain("US$226");
   });
 

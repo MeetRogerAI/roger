@@ -7,7 +7,7 @@ import type { CardGateway } from "./gateway";
 import { adjustmentOnSubscriptionEnded, markInvoiced } from "./adjustment";
 import { noticeQuoteChange } from "./quote";
 import { afterCardChange, renewalFailed, renewalPaid, subscriptionEnded, syncSubscription, type RenewalDeps } from "./renewals";
-import type { AdjustmentGateway, BillingGateway, OrderGateway, PlanGateway } from "./subscriptions";
+import { taxOf, type AdjustmentGateway, type BillingGateway, type OrderGateway, type PlanGateway } from "./subscriptions";
 
 /**
  * Stripe webhooks: signals, not facts. Each event id is claimed once in
@@ -126,7 +126,7 @@ export async function handleStripeEvent(
       if (claimId && sub && !renewal) {
         const r = await settleFromInvoice(
           q,
-          { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, anchor: planLineStart(inv) },
+          { claimId, subscription: typeof sub.subscription === "string" ? sub.subscription : sub.subscription.id, amountCents: inv.amount_paid, currency: inv.currency, taxCents: taxOf(inv), anchor: planLineStart(inv) },
           { settings: await o.getSettings(), now: o.now ?? new Date(), query: o.query, transport: o.transport, sleep: o.sleep },
         );
         outcome = "handled";

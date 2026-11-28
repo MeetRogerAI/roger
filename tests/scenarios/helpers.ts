@@ -180,6 +180,8 @@ export function fakeStripe(now: () => Date): FakeStripe {
     const all = tax > 0 ? [...lines, { kind: "tax" as const, description: "HST (13%)", amountCents: tax, invoiceItem: null, price: null }] : lines;
     return { lines: all, totalCents: subtotal + tax, ...(discountCents ? { discountCents } : {}) };
   };
+  /** The tax rows of an invoice or preview (Stripe's `total_taxes`). */
+  const taxIn = (lines: Line[]) => lines.filter((l) => l.kind === "tax").reduce((t, l) => t + l.amountCents, 0);
   /** The coupon's amount off a first invoice's lines (throws Stripe's error for a deleted or expired coupon). */
   const couponOff = (coupon: string | null | undefined, p: string, lines: Line[]) =>
     coupon ? payment.couponOff(coupon, lines.reduce((s, l) => s + l.amountCents, 0), price(p).currency) : 0;
@@ -295,7 +297,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
       const lines = planLines(p, extra);
       const discountCents = couponOff(coupon, p, lines);
       const inv = priced(customer, lines, discountCents);
-      return { totalCents: inv.totalCents, currency: price(p).currency, discountCents };
+      return { totalCents: inv.totalCents, currency: price(p).currency, discountCents, taxCents: taxIn(inv.lines) };
     },
     async subscriptions(customer) {
       return [...subs.values()].filter((s) => s.customer === customer).map((s) => ({ id: s.id, status: s.status, claimId: s.claimId, anchor: s.anchor }));
@@ -328,7 +330,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
       const s: FakeSub = { id: id("sub"), customer, price: p as PriceId, claimId, userId, status: "active", anchor: sec(at), periodEnd: sec(anniversary(at, 1)), cancelAt: null, endedAt: null };
       subs.set(s.id, s);
       const inv = invoice({ customer, subscription: s.id, claimId, billingReason: "subscription_create", status: "paid", currency: price(p).currency, periodStart: s.anchor, ...(discountCents ? { discountCents } : {}) }, planLines(p, extra));
-      const r: ChargeResult = { kind: "succeeded", object: s.id, amountCents: inv.totalCents, currency: inv.currency, anchor: s.anchor };
+      const r: ChargeResult = { kind: "succeeded", object: s.id, amountCents: inv.totalCents, currency: inv.currency, taxCents: taxIn(inv.lines), anchor: s.anchor };
       replays.set(idempotencyKey, r);
       return r;
     },
@@ -337,7 +339,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
     async previewOrder({ customer, price: p }) {
       call("invoices.createPreview.order", { customer, price: p });
       const inv = priced(customer, [{ kind: "order", description: `1 × ${price(p).product}`, amountCents: price(p).cents, invoiceItem: null, price: p }]);
-      return { totalCents: inv.totalCents, currency: price(p).currency };
+      return { totalCents: inv.totalCents, currency: price(p).currency, taxCents: taxIn(inv.lines) };
     },
     async findOrderInvoice(customer, claimId) {
       const i = invoiceList.find((x) => x.customer === customer && x.claimId === claimId);
@@ -443,7 +445,7 @@ export function fakeStripe(now: () => Date): FakeStripe {
       const s = subs.get(subscription)!;
       const pending = [...items.values()].filter((i) => i.subscription === subscription && !i.invoice);
       const inv = priced(customer, [...planLines(s.price), ...pending.map((i) => ({ kind: "item" as const, description: i.description, amountCents: i.amountCents, invoiceItem: i.id, price: null }))]);
-      return { totalCents: inv.totalCents, taxCents: inv.lines.filter((l) => l.kind === "tax").reduce((t, l) => t + l.amountCents, 0), currency: price(s.price).currency, lines: inv.lines.map((l) => ({ description: l.description, amountCents: l.amountCents, invoiceItem: l.invoiceItem })) };
+      return { totalCents: inv.totalCents, taxCents: taxIn(inv.lines), currency: price(s.price).currency, lines: inv.lines.map((l) => ({ description: l.description, amountCents: l.amountCents, invoiceItem: l.invoiceItem })) };
     },
 
     // --- Stripe's own clock
@@ -503,6 +505,7 @@ function invoiceEvent(type: string, inv: FakeInvoice, s: FakeSub): Stripe.Event 
     attempt_count: 1,
     amount_paid: inv.status === "paid" ? inv.totalCents : 0,
     currency: inv.currency.toLowerCase(),
+    total_taxes: inv.lines.filter((l) => l.kind === "tax").map((l) => ({ amount: l.amountCents })),
     metadata: {},
     parent: { subscription_details: { subscription: s.id, metadata: { claim_id: s.claimId, user_id: s.userId } } },
     lines: {

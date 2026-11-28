@@ -1,10 +1,17 @@
-import { moneyCents, type Currency } from "@/lib/billing/prices";
+import { chargeWords, moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
 import { longDate } from "@/lib/dates";
 
 /** Spec B.13: the first charge succeeded and the subscription started. */
-export function subscribedEmail(o: { amountCents: number | null; currency: Currency; /** A one-at-a-time member's first monthly charge: not a third list. */ switched?: boolean }): Rendered {
-  const paid = o.amountCents != null ? `${moneyCents(o.amountCents, o.currency)}, tax included` : "your first month";
+export function subscribedEmail(o: {
+  amountCents: number | null;
+  currency: Currency;
+  /** The tax in the paid amount: said as the price plus the tax (S18 point a). */
+  taxCents?: number | null;
+  /** A one-at-a-time member's first monthly charge: not a third list. */
+  switched?: boolean;
+}): Rendered {
+  const paid = o.amountCents != null ? chargeWords(o.amountCents, o.currency, o.taxCents) : "your first month";
   const list = o.switched ? "This week’s list" : "Your third list";
   // A promo that covers the whole first invoice (Unit 8 review F7): Stripe starts the subscription and charges nothing.
   const charged = o.amountCents === 0 ? "Your first month is covered by your promo code, so nothing was charged." : `We charged ${paid}.`;
@@ -60,14 +67,21 @@ export function chargeDateMovedEmail(o: { nextMonday: string; reason?: "no_plays
 }
 
 /** The amount changed after the reminder: the list waits a day so the user sees the new amount first. */
-export function amountChangedEmail(o: { amountCents: number; currency: Currency; /** The label of a locked-in discount Stripe no longer applies. */ discountEnded?: string | null }): Rendered {
+export function amountChangedEmail(o: {
+  amountCents: number;
+  currency: Currency;
+  /** The tax in the amount, from the same preview (S18 point a). */
+  taxCents?: number | null;
+  /** The label of a locked-in discount Stripe no longer applies. */
+  discountEnded?: string | null;
+}): Rendered {
   return renderEmail({
     subject: "Your first charge amount changed",
     preview: `It is now ${moneyCents(o.amountCents, o.currency)}.`,
     heading: "Your first charge amount changed.",
     paragraphs: [
       ...(o.discountEnded ? [`Your promo code’s discount (${o.discountEnded}) has ended and can no longer be applied, so your first charge is at the full price.`] : []),
-      `Your first charge will be ${moneyCents(o.amountCents, o.currency)}, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.`,
+      `Your first charge will be ${chargeWords(o.amountCents, o.currency, o.taxCents)}. That isn’t the amount we last told you, so we’re telling you now, before charging.`,
       "We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.",
     ],
     button: { label: "Billing", url: appUrl("/app/billing") },

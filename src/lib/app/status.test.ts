@@ -26,9 +26,20 @@ describe("statusLine (spec B.8 item 3)", () => {
   });
 
   it("trial, monthly, second list: the first paid date and the told amount", () => {
-    expect(statusLine(f({ freeListsUsed: 2, quote: { totalCents: 22600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
-      "Free list 2 of 2. Your next list is your first paid one: Monday, December 21, US$226 with tax.",
+    expect(statusLine(f({ freeListsUsed: 2, quote: { totalCents: 22600, taxCents: 2600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
+      "Free list 2 of 2. Your next list is your first paid one: Monday, December 21, US$226 (US$200 plus US$26 tax).",
     );
+  });
+
+  // S18 point a (Peter, 2026-11-27): the price plus the tax, never "with tax".
+  it("the told amount: price plus HST with tax, the bare amount with none, and a quote told before the tax was kept", () => {
+    const line = (quote: NonNullable<StatusFacts["quote"]>) => statusLine(f({ freeListsUsed: 2, quote }), s);
+    expect(line({ totalCents: 31640, taxCents: 3640, currency: "CAD", week: "2026-12-14" })).toBe(
+      "Free list 2 of 2. Your next list is your first paid one: Monday, December 14, CA$316.40 (CA$280 plus CA$36.40 HST).",
+    );
+    expect(line({ totalCents: 20000, taxCents: 0, currency: "USD", week: "2026-12-14" })).toBe("Free list 2 of 2. Your next list is your first paid one: Monday, December 14, US$200.");
+    expect(line({ totalCents: 31640, currency: "CAD", week: "2026-12-14" })).toBe("Free list 2 of 2. Your next list is your first paid one: Monday, December 14, CA$316.40 in total.");
+    for (const q of [{ totalCents: 31640, taxCents: 3640 }, { totalCents: 20000, taxCents: 0 }]) expect(line({ ...q, currency: "CAD", week: "2026-12-14" })).not.toMatch(/with tax|tax included/);
   });
 
   it("trial, leftover one at a time, second list: no ordering promised (review fixes Unit 9, F2)", () => {
@@ -89,7 +100,7 @@ describe("statusLine (spec B.8 item 3)", () => {
 
 
   it("leftover one at a time: what this list cost, and no ordering promised (review fixes Unit 9, F2)", () => {
-    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toBe(`This list: US$56.50 with tax. ${PLAN_QUESTIONS}`);
+    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toBe(`This list: US$56.50 in total. ${PLAN_QUESTIONS}`);
     expect(statusLine(f({ status: "active", plan: "per_run", orderCents: null }), s)).toMatch(/^This list: US\$\d+ plus tax where it applies\. Monthly is now the only plan\./);
     expect(PLAN_QUESTIONS).not.toMatch(/order|one (list )?at a time/i);
   });
@@ -107,8 +118,8 @@ describe("statusLine (spec B.8 item 3)", () => {
     expect(statusLine(f({ status: "active", firstChargeAt: "2026-12-03T11:05:00Z", endingAt: "2027-01-03T11:05:00Z" }), s)).toBe(
       "Your plan is cancelled. Your lists continue until Sunday, January 3, and nothing more will be charged.",
     );
-    expect(statusLine(f({ freeListsUsed: 2, switchedFromPerRun: true, quote: { totalCents: 22600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
-      "Monthly starts with your next list: Monday, December 21 at the earliest, US$226 with tax.",
+    expect(statusLine(f({ freeListsUsed: 2, switchedFromPerRun: true, quote: { totalCents: 22600, taxCents: 2600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
+      "Monthly starts with your next list: Monday, December 21 at the earliest, US$226 (US$200 plus US$26 tax).",
     );
   });
 
