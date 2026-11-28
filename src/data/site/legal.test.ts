@@ -415,7 +415,7 @@ describe("terms say each point in the spec's list", () => {
   });
 
   it("no refunds, cancel any time, access to the end of the paid month", () => {
-    const refunds = section(terms, "refunds");
+    const refunds = section(terms, "roger-monthly");
     expect(refunds).toContain("There are no refunds.");
     expect(refunds).toContain("You can cancel any time");
     expect(refunds).toContain("Your access continues to the end of the month you have paid for.");

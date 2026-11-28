@@ -199,7 +199,8 @@ export const siteTerms: LegalDoc = {
       ],
     },
     {
-      id: "refunds",
+      // The Payment page's "Terms and refunds" link (main, components/app/payment/trust.tsx) opens /terms#roger-monthly.
+      id: "roger-monthly",
       heading: "Refunds and cancelling",
       body: ["There are no refunds.", "You can cancel any time, in one click. Your access continues to the end of the month you have paid for."],
     },
