@@ -495,6 +495,10 @@ describe("review and publish", () => {
     expect(words(/<span data-label[\s\S]*?<\/span>/.exec(review)![0])).toMatch(/^ Price and billing: Question \d+ — “Can I get a refund\?” · Answer $/);
     expect(warning).toContain("The rule: It says “agent” without “AI” in front.");
     expect(warning).toContain(`The words: “agent”, in “${answer}”`);
+    // At the top of the screen, above what will change (Peter, November 28, 2026); its Dismiss button needs the page's scripts.
+    expect(review.indexOf("data-warnings")).toBeGreaterThan(-1);
+    expect(review.indexOf("data-warnings")).toBeLessThan(review.indexOf("data-changes"));
+    expect(review).not.toContain("data-dismiss=");
     // Publishing is for the whole site, and the screen says so where the button is.
     expect(seen).toContain("Publishing is for the whole site, not one page. It puts the 1 change above on the site at once (FAQ)");
     expect(seen).toContain("Publish anyway: this 1 change");

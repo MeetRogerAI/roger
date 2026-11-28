@@ -35,7 +35,7 @@ Press **Preview** on a page (or in the review). The real page opens in a new tab
 
 1. On Pages, press **Review and publish**. The **Publish** card with that button is there only while a saved draft would change the site.
 2. The review lists every change, as a visitor will read it, and two kinds of warning:
-   - **Wording warnings**: a line that breaks one of the site's wording rules (for example "agent" without "AI", a time saved, a number). Each names the rule and the words.
+   - **Wording warnings**, at the top of the review: a line that breaks one of the site's wording rules (for example "agent" without "AI", a time saved, a number). Each names the rule and the words. Press **Dismiss** on one once you have read it and it is fine: it leaves the box (the box goes with the last one), the text stays as it is, and it is still written in the admin log when you publish. A reload of the same review keeps it dismissed; a new save brings every warning back. Once all are dismissed, and there is no link or page warning, the button reads "Publish".
    - **Link warnings**: a link that would point at a section you switched off or an item you removed, or a page left with no main heading.
 3. Warnings never stop you. Press the publish button at the foot ("Publish this 1 change", or "Publish anyway" when there are warnings). Publishing is for the whole site: every draft on every page goes live together. Each wording warning you publish over is written in the admin log.
 4. Visitors see the changes from their next page view, within a few seconds.
