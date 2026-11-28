@@ -53,7 +53,15 @@ export type PlaySource = {
   score: number | null;
 };
 
-export type PickSource = { personalScore: number; reason: string };
+/** `ideaCode`: the pick's "Roger idea ID" (`picks.idea_code`, B3 Unit 11), on a delivered pick only. */
+export type PickSource = { personalScore: number; reason: string; ideaCode?: string | null };
+
+/**
+ * The line in a delivered idea's copy that names its pick (Cora change 15):
+ * the member's agent notes it, and Zack's next profile reports it back.
+ * Member-visible copy: wording sign-off section 14, pending.
+ */
+export const ideaIdLine = (code: string) => `Roger idea ID: ${code}. Keep this ID with the idea in your Roger Upgrade Notes.`;
 
 /**
  * Added after the preface on every copy (plan, "A playbook is also untrusted
@@ -115,7 +123,9 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
     },
   };
 
-  const copyText = [preface.trim(), PASTE_CAUTION, play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
+  // The ID line goes after the caution, before the prompt. The public sample, and a pick without a code, have none.
+  const idLine = pick?.ideaCode ? [ideaIdLine(pick.ideaCode)] : [];
+  const copyText = [preface.trim(), PASTE_CAUTION, ...idLine, play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
 
   return {
     id: play.id,

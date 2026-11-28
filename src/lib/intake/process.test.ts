@@ -355,3 +355,53 @@ describe("processProfile and processPending", () => {
     expect(await processProfile(query, p.id)).toBe("rejected");
   });
 });
+
+describe("processProfile and adoption (B3 Unit 11)", () => {
+  const profileText = (pastIdeas: unknown) => "```roger-profile\n" + JSON.stringify({ past_ideas: pastIdeas }) + "\n```";
+  async function deliveredPick(): Promise<string> {
+    const [{ id: playId }] = await query<{ id: string }>(
+      "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('Showing brief', 'solo', 'd', 'p', 'i', '2026-11-01', '2026-11-01') returning id",
+    );
+    const [{ idea_code }] = await query<{ idea_code: string }>(
+      "insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, delivered_at) values ($1, '2026-11-23', 1, $2, 70, 3, 'r', '2026-11-23T12:00:00Z') returning idea_code",
+      [userId, playId],
+    );
+    return idea_code;
+  }
+  const addProfile = async (text: string) =>
+    (await query<{ id: string }>("insert into zack_profiles (user_id, week_of, route, raw_text, received_at) values ($1, '2026-11-30', 'connector', $2, '2026-11-28T20:00:00Z') returning id", [userId, text]))[0].id;
+  const pickStamps = async () => (await query<{ installed: boolean; used: boolean }>("select installed_at is not null as installed, used_at is not null as used from picks"))[0];
+
+  it("an accepted profile stamps the member's pick from its past ideas, at the job clock", async () => {
+    const code = await deliveredPick();
+    const id = await addProfile(profileText([{ idea_id: code, title: "Showing brief", status: "used this week (2 times)", uses_this_week: 2 }]));
+    expect(await processProfile(query, id, new Date("2026-11-28T20:01:00Z"))).toBe("accepted");
+    const [r] = await query<{ used_at: string }>("select used_at::text from picks");
+    expect(new Date(r.used_at).toISOString()).toBe("2026-11-28T20:01:00.000Z");
+  });
+
+  it("a malformed past_ideas is ignored and the profile is still accepted", async () => {
+    await deliveredPick();
+    for (const bad of ["not a list", { idea_id: "R-ABCD2345" }, 7, null]) {
+      const id = await addProfile(profileText(bad));
+      expect(await processProfile(query, id)).toBe("accepted");
+      await query("delete from zack_profiles");
+    }
+    expect(await pickStamps()).toEqual({ installed: false, used: false });
+  });
+
+  it("a failure while stamping is logged and never rejects the profile", async () => {
+    const code = await deliveredPick();
+    const id = await addProfile(profileText([{ idea_id: code, status: "used this week (1 time)" }]));
+    const failing: Query = async <T,>(text: string, params?: unknown[]) => {
+      if (/update picks k set/.test(text)) throw new Error("database hiccup");
+      return query<T>(text, params);
+    };
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await processProfile(failing, id)).toBe("accepted");
+    expect(err).toHaveBeenCalledWith("[intake] adoption not recorded", id, "database hiccup");
+    err.mockRestore();
+    expect(await query("select status from zack_profiles")).toEqual([{ status: "accepted" }]);
+    expect(await pickStamps()).toEqual({ installed: false, used: false });
+  });
+});

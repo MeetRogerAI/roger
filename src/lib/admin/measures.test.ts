@@ -215,10 +215,15 @@ describe("adoption against 2 of 3", () => {
     );
     return id;
   }
-  async function pick(userId: string, playId: string, position: number, o: { marked?: boolean; confirmed?: boolean; dryRun?: boolean; delivered?: boolean } = {}) {
+  async function pick(
+    userId: string,
+    playId: string,
+    position: number,
+    o: { marked?: boolean; confirmed?: boolean; dryRun?: boolean; delivered?: boolean; installed?: boolean; used?: boolean } = {},
+  ) {
     await query(
-      `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, delivered_at, setup_marked_at, setup_confirmed_at)
-       values ($1, '2026-12-07', $2, $3, 1, 1, 'r', $4, $5, $6, $7)`,
+      `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, delivered_at, setup_marked_at, setup_confirmed_at, installed_at, used_at)
+       values ($1, '2026-12-07', $2, $3, 1, 1, 'r', $4, $5, $6, $7, $8, $9)`,
       [
         userId,
         position,
@@ -227,35 +232,39 @@ describe("adoption against 2 of 3", () => {
         o.delivered === false ? null : "2026-12-07T12:05:00Z",
         o.marked ? "2026-12-08T12:00:00Z" : null,
         o.confirmed ? "2026-12-09T12:00:00Z" : null,
+        o.installed || o.used ? "2026-12-12T20:00:00Z" : null,
+        o.used ? "2026-12-12T20:00:00Z" : null,
       ],
     );
   }
 
-  it("9 ideas to 3 members adopted 3, 2 and 0: 5/9, and 2 of 3 members at the target", async () => {
+  it("9 ideas to 3 members adopted 3, 2 and 0: 5/9, and 2 of 3 members at the target; 3 installed and 2 used from the next profile", async () => {
     const p = await play();
     const m1 = await user("m1@example.com", { signup_finished_at: "2026-11-01T15:00:00Z" });
     const m2 = await user("m2@example.com", { signup_finished_at: "2026-11-01T15:00:00Z" });
     const m3 = await user("m3@example.com", { signup_finished_at: "2026-11-01T15:00:00Z" });
-    // m1: marked, marked, and confirmed with no mark (still adopted).
-    await pick(m1, p, 1, { marked: true });
-    await pick(m1, p, 2, { marked: true });
+    // m1: marked (and used, from the next profile), marked (installed only), and confirmed with no mark (still adopted).
+    await pick(m1, p, 1, { marked: true, used: true });
+    await pick(m1, p, 2, { marked: true, installed: true });
     await pick(m1, p, 3, { confirmed: true });
     // m2: marked, marked and confirmed, nothing.
     await pick(m2, p, 1, { marked: true });
     await pick(m2, p, 2, { marked: true, confirmed: true });
     await pick(m2, p, 3);
-    // m3: nothing adopted.
-    for (const pos of [1, 2, 3]) await pick(m3, p, pos);
+    // m3: nothing adopted. One idea used per the next profile, never marked: counted as used and installed, not adopted.
+    await pick(m3, p, 1, { used: true });
+    for (const pos of [2, 3]) await pick(m3, p, pos);
     // Left out: a dry-run pick, an undelivered pick and an admin's pick, all marked.
     const m4 = await user("m4@example.com", { signup_finished_at: "2026-11-01T15:00:00Z" });
-    await pick(m4, p, 1, { marked: true, dryRun: true });
-    await pick(m4, p, 2, { marked: true, delivered: false });
+    await pick(m4, p, 1, { marked: true, used: true, dryRun: true });
+    await pick(m4, p, 2, { marked: true, used: true, delivered: false });
     const admin = await user("Boss@Example.com", { signup_finished_at: "2026-11-01T15:00:00Z" });
-    await pick(admin, p, 1, { marked: true });
+    await pick(admin, p, 1, { marked: true, used: true });
 
     const m = await loadMeasures(query, { now: NOW, adminEmails: ["boss@example.com"] });
-    expect(week(m, "2026-12-07").adoption).toEqual({ sent: 9, marked: 4, confirmed: 2, adopted: 5, members: 3, membersAtTarget: 2 });
-    expect(week(m, "2026-11-30").adoption).toEqual({ sent: 0, marked: 0, confirmed: 0, adopted: 0, members: 0, membersAtTarget: 0 });
+    // Installed: m1 1 and 2, m3 1 (used implies installed) = 3. Used: m1 1, m3 1 = 2.
+    expect(week(m, "2026-12-07").adoption).toEqual({ sent: 9, marked: 4, confirmed: 2, adopted: 5, installed: 3, used: 2, members: 3, membersAtTarget: 2 });
+    expect(week(m, "2026-11-30").adoption).toEqual({ sent: 0, marked: 0, confirmed: 0, adopted: 0, installed: 0, used: 0, members: 0, membersAtTarget: 0 });
   });
 });
 

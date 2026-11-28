@@ -193,7 +193,7 @@ export default async function MeasuresPage() {
       </div>
 
       <div className="overflow-x-auto">
-        <table className={`${table} min-w-[48rem]`}>
+        <table className={`${table} min-w-[60rem]`}>
           <caption className={caption}>Ideas adopted out of ideas sent, by list week (target: 2 of 3)</caption>
           <thead>
             <tr className={headRow}>
@@ -208,6 +208,12 @@ export default async function MeasuresPage() {
               </th>
               <th scope="col" className={th}>
                 Confirmed
+              </th>
+              <th scope="col" className={th}>
+                Installed (next profile)
+              </th>
+              <th scope="col" className={th}>
+                Used (next profile)
               </th>
               <th scope="col" className={th}>
                 Against the target
@@ -232,6 +238,12 @@ export default async function MeasuresPage() {
                   <td className={td}>
                     {a.confirmed} ({pct(a.confirmed, a.sent)})
                   </td>
+                  <td className={td}>
+                    {a.installed} ({pct(a.installed, a.sent)})
+                  </td>
+                  <td className={td}>
+                    {a.used} ({pct(a.used, a.sent)})
+                  </td>
                   <td className={td}>{a.sent === 0 ? "No data" : a.adopted * TARGET_OF >= a.sent * TARGET_HIT ? "At or above target" : <span className="font-[600] text-error">Below target</span>}</td>
                   <td className={td}>{a.members === 0 ? "No data" : `${a.membersAtTarget} of ${a.members} (${pct(a.membersAtTarget, a.members)})`}</td>
                 </tr>
@@ -239,7 +251,7 @@ export default async function MeasuresPage() {
             })}
           </tbody>
         </table>
-        <p className="mt-2 text-small text-ink-2">An idea is adopted when the member marked it set up or Zack confirmed it. The target is 2 of 3 ideas adopted (67%).</p>
+        <p className="mt-2 text-small text-ink-2">An idea is adopted when the member marked it set up or Zack confirmed it. The target is 2 of 3 ideas adopted (67%). Installed and used come from the member’s next Zack profile, matched by the idea’s Roger idea ID or its title.</p>
       </div>
     </section>
   );

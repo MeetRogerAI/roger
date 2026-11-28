@@ -920,7 +920,7 @@ Tests: `src/lib/review/approve.test.ts` (56, 9 from the review fixes), `src/lib/
 
 Tests: `src/app/admin/review/page.test.tsx` (9), `src/lib/review/before-after.test.ts` (9), `src/lib/review/evidence-view.test.ts` (3), `src/components/admin/review-proposal.dom.test.tsx` (5). Not done here: the preview walk-through and the 375px check (needs a deploy).
 
-- [ ] **Unit 11: Cora change 15, adoption counts from the next profile**
+- [x] **Unit 11: Cora change 15, adoption counts from the next profile**
 
 **Goal:** The B.16 row "Cora adoption counts": an idea counts as adopted when the member's next profile shows it "used this week", with "installed" and "used" reported separately, feeding the adoption measure.
 
@@ -958,6 +958,17 @@ Tests: `src/app/admin/review/page.test.tsx` (9), `src/lib/review/before-after.te
 - Happy path: the measures' adoption row shows the installed and used counts for the week.
 
 **Verification:** Adoption counts appear on `/admin/measures`, and profile intake is unchanged otherwise.
+
+*Unit 11 as built (2026-11-27):* `src/lib/cora/adoption.ts` (`recordAdoption`, `readPastIdeas`, `matchPicks`, `statusLevel`, `normaliseTitle`, `IDEA_CODE`, `MAX_PAST_IDEAS` 50, `ADOPTION_WEEKS` 8), `src/lib/cora/idea-view.ts` (`ideaIdLine`, `PickSource.ideaCode`), `src/lib/app/week.ts` (reads `idea_code`), `src/lib/intake/process.ts` (`processProfile(q, id, now?)`), `src/lib/admin/measures.ts` and `src/app/admin/measures/page.tsx` (installed and used columns). Where the build adds to or differs from the text above:
+- **The ID is random per pick, not derived from the pool play id.** A new column `picks.idea_code` (`db/schema.sql`, default `roger_idea_code()`: `R-` and 8 base32 characters from `gen_random_uuid`; existing picks get one each when the column is added). So the same play sent to two members, or twice to one, has different codes; the code says nothing about the member or the play and can't be worked out from a play id. There is no `ideaCode(poolPlayId)` function. Codes need not be unique across members: matching only ever looks within the member's own picks.
+- **Where the line goes:** the copy has no title block, so the line is its own paragraph after the safety caution and before the install prompt: "Roger idea ID: R-XXXXXXXX. Keep this ID with the idea in your Roger Upgrade Notes." (wording sign-off section 14, pending). Only a delivered pick read through `weekIdeas` has it; the public sample and the dev card don't. The Monday email doesn't carry the copy, so it is unchanged.
+- **Which picks:** the profile's own member's delivered, non-dry-run picks with `week_of` from 8 weeks (56 days) before the profile's week up to it, delivered no later than the profile arrived. A test profile, or one not accepted, stamps nothing. An ID that matches none of them falls back to the title; titles match newest first.
+- **Statuses** are read negatives first ("installed, not used this week" contains "used this week"); anything unrecognised stamps nothing.
+- **Limits:** `past_ideas` must be an array; at most 50 entries are read; an entry that isn't an object, an ID that isn't `R-` and 8 base32 characters, and a title over 300 characters are ignored.
+- **Writes:** one read of the candidates, then one `update picks ... from jsonb_to_recordset` that only fills empty stamps (`coalesce`), so a resubmitted profile changes nothing. `adoption_seen_at` is the `received_at` of the profile that last set a stamp. A failure is logged (`[intake] adoption not recorded`) and the profile is still accepted.
+- **Retention:** account deletion removes the picks, and so the stamps and code, by the `picks.user_id` cascade (tested). Retention (`applyRetention`, `applyIdleRetention`) erases runs, profiles and feedback but keeps picks, as it always has for `setup_marked_at` and `setup_confirmed_at`, so the stamps stay with the picks. Flag for Peter: if stamps derived from an erased profile should go too, retention would need to clear them, and past weeks' installed and used counts would drop.
+
+Tests: `src/lib/cora/adoption.test.ts` (19), `src/lib/cora/idea-view.test.ts` (2 new: B1's copy pinned exactly, and the ID line changing nothing else), `src/lib/intake/process.test.ts` (3 new), `src/lib/admin/measures.test.ts` (the hand calculation gains installed 3 and used 2), `src/app/admin/measures/page.test.tsx` (the two new column headers).
 
 - [ ] **Unit 12: Cora change 11, upgrades (behind `v3.coraUpgradesOn`), the last code unit**
 

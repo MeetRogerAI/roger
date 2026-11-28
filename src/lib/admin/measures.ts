@@ -148,7 +148,10 @@ export const PAID_SQL = `with recursive ${GENERATION_SQL}, ${BASE_SQL}
  * Adoption per list week W (row 6). sent: members' picks with week_of = W,
  * delivered, not dry runs. Marked and confirmed as stamped; adopted is marked
  * or confirmed. members: members with at least one sent; membersAtTarget:
- * those whose adopted / sent is at least 2/3.
+ * those whose adopted / sent is at least 2/3. installed and used (Cora change
+ * 15, B3 Unit 11): picks a later profile showed installed (or used), and
+ * used, as stamped by recordAdoption (src/lib/cora/adoption.ts). Shown beside
+ * adopted; the headline stays marked or confirmed.
  */
 export const ADOPTION_SQL = `
   with w as (select wk from unnest($1::date[]) wk),
@@ -156,7 +159,9 @@ export const ADOPTION_SQL = `
     select p.week_of, p.user_id, count(*)::int as sent,
            count(*) filter (where p.setup_marked_at is not null)::int as marked,
            count(*) filter (where p.setup_confirmed_at is not null)::int as confirmed,
-           count(*) filter (where p.setup_marked_at is not null or p.setup_confirmed_at is not null)::int as adopted
+           count(*) filter (where p.setup_marked_at is not null or p.setup_confirmed_at is not null)::int as adopted,
+           count(*) filter (where p.installed_at is not null)::int as installed,
+           count(*) filter (where p.used_at is not null)::int as used
     from picks p join users u on u.id = p.user_id
     where p.week_of = any($1::date[]) and p.delivered_at is not null and not p.dry_run and lower(u.email) <> all($2::text[])
     group by p.week_of, p.user_id
@@ -164,6 +169,7 @@ export const ADOPTION_SQL = `
   select to_char(w.wk, 'YYYY-MM-DD') as week,
          coalesce(sum(per.sent), 0)::int as sent, coalesce(sum(per.marked), 0)::int as marked,
          coalesce(sum(per.confirmed), 0)::int as confirmed, coalesce(sum(per.adopted), 0)::int as adopted,
+         coalesce(sum(per.installed), 0)::int as installed, coalesce(sum(per.used), 0)::int as used,
          count(per.user_id)::int as members,
          count(per.user_id) filter (where per.adopted * 3 >= per.sent * 2)::int as "membersAtTarget"
   from w left join per on per.week_of = w.wk
@@ -172,7 +178,7 @@ export const ADOPTION_SQL = `
 
 export type Ratio = { num: number; den: number; value: number | null };
 export type Cycle = { n: number; median: number | null; mean: number | null };
-export type Adoption = { sent: number; marked: number; confirmed: number; adopted: number; members: number; membersAtTarget: number };
+export type Adoption = { sent: number; marked: number; confirmed: number; adopted: number; installed: number; used: number; members: number; membersAtTarget: number };
 export type MeasureWeek = {
   week: string;
   k: Ratio;
@@ -310,7 +316,7 @@ export async function loadMeasures(q: Query, o: MeasureOptions): Promise<Measure
       kByGen: BUCKETS.map((g) => ratio(kr?.num_g[g] ?? 0, kr?.den_g[g] ?? 0)),
       cycle,
       paid: ratio(pr?.num ?? 0, pr?.den ?? 0),
-      adoption: { sent: ar?.sent ?? 0, marked: ar?.marked ?? 0, confirmed: ar?.confirmed ?? 0, adopted: ar?.adopted ?? 0, members: ar?.members ?? 0, membersAtTarget: ar?.membersAtTarget ?? 0 },
+      adoption: { sent: ar?.sent ?? 0, marked: ar?.marked ?? 0, confirmed: ar?.confirmed ?? 0, adopted: ar?.adopted ?? 0, installed: ar?.installed ?? 0, used: ar?.used ?? 0, members: ar?.members ?? 0, membersAtTarget: ar?.membersAtTarget ?? 0 },
     };
   });
 

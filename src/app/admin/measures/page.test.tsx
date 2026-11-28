@@ -57,6 +57,9 @@ describe("/admin/measures", () => {
     expect(html).toContain("0.25 (1 of 4)");
     expect(html).toMatch(/<caption[^>]*>New members per member, by week<\/caption>/);
     expect(html).toMatch(/<caption[^>]*>Ideas adopted out of ideas sent, by list week \(target: 2 of 3\)<\/caption>/);
+    // Cora change 15 (B3 Unit 11): installed and used from the next profile, beside adopted.
+    expect(html).toMatch(/<th scope="col"[^>]*>Installed \(next profile\)<\/th>/);
+    expect(html).toMatch(/<th scope="col"[^>]*>Used \(next profile\)<\/th>/);
     expect(html).toContain('scope="col"');
     expect(html).toContain('scope="row"');
     // 26 weekly rows in each of the four tables.

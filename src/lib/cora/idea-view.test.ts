@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { v3Defaults } from "@/data/config";
-import { buildIdeaView, formatHours, PASTE_CAUTION, type PlaySource } from "./idea-view";
+import { buildIdeaView, formatHours, ideaIdLine, PASTE_CAUTION, type PlaySource } from "./idea-view";
 
 const fixture = JSON.parse(readFileSync(new URL("../../../db/seeds/sample-play.fixture.json", import.meta.url), "utf8"));
 
@@ -66,6 +66,25 @@ describe("buildIdeaView", () => {
     expect(parts[1]).toBe(PASTE_CAUTION);
     expect(v.copyText).toContain(play.pasteToInstall);
     expect(v.copyText).toContain(`PLAYBOOK\n\n${play.playbookMd.trim()}`);
+  });
+
+  // B1's copied text, pinned exactly (B3 Unit 11 adds only the ID line, and only on a pick with a code).
+  const b1Copy = [preface, PASTE_CAUTION, play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
+
+  it("keeps B1's copied text exactly for the public sample and a pick without a code", () => {
+    expect(buildIdeaView(play, preface).copyText).toBe(b1Copy);
+    expect(buildIdeaView(play, preface, { personalScore: 66, reason: "r" }).copyText).toBe(b1Copy);
+    expect(buildIdeaView(play, preface, { personalScore: 66, reason: "r", ideaCode: null }).copyText).toBe(b1Copy);
+  });
+
+  it("adds the Roger idea ID line after the caution on a delivered pick, and changes nothing else", () => {
+    const pickOnly = buildIdeaView(play, preface, { personalScore: 66, reason: "r" });
+    const v = buildIdeaView(play, preface, { personalScore: 66, reason: "r", ideaCode: "R-ABCD2345" });
+    expect(ideaIdLine("R-ABCD2345")).toBe("Roger idea ID: R-ABCD2345. Keep this ID with the idea in your Roger Upgrade Notes.");
+    expect(v.copyText).toBe([preface, PASTE_CAUTION, ideaIdLine("R-ABCD2345"), play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n"));
+    expect(v.copyText.startsWith(preface)).toBe(true);
+    // Everything the page and the email render, other than the copy, is as before.
+    expect({ ...v, copyText: "" }).toEqual({ ...pickOnly, copyText: "" });
   });
 
   it("says counted when the basis is Actual", () => {

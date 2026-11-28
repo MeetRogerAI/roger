@@ -656,8 +656,17 @@ How were this week’s ideas? Only you and the Roger team see this. We read ever
 This page couldn’t be logged, so it isn’t shown. Try again in a minute.
 ```
 
+**Member, the Roger idea ID line (B3 Unit 11, Cora change 15)** (`src/lib/cora/idea-view.ts`, `ideaIdLine`): added to what "Copy prompt and playbook" copies for each delivered idea, as its own paragraph after the safety caution and before the install prompt. The code is random per idea sent (for example `R-ABCD2345`); it carries nothing about the member. The public sample has no line. Nothing else on the card or in the Monday email changes.
+
+```
+Roger idea ID: R-ABCD2345. Keep this ID with the idea in your Roger Upgrade Notes.
+```
+
+**Admin, `/admin/measures`** (adoption table): two more columns, `Installed (next profile)` and `Used (next profile)`, each a count and a share of ideas sent; and the note under the table gains `Installed and used come from the member’s next Zack profile, matched by the idea’s Roger idea ID or its title.`
+
 **Flags for Peter:**
 
+- **The idea ID line** is pending sign-off. Is "Keep this ID with the idea in your Roger Upgrade Notes." clear enough for the member's agent, which keeps that file? And should the north star stay "marked or confirmed", with installed and used beside it (as built), or move to "used"?
 - **"Only you and the Roger team see this."** The review bot (B3 Unit 7) will also read notes, through the AI Gateway, as evidence for wording changes, and never copies them into a pull request. Is "the Roger team" fair for that, or should the line say "Only you and the Roger team see this, and our review tools read it to improve Zack and Cora."?
 - **Delete works with the switch off.** A member can always delete their own note, even while notes are switched off (the save is refused). Right?
 - **A reply is filed under the week it came in** (the Monday of the date entered), as the list it's most likely about.

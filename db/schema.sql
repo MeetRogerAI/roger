@@ -1229,6 +1229,15 @@ update leads set first_seen_at = created_at where first_seen_at > created_at;
 alter table picks add column if not exists installed_at timestamptz;
 alter table picks add column if not exists used_at timestamptz;
 alter table picks add column if not exists adoption_seen_at timestamptz;
+-- picks.idea_code (B3 Unit 11): the "Roger idea ID" in each delivered idea's
+-- copied text, which the member's agent notes and Zack's next profile reports
+-- back (past_ideas[].idea_id). Random per pick ("R-" and 8 base32 characters,
+-- from gen_random_uuid), so it says nothing about the member or the play and
+-- can't be guessed. Matching only ever looks within the member's own picks,
+-- so codes need not be unique across members. Existing picks get one each
+-- when the column is added (a volatile default is evaluated per row).
+create or replace function roger_idea_code() returns text language sql volatile as $$ select 'R-' || string_agg(substr('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', get_byte(x.b, i) % 32 + 1, 1), '' order by i) from (select decode(md5(gen_random_uuid()::text), 'hex') as b) x, generate_series(0, 7) i $$;
+alter table picks add column if not exists idea_code text not null default roger_idea_code();
 -- picks (B3 Unit 12, Cora change 11): an upgrade to something the member
 -- already runs, and its What's better line. Unused while v3.coraUpgradesOn is off.
 alter table picks add column if not exists kind text not null default 'new' check (kind in ('new', 'upgrade'));

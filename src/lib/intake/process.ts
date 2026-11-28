@@ -1,4 +1,5 @@
 import { isModelUnavailable, rethrowIfUnavailable } from "@/lib/ai/errors";
+import { recordAdoption } from "@/lib/cora/adoption";
 import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { runNeedsALookEmail } from "@/lib/mail/templates/run-needs-a-look";
@@ -307,8 +308,14 @@ async function giveUpIfLast(q: Query, run: RunRow & { attempts: number }): Promi
   return run.attempts >= MAX_ATTEMPTS ? flagWhole(q, run, REASON.unreadable) : "retry";
 }
 
-/** The private profile: parsed for matching only, never shared. */
-export async function processProfile(q: Query, id: string): Promise<Outcome> {
+/**
+ * The private profile: parsed for matching only, never shared. Once accepted,
+ * its past ideas stamp the member's own picks installed or used (Cora change
+ * 15, `recordAdoption`, at the job clock `now`). That step never fails the
+ * profile: an error is logged, and the next profile, which lists the same
+ * ideas again, stamps them then.
+ */
+export async function processProfile(q: Query, id: string, now: Date = new Date()): Promise<Outcome> {
   const [p] = await q<{ raw_text: string; revision: number }>(`select raw_text, revision from zack_profiles where id = $1 and status = 'received'`, [id]);
   if (!p) return "skipped";
   const parsed = parseProfileBlock(p.raw_text);
@@ -317,6 +324,9 @@ export async function processProfile(q: Query, id: string): Promise<Outcome> {
     `update zack_profiles set status = $3, parsed = $4, reason = $5, processed_at = now() where id = $1 and revision = $2 and status = 'received' returning id`,
     [id, p.revision, status, parsed ? JSON.stringify(parsed) : null, parsed ? "" : "The profile had no readable roger-profile block."],
   );
+  if (rows.length && status === "accepted") {
+    await recordAdoption(q, id, now).catch((e) => console.error("[intake] adoption not recorded", id, e instanceof Error ? e.message : e));
+  }
   return rows.length ? status : "skipped";
 }
 
