@@ -5,7 +5,7 @@ import { amountChangedEmail, chargeFailedEmail, subscribedEmail, trialClosedEmai
 import { backToPerRunEmail } from "@/lib/mail/templates/plan-changed";
 import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
-import { carriedDifferenceCents, carriedReasons, clearCarried, firstLineLabel, type OweReason } from "./adjustment";
+import { carriedDifferenceCents, clearCarried } from "./adjustment";
 import { claimCharge, claimedPrice, closeTrialAt, idempotencyKey, nextAttempt, nextRetryAt, settle, stillChargeable, type Claim } from "./claims";
 import { firstChargePricing, type Currency } from "./prices";
 import { isCouponGone } from "./gateway";
@@ -129,15 +129,7 @@ async function alert(kind: string, ref: string, subject: string, lines: string[]
   await alertAdmins(kind, ref, adminAlert(subject, lines), d).catch(() => {});
 }
 
-/**
- * The first invoice's higher-rate item for `extraCents`, named for why it is owed (S18 point c): not sharing at the
- * cutoff, and the reasons of any difference carried to this charge. The quote, the charge and a takeover name it alike.
- */
-export async function firstExtra(q: Query, userId: string, sharing: string, extraCents: number, currency: string): Promise<FirstExtra> {
-  if (extraCents <= 0) return null;
-  const reasons: OweReason[] = [...(sharing === "share" ? [] : (["not_sharing"] as OweReason[])), ...(await carriedReasons(q, userId))];
-  return { amountCents: extraCents, currency, description: firstLineLabel(reasons) };
-}
+const extraOf = (cents: number, currency: string): FirstExtra => (cents > 0 ? { amountCents: cents, currency } : null);
 
 export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week: string, o: { reset?: boolean } = {}): Promise<FirstOutcome> {
   const u = await loadUser(q, userId);
@@ -153,18 +145,14 @@ export async function chargeFirst(q: Query, d: ChargeDeps, userId: string, week:
   }
   const currency = u.currency ?? "USD";
   // The standard price; not sharing at the cutoff adds the month's difference to the first invoice (the contributor rule).
-  const sharing = await sharingAtCutoff(q, userId, week, d.settings);
-  const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw, await carriedDifferenceCents(q, userId));
-  const extra = await firstExtra(q, userId, sharing, extraCents, currency);
+  const { price, extraCents } = await firstChargePricing(d.settings, currency, await sharingAtCutoff(q, userId, week, d.settings), d.gw, await carriedDifferenceCents(q, userId));
+  const extra = extraOf(extraCents, currency);
   if (!price) {
     await alert("charge_setup", `price:${currency}`, "A Stripe price is missing", [`No price id for monthly ${currency}. Set the STRIPE_PRICE_* variables.`], d);
     return "error";
   }
   const attempt = await nextAttempt(q, { userId, purpose: "first_charge", weekOf: week, reset: o.reset });
   if (attempt == null) return "open";
-  // No first charge claim is open: a higher-rate item still pending is left by one that did not go through. Stripe's
-  // preview (and the subscription's first invoice) would pick it up, so it goes before anything is previewed.
-  await d.gw.clearFirstExtras?.(u.stripe_customer);
 
   // The amount must be the one the user was told (spec check 21), checked before anything is claimed. The told
   // quote and this preview carry the same locked-in coupon; one Stripe no longer applies is dropped here. A quote
@@ -409,7 +397,7 @@ export async function takeOverFirstCharge(q: Query, d: ChargeDeps, claim: Claim)
   if (!(await stillChargeable(q, claim.id))) return applyResult(q, d, u, claim, { kind: "error", error: "The user can no longer be charged (cancelled, closed or switched)." });
   const { price, extraCents, currency, coupon } = await claimedPrice(q, claim.id);
   if (!price) return applyResult(q, d, u, claim, { kind: "error", error: "The claim has no recorded price." });
-  const extra = await firstExtra(q, u.id, await sharingAtCutoff(q, u.id, claim.weekOf, d.settings), extraCents, currency ?? u.currency ?? "USD");
+  const extra = extraOf(extraCents, currency ?? u.currency ?? "USD");
   // Exactly the claimed call, coupon included (Stripe refuses a reused key with other parameters). The member was told
   // the amount with that coupon, so it is sent even if the member's own coupon was changed or dropped since.
   if ((u.promo_coupon ?? null) !== coupon) console.warn("[charge] takeover repeats the claimed coupon", { claimId: claim.id, coupon, current: u.promo_coupon });

@@ -62,21 +62,8 @@ export function dropReasonFor(u: RuleUser): DropReason | "wait" | null {
   return null;
 }
 
-const reasonWords = (reason: OweReason) => (reason === "not_sharing" ? "Zack not sharing" : "two missed weeks");
-
 /** The invoice line (spec B.9 notice 6). */
-export const lineLabel = (period: string, reason: OweReason) => `Higher-rate adjustment for ${period}: ${reasonWords(reason)}`;
-
-/**
- * The first invoice's higher-rate line (S18 point c, Peter 2026-11-27): named
- * for why it is owed, as later invoices' adjustment lines are, never after the
- * plan's product: "Higher monthly rate: Zack not sharing", or "...: two missed
- * weeks" for a carried difference owed for misses. Both reasons, when both apply.
- */
-export const firstLineLabel = (reasons: OweReason[]) => {
-  const words = [...new Set((reasons.length ? reasons : (["not_sharing"] as OweReason[])).map(reasonWords))];
-  return `Higher monthly rate: ${words.join(" and ")}`;
-};
+export const lineLabel = (period: string, reason: OweReason) => `Higher-rate adjustment for ${period}: ${reason === "not_sharing" ? "Zack not sharing" : "two missed weeks"}`;
 
 /**
  * Notice 4 (two misses) or the not-sharing notice, with the invoice the
@@ -256,15 +243,6 @@ export async function carryToFirstCharge(q: Query, userId: string, now: Date): P
 /** No longer going to a first charge (back to one at a time, or cancelled): nothing is carried. */
 export async function clearCarried(q: Query, userId: string): Promise<void> {
   await q(`update pending_adjustments set carried_at = null where user_id = $1 and status = 'deleted' and carried_at is not null`, [userId]);
-}
-
-/** Why the differences carried to this member's first charge are owed. */
-export async function carriedReasons(q: Query, userId: string): Promise<OweReason[]> {
-  const rows = await q<{ reason: OweReason }>(
-    `select distinct reason from pending_adjustments where user_id = $1 and status = 'deleted' and carried_at is not null and reason is not null order by reason`,
-    [userId],
-  );
-  return rows.map((r) => r.reason);
 }
 
 /** The differences carried to this member's first charge, in cents. */
