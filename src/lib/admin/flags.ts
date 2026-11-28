@@ -1,4 +1,5 @@
 import type { Query } from "@/lib/db-query";
+import { harmFlags, replacePatterns } from "@/lib/intake/privacy-patterns";
 import type { AutoFixed, FixAction } from "@/lib/intake/auto-admit";
 import { logAdminAction } from "./log";
 import type { Done } from "./users";
@@ -116,32 +117,59 @@ export async function flaggedRunsWithoutPlays(q: Query): Promise<{ id: string; w
 /** shareable from the run and the member, never from the flag. */
 const SHAREABLE_SQL = `(r.sharing = 'share' and not r.is_test and (r.contributor_id is not null or u.sharing = 'share'))`;
 
+/** A run is settled (marked accepted) once it has plays and none has an open flag. `$1` is one run's id, or null for every run. */
+const SETTLE_SQL = `update runs r set status = 'accepted' where ($1::uuid is null or r.id = $1) and r.status = 'flagged'
+       and exists (select 1 from plays p where p.run_id = r.id) and not exists (select 1 from plays p where p.run_id = r.id and ${OPEN_FLAG})
+     returning r.id`;
+
 /** Marks a run accepted once none of its plays has an open flag. */
 async function settleRun(q: Query, runId: string): Promise<void> {
-  await q(
-    `update runs r set status = 'accepted' where r.id = $1 and r.status = 'flagged'
-       and exists (select 1 from plays p where p.run_id = r.id) and not exists (select 1 from plays p where p.run_id = r.id and ${OPEN_FLAG})`,
-    [runId],
-  );
+  await q(SETTLE_SQL, [runId]);
+}
+
+/**
+ * Settles every flagged run with no open flag left; how many. Safe to run at
+ * any time. The backfill ends with it, so a run whose last held play was
+ * written just before a crash is not left flagged (2026-11-28 review F10).
+ */
+export async function settleRuns(q: Query): Promise<number> {
+  return (await q(SETTLE_SQL, [null])).length;
 }
 
 /**
  * Replaces an admitted play's text fields (only the editable ones, trimmed).
- * A play in the pool takes the new text at the next Cora run, which rebuilds
+ * The text is checked like a member's (2026-11-28 review F8): any harm (a
+ * link, a step that sends data out, ...) refuses the edit, and the contact
+ * patterns (emails, phone numbers, addresses) are replaced. New steps are the
+ * admin's own, so the play is no longer marked drafted or outline only. A
+ * play in the pool takes the new text at the next Cora run, which rebuilds
  * each pool play from its plays. A dropped play cannot be edited.
  */
 export async function editPlay(q: Query, by: string, playId: string, fields: Record<string, string>): Promise<Done> {
   const edits: Record<string, string> = {};
   for (const k of EDITABLE_FIELDS) if (typeof fields[k] === "string") edits[k] = fields[k].replace(/\r\n/g, "\n").trim();
   if (!edits.title) return { ok: false, message: "The title can’t be empty." };
+  const harm = [...new Set(Object.values(edits).flatMap(harmFlags))];
+  if (harm.length) return { ok: false, message: `Not saved: the text ${harm.join(", ")}. Other members’ agents run this text, so take that out first.` };
+  let replaced = 0;
+  for (const k of Object.keys(edits)) {
+    const r = replacePatterns(edits[k]);
+    edits[k] = r.text;
+    replaced += r.findings.length;
+  }
   const rows = await q<{ user_id: string | null }>(
-    `update plays p set body = p.body || $2::jsonb, title = $2::jsonb->>'title', cleared_by = $3
+    `update plays p set
+       body = case when $2::jsonb ? 'playbook_md' and (p.body->>'playbook_md') is distinct from ($2::jsonb->>'playbook_md')
+                then p.body || $2::jsonb || '{"playbook_drafted": false, "outline_only": false}'::jsonb
+                else p.body || $2::jsonb end,
+       title = $2::jsonb->>'title', cleared_by = $3
      where p.id = $1 and p.flag is null returning p.user_id`,
     [playId, JSON.stringify(edits), by],
   );
   if (!rows.length) return { ok: false, message: "That play can’t be edited: it was dropped, or it is gone." };
   await logAdminAction(q, { by, userId: rows[0].user_id, action: "play_edited", detail: { playId, fields: Object.keys(edits) } });
-  return { ok: true, message: "Saved. A play in the pool shows the new text after the next Cora run." };
+  const note = replaced ? " Contact details were replaced with placeholders." : "";
+  return { ok: true, message: `Saved.${note} A play in the pool shows the new text after the next Cora run.` };
 }
 
 /**
@@ -150,8 +178,13 @@ export async function editPlay(q: Query, by: string, playId: string, fields: Rec
  * every play it scores: Cora never loads, scores, picks or reactivates a
  * removed play, and a new play that merges into it stays out with it
  * (src/lib/cora/context.ts loadPool, job.ts, merge.ts). It stops being the
- * public sample. Lists already picked keep it; nothing is recalled.
+ * public sample. A pick of it not yet delivered is skipped when its list goes
+ * out (the Monday send, a held list unlocked by a card), and a delivered one
+ * shows "withdrawn" in the app instead of its steps (2026-11-28 review F4).
+ * Emails already sent cannot be recalled.
  */
+const REMOVE_EFFECT = "Cora won’t pick it again, and lists not yet delivered skip it; emails already sent can’t be recalled.";
+
 export async function removeFromPool(q: Query, by: string, poolPlayId: string): Promise<Done> {
   const rows = await q<{ title: string }>(
     `update pool_plays set removed_at = now(), removed_by = $2, active = false, score = null, is_public_sample = false
@@ -164,7 +197,7 @@ export async function removeFromPool(q: Query, by: string, poolPlayId: string): 
   }
   const { title } = rows[0];
   await logAdminAction(q, { by, action: "remove_pool_play", detail: { poolPlayId, title } });
-  return { ok: true, message: `Removed “${title}” from the pool. Cora won’t pick it again; lists already picked keep it.` };
+  return { ok: true, message: `Removed “${title}” from the pool. ${REMOVE_EFFECT}` };
 }
 
 /**
@@ -184,12 +217,17 @@ export async function admitHeld(q: Query, playId: string, revision: number, fix:
   return rows.length > 0;
 }
 
-/** Drops a play held before auto-admit for harm: rejected and auto, never in the pool. True when it was dropped. */
-export async function dropHeld(q: Query, playId: string, revision: number): Promise<boolean> {
+/**
+ * Drops a play held before auto-admit for harm: rejected and auto, never in
+ * the pool. `reasons` are added to the flag's own for the log (no reason
+ * stored, or a privacy outline's title that holds a name). True when it was dropped.
+ */
+export async function dropHeld(q: Query, playId: string, revision: number, reasons: string[] = []): Promise<boolean> {
   const rows = await q<{ run_id: string }>(
-    `update plays p set flag = p.flag || jsonb_build_object('rejected', true, 'auto', true), cleared_by = $3, shareable = false
+    `update plays p set flag = p.flag || jsonb_build_object('rejected', true, 'auto', true, 'reasons', coalesce(p.flag->'reasons', '[]'::jsonb) || $4::jsonb),
+       cleared_by = $3, shareable = false
      where p.id = $1 and p.revision = $2 and ${OPEN_FLAG} returning p.run_id`,
-    [playId, revision, AUTO_BY],
+    [playId, revision, AUTO_BY, JSON.stringify(reasons)],
   );
   if (rows.length) await settleRun(q, rows[0].run_id);
   return rows.length > 0;

@@ -27,14 +27,18 @@ export const HELD_WEEK_SQL = `(cw.user_id = u.id and w.week_of = cw.week_of
   and not w.dry_run and w.status in ('ready', 'sent')
   and ${NO_CARD_TRIAL_SQL("u")})`;
 
-/** The titles of one held week, in order; empty when the week is not held for this user. Titles only. */
+/**
+ * The titles of one held week, in order; empty when the week is not held for
+ * this user. Titles only. A play removed from the pool is left out: it will
+ * not be delivered when the card is saved (deliver.ts PICK_NOT_REMOVED_SQL).
+ */
 export async function heldTitles(q: Query, userId: string, week: string): Promise<string[]> {
   if (!isRealDate(week)) return [];
   const rows = await q<{ title: string }>(
     `select pp.title
      from cora_user_weeks cw join users u on u.id = cw.user_id join cora_weeks w on w.week_of = cw.week_of
        join picks k on k.user_id = cw.user_id and k.week_of = cw.week_of and not k.dry_run and k.delivered_at is null
-       join pool_plays pp on pp.id = k.pool_play_id
+       join pool_plays pp on pp.id = k.pool_play_id and pp.removed_at is null
      where cw.user_id = $1 and cw.week_of = $2::date and ${HELD_WEEK_SQL}
      order by k.position`,
     [userId, week],

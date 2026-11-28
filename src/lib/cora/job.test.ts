@@ -339,7 +339,7 @@ describe("a play an admin removed from the pool (2026-11-28)", () => {
   const NEXT_ONE_AM = new Date("2026-12-07T06:05:00Z");
   const idOf = async (title: string) => (await query<{ id: string }>("select id from pool_plays where title = $1", [title]))[0].id;
 
-  it("is never loaded, scored or picked again, even when a new play with its job joins it; lists already picked keep it", async () => {
+  it("is never loaded, scored or picked again, even when a new play with its job joins it; picks already made stay on record", async () => {
     await runCoraJob(query, deps(), { now: ONE_AM, settings: live });
     const gone = await idOf("Calendar prep");
     const picked = await query("select user_id, week_of::text from picks where pool_play_id = $1 order by user_id", [gone]);
@@ -373,5 +373,68 @@ describe("a play an admin removed from the pool (2026-11-28)", () => {
     expect(await query("select active, score from pool_plays where title = 'Calendar prep'")).toEqual([{ active: false, score: null }]);
     expect(await query("select 1 from picks where pool_play_id = $1", [await idOf("Calendar prep")])).toEqual([]);
     expect(await query("select 1 from picks")).not.toHaveLength(0);
+  });
+
+  it("is never picked once removed while the week is being picked: the user it was meant for gets the rest, and later users never see it (review F4)", async () => {
+    let gone: string | null = null;
+    // The first user's fit call removes one of the plays the scores offered, after the scores were read.
+    const racing: FitModel = {
+      fit: async (u, cands) => {
+        if (!gone) {
+          gone = cands[0].id;
+          await removeFromPool(query, "admin@example.com", gone);
+        }
+        return fit.fit(u, cands);
+      },
+    };
+    expect(await runCoraJob(query, deps({ fit: racing }), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    expect(gone).not.toBeNull();
+    expect(await query("select 1 from picks where pool_play_id = $1", [gone])).toEqual([]);
+    for (const u of [a, b, c]) {
+      const [w] = await query<{ outcome: string; picked_count: number }>("select outcome, picked_count from cora_user_weeks where user_id = $1", [u]);
+      expect(w.picked_count).toBe((await picksOf(u)).length);
+      expect(w.outcome).toBe(w.picked_count === 3 ? "picked" : w.picked_count ? "short" : "none");
+    }
+    expect(await query("select 1 from picks")).not.toHaveLength(0);
+  });
+});
+
+describe("a play Roger drafted (2026-11-27) through the job", () => {
+  it("is loaded, scored and stored as drafted, picked by the drafted score, and loses the mark once a member's own playbook joins it", async () => {
+    const { processPending } = await import("@/lib/intake/process");
+    const { DRAFTED_PENALTY, networkScore, personalScore } = await import("./score");
+    const { loadPool } = await import("./context");
+    await processPending(query, { model: intake, query, transport });
+    // As if intake had drafted A's inbox play.
+    await query(`update plays set body = body || '{"playbook_drafted": true, "playbook_md": "Drafted steps."}' where title = 'Inbox triage'`);
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+
+    type Row = { id: string; title: string; playbook_drafted: boolean; playbook_md: string; score: number; f_hours: number; f_reach: number; f_ease: number; f_proof: number; f_surprise: number };
+    const row = async () =>
+      (
+        await query<Row>(
+          "select pp.id, pp.title, pp.playbook_drafted, pp.playbook_md, pp.score, pp.f_hours, pp.f_reach, pp.f_ease, pp.f_proof, pp.f_surprise from pool_plays pp join plays p on p.pool_play_id = pp.id where p.title = 'Inbox triage'",
+        )
+      )[0];
+    const f = (r: Row) => ({ hours: r.f_hours, reach: r.f_reach, ease: r.f_ease, proof: r.f_proof, surprise: r.f_surprise });
+    // C's "Inbox sorter" joined it with C's own playbook, which wins, so the pool play is not drafted.
+    let r = await row();
+    expect(r).toMatchObject({ playbook_drafted: false, playbook_md: "1. Do the thing.\n2. Check it." });
+    expect(r.score).toBe(Math.round(networkScore(f(r), false)));
+
+    // Without C's play, only the drafted one is left: the next run rebuilds the pool play as drafted and scores it lower.
+    await query("update plays set pool_play_id = null, merged_at = now() where title = 'Inbox sorter'");
+    await query("update cora_weeks set status = 'running', phase = 'merged'");
+    await query("delete from picks");
+    await query("delete from cora_user_weeks");
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    r = await row();
+    expect(r).toMatchObject({ playbook_drafted: true, playbook_md: "Drafted steps." });
+    expect((await loadPool(query, WEEK)).rows.find((p) => p.id === r.id)?.playbook_drafted).toBe(true);
+    expect(r.score).toBe(Math.round(networkScore(f(r), true)));
+    expect(networkScore(f(r), true)).toBe(networkScore(f(r), false) - DRAFTED_PENALTY);
+    // Picking reads the stored scores with the same penalty: B (who has only three plays to choose from) picks it at the drafted score.
+    const [pick] = await query<{ personal_score: number; fit: number }>("select personal_score, fit from picks where pool_play_id = $1 and user_id = $2", [r.id, b]);
+    expect(pick.personal_score).toBe(Math.round(personalScore(networkScore(f(r), true), pick.fit)));
   });
 });

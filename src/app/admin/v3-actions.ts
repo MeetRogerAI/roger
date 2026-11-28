@@ -220,7 +220,7 @@ export async function flagAction(_p: V3State, fd: FormData): Promise<V3State> {
   return state(r);
 }
 
-/** Takes a pool play out for good (2026-11-28): Cora never picks it again; lists already picked keep it. It stops being the public sample. */
+/** Takes a pool play out for good (2026-11-28): Cora never picks it again, undelivered lists skip it, and it stops being the public sample. */
 export async function removePoolPlayAction(_p: V3State, fd: FormData): Promise<V3State> {
   const by = await requireAdmin();
   const poolPlayId = idOf(fd, "poolPlayId");

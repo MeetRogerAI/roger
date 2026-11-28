@@ -213,6 +213,15 @@ describe("a Roger-drafted playbook (2026-11-27)", () => {
     expect(bestContent([drafted, own])).toMatchObject({ playbook_md: "1. Short.", playbook_drafted: false });
     expect(bestContent([drafted])).toMatchObject({ playbook_drafted: true });
   });
+
+  it("never lets an outline take the place of real steps, a member's own or drafted (review F5)", () => {
+    const outline = { title: "Outline", description: "", playbook_md: "Outline only: a very long note that is longer than any of the real playbooks here.", confidence: "High", basis: "Actual", outline_only: true };
+    const drafted = { title: "Drafted", playbook_md: "Drafted steps.", confidence: "Low", playbook_drafted: true };
+    const own = { title: "Own", playbook_md: "1. Own step.", confidence: "Low" };
+    expect(bestContent([outline, drafted, own])).toMatchObject({ playbook_md: "1. Own step.", playbook_drafted: false });
+    expect(bestContent([outline, drafted])).toMatchObject({ playbook_md: "Drafted steps.", playbook_drafted: true });
+    expect(bestContent([outline])).toMatchObject({ playbook_md: outline.playbook_md, playbook_drafted: false });
+  });
 });
 
 /** One decile step of Ease, in network-score points (the smallest factor). */

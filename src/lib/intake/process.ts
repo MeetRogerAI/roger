@@ -10,9 +10,11 @@ import {
   modelHarmReason,
   NAME_PLACEHOLDER,
   nameReason,
+  privacyOutline,
   QUALITY_REASON,
   replaceName,
   SENSITIVE_REASON,
+  TITLE_NAME_REASON,
   toOutline,
   type AutoFixed,
   type DroppedFlag,
@@ -133,27 +135,46 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
     a.job = a.job.replace(phrasePattern(n.text), NAME_PLACEHOLDER[n.kind as keyof typeof NAME_PLACEHOLDER]);
   }
 
-  // 4. Auto-admit (2026-11-27): harm is dropped; an outline replaces what cannot be made safe; a missing playbook is drafted.
-  for (const p of plays) {
+  // 4. Auto-admit (2026-11-27): harm is dropped; a privacy outline replaces what cannot be made private; a missing playbook is drafted.
+  const names = findings.filter((f) => f.kind !== "harm" && f.text.trim());
+  // Every draft at once, so a run with several stays inside the arrival route's time limit (2026-11-28 review F7).
+  const drafts = await Promise.all(
+    plays.map((p) =>
+      p.harm.size || p.outline.size || !p.quality
+        ? null
+        : draftPlaybook(
+            deps.model,
+            { title: p.play.title, description: p.play.description, job: p.play.job, install_notes: p.play.install_notes },
+            run.raw_text,
+            run.never_words ?? [],
+            names,
+          ),
+    ),
+  );
+  // A model error while drafting may pass: try the run again, as for a failed review; only the last try keeps an outline (F6).
+  if (drafts.some((d) => d?.kind === "error") && run.attempts < MAX_ATTEMPTS) return "retry";
+  for (const [i, p] of plays.entries()) {
     if (p.harm.size) continue;
     if (p.outline.size) {
-      p.play = toOutline(p.play, [...p.outline].every((r) => r === SENSITIVE_REASON));
+      // Title and category only; a title that still holds a name found in the run drops the play (2026-11-28 review F1).
+      const o = privacyOutline(p.play, names);
+      p.play = o.play;
+      if (o.titleHoldsName) {
+        p.harm.add(TITLE_NAME_REASON);
+        p.harmFields.add("title");
+        continue;
+      }
       p.actions.add("outline_only");
       continue;
     }
-    if (!p.quality) continue;
-    const drafted = await draftPlaybook(
-      deps.model,
-      { title: p.play.title, description: p.play.description, job: p.play.job, install_notes: p.play.install_notes },
-      run.raw_text,
-      run.never_words ?? [],
-    );
-    if (drafted) {
-      p.play = { ...p.play, playbook_md: drafted };
+    const d = drafts[i];
+    if (!d) continue;
+    if (d.kind === "drafted") {
+      p.play = { ...p.play, playbook_md: d.text };
       p.drafted = true;
       p.actions.add("drafted");
     } else {
-      p.play = toOutline(p.play, false);
+      p.play = toOutline(p.play);
       p.actions.add("outline_only");
       p.reasons.add(DRAFT_FAILED_REASON);
     }
@@ -197,7 +218,7 @@ type Cleaned = {
   harmFields: Set<string>;
   /** The playbook could not be found: draft it. */
   quality: boolean;
-  /** Reasons to keep it as an outline: sensitive, or a name that could not be placed or replaced. */
+  /** Reasons to keep it as a privacy outline (title only): sensitive, or a name that could not be placed. */
   outline: Set<string>;
   /** Every hold reason that was fixed, for the log. */
   reasons: Set<string>;
@@ -265,9 +286,9 @@ function cleanPlay(play: Play, id: string, neverWords: string[], parsedBy: "bloc
  * Names and harm from the model review. Every name is replaced in every play,
  * longest first, in any capitalisation: a clear one silently, an unclear one
  * recorded as redacted (2026-11-27: replaced rather than held). A name that
- * replaces nothing, or has no text, makes its play an outline (every play,
- * when the finding names a play that does not exist). Harm drops its play
- * (every play, when it cannot be placed). Fails closed.
+ * replaces nothing, or has no text, makes its play a privacy outline (every
+ * play, when the finding names a play that does not exist). Harm drops its
+ * play (every play, when it cannot be placed). Fails closed.
  */
 function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns: () => void) {
   const known = (id: string) => plays.find((p) => p.id === id);

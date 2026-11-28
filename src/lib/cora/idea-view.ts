@@ -40,6 +40,12 @@ export type IdeaView = {
   howWorkedOut: string | null;
   /** What "Copy prompt and playbook" puts on the clipboard. */
   copyText: string;
+  /**
+   * An admin removed it from the pool after it was delivered (2026-11-28
+   * review F4): the card shows WITHDRAWN_NOTICE instead of its install text,
+   * playbook and copy button, which are all empty.
+   */
+  withdrawn: boolean;
 };
 
 export type PlaySource = {
@@ -54,9 +60,14 @@ export type PlaySource = {
   figures: Record<string, unknown>;
   scores: Partial<Record<FactorKey, number | null>>;
   score: number | null;
+  /** Its pool play was removed from the pool. */
+  withdrawn?: boolean;
 };
 
 export type PickSource = { personalScore: number; reason: string };
+
+/** What a delivered idea shows once its pool play is removed from the pool. */
+export const WITHDRAWN_NOTICE = "This idea was withdrawn by Roger.";
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -112,8 +123,10 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
 
   // The preface stays first, word for word (spec check 15). The safeguard preamble opens the paste-to-install text, and
   // replaces the older one-line caution (plan, "A playbook is also untrusted when another user pastes it"; 2026-11-27).
-  const pasteToInstall = withSafeguard(play.pasteToInstall);
-  const copyText = [preface.trim(), pasteToInstall, `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
+  // A withdrawn idea (removed from the pool after delivery) keeps nothing that could be pasted or run.
+  const withdrawn = play.withdrawn === true;
+  const pasteToInstall = withdrawn ? "" : withSafeguard(play.pasteToInstall);
+  const copyText = withdrawn ? "" : [preface.trim(), pasteToInstall, `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
 
   return {
     id: play.id,
@@ -126,9 +139,10 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
     tiles,
     scores: factors.map((x) => ({ ...x, value: num(play.scores[x.key]) })),
     pasteToInstall,
-    playbookMd: play.playbookMd,
+    playbookMd: withdrawn ? "" : play.playbookMd,
     writtenOn: play.writtenOn ? agentName(play.writtenOn) : "",
-    howWorkedOut: str(f.math),
+    howWorkedOut: withdrawn ? null : str(f.math),
     copyText,
+    withdrawn,
   };
 }

@@ -64,6 +64,57 @@ function overlap(a: string, b: string): number {
   return n;
 }
 
+/**
+ * Words in common (of four letters or more, title and job) at which a play
+ * whose merge decision kept failing goes into a removed pool play rather than
+ * a new one (2026-11-28 review F3). Low on purpose: a wrong match only keeps a
+ * play out of the pool, a missed one brings a removed play back.
+ */
+export const REMOVED_OVERLAP = 2;
+
+/** A title or job compared as words: no case, accents or punctuation. */
+const normal = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+/** A pool play an admin removed, with every title, job and contributor that has gone into it. */
+type Removed = { id: string; titles: string[]; jobs: { contributor: string; job: string }[] };
+
+async function removedPool(q: Query): Promise<Removed[]> {
+  const rows = await q<{ id: string; title: string; job: string; plays: { title: string; job: string; contributor: string }[] | null; contributors: string[] | null }>(
+    `select pp.id, pp.title, pp.job,
+            (select jsonb_agg(jsonb_build_object('title', p.title, 'job', coalesce(p.body->>'job', ''),
+                     'contributor', coalesce(p.user_id::text, 'seed:' || p.contributor_id::text)))
+             from plays p where p.pool_play_id = pp.id) as plays,
+            (select array_agg(c.contributor) from pool_play_contributors c where c.pool_play_id = pp.id) as contributors
+     from pool_plays pp where pp.removed_at is not null order by pp.id`,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    titles: [r.title, ...(r.plays ?? []).map((p) => p.title)].map(normal).filter(Boolean),
+    jobs: [...(r.contributors ?? []).map((c) => ({ contributor: c, job: r.job })), ...(r.plays ?? []).map((p) => ({ contributor: p.contributor, job: p.job }))]
+      .map((j) => ({ contributor: j.contributor, job: normal(j.job) }))
+      .filter((j) => j.job),
+  }));
+}
+
+/**
+ * The removed pool play a new play belongs to without asking the model: the
+ * same title (anyone's), or the same contributor with the same job. So a play
+ * an admin removed never comes back under a new pool play id when its member
+ * sends it again, reworded or not.
+ */
+function sameAsRemoved(p: MergePlay & { contributor: string }, removed: Removed[]): string | null {
+  const title = normal(p.title);
+  const job = normal(p.job);
+  const hit = removed.find((r) => (title && r.titles.includes(title)) || (job && r.jobs.some((j) => j.contributor === p.contributor && j.job === job)));
+  return hit?.id ?? null;
+}
+
 /** Takes or renews a named lease; false when someone else holds it. */
 export async function takeLease(q: Query, name: string, holder: string, seconds: number): Promise<boolean> {
   const rows = await q(
@@ -80,7 +131,7 @@ export async function releaseLease(q: Query, name: string, holder: string): Prom
   await q(`delete from leases where name = $1 and holder = $2`, [name, holder]);
 }
 
-type Row = MergePlay & { week_of: string; shareable: boolean; body: Record<string, unknown> };
+type Row = MergePlay & { week_of: string; shareable: boolean; body: Record<string, unknown>; contributor: string };
 
 export type MergeTally = { joined: number; created: number; matchOnly: number; kept: number; failed: number; busy: boolean };
 
@@ -118,7 +169,8 @@ export async function mergePending(
   try {
     const rows = await q<Row>(
       `select p.id, p.title, p.category, coalesce(p.body->>'job', '') as job, coalesce(p.body->>'description', '') as description,
-              to_char(p.week_of, 'YYYY-MM-DD') as week_of, p.shareable, p.body
+              to_char(p.week_of, 'YYYY-MM-DD') as week_of, p.shareable, p.body,
+              coalesce(p.user_id::text, 'seed:' || p.contributor_id::text) as contributor
        from plays p join runs r on r.id = p.run_id
        where p.merged_at is null and p.flag is null and r.status in ('accepted', 'flagged') and not r.is_test
          and ($2::uuid[] is null or p.run_id = any($2::uuid[]))
@@ -128,25 +180,40 @@ export async function mergePending(
        limit $1`,
       [o.limit ?? 500, o.runIds ?? null, o.week ?? null],
     );
+    const removed = await removedPool(q);
     for (const p of rows) {
       if (o.until && Date.now() > o.until.getTime()) break;
       if (!(await takeLease(q, "cora-merge", holder, 120))) return { ...tally, busy: true };
       // Retired pool plays are candidates too: the same job revives them rather than starting over. A play an
-      // admin removed from the pool (removed_at) is a candidate as well, but never revived: what joins it stays out.
-      const pool = await q<PoolCandidate>(`select id, title, job, description from pool_plays where category = $1 order by first_seen, id`, [p.category]);
-      const candidates =
-        pool.length > MAX_CANDIDATES ? [...pool].sort((a, b) => overlap(p.job + p.title, b.job + b.title) - overlap(p.job + p.title, a.job + a.title)).slice(0, MAX_CANDIDATES) : pool;
-      let match: string | null = null;
-      try {
-        match = await model.sameJob(p, candidates);
-      } catch (e) {
-        // No credits or no key: stop, by name. Anything else is tried again; after a few tries the play is
-        // kept separate ("when in doubt, keep them separate") so one play never holds up the week.
-        rethrowIfUnavailable(e);
-        tally.failed++;
-        const [a] = await q<{ merge_attempts: number }>(`update plays set merge_attempts = merge_attempts + 1 where id = $1 returning merge_attempts`, [p.id]);
-        console.error("[cora] merge decision failed", p.id, a?.merge_attempts, e instanceof Error ? e.message : e);
-        if ((a?.merge_attempts ?? 0) < MERGE_ATTEMPTS) continue;
+      // admin removed from the pool (removed_at) is never revived: what joins it stays out. A new play with a
+      // removed play's title, or its own removed job, goes straight in; otherwise every removed play, of any
+      // category, is a candidate past the cut (2026-11-28 review F3).
+      let match = sameAsRemoved(p, removed);
+      if (!match) {
+        const pool = await q<PoolCandidate & { removed: boolean }>(
+          `select id, title, job, description, removed_at is not null as removed from pool_plays where category = $1 or removed_at is not null order by first_seen, id`,
+          [p.category],
+        );
+        const near = (c: PoolCandidate) => overlap(`${p.job} ${p.title}`, `${c.job} ${c.title}`);
+        const live = pool.filter((c) => !c.removed);
+        const gone = pool.filter((c) => c.removed);
+        const candidates = [...(live.length > MAX_CANDIDATES ? [...live].sort((a, b) => near(b) - near(a)).slice(0, MAX_CANDIDATES) : live), ...gone].map(
+          ({ id, title, job, description }) => ({ id, title, job, description }),
+        );
+        try {
+          match = await model.sameJob(p, candidates);
+        } catch (e) {
+          // No credits or no key: stop, by name. Anything else is tried again; after a few tries the play is
+          // kept separate ("when in doubt, keep them separate") so one play never holds up the week, unless it is
+          // near a removed play: then it goes into that one and stays out, rather than bring it back.
+          rethrowIfUnavailable(e);
+          tally.failed++;
+          const [a] = await q<{ merge_attempts: number }>(`update plays set merge_attempts = merge_attempts + 1 where id = $1 returning merge_attempts`, [p.id]);
+          console.error("[cora] merge decision failed", p.id, a?.merge_attempts, e instanceof Error ? e.message : e);
+          if ((a?.merge_attempts ?? 0) < MERGE_ATTEMPTS) continue;
+          const closest = gone.map((c) => ({ id: c.id, n: near(c) })).sort((a, b) => b.n - a.n)[0];
+          if (closest && closest.n >= REMOVED_OVERLAP) match = closest.id;
+        }
       }
       try {
         if (match) {

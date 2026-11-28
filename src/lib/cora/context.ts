@@ -98,15 +98,17 @@ const LEVEL: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
  * confidence with an Actual basis, then the most complete playbook. The title
  * is the plainest under eight words. Heavy use for: the most common. A
  * member's own playbook always wins over one Roger drafted (2026-11-27), and
- * the pool play is marked drafted only when its playbook is a drafted one.
+ * either wins over an outline (2026-11-28 review F5), so an outline never
+ * takes the place of real steps. The pool play is marked drafted only when
+ * its playbook is a drafted one.
  */
 export function bestContent(
   bodies: Record<string, unknown>[],
 ): { title: string; description: string; playbook_md: string; paste_to_install: string; heavy_use_for: string; job: string; playbook_drafted: boolean } | null {
   if (!bodies.length) return null;
-  const drafted = (b: Record<string, unknown>) => (b.playbook_drafted === true ? 1 : 0);
+  const kind = (b: Record<string, unknown>) => (b.outline_only === true ? 2 : b.playbook_drafted === true ? 1 : 0);
   const rank = (b: Record<string, unknown>) => (LEVEL[str(b.confidence)] ?? 0) * 10 + (str(b.basis) === "Actual" ? 5 : 0);
-  const best = [...bodies].sort((a, b) => drafted(a) - drafted(b) || rank(b) - rank(a) || str(b.playbook_md).length - str(a.playbook_md).length)[0];
+  const best = [...bodies].sort((a, b) => kind(a) - kind(b) || rank(b) - rank(a) || str(b.playbook_md).length - str(a.playbook_md).length)[0];
   const titles = bodies.map((b) => str(b.title)).filter((t) => t && t.split(/\s+/).length < 8);
   const title = titles.sort((a, b) => a.length - b.length || a.localeCompare(b))[0] ?? str(best.title);
   const counts = new Map<string, number>();

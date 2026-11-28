@@ -14,7 +14,7 @@ import { firstListHeldEmail } from "@/lib/mail/templates/held";
 import { mondayListEmail, noIdeasThisWeekEmail, noRunThisWeekEmail } from "@/lib/mail/templates/monday";
 import type { V3Settings } from "@/lib/v3-settings";
 import { teaserQuiet } from "@/lib/housekeeping/clocks";
-import { deliverWeek, NOT_SUPERSEDED_SQL } from "./deliver";
+import { deliverWeek, NOT_SUPERSEDED_SQL, PICK_NOT_REMOVED_SQL } from "./deliver";
 
 /**
  * The Monday send (spec B.8 step 2): each user with picks and nothing owed
@@ -163,7 +163,8 @@ export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string):
   }
 
   const [after] = await usersFor(q, week, [u.id]);
-  const ideas = await weekIdeas(q, u.id, week, d.settings.playbookPreface);
+  // An idea removed from the pool since it was delivered is left out of the email (F4).
+  const ideas = (await weekIdeas(q, u.id, week, d.settings.playbookPreface)).filter((i) => !i.withdrawn);
   if (!ideas.length) return delivered > 0;
   const orderCharged = after.order_status === "charged" || after.order_status === "sent";
   const message = mondayListEmail({
@@ -251,12 +252,14 @@ export async function deliverLate(q: Query, d: SendDeps): Promise<number> {
   for (const { week } of weeks) {
     if (!isAtOrPast(d.now, week, d.settings.sendAt)) continue;
     // Never a superseded (replaced) held list, and never an account with no card and no sponsor: their teaser is the hourly `teaser_unsent`.
+    // A pick of a play removed from the pool is never delivered, so it waits for nothing (F4).
     const waiting = await q<{ user_id: string }>(
       `select distinct k.user_id from picks k join users u on u.id = k.user_id
        where k.week_of = $1::date and not k.dry_run and not ${NO_CARD_TRIAL_SQL("u")}
          and ${NOT_SUPERSEDED_SQL("k.user_id", "k.week_of")}
-         and (k.delivered_at is null
-              or not exists (select 1 from notifications n where n.recipient = k.user_id::text and n.kind in ('monday_list', 'order_receipt') and n.ref = $2 and n.status in ('sent', 'skipped')))`,
+         and ((k.delivered_at is null and ${PICK_NOT_REMOVED_SQL("k")})
+              or (k.delivered_at is not null
+                  and not exists (select 1 from notifications n where n.recipient = k.user_id::text and n.kind in ('monday_list', 'order_receipt') and n.ref = $2 and n.status in ('sent', 'skipped'))))`,
       [week, week],
     );
     if (!waiting.length) continue;

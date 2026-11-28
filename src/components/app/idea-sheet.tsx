@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, type ReactNode, type RefObject } from "react";
-import type { IdeaView, Tile } from "@/lib/cora/idea-view";
+import { WITHDRAWN_NOTICE, type IdeaView, type Tile } from "@/lib/cora/idea-view";
 import { CopyTextButton } from "./copy-text-button";
 import { ScoreBars } from "./score-bars";
 import { SimpleMarkdown } from "./simple-markdown";
@@ -75,21 +75,28 @@ export function IdeaSheet({
         </dl>
         <p className="mt-3 text-meta text-ink-2">Times are estimates from other users’ runs, not a promise.</p>
 
-        <section className="mt-10 rounded-[8px] border border-rule bg-surface p-5 sm:p-6" aria-labelledby={`${titleId}-install`}>
-          <h3 id={`${titleId}-install`} className="text-title">
-            Paste to install
-          </h3>
-          <p className="mt-2 text-small text-ink-2">
-            The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions.
+        {idea.withdrawn ? (
+          // Removed from the pool after it was delivered (2026-11-28): nothing to paste, copy or follow.
+          <p role="status" className="mt-10 rounded-[8px] border border-rule bg-surface p-5 text-small sm:p-6">
+            {WITHDRAWN_NOTICE}
           </p>
-          <blockquote className="mt-4 whitespace-pre-line border-l-2 border-rule-strong pl-4 text-small">{idea.pasteToInstall}</blockquote>
-          <CopyTextButton text={idea.copyText} label="Copy prompt and playbook" className="btn btn-m mt-5" />
-          {idea.writtenOn && (
-            <p className="mt-4 text-meta text-ink-2">
-              Written on {idea.writtenOn}. Words like “skill” or “routine” may have another name on your AI agent.
+        ) : (
+          <section className="mt-10 rounded-[8px] border border-rule bg-surface p-5 sm:p-6" aria-labelledby={`${titleId}-install`}>
+            <h3 id={`${titleId}-install`} className="text-title">
+              Paste to install
+            </h3>
+            <p className="mt-2 text-small text-ink-2">
+              The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions.
             </p>
-          )}
-        </section>
+            <blockquote className="mt-4 whitespace-pre-line border-l-2 border-rule-strong pl-4 text-small">{idea.pasteToInstall}</blockquote>
+            <CopyTextButton text={idea.copyText} label="Copy prompt and playbook" className="btn btn-m mt-5" />
+            {idea.writtenOn && (
+              <p className="mt-4 text-meta text-ink-2">
+                Written on {idea.writtenOn}. Words like “skill” or “routine” may have another name on your AI agent.
+              </p>
+            )}
+          </section>
+        )}
 
         <section className="mt-10" aria-labelledby={`${titleId}-scores`}>
           <h3 id={`${titleId}-scores`} className="text-title">
@@ -100,10 +107,12 @@ export function IdeaSheet({
           </div>
         </section>
 
-        <details className="mt-10" open>
-          <summary className="cursor-pointer text-title">The playbook</summary>
-          <SimpleMarkdown source={idea.playbookMd} className="mt-4 text-small" />
-        </details>
+        {!idea.withdrawn && (
+          <details className="mt-10" open>
+            <summary className="cursor-pointer text-title">The playbook</summary>
+            <SimpleMarkdown source={idea.playbookMd} className="mt-4 text-small" />
+          </details>
+        )}
 
         {idea.howWorkedOut && (
           <details className="mt-6">

@@ -408,7 +408,7 @@ export function PoolRemove({ poolPlayId, title, removed = false }: { poolPlayId:
       </button>
       {asking && (
         <>
-          <span className="text-small">This takes out the whole pooled idea, with any other members’ plays merged into it. Cora won’t pick it again. Lists already picked keep it.</span>
+          <span className="text-small">This takes out the whole pooled idea, with any other members’ plays merged into it. Cora won’t pick it again, and lists not yet delivered skip it; emails already sent can’t be recalled.</span>
           <button type="submit" disabled={pending} className={small}>
             {pending ? "Removing…" : "Remove for good"}
           </button>

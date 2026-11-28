@@ -70,6 +70,12 @@ describe("buildIdeaView", () => {
     expect(v.copyText).toContain(`PLAYBOOK\n\n${play.playbookMd.trim()}`);
   });
 
+  it("keeps nothing to paste, copy or follow once the idea is withdrawn (removed from the pool, review F4)", () => {
+    expect(buildIdeaView(play, preface).withdrawn).toBe(false);
+    const v = buildIdeaView({ ...play, withdrawn: true }, preface, { personalScore: 66, reason: "Fits." });
+    expect(v).toMatchObject({ withdrawn: true, pasteToInstall: "", playbookMd: "", copyText: "", howWorkedOut: null, title: play.title, description: play.description });
+  });
+
   it("puts the safeguard preamble at the top of the paste-to-install text, so a play copied alone carries it (2026-11-27)", () => {
     const v = buildIdeaView(play, preface);
     expect(v.pasteToInstall).toBe(`${SAFEGUARD_PREAMBLE}\n\n${play.pasteToInstall.trim()}`);

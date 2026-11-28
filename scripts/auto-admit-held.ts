@@ -1,8 +1,10 @@
 /**
  * Auto-admit backfill (2026-11-27, Peter): applies the auto-admit rules to
  * every play still held with flags, once. Harm is dropped; a missing playbook
- * is drafted; names are redacted; what cannot be made safe is kept as an
- * outline only. Admitted plays join the pool at the next Cora merge.
+ * is drafted; names are redacted; what cannot be made private is kept as a
+ * title-only outline (dropped if its title holds a name). A play whose model
+ * call fails stays held for the next run. Admitted plays join the pool at the
+ * next Cora merge.
  *
  *   node --env-file=.env.local node_modules/vite-node/vite-node.mjs --config vitest.config.ts scripts/auto-admit-held.ts -- [--limit 500] [--yes]
  *
@@ -65,8 +67,8 @@ console.log(
     `${verb}admitted: ${t.admitted}`,
     `  ${verb}drafted by Roger: ${t.drafted}`,
     `  ${verb}names redacted: ${t.redacted}`,
-    `  ${verb}outline only: ${t.outlined}${yes ? "" : " (sensitive; a failed draft or name review adds to this when applied)"}`,
-    ...(yes ? [`left alone (changed meanwhile): ${t.skipped}`] : []),
+    `  ${verb}outline only: ${t.outlined}${yes ? "" : " (sensitive; a draft or name review that finds nothing usable adds to this when applied)"}`,
+    ...(yes ? [`left held (changed meanwhile, or a model call failed; run again): ${t.skipped}`] : []),
     `still held after this pass: ${t.left}`,
   ].join("\n"),
 );

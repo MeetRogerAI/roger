@@ -83,14 +83,67 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** A phrase as a pattern: any capitalisation, any run of spaces, straight or curly apostrophes, whole words. */
+/** Text without accents: "Zoë" → "Zoe". */
+export function stripDiacritics(s: string): string {
+  return s.normalize("NFD").replace(/\p{M}+/gu, "").normalize("NFC");
+}
+
+/** Each plain Latin letter with every accented letter that folds to it ("e" → "èéêë…"), for phrasePattern. */
+const ACCENTED = (() => {
+  const m = new Map<string, string>();
+  for (let cp = 0xc0; cp <= 0x24f; cp++) {
+    const ch = String.fromCodePoint(cp);
+    const base = stripDiacritics(ch).toLowerCase();
+    if (base !== ch.toLowerCase() && /^[a-z]$/.test(base)) m.set(base, (m.get(base) ?? "") + ch);
+  }
+  return m;
+})();
+
+/**
+ * A phrase as a pattern: any capitalisation, any accents ("Zoe Park" finds
+ * "Zoë Park" and the other way round, composed or not), any run of spaces,
+ * straight or curly apostrophes, whole words.
+ */
 export function phrasePattern(phrase: string): RegExp {
-  const body = phrase
+  const letter = (c: string) => {
+    if (c === "'" || c === "’") return "['’]";
+    const accented = ACCENTED.get(c.toLowerCase());
+    return accented ? `[${c}${accented}]\\p{M}*` : escapeRe(c);
+  };
+  const body = stripDiacritics(phrase)
     .trim()
     .split(/\s+/)
-    .map((w) => escapeRe(w).replace(/['’]/g, "['’]"))
+    .map((w) => [...w].map(letter).join(""))
     .join("\\s+");
   return new RegExp(`(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])`, "giu");
+}
+
+/**
+ * For comparing names: no accents, lower case, punctuation as single spaces;
+ * apostrophes both dropped ("O'Brien" as "obrien") and as a space ("Zoë's"
+ * as "zoe s"), so either spelling is found.
+ */
+function foldForNames(s: string): string[] {
+  const base = stripDiacritics(normalise(s)).toLowerCase();
+  const words = (t: string) => t.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return [...new Set([words(base.replace(/['’‘`]/g, "")), words(base)])].filter(Boolean);
+}
+
+/**
+ * True when `text` still holds any of `names`, ignoring case, accents and
+ * punctuation: as whole words, or (a name of two words or more) run together
+ * ("DanaWhitfield"). Used on what is left of a privacy outline: its title.
+ */
+export function holdsAnyName(text: string, names: string[]): boolean {
+  const texts = foldForNames(text);
+  for (const n of names) {
+    const forms = foldForNames(n);
+    if (forms.some((f) => texts.some((t) => ` ${t} `.includes(` ${f} `)))) return true;
+    // Run together: only a name of whole words ("Dana Whitfield"), not one split at an apostrophe.
+    const [f] = forms;
+    if (f?.includes(" ") && texts.some((t) => t.replaceAll(" ", "").includes(f.replaceAll(" ", "")))) return true;
+  }
+  return false;
 }
 
 /** The member's own "never include" list, whole words, any capitalisation (spec check 10). */

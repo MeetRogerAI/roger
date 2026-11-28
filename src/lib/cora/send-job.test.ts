@@ -286,3 +286,40 @@ describe("I set this up, and the week pages", () => {
     expect(await markSetUp(query, a, "2026-02-30", 1)).toBe(false);
   });
 });
+
+describe("a play removed from the pool (2026-11-28 review F4)", () => {
+  it("removed before the send: the list goes out with the rest, and the email names only those", async () => {
+    const { removeFromPool } = await import("@/lib/admin/flags");
+    const a = await member("a@example.com");
+    await picked(a);
+    await removeFromPool(query, "admin@example.com", plays[0]);
+    expect(await runSendJob(query, deps(), { week: WEEK })).toMatchObject({ delivered: 1 });
+    expect(await delivered(a)).toBe(2);
+    const [m] = to("a@example.com");
+    expect(m.subject).toBe("Your two ideas for the week of Monday, December 14");
+    expect(m.text).not.toContain("Inbox triage");
+    expect(m.text).toContain("Listing post");
+    expect(await user(a)).toEqual({ free_lists_used: 1 });
+    // The hourly pass waits on nothing: the skipped pick is never delivered or emailed.
+    sent = [];
+    await runHourly(query, { ...deps(new Date("2026-12-14T14:05:00Z")) });
+    expect(to("a@example.com")).toEqual([]);
+    expect(await delivered(a)).toBe(2);
+  });
+
+  it("removed after delivery: the idea stays in the week, withdrawn, with nothing to paste or copy", async () => {
+    const { removeFromPool } = await import("@/lib/admin/flags");
+    const a = await member("a@example.com");
+    await picked(a);
+    await runSendJob(query, deps(), { week: WEEK });
+    await removeFromPool(query, "admin@example.com", plays[0]);
+    const ideas = await weekIdeas(query, a, WEEK, settings.playbookPreface);
+    expect(ideas.map((i) => [i.title, i.withdrawn])).toEqual([
+      ["Inbox triage", true],
+      ["Listing post", false],
+      ["Calendar prep", false],
+    ]);
+    expect(ideas[0]).toMatchObject({ pasteToInstall: "", playbookMd: "", copyText: "", howWorkedOut: null });
+    expect(ideas[1].copyText).toContain("1. Step.");
+  });
+});

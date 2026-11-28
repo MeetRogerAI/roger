@@ -79,9 +79,18 @@ export const DELIVERABLE_SQL = `((
 ) and ${NOT_SUPERSEDED_SQL("u.id", "$2")})`;
 
 /**
+ * SQL (alias `k` picks): the pick's pool play was not removed from the pool
+ * (2026-11-28 review F4). A removed play's pick is never delivered, so the
+ * rest of its list goes out without it, and it is never retried.
+ */
+export const PICK_NOT_REMOVED_SQL = (k = "picks") => `not exists (select 1 from pool_plays rp where rp.id = ${k}.pool_play_id and rp.removed_at is not null)`;
+
+/**
  * Delivers one user's list for a week; returns how many ideas were delivered
  * now (0 if already delivered, none, or not deliverable). A list paid by order
- * never uses a free list.
+ * never uses a free list. A pick whose pool play an admin removed is skipped
+ * (PICK_NOT_REMOVED_SQL), whether this is the Monday send, a late one, or a
+ * held list unlocked by a card (unlock.ts goes through here too).
  */
 export async function deliverWeek(q: Query, userId: string, week: string, freeRuns: number, now?: Date): Promise<{ delivered: number; freeListNumber: number | null }> {
   // `now` is the job clock: "as of" runs must stamp the simulated time, which the trial close counts from.
@@ -90,7 +99,7 @@ export async function deliverWeek(q: Query, userId: string, week: string, freeRu
      paid as (select exists (select 1 from orders o where o.user_id = $1 and o.week_of = $2 and o.status in ('charged', 'sent')) as yes),
      p as (
        update picks set delivered_at = coalesce($4::timestamptz, now()), is_free_list = ((select status from u) = 'trial' and (select sponsor_id from u) is null and not (select yes from paid))
-       where user_id = $1 and week_of = $2 and not dry_run and delivered_at is null and exists (select 1 from u)
+       where user_id = $1 and week_of = $2 and not dry_run and delivered_at is null and exists (select 1 from u) and ${PICK_NOT_REMOVED_SQL()}
        returning position
      ),
      c as (

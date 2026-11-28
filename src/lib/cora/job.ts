@@ -275,19 +275,29 @@ async function rebuildContent(q: Query, week: string) {
  * The statement writes only while this worker holds the week's lease (holder and kind of run), like every
  * other write here. It supersedes nothing: a held list is replaced only once the newer week is ready
  * (SUPERSEDE_AT_READY_SQL), so a week that fails after its picks never takes the older held list away.
+ *
+ * It writes nothing either when a picked play was removed from the pool since the scores were read (2026-11-28
+ * review F4), and returns those plays' ids (`removed`) so the caller picks again without them. The pool plays are
+ * read `for share`, so a removal at the same moment either lands first (and is seen here) or waits for this
+ * statement (and its pick is then skipped at delivery).
  */
 export const RECORD_PICKS_SQL = `with lease as (
          select 1 from cora_weeks where week_of = $2::date and holder = $9::text and status = 'running' and dry_run = $7::boolean
        ),
+       locked as (select pp.id, pp.removed_at from pool_plays pp where pp.id in (select p.id from jsonb_to_recordset($8::jsonb) as p(id uuid)) for share),
+       gone as (select id from locked where removed_at is not null),
        cw as (
          insert into cora_user_weeks (user_id, week_of, outcome, eligible_count, picked_count, note, dry_run)
-         select $1::uuid, $2::date, $3::text, $4::int, $5::int, $6::text, $7::boolean where exists (select 1 from lease)
+         select $1::uuid, $2::date, $3::text, $4::int, $5::int, $6::text, $7::boolean where exists (select 1 from lease) and not exists (select 1 from gone)
          on conflict (user_id, week_of) do nothing returning user_id
+       ),
+       ins as (
+         insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run)
+         select $1, $2, p.position, p.id, p.personal, p.fit, p.reason, $7
+         from cw, jsonb_to_recordset($8::jsonb) as p(position int, id uuid, personal int, fit int, reason text)
+         on conflict do nothing
        )
-       insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run)
-       select $1, $2, p.position, p.id, p.personal, p.fit, p.reason, $7
-       from cw, jsonb_to_recordset($8::jsonb) as p(position int, id uuid, personal int, fit int, reason text)
-       on conflict do nothing`;
+       select coalesce((select array_agg(id::text) from gone), '{}') as removed`;
 
 /**
  * The week becomes ready, and held lists are replaced, in one statement (plan 2026-11-26-001, Unit 3 review).
@@ -326,8 +336,10 @@ export const SUPERSEDE_AT_READY_SQL = `with r as (
        select week_of from r`;
 
 async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, scored: Scored[], byId: Map<string, PoolRow>, breaker: { failures: number }) {
+  /** Records the picks; returns the ids of any picked play removed from the pool meanwhile (then nothing was written). */
   const record = async (outcome: string, eligible: number, picks: { position: number; id: string; personal: number; fit: number; reason: string }[], note = "") => {
-    await q(RECORD_PICKS_SQL, [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks), o.holder]);
+    const [r] = await q<{ removed: string[] }>(RECORD_PICKS_SQL, [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks), o.holder]);
+    return r?.removed ?? [];
   };
 
   const eligible = eligiblePlays(
@@ -354,7 +366,7 @@ async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, sc
       console.error("[cora] fit failed; using categories", u.id, e instanceof Error ? e.message : e);
     }
   }
-  const fitted: (Fitted & { reason: string })[] = candidates.map((c) => {
+  let fitted: (Fitted & { reason: string })[] = candidates.map((c) => {
     const r = byId.get(c.id)!;
     const b = boundFit(
       judged.find((x) => x.id === c.id),
@@ -362,12 +374,20 @@ async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, sc
     );
     return { play: c, fit: b.fit, frictionMatch: b.frictionMatch, installable: installable(u, r), reason: reasonFor(b.why, r) };
   });
-  const result = pickThree(fitted);
-  const picks = result.picks.map((p) => {
-    const reason = fitted.find((f) => f.play.id === p.play.id)!.reason;
-    return { position: p.position, id: p.play.id, personal: Math.round(p.personal), fit: p.fit, reason: p.installable ? reason : `${reason}${needsLine(byId.get(p.play.id)!.requires)}` };
-  });
-  return record(result.outcome, eligible.length, picks);
+  // A play removed from the pool while this user was being picked for is left out, and the rest picked again (F4).
+  let left = eligible.length;
+  for (;;) {
+    const result = pickThree(fitted);
+    if (result.outcome === "none") return record("none", left, [], "no eligible plays");
+    const picks = result.picks.map((p) => {
+      const reason = fitted.find((f) => f.play.id === p.play.id)!.reason;
+      return { position: p.position, id: p.play.id, personal: Math.round(p.personal), fit: p.fit, reason: p.installable ? reason : `${reason}${needsLine(byId.get(p.play.id)!.requires)}` };
+    });
+    const removed = new Set(await record(result.outcome, left, picks));
+    if (!removed.size) return;
+    fitted = fitted.filter((f) => !removed.has(f.play.id));
+    left -= removed.size;
+  }
 }
 
 async function alert(week: string, dry: boolean, message: string, deps: MailDeps) {

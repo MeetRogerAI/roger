@@ -30,6 +30,7 @@ type Row = {
   f_proof: number | null;
   f_surprise: number | null;
   score: number | null;
+  withdrawn: boolean;
 };
 
 export async function weekIdeas(q: Query, userId: string, week: string, preface: string): Promise<WeekIdea[]> {
@@ -37,7 +38,7 @@ export async function weekIdeas(q: Query, userId: string, week: string, preface:
   const rows = await q<Row>(
     `select k.position, k.personal_score, k.reason, k.setup_marked_at::text, k.setup_confirmed_at::text,
             pp.id, pp.title, pp.category, pp.description, pp.heavy_use_for, pp.playbook_md, pp.paste_to_install, pp.written_on, pp.figures,
-            pp.f_hours, pp.f_reach, pp.f_ease, pp.f_proof, pp.f_surprise, pp.score
+            pp.f_hours, pp.f_reach, pp.f_ease, pp.f_proof, pp.f_surprise, pp.score, pp.removed_at is not null as withdrawn
      from picks k join pool_plays pp on pp.id = k.pool_play_id
      where k.user_id = $1 and k.week_of = $2 and not k.dry_run and k.delivered_at is not null
      order by k.position`,
@@ -58,6 +59,7 @@ export async function weekIdeas(q: Query, userId: string, week: string, preface:
         figures: r.figures,
         scores,
         score: r.score,
+        withdrawn: r.withdrawn,
       },
       preface,
       { personalScore: r.personal_score, reason: r.reason },

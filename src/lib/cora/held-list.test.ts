@@ -420,3 +420,33 @@ describe("/app for a trial with no card", () => {
     expect((await loadHome(query, c, settings, SEVEN_AM))?.held).toBeNull();
   });
 });
+
+describe("a play removed from the pool before a held list is released (2026-11-28 review F4)", () => {
+  it("leaves it out of the teaser, and the card's unlock delivers the rest of the list without it", async () => {
+    const { removeFromPool } = await import("@/lib/admin/flags");
+    const { deliverUnlock } = await import("./unlock");
+    const a = await member("a@example.com");
+    await picked(a);
+    await removeFromPool(query, "admin@example.com", plays[1]);
+    await runSendJob(query, deps(), { week: WEEK });
+    const [teaser] = teasers("a@example.com");
+    expect(teaser.subject).toBe("Your first ideas are ready");
+    expect(teaser.text).not.toContain(TITLES[1]);
+    expect(await heldTeaser(query, a)).toEqual({ week: WEEK, titles: [TITLES[0], TITLES[2]], count: 2 });
+
+    // The card is saved: the unlock delivers the two that are left, as free list 1, and their email names only those.
+    await query("update users set trial_started_at = '2026-12-14T13:00:00Z' where id = $1", [a]);
+    sent = [];
+    expect(await deliverUnlock(query, deps(new Date("2026-12-14T13:05:00Z")), a)).toBe(WEEK);
+    expect((await weekIdeas(query, a, WEEK, "")).map((i) => i.title)).toEqual([TITLES[0], TITLES[2]]);
+    expect(await query("select 1 from picks where user_id = $1 and pool_play_id = $2 and delivered_at is not null", [a, plays[1]])).toEqual([]);
+    const [list] = to("a@example.com");
+    expect(list.subject).toBe("Your two ideas for the week of Monday, December 14");
+    expect(list.text).not.toContain(TITLES[1]);
+    expect((await userRow(a)).free_lists_used).toBe(1);
+    // The pick that was skipped is not waited on later.
+    sent = [];
+    expect(await deliverLate(query, deps(new Date("2026-12-14T15:05:00Z")))).toBe(0);
+    expect(sent).toEqual([]);
+  });
+});

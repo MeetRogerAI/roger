@@ -174,6 +174,68 @@ describe("mergePending, review follow-ups", () => {
   });
 });
 
+describe("a removed pool play never comes back under a new id (2026-11-28 review F3)", () => {
+  const never: MergeModel = { sameJob: async () => null };
+  async function removedInboxTriage() {
+    const a = await user("a@example.com");
+    await runWith(a, [play("Inbox triage", "inbox sort and draft morning mail")], { week: "2026-11-23" });
+    await mergePending(query, keyModel().m);
+    const [{ id }] = await query<{ id: string }>("select id from pool_plays");
+    await removeFromPool(query, "admin@example.com", id);
+    return { a, id };
+  }
+  const placedIn = async (title: string) => (await query<{ pool_play_id: string | null }>("select pool_play_id from plays where title = $1", [title]))[0]?.pool_play_id;
+
+  it("places a play with its title (anyone's), or its member's same job reworded in case and punctuation, into it without asking the model", async () => {
+    const { a, id } = await removedInboxTriage();
+    const b = await user("b@example.com");
+    await runWith(b, [play("INBOX: Triage!", "something else entirely")]);
+    await runWith(a, [play("Morning mail", "Inbox sort, and draft morning mail.")], { week: "2026-12-07" });
+    const asked: string[] = [];
+    const m: MergeModel = { sameJob: async (p) => (asked.push(p.title), null) };
+    expect(await mergePending(query, m)).toMatchObject({ joined: 2, created: 0 });
+    expect(asked).toEqual([]);
+    expect(await placedIn("INBOX: Triage!")).toBe(id);
+    expect(await placedIn("Morning mail")).toBe(id);
+    expect(await query("select active from pool_plays")).toEqual([{ active: false }]);
+    // Another member's same job is not enough on its own: the model decides, and here it says none.
+    const c = await user("c@example.com");
+    await runWith(c, [play("Their own triage", "inbox sort and draft morning mail")]);
+    expect(await mergePending(query, never)).toMatchObject({ created: 1 });
+  });
+
+  it("offers every removed play to the model, of any category and past the candidate cut", async () => {
+    const { id } = await removedInboxTriage();
+    await query("update pool_plays set category = 'Operations' where id = $1", [id]);
+    for (let i = 0; i < 45; i++) {
+      await query(
+        "insert into pool_plays (title, category, description, playbook_md, paste_to_install, job, first_seen, last_seen) values ($1, 'Email and calendar', 'd', 'p', 'i', $2, '2026-11-23', '2026-11-23')",
+        [`Filler ${i}`, `filler job number ${i} with many shared words inbox triage`],
+      );
+    }
+    const b = await user("b@example.com");
+    await runWith(b, [play("Mail sorter", "inbox sort again")]);
+    let offered: string[] = [];
+    const m: MergeModel = { sameJob: async (_p, cands) => ((offered = cands.map((c) => c.id)), cands.find((c) => c.id === id)?.id ?? null) };
+    expect(await mergePending(query, m)).toMatchObject({ joined: 1, created: 0 });
+    expect(offered).toContain(id);
+    expect(offered).toHaveLength(41);
+    expect(await placedIn("Mail sorter")).toBe(id);
+  });
+
+  it("when the merge decision keeps failing, places a play near a removed one into it rather than a new pool play; others are kept separate as before", async () => {
+    const { id } = await removedInboxTriage();
+    const b = await user("b@example.com");
+    await runWith(b, [play("Inbox sorter", "inbox sorting of morning mail"), play("Calendar prep", "calendar briefs", { set: "B" })]);
+    const failing = keyModel(new Set(["Inbox sorter", "Calendar prep"])).m;
+    for (let i = 0; i < 2; i++) expect(await mergePending(query, failing)).toMatchObject({ failed: 2, created: 0, joined: 0 });
+    expect(await mergePending(query, failing)).toMatchObject({ failed: 2, created: 1, joined: 1 });
+    expect(await placedIn("Inbox sorter")).toBe(id);
+    expect((await pool()).map((p) => p.title)).toEqual(["Calendar prep", "Inbox triage"]);
+    expect(await query("select title from pool_plays where active")).toEqual([{ title: "Calendar prep" }]);
+  });
+});
+
 describe("importSeedRun", () => {
   it("stores a seed run under a hidden contributor, runs intake, and merges it into the pool at once", async () => {
     const r = await importSeedRun(query, { label: "Rob", agent: "Hark", text: report([play("Listing post", "listing post weekly")]), ranOn: "2026-11-12" }, { model: cleanReview, merge: keyModel().m, query });

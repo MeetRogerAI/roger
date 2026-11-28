@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseProfileBlock, parseRunBlock } from "./parse-block";
-import { harmFlags, replaceNeverWords, replacePatterns } from "./privacy-patterns";
+import { harmFlags, holdsAnyName, phrasePattern, replaceNeverWords, replacePatterns } from "./privacy-patterns";
 import { validateRun } from "./validate";
 
 const play = (over: Record<string, unknown> = {}) => ({
@@ -96,6 +96,25 @@ describe("replaceNeverWords (spec check 10)", () => {
   it("handles phrases and characters that mean something in a pattern", () => {
     expect(replaceNeverWords("Call Dr. Lee (Main) today", ["Dr. Lee (Main)"]).text).toBe("Call [removed] today");
     expect(replaceNeverWords("nothing", ["", "  "]).text).toBe("nothing");
+  });
+});
+
+describe("phrasePattern and holdsAnyName (2026-11-28 review F1)", () => {
+  it("matches a name whatever its accents, composed or not, either way round", () => {
+    const decomposed = "Zoë Park";
+    for (const text of ["Zoë Park", "ZOË PARK", decomposed, "Zoe Park"]) expect(`call ${text} now`.replace(phrasePattern("Zoe Park"), "[a person]")).toBe("call [a person] now");
+    expect("Meet Zoe Park".replace(phrasePattern("Zoë Park"), "[a person]")).toBe("Meet [a person]");
+    expect("José’s café".replace(phrasePattern("jose's"), "X")).toBe("X café");
+    // Still whole words only.
+    expect(phrasePattern("Ann").test("Annual planning")).toBe(false);
+  });
+
+  it("finds a name left in a text in any case, accents or punctuation, or run together", () => {
+    expect(holdsAnyName("Friday call with OBRIEN", ["O'Brien"])).toBe(true);
+    expect(holdsAnyName("Notes for mary jane lowe", ["Mary-Jane Lowe"])).toBe(true);
+    expect(holdsAnyName("Weekly DanaWhitfield sync", ["Dana Whitfield"])).toBe(true);
+    expect(holdsAnyName("Zoë’s weekly call", ["Zoe"])).toBe(true);
+    expect(holdsAnyName("Annual planning for [a person]", ["Ann", "Dana Whitfield", ""])).toBe(false);
   });
 });
 

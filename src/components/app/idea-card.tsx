@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, type ReactNode } from "react";
-import type { IdeaView } from "@/lib/cora/idea-view";
+import { WITHDRAWN_NOTICE, type IdeaView } from "@/lib/cora/idea-view";
 import { IdeaSheet } from "./idea-sheet";
 
 /**
@@ -46,7 +46,7 @@ export function IdeaCard({ idea, sheetActions, initiallyOpen = false }: { idea: 
             {idea.timeLine}. An estimate from other users’ runs.
           </span>
         )}
-        <span className="tlink chev mt-4 inline-block text-small">Open and install</span>
+        {idea.withdrawn ? <span className="mt-4 block text-small">{WITHDRAWN_NOTICE}</span> : <span className="tlink chev mt-4 inline-block text-small">Open and install</span>}
       </button>
       <IdeaSheet ref={dialog} idea={idea} actions={sheetActions} returnFocus={opener} initiallyOpen={initiallyOpen} />
     </>

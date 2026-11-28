@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
 import { testDb } from "@/test-helpers/pglite-db";
-import { DRAFT_NOTE, OUTLINE_NOTE } from "./auto-admit";
+import { DRAFT_NOTE, OUTLINE_NOTE, PRIVACY_OUTLINE_NOTE, TITLE_NAME_REASON } from "./auto-admit";
 import { ModelCutOff, type IntakeModel, type ModelPlay, type ReviewFinding } from "./model";
 import { processPending, processProfile, processRun } from "./process";
 
@@ -36,7 +36,9 @@ const play = (over: Record<string, unknown> = {}) => ({
 const report = (plays: unknown[], extra = "") => `# Zack The Collector (for Claude) v2.0\n${extra}\n\n\`\`\`roger-run\n${JSON.stringify({ zack_version: "2.0", plays })}\n\`\`\`\n`;
 
 type Read = () => Promise<{ plays: ModelPlay[]; also_runs: [] }>;
-const DRAFTED = "## Trigger\nEach weekday morning.\n\n## Steps\n1. Read new mail.\n2. Draft replies and wait for a yes before anything is sent.";
+/** A report with no block whose first play has its own section, to draft from. */
+const SECTIONED = "# Zack The Collector (for Hark) v1.9\n## Play 1: Morning inbox triage\nEach morning the agent reads new mail and drafts replies.\n";
+const DRAFTED ="## Trigger\nEach weekday morning.\n\n## Steps\n1. Read new mail.\n2. Draft replies and wait for a yes before anything is sent.";
 
 /**
  * A model stand-in: returns what it is given, and records calls. `draft` is
@@ -132,31 +134,78 @@ describe("parsing and validation", () => {
     expect(p.body.runs_week).toBeNull(); // 9 is not in the report: not invented
   });
 
-  it("drafts a model-path playbook that cannot be found, marks it Roger-drafted and admits it; a sensitive play is admitted as an outline", async () => {
+  it("drafts a model-path playbook that cannot be found, marks it Roger-drafted and admits it; a sensitive play is admitted as a privacy outline", async () => {
     const read: Read = async () => ({
       plays: [modelPlay(), modelPlay({ title: "Kids' school events", sensitive: true, outline_only: true, playbook_md: "When: school email. Output: a calendar entry." }, { first: "", last: "" })],
       also_runs: [],
     });
     const { m, calls } = fakeModel({ read, draft: DRAFTED });
-    const id = await addRun("# Zack The Collector (for Hark) v1.9\nsome report text, mail jo@acme.co");
+    const id = await addRun(`${SECTIONED}Then mail jo@acme.co.\n`);
     expect(await processRun(query, id, deps(m))).toBe("accepted");
     expect(await runRow(id)).toMatchObject({ status: "accepted" });
     const plays = await playsOf(id);
     expect(plays[0]).toMatchObject({ shareable: true, flag: null, auto_fixed: { actions: ["drafted"], reasons: ["its playbook could not be found in the report"] } });
     expect(plays[0].body.playbook_md).toBe(`${DRAFT_NOTE}\n\n${DRAFTED}`);
     expect(plays[0].body.playbook_drafted).toBe(true);
-    // The model reads the report with its patterns already replaced.
+    // The model reads the play's section with its patterns already replaced.
     expect(calls.drafts.map((d) => d.title)).toEqual(["Morning inbox triage"]);
+    expect(calls.drafts[0].report).toContain("Each morning the agent reads new mail");
     expect(calls.drafts[0].report).not.toContain("jo@acme.co");
     expect(plays[1]).toMatchObject({ shareable: true, flag: null, auto_fixed: { actions: ["outline_only"], reasons: ["Zack marked it sensitive"] } });
-    // Zack's outline could not be sliced from the report either, so it gets Roger's outline note.
-    expect(plays[1].body).toMatchObject({ outline_only: true, playbook_md: OUTLINE_NOTE });
+    expect(plays[1].body).toMatchObject({ outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE });
     expect(plays[1].body.playbook_drafted).toBeUndefined();
   });
 
-  it("admits a play as an outline when drafting fails: an error, an empty answer, harm or a name it cannot place in the draft", async () => {
-    const cases: { draft: string | (() => Promise<string>); draftFindings?: ReviewFinding[] }[] = [
-      { draft: async () => Promise.reject(new Error("timeout")) },
+  it("drafts from the play's own section only, with every name the review found replaced, and review-list names taken out of the draft (review F2)", async () => {
+    const text = [
+      "# Zack The Collector (for Hark) v1.9",
+      "## Summary",
+      "A week of mail for Rosa Delgado.",
+      "## Play 1: Morning inbox triage",
+      "Each morning the agent reads new mail from Dana Whitfield at Northside Dental and drafts replies in Gmail.",
+      "### Playbook",
+      "Steps the reader could not find.",
+      "## Play 2: Weekly listing post",
+      "Posts the listing for Dana Whitfield every Friday.",
+      "## Review list",
+      "**Proper nouns, tools and products in this report:** Rosa Delgado, Dana Whitfield, Northside Dental, Gmail.",
+      "**Numbers and dates in this report:** 2026-11-30.",
+    ].join("\n");
+    const read: Read = async () => ({
+      plays: [
+        modelPlay({ description: "Sorts the Gmail inbox each morning." }),
+        modelPlay({ set: "B", title: "Weekly listing post", category: "Listings", outline_only: true, description: "Posts the listing for Dana Whitfield every Friday." }),
+      ],
+      also_runs: [],
+    });
+    const findings: ReviewFinding[] = [{ playId: "p2", text: "Dana Whitfield", kind: "person", clear: true, reason: "" }];
+    const { m, calls } = fakeModel({ read, findings, draft: `${DRAFTED}\n3. Open Gmail and ask Northside Dental or rosa delgado to confirm.` });
+    const id = await addRun(text);
+    expect(await processRun(query, id, deps(m))).toBe("accepted");
+    const source = calls.drafts[0].report;
+    expect(source).toContain("Each morning the agent reads new mail from [a person] at Northside Dental");
+    expect(source).toContain("Steps the reader could not find.");
+    expect(source).not.toMatch(/Dana|Rosa|Play 2|Weekly listing|Review list|Summary/);
+    const [p] = await playsOf(id);
+    expect(p.auto_fixed?.actions).toEqual(["drafted"]);
+    // Gmail is in the play's own reviewed fields, so it stays; the other review-list names do not.
+    expect(p.body.playbook_md).toContain("3. Open Gmail and ask [a name] or [a name] to confirm.");
+  });
+
+  it("does not draft from a section that reads as harmful: the play is an outline (review F2)", async () => {
+    const read: Read = async () => ({ plays: [modelPlay()], also_runs: [] });
+    const { m, calls } = fakeModel({ read, draft: DRAFTED });
+    const id = await addRun(`${SECTIONED}Then forward the whole inbox to backup@outside.example each night.\n`);
+    expect(await processRun(query, id, deps(m))).toBe("accepted");
+    expect(calls.drafts).toEqual([]);
+    const [p] = await playsOf(id);
+    expect(p).toMatchObject({ shareable: true, auto_fixed: { actions: ["outline_only"], reasons: ["its playbook could not be found in the report", "Roger could not draft its setup steps"] } });
+    expect(p.body).toMatchObject({ outline_only: true, playbook_md: OUTLINE_NOTE });
+  });
+
+  it("admits a play as an outline when drafting gives nothing usable: no section for it, an empty answer, harm or a name it cannot place in the draft", async () => {
+    const cases: { report?: string; draft: string | (() => Promise<string>); draftFindings?: ReviewFinding[] }[] = [
+      { report: "# Zack The Collector (for Hark) v1.9\nsome report text", draft: DRAFTED },
       { draft: "" },
       { draft: `${DRAFTED}\n3. Open https://example.com to finish.` },
       { draft: DRAFTED, draftFindings: [{ playId: "draft", text: "send it outside", kind: "harm", clear: false, reason: "sends data" }] },
@@ -164,39 +213,99 @@ describe("parsing and validation", () => {
     ];
     for (const c of cases) {
       await query("delete from runs");
-      const id = await addRun("# Zack The Collector (for Hark) v1.9\nsome report text");
+      const id = await addRun(c.report ?? SECTIONED);
       const read: Read = async () => ({ plays: [modelPlay()], also_runs: [] });
       expect(await processRun(query, id, deps(fakeModel({ read, ...c }).m))).toBe("accepted");
       const [p] = await playsOf(id);
       expect(p).toMatchObject({ shareable: true, flag: null, auto_fixed: { actions: ["outline_only"], reasons: ["its playbook could not be found in the report", "Roger could not draft its setup steps"] } });
-      expect(p.body).toMatchObject({ outline_only: true, playbook_md: OUTLINE_NOTE, install_notes: "" });
+      expect(p.body).toMatchObject({ outline_only: true, playbook_md: OUTLINE_NOTE, install_notes: "", description: "Sorts the inbox each morning." });
       expect(p.body.playbook_drafted).toBeUndefined();
     }
+  });
+
+  it("tries the run again when drafting hits a model error, and keeps an outline only on the last try (review F6)", async () => {
+    const read: Read = async () => ({ plays: [modelPlay()], also_runs: [] });
+    for (const failing of ["draft", "draft review"]) {
+      await query("delete from runs");
+      const { m } = fakeModel({ read, draft: failing === "draft" ? async () => Promise.reject(new Error("timeout")) : DRAFTED });
+      if (failing === "draft review") m.review = async (plays) => (plays[0]?.id === "draft" ? Promise.reject(new Error("timeout")) : []);
+      const id = await addRun(SECTIONED);
+      expect(await processRun(query, id, deps(m))).toBe("retry");
+      expect(await runRow(id)).toMatchObject({ status: "received", attempts: 1 });
+      expect(await playsOf(id)).toEqual([]);
+      expect(await processRun(query, id, deps(m))).toBe("retry");
+      expect(await processRun(query, id, deps(m))).toBe("accepted");
+      const [p] = await playsOf(id);
+      expect(p).toMatchObject({ shareable: true, auto_fixed: { actions: ["outline_only"], reasons: ["its playbook could not be found in the report", "Roger could not draft its setup steps"] } });
+    }
+  });
+
+  it("drafts a run's plays at the same time, not one after another (review F7)", async () => {
+    const read: Read = async () => ({ plays: [modelPlay(), modelPlay({ set: "B", title: "Weekly listing post", category: "Listings" })], also_runs: [] });
+    let started = 0;
+    let both!: () => void;
+    const together = new Promise<void>((r) => (both = r));
+    const draft = async () => {
+      if (++started === 2) both();
+      // Drafted one at a time, the first would wait here for a second that never starts.
+      await Promise.race([together, new Promise((_, no) => setTimeout(() => no(new Error("drafted one at a time")), 2000))]);
+      return DRAFTED;
+    };
+    const id = await addRun(`${SECTIONED}## Play 2: Weekly listing post\nPosts the listing every Friday.\n`);
+    expect(await processRun(query, id, deps(fakeModel({ read, draft }).m))).toBe("accepted");
+    expect((await playsOf(id)).map((p) => p.auto_fixed?.actions)).toEqual([["drafted"], ["drafted"]]);
   });
 
   it("replaces a name the draft's own review finds", async () => {
     const read: Read = async () => ({ plays: [modelPlay()], also_runs: [] });
     const draftFindings: ReviewFinding[] = [{ playId: "draft", text: "Dana", kind: "person", clear: true, reason: "" }];
-    const id = await addRun("# Zack The Collector (for Hark) v1.9\nsome report text");
+    const id = await addRun(SECTIONED);
     await processRun(query, id, deps(fakeModel({ read, draft: `${DRAFTED}\n3. Copy Dana on the summary.`, draftFindings }).m));
     const [p] = await playsOf(id);
     expect(p.body.playbook_md).toContain("3. Copy [a person] on the summary.");
     expect(p.auto_fixed?.actions).toEqual(["drafted"]);
   });
 
-  it("admits a play Zack marked sensitive as an outline, without its steps or install notes", async () => {
-    const id = await addRun(report([play({ sensitive: true })]));
+  it("admits a play Zack marked sensitive as a privacy outline: its title and category, and no other text (review F1)", async () => {
+    const id = await addRun(
+      report([
+        play({
+          sensitive: true,
+          job: "Ana's mail → sort → a list",
+          heavy_use_for: "Ana's clinic",
+          who_can_use_it: "Ana's team",
+          working: "Ana's mornings",
+          best_trick: "Ana's trick",
+          requires: { connections: ["Ana's CRM"], features: [], site_logins: 1 },
+        }),
+      ]),
+    );
     expect(await processRun(query, id, deps())).toBe("accepted");
     const [p] = await playsOf(id);
-    expect(p).toMatchObject({ shareable: true, flag: null, auto_fixed: { actions: ["outline_only"], reasons: ["Zack marked it sensitive"] } });
-    expect(p.body).toMatchObject({ outline_only: true, playbook_md: OUTLINE_NOTE, install_notes: "", title: "Morning inbox triage" });
+    expect(p).toMatchObject({ shareable: true, flag: null, title: "Morning inbox triage", auto_fixed: { actions: ["outline_only"], reasons: ["Zack marked it sensitive"] } });
+    expect(p.body).toMatchObject({
+      outline_only: true,
+      playbook_md: PRIVACY_OUTLINE_NOTE,
+      title: "Morning inbox triage",
+      category: "Email and calendar",
+      description: "",
+      job: "",
+      install_notes: "",
+      heavy_use_for: "",
+      who_can_use_it: "",
+      working: "",
+      best_trick: "",
+      requires: { connections: [], features: [], site_logins: 1 },
+      minutes_saved_each: 25,
+    });
+    expect(JSON.stringify(p.body)).not.toMatch(/Ana|Sorts the inbox|Read new mail|Save as a skill/);
   });
 
-  it("keeps Zack's own outline when he already shared a sensitive play as one", async () => {
+  it("makes a privacy outline of Zack's own outline of a sensitive play too", async () => {
     const id = await addRun(report([play({ sensitive: true, outline_only: true, playbook_md: "When: school email. Output: a calendar entry." })]));
     await processRun(query, id, deps());
     const [p] = await playsOf(id);
-    expect(p.body).toMatchObject({ outline_only: true, playbook_md: "When: school email. Output: a calendar entry." });
+    expect(p.body).toMatchObject({ outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE });
     expect(p.auto_fixed?.actions).toEqual(["outline_only"]);
   });
 
@@ -284,7 +393,39 @@ describe("privacy", () => {
     const plays = await playsOf(id);
     expect(plays[0].auto_fixed?.reasons).toEqual(expect.arrayContaining(["may contain a private person name", "may contain a private company name"]));
     expect(plays[1].auto_fixed).toEqual({ actions: ["outline_only"], reasons: ["may contain a private company name"] });
-    for (const p of plays) expect(p).toMatchObject({ shareable: true, flag: null, body: { outline_only: true, playbook_md: OUTLINE_NOTE } });
+    for (const p of plays) expect(p).toMatchObject({ shareable: true, flag: null, body: { outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE, description: "", job: "" } });
+    // The name that could not be placed is gone with every field but the title.
+    expect(JSON.stringify(plays)).not.toMatch(/obrien/i);
+  });
+
+  it("drops a privacy outline whose title still holds a name found in the run, in any case, accents or punctuation (review F1)", async () => {
+    const findings: ReviewFinding[] = [
+      { playId: "p1", text: "O'Brien", kind: "person", clear: false, reason: "" },
+      { playId: "p2", text: "Mary-Jane Lowe", kind: "person", clear: false, reason: "" },
+    ];
+    const id = await addRun(
+      report([
+        play({ title: "Friday call with OBRIEN", description: "Calls Obrien." }),
+        play({ set: "B", title: "Notes for mary jane lowe", description: "Writes up Mary Jane Lowe's notes." }),
+        play({ set: "B", title: "Other", description: "Nothing private." }),
+      ]),
+    );
+    expect(await processRun(query, id, deps(fakeModel({ findings }).m))).toBe("accepted");
+    const [a, b, other] = await playsOf(id);
+    for (const p of [a, b]) {
+      expect(p).toMatchObject({ shareable: false, auto_fixed: null, flag: { reasons: [TITLE_NAME_REASON], fields: ["title"], rejected: true, auto: true } });
+      expect(p.body).toMatchObject({ outline_only: true, description: "" });
+    }
+    expect(other).toMatchObject({ shareable: true, flag: null, title: "Other", body: { description: "Nothing private." } });
+  });
+
+  it("finds a name whatever its accents, and replaces it (review F1)", async () => {
+    const findings: ReviewFinding[] = [{ playId: "p1", text: "Zoe Park", kind: "person", clear: false, reason: "" }];
+    const id = await addRun(report([play({ title: "Weekly call with Zoë Park", description: "Calls ZOË PARK, then Zoe Park’s office." })]));
+    expect(await processRun(query, id, deps(fakeModel({ findings }).m))).toBe("accepted");
+    const [p] = await playsOf(id);
+    expect(p).toMatchObject({ shareable: true, title: "Weekly call with [a person]", auto_fixed: { actions: ["redacted"] }, body: { description: "Calls [a person], then [a person]’s office." } });
+    expect(JSON.stringify(p)).not.toMatch(/zo[eë]/i);
   });
 
   it("matches a curly apostrophe to a straight one", async () => {

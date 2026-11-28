@@ -77,6 +77,19 @@ describe("/app/week/[date] for a held list", () => {
     expect(html.match(/<aside[^>]*Before you set these up/g)).toHaveLength(1);
   });
 
+  it("shows a delivered idea later removed from the pool as withdrawn, with no install text, playbook or copy button (review F4)", async () => {
+    await db.query!("update picks set delivered_at = now()");
+    await db.query!("update users set trial_started_at = now()");
+    await db.query!("update pool_plays set removed_at = now(), playbook_md = '1. Removed step.', paste_to_install = 'Removed install.' where title = 'Listing post'");
+    const html = await render(WEEK);
+    expect(html.split("This idea was withdrawn by Roger.")).toHaveLength(1 + 2); // the card and its sheet
+    expect(html).toContain("Listing post");
+    expect(html).not.toMatch(/Removed step|Removed install/);
+    // The other two are whole: two install texts, two copy buttons.
+    expect(html.split("Secret install.")).toHaveLength(1 + 2);
+    expect(html.split("Copy prompt and playbook")).toHaveLength(1 + 2);
+  });
+
   it("shows the plain empty state for an earlier, superseded held week: no titles and no Payment link", async () => {
     const PREV = "2026-12-07";
     await db.query!("insert into cora_weeks (week_of, status, phase) values ($1, 'sent', 'ready')", [PREV]);
