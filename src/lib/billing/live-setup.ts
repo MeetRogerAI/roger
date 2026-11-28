@@ -14,7 +14,8 @@ import { STRIPE_API_VERSION } from "./stripe";
  */
 
 export const PRODUCT_MARKER = { roger_product: "monthly" } as const;
-export const PRODUCT = { name: "Roger Monthly", description: "Monthly Subscription to AI Intelligence Sharing" } as const;
+/** Tax code: SaaS for business use, on the accountant's word (Peter, 2026-11-27, launch list g-accountant). */
+export const PRODUCT = { name: "Roger Monthly", description: "Monthly Subscription to AI Intelligence Sharing", tax_code: "txcd_10103001" } as const;
 
 export type PriceSpec = { env: string; lookupKey: string; currency: "usd" | "cad"; amount: number; nickname: string };
 
@@ -58,8 +59,8 @@ export type SetupClient = {
     registrations: { list(p: { limit: number; status?: string }): Promise<{ data: { country: string; status: string }[] }> };
   };
   products: {
-    list(p: { limit: number; active?: boolean }): Promise<{ data: { id: string; active: boolean; metadata: Record<string, string> }[] }>;
-    create(p: { name: string; description: string; metadata: Record<string, string> }): Promise<{ id: string }>;
+    list(p: { limit: number; active?: boolean }): Promise<{ data: { id: string; active: boolean; metadata: Record<string, string>; tax_code?: string | { id: string } | null }[] }>;
+    create(p: { name: string; description: string; tax_code: string; metadata: Record<string, string> }): Promise<{ id: string }>;
   };
   prices: {
     list(p: { lookup_keys: string[]; limit: number }): Promise<{ data: StripePrice[] }>;
@@ -229,7 +230,7 @@ export function describePlan(plan: Plan): string[] {
   return [
     ...head,
     ...plan.steps.map((s) => {
-      if (s.kind === "product") return s.action === "create" ? `Create product "${PRODUCT.name}"` : s.action === "exists" ? `Product exists (${s.id})` : `CONFLICT product ${s.id ?? ""} ${s.problem}`;
+      if (s.kind === "product") return s.action === "create" ? `Create product "${PRODUCT.name}" with tax code ${PRODUCT.tax_code}` : s.action === "exists" ? `Product exists (${s.id})` : `CONFLICT product ${s.id ?? ""} ${s.problem}`;
       if (s.kind === "price") {
         const spec = PRICES.find((p) => p.lookupKey === s.lookupKey)!;
         const what = `${spec.currency.toUpperCase()} ${(spec.amount / 100).toFixed(2)} monthly, tax exclusive (${spec.env})`;

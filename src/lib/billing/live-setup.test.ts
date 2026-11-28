@@ -20,7 +20,7 @@ const endpoint = (over: Partial<Endpoint> = {}): Endpoint => ({ id: "we_1", url:
 
 /** An in-memory Stripe with just what the setup uses, counting every write. */
 function fakeStripe(seed: { products?: Product[]; prices?: Price[]; endpoints?: Endpoint[] } = {}) {
-  const products = [...(seed.products ?? [])];
+  const products: (Product & { tax_code?: string })[] = [...(seed.products ?? [])];
   const prices = [...(seed.prices ?? [])];
   const endpoints = [...(seed.endpoints ?? [])];
   const writes: string[] = [];
@@ -35,7 +35,7 @@ function fakeStripe(seed: { products?: Product[]; prices?: Price[]; endpoints?: 
       list: async () => ({ data: products }),
       create: async (p) => {
         writes.push("product");
-        const row = { id: `prod_${++n}`, active: true, metadata: p.metadata };
+        const row = { id: `prod_${++n}`, active: true, metadata: p.metadata, tax_code: p.tax_code };
         products.push(row);
         return row;
       },
@@ -64,7 +64,7 @@ function fakeStripe(seed: { products?: Product[]; prices?: Price[]; endpoints?: 
       },
     },
   };
-  return { c, writes, prices, endpoints };
+  return { c, writes, prices, endpoints, products };
 }
 
 const conflicts = (lines: string[]) => lines.filter((l) => l.startsWith("CONFLICT"));
@@ -99,6 +99,7 @@ describe("live Stripe setup (launch list g-live-prices, g-live-webhook)", () => 
       ["cad", 56000, "exclusive"],
     ]);
     expect(f.endpoints[0]).toMatchObject({ url: LIVE_WEBHOOK_URL, api_version: STRIPE_API_VERSION, enabled_events: [...WEBHOOK_EVENTS] });
+    expect(f.products[0]).toMatchObject({ tax_code: "txcd_10103001" });
   });
 
   it("is safe to run twice: the second run finds everything and creates nothing", async () => {

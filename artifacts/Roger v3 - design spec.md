@@ -1255,6 +1255,7 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 | **Cora upgrades** | Cora 2.0 change 11: a list may offer an upgrade to a play the user already runs; at most one of three picks (recommendation). Not needed for launch (Peter, 2026-11-27). |
 | **Cora adoption counts** | Cora 2.0 change 15: an idea counts as adopted when the user's next profile shows it "used this week"; "installed" and "used" reported separately, feeding the adoption measure above. Not needed for launch (Peter, 2026-11-27). |
 | **Admin read log** | Each time an admin opens a member's runs or picks, the admin action log records it. The privacy page then says so. Moved from launch list S22, 2026-11-27 (not logged at launch). |
+| **Sign in with Google** | Built and hidden until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set: a Google OAuth client (web application) with `https://meetroger.ai/auth/google/callback` and each preview base URL. Launch is email-link sign-in only (Peter, 2026-11-27; was launch list S5). |
 | **Scenario tests against the sandbox** | `SCENARIO_TARGET=sandbox` in `tests/scenarios/helpers.ts`: the scenario files run against the Stripe sandbox on test clocks and the scenario-test Neon branch (`SCENARIO_DATABASE_URL`). Includes creating that Neon branch with its non-production marker row. Replaced at launch by one test-clock journey walked on preview (Peter, 2026-11-27). |
 
 ## B.16a Version B4: levels *(1.5)*
@@ -1400,7 +1401,7 @@ Every version is built in full *(1.5)*.
 | 1 | **Zack version 2.0** for Claude, Duet, Grok Bot, and Hark, with the seven changes in B.5 | The connected weekly cycle |
 | 2 | **Cora version 2.0**, with the nine changes in B.7 | The Cora job |
 | 3 | The fixed category list, confirmed | Zack, the quiz, and Cora |
-| 4 | Tax registration entered in Stripe, and a word from your accountant on charging US customers | The first charge |
+| 4 | Tax registration entered in Stripe, and a word from your accountant on charging US customers. *Accountant, November 27, 2026: no US sales tax for now (no US registration, so Stripe adds none); product tax code txcd_10103001, SaaS for business use.* | The first charge |
 | 5 | Google sign-in credentials for the project | "Sign in with Google" |
 | 6 | The letter, edited for v3 (the approved text mentions Circles and applications) | `/about` and the homepage block |
 | 7 | Headshot at `public/media/peter.jpg` and signature at `public/media/peter-signature.svg` | Nothing; both have fallbacks |
