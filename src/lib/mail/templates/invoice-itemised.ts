@@ -1,6 +1,6 @@
 import { moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, renderEmail, type Rendered } from "../layout";
-import { longDate } from "./welcome";
+import { longDate } from "@/lib/dates";
 
 /**
  * Spec B.9 notice 5: three days before an invoice that carries a

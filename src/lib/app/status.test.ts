@@ -1,16 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mergeV3 } from "@/lib/v3-settings";
-
-// The one-at-a-time switch (`plans.oneAtATimeOffered`, read through billing/offered): off, as at launch, unless a test turns it on.
-const offer = vi.hoisted(() => ({ on: false }));
-vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
-
-const { nextMonthly, statusLine } = await import("./status");
-type StatusFacts = import("./status").StatusFacts;
-
-beforeEach(() => {
-  offer.on = false;
-});
+import { nextMonthly, PLAN_QUESTIONS, statusLine, statusLink, type StatusFacts } from "./status";
 
 const s = mergeV3([]);
 const now = new Date("2026-12-14T12:05:00Z");
@@ -25,6 +15,7 @@ const f = (o: Partial<StatusFacts>): StatusFacts => ({
   quote: null,
   firstChargeAt: null,
   orderCents: null,
+  hasCard: true,
   now,
   ...o,
 });
@@ -34,30 +25,27 @@ describe("statusLine (spec B.8 item 3)", () => {
     expect(statusLine(f({}), s)).toBe("Free Cora Curation 1 of 2.");
   });
 
-  it("trial, monthly, second Cora Curation: the first paid date and the told amount", () => {
-    expect(statusLine(f({ freeListsUsed: 2, quote: { totalCents: 22600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
-      "Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 21, US$226 with tax.",
+  it("trial, monthly, second list: the first paid date and the told amount", () => {
+    expect(statusLine(f({ freeListsUsed: 2, quote: { totalCents: 22600, taxCents: 2600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
+      "Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 21, US$226 (US$200 plus US$26 tax).",
     );
   });
 
-  it("trial, one at a time, second Cora Curation: how to order, while that plan is offered", () => {
-    offer.on = true;
-    expect(statusLine(f({ plan: "per_run", freeListsUsed: 2 }), s)).toMatch(/^Free Cora Curation 2 of 2\. Order your next one whenever you want it: US\$\d+ plus tax where it applies\.$/);
+  // S18 point a (Peter, 2026-11-27): the price plus the tax, never "with tax".
+  it("the told amount: price plus HST with tax, the bare amount with none, and a quote told before the tax was kept", () => {
+    const line = (quote: NonNullable<StatusFacts["quote"]>) => statusLine(f({ freeListsUsed: 2, quote }), s);
+    expect(line({ totalCents: 31640, taxCents: 3640, currency: "CAD", week: "2026-12-14" })).toBe(
+      "Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 14, CA$316.40 (CA$280 plus CA$36.40 HST).",
+    );
+    expect(line({ totalCents: 20000, taxCents: 0, currency: "USD", week: "2026-12-14" })).toBe("Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 14, US$200.");
+    expect(line({ totalCents: 31640, currency: "CAD", week: "2026-12-14" })).toBe("Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: Monday, December 14, CA$316.40 in total.");
+    for (const q of [{ totalCents: 31640, taxCents: 3640 }, { totalCents: 20000, taxCents: 0 }]) expect(line({ ...q, currency: "CAD", week: "2026-12-14" })).not.toMatch(/with tax|tax included/);
   });
 
-  it("an account still on one at a time while it is not offered: no invitation to order and no price for one, only the way to monthly", () => {
-    const way = "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday. You can switch to monthly on the billing page; nothing is charged unless you do.";
-    expect(statusLine(f({ plan: "per_run", freeListsUsed: 1 }), s)).toBe("Free Cora Curation 1 of 2.");
-    expect(statusLine(f({ plan: "per_run", freeListsUsed: 2 }), s)).toBe(`Free Cora Curation 2 of 2. ${way}`);
-    expect(statusLine(f({ status: "active", plan: "per_run" }), s)).toBe(way);
-    // The week of an order placed before the option was withdrawn still says what it cost.
-    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toBe(`This Cora Curation: US$56.50 with tax. ${way}`);
-    for (const facts of [f({ plan: "per_run", freeListsUsed: 2 }), f({ status: "active", plan: "per_run" })]) expect(statusLine(facts, s)).not.toMatch(/Order |US\$200/);
-  });
-
-  it("names one at a time to no monthly member while it is not offered", () => {
-    const monthly = [f({}), f({ freeListsUsed: 0 }), f({ freeListsUsed: 2 }), f({ status: "active", firstChargeAt: "2026-11-30T11:05:00Z" }), f({ status: "held" }), f({ status: "cancelled" })];
-    for (const facts of monthly) expect(statusLine(facts, s)).not.toMatch(/one at a time|order/i);
+  it("trial, leftover one at a time, second list: no ordering promised (review fixes Unit 9, F2)", () => {
+    const line = statusLine(f({ plan: "per_run", freeListsUsed: 2 }), s);
+    expect(line).toBe(`Free Cora Curation 2 of 2. ${PLAN_QUESTIONS}`);
+    expect(line).not.toMatch(/order/i);
   });
 
   it("monthly: contributing, the month's forgiven misses, and the next charge (spec B.9 notice 2)", () => {
@@ -111,11 +99,10 @@ describe("statusLine (spec B.8 item 3)", () => {
   });
 
 
-  it("one at a time, while it is offered: what this Cora Curation cost", () => {
-    offer.on = true;
-    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toMatch(
-      /^This Cora Curation: US\$56\.50 with tax\. Order next Monday’s whenever you want one\. Monthly is US\$\d+ for every Monday\.$/,
-    );
+  it("leftover one at a time: what this list cost, and no ordering promised (review fixes Unit 9, F2)", () => {
+    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: 5650 }), s)).toBe(`This Cora Curation: US$56.50 in total. ${PLAN_QUESTIONS}`);
+    expect(statusLine(f({ status: "active", plan: "per_run", orderCents: null }), s)).toMatch(/^This Cora Curation: US\$\d+ plus tax where it applies\. Monthly is now the only plan\./);
+    expect(PLAN_QUESTIONS).not.toMatch(/order|one (list )?at a time/i);
   });
 
   it("held, closed, cancelled and before the first Cora Curation each say what is true", () => {
@@ -131,8 +118,8 @@ describe("statusLine (spec B.8 item 3)", () => {
     expect(statusLine(f({ status: "active", firstChargeAt: "2026-12-03T11:05:00Z", endingAt: "2027-01-03T11:05:00Z" }), s)).toBe(
       "Your plan is cancelled. Your Cora Curations continue until Sunday, January 3, and nothing more will be charged.",
     );
-    expect(statusLine(f({ freeListsUsed: 2, switchedFromPerRun: true, quote: { totalCents: 22600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
-      "Monthly starts with your next Cora Curation: Monday, December 21 at the earliest, US$226 with tax.",
+    expect(statusLine(f({ freeListsUsed: 2, switchedFromPerRun: true, quote: { totalCents: 22600, taxCents: 2600, currency: "USD", week: "2026-12-21" } }), s)).toBe(
+      "Monthly starts with your next Cora Curation: Monday, December 21 at the earliest, US$226 (US$200 plus US$26 tax).",
     );
   });
 
@@ -140,12 +127,42 @@ describe("statusLine (spec B.8 item 3)", () => {
     expect(statusLine(f({ status: "held", holdReason: "renewal_unpaid" }), s)).toMatch(/^Your monthly payment didn’t go through, so your Cora Curations are paused\./);
     expect(statusLine(f({ status: "cancelled", accessEndsAt: "2026-12-12T15:00:00Z" }), s)).toBe("Your plan is cancelled, and nothing more will be charged.");
     expect(statusLine(f({ status: "active", firstChargeAt: "2026-12-03T11:05:00Z", switchingAt: "2027-01-03T11:05:00Z" }), s)).toBe(
-      "Monthly continues until Sunday, January 3, with a Cora Curation every Monday. After that you order them one at a time.",
+      `Monthly continues until Sunday, January 3, with a Cora Curation every Monday. ${PLAN_QUESTIONS}`,
     );
   });
 
   it("finds the next monthly date, including short months", () => {
     expect(nextMonthly("2026-01-31T15:00:00Z", new Date("2026-02-10T15:00:00Z"))).toBe("2026-02-28");
     expect(nextMonthly("2026-11-30T15:00:00Z", now)).toBe("2026-12-30");
+  });
+});
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  const noCard = (o: Partial<StatusFacts> = {}) => f({ hasCard: false, freeListsUsed: 0, ...o });
+
+  it("before any teaser: the first list follows Zack's first report, or Monday with sharing off; no link", () => {
+    expect(statusLine(noCard(), s)).toBe("Your first Cora Curation arrives after Zack’s first report.");
+    expect(statusLine(noCard({ sharing: "match_only" }), s)).toBe("Your first Cora Curation arrives after Zack’s first report.");
+    expect(statusLine(noCard({ sharing: "off" }), s)).toBe("Your first Cora Curation arrives on Monday.");
+    expect(statusLink(noCard())).toBeNull();
+  });
+
+  it("with a held list (a teaser sent): the ideas are ready, with a link to Payment", () => {
+    const facts = noCard({ firstTeaserAt: "2026-12-14T12:00:00Z" });
+    expect(statusLine(facts, s)).toBe("Your first ideas are ready — add a card to see them.");
+    expect(statusLink(facts)).toEqual({ href: "/start/payment", label: "Add your card" });
+  });
+
+  it("never names a price, a free-list count or a charge date", () => {
+    for (const facts of [noCard(), noCard({ firstTeaserAt: "2026-12-14T12:00:00Z" }), noCard({ sharing: "off" })]) {
+      expect(statusLine(facts, s)).not.toMatch(/US\$|free list|charge|earliest/i);
+    }
+  });
+
+  it("a sponsored trial needs no card; a trial with a card reads as before", () => {
+    expect(statusLine(noCard({ sponsored: true, firstTeaserAt: "2026-12-14T12:00:00Z" }), s)).toBe("Your Cora Curations are covered by your sponsor.");
+    expect(statusLink(noCard({ sponsored: true, firstTeaserAt: "2026-12-14T12:00:00Z" }))).toBeNull();
+    expect(statusLine(f({ freeListsUsed: 0 }), s)).toBe("Your first 2 Cora Curations are free.");
+    expect(statusLink(f({ firstTeaserAt: "2026-12-14T12:00:00Z" }))).toBeNull();
   });
 });

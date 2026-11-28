@@ -4,7 +4,8 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { testDb } from "@/test-helpers/pglite-db";
-import { completeCardSetup, startCardSetup } from "./card-setup";
+import { sendSignupWelcome } from "@/lib/signup/finish";
+import { completeCardSetup, openEmbeddedSetup } from "./card-setup";
 import { claimEvent, handleStripeEvent } from "./webhook";
 
 // Cases from the Unit 7 code review.
@@ -19,61 +20,50 @@ const transport: Transport = async (m) => {
   return { ok: true };
 };
 let userId: string;
-const urls = { successUrl: "https://x/start/done", cancelUrl: "https://x/start/card" };
 const setupEvent = (id: string, sessionId: string) => ({ id, type: "checkout.session.completed", data: { object: { id: sessionId, mode: "setup" } } }) as never;
 
+/** Sign-up ends at Step 3 with a trial and no card (Unit 2); the card is saved on Payment's embedded session. */
 beforeEach(async () => {
   ({ query } = await testDb());
   sent = [];
   process.env.ADMIN_EMAILS = "";
   [{ id: userId }] = await query<{ id: string }>(
-    "insert into users (email, name, plan, currency, path, email_verified_at, signup_step, consent_at) values ('ana@example.com', 'Ana Silva', 'monthly', 'CAD', 'new', now(), 'card', now()) returning id",
+    "insert into users (email, name, status, plan, currency, path, email_verified_at, signup_step, consent_at) values ('ana@example.com', 'Ana Silva', 'trial', 'monthly', 'CAD', 'new', now(), 'done', now()) returning id",
   );
 });
 
-async function opened(gw: ReturnType<typeof fakeGateway>, currency: "USD" | "CAD" = "CAD") {
-  await startCardSetup(query, gw, { userId, currency, ...urls });
-  return [...gw.sessions.keys()].pop()!;
+/** Opens the Payment page's session in the account's currency (`currency` sets it first). */
+async function opened(gw: ReturnType<typeof fakeGateway>, currency?: "USD" | "CAD") {
+  if (currency) await query("update users set currency = $1", [currency]);
+  const r = await openEmbeddedSetup(query, gw, { userId, ip: "203.0.113.9", returnUrl: "https://x/start/payment/done?session_id={CHECKOUT_SESSION_ID}" });
+  if (!r.ok) throw new Error(`no session: ${r.reason}`);
+  return r.sessionId;
 }
 
-describe("consent", () => {
-  it("is required to open the card page and to start the trial, not only on the page", async () => {
-    await query("update users set consent_at = null");
-    expect(await startCardSetup(query, fakeGateway(), { userId, currency: "CAD", ...urls })).toEqual({ ok: false, reason: "not_consented" });
-    await query("update users set consent_at = now()");
+describe("the account state", () => {
+  it("an account still signing up (no consent) can open no Payment session and save no card", async () => {
+    await query("update users set status = 'signup', signup_step = 'plan', consent_at = null");
     const gw = fakeGateway();
-    const id = await opened(gw);
-    await query("update users set consent_at = null");
-    gw.complete(id);
-    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("not_consented");
-    const [u] = await query<{ status: string }>("select status from users");
-    expect(u.status).toBe("signup");
+    expect(await openEmbeddedSetup(query, gw, { userId, ip: "203.0.113.9", returnUrl: "https://x" })).toEqual({ ok: false, reason: "not_allowed" });
+    expect(gw.sessions.size).toBe(0);
   });
 });
 
 describe("the welcome email", () => {
-  it("is sent on the next visit if the first send failed, and only once", async () => {
+  it("is not sent by the card step: sign-up sends it at Step 3 (plan 2026-11-26-001, Unit 2)", async () => {
     const gw = fakeGateway();
     const id = await opened(gw);
     gw.complete(id);
-    let fail = true;
-    const flaky: Transport = async (m) => {
-      if (fail) return { ok: false, error: "resend 500", retryable: true };
-      sent.push(m);
-      return { ok: true };
-    };
-    await expect(completeCardSetup(query, gw, id, { getSettings, query, transport: flaky, sleep: async () => {} })).rejects.toThrow(/welcome email/);
+    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("done");
+    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport })).toBe("done");
     const [u] = await query<{ status: string }>("select status from users");
     expect(u.status).toBe("trial");
-    fail = false;
-    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport: flaky })).toBe("done");
-    expect(await completeCardSetup(query, gw, id, { getSettings, query, transport: flaky })).toBe("done");
-    expect(sent.filter((m) => m.subject === "Welcome to Roger")).toHaveLength(1);
+    expect(sent).toHaveLength(0);
   });
 });
 
 describe("ordering and ownership", () => {
-  it("browser first, webhook later: one trial start, one email, the start time unchanged", async () => {
+  it("browser first, webhook later: one trial start, the start time unchanged", async () => {
     const gw = fakeGateway();
     const id = await opened(gw);
     gw.complete(id);
@@ -83,7 +73,7 @@ describe("ordering and ownership", () => {
     const [after] = await query<{ trial_started_at: Date; status: string }>("select trial_started_at, status from users");
     expect(after.status).toBe("trial");
     expect(new Date(after.trial_started_at).getTime()).toBe(new Date(before.trial_started_at).getTime());
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(0);
   });
 
   it("changes nothing when the session's own metadata names another user (the webhook's only check)", async () => {
@@ -152,13 +142,14 @@ describe("claimEvent", () => {
   });
 });
 
-describe("a free-tool report brought to sign-up", () => {
+describe("a free-tool report brought to sign-up (claimed at Step 3 now, not here)", () => {
   beforeEach(async () => {
     await query("insert into free_runs (token, email, agent, report, report_at) values ('tok1', 'ana@example.com', 'hark', '# free report', now())");
     await query("update users set pending_zack_token = 'tok1'");
   });
 
-  it("becomes the user's run when the trial starts, once, even when Stripe retries", async () => {
+  it("becomes the user's run once, at Step 3, and the card step and Stripe's retries add nothing", async () => {
+    await sendSignupWelcome(query, userId, { settings, query, transport });
     const gw = fakeGateway();
     const id = await opened(gw);
     gw.complete(id);
@@ -168,19 +159,14 @@ describe("a free-tool report brought to sign-up", () => {
     expect(runs).toEqual([{ route: "free_tool" }]);
   });
 
-  it("never blocks the trial or the welcome email when the claim fails", async () => {
-    const gw = fakeGateway();
-    const id = await opened(gw);
-    gw.complete(id);
+  it("never blocks the welcome email when the claim fails", async () => {
     const failing: typeof query = async (t, p) => {
       if (/free_runs/.test(t)) throw new Error("db blip");
       return query(t, p);
     };
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(await completeCardSetup(failing, gw, id, { getSettings, query, transport })).toBe("done");
+    expect(await sendSignupWelcome(failing, userId, { settings, query, transport })).toBe("sent");
     errors.mockRestore();
     expect(sent.map((m) => m.subject)).toEqual(["Welcome to Roger"]);
-    const [u] = await query<{ status: string }>("select status from users");
-    expect(u.status).toBe("trial");
   });
 });

@@ -208,6 +208,11 @@
     text-wrap: balance;
     line-height: 1.2;
     padding-block: 0.5em;
+    /* A plain .btn is the medium size; .btn-l, .btn-m and .btn-s (below) override it. Without this a
+       bare .btn had no side padding (the "Add your card to see them" button, 2026-11-27). */
+    min-height: 44px;
+    padding-inline: 22px;
+    font-size: 1rem;
     white-space: nowrap;
     max-width: 100%;
     border: 1px solid transparent;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { cancelAction, switchAction, undoCancelAction, updateCardAction, type BillingState } from "@/app/app/billing/actions";
+import { cancelAction, undoCancelAction, updateCardAction, type BillingState } from "@/app/app/billing/actions";
 
 const idle: BillingState = { status: "idle" };
 
@@ -28,34 +28,11 @@ export function UpdateCardButton() {
 }
 
 /**
- * Switch plan in one click (spec B.9): the effect is shown beside the button
- * before it is pressed, so the click itself saves.
- */
-export function SwitchForm({ to, effect, allowed, why }: { to: "monthly" | "per_run"; effect: string; allowed: boolean; why?: string }) {
-  const [state, action, pending] = useActionState(switchAction, idle);
-  const label = to === "monthly" ? "Switch to monthly" : "Switch to one Cora Curation at a time";
-  return (
-    <form action={action} className="space-y-3">
-      <input type="hidden" name="to" value={to} />
-      <p className="text-small text-ink-2">{effect}</p>
-      {allowed ? (
-        <button type="submit" className="btn btn-s" disabled={pending}>
-          {pending ? "Saving…" : label}
-        </button>
-      ) : (
-        <p className="text-small text-ink-2">{why}</p>
-      )}
-      <Message state={state} />
-    </form>
-  );
-}
-
-/**
  * Cancel in one click with one optional question and no retention screen
- * (spec B.9, check 27). Under the button, one plain link to switch instead:
- * `switchLink` is false while one at a time is not offered (lib/app/billing.ts).
+ * (spec B.9, check 27). Monthly is the only plan (plan 2026-11-26-001,
+ * Unit 9; origin R28), so there is no "switch instead" link under it.
  */
-export function CancelForm({ label, switchLink }: { label: string; switchLink: boolean }) {
+export function CancelForm({ label }: { label: string }) {
   const [state, action, pending] = useActionState(cancelAction, idle);
   return (
     <form action={action} className="space-y-3">
@@ -74,13 +51,6 @@ export function CancelForm({ label, switchLink }: { label: string; switchLink: b
       <button type="submit" className="btn btn-s" disabled={pending}>
         {pending ? "Cancelling…" : label}
       </button>
-      {switchLink && (
-        <p className="text-small">
-          <a href="#switch" className="tlink">
-            Or switch to one Cora Curation at a time.
-          </a>
-        </p>
-      )}
       <Message state={state} />
     </form>
   );

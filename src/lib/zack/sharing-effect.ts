@@ -2,7 +2,7 @@ import { addDays, weekOf } from "@/lib/clock";
 import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { amount, money, type Currency, type Plan } from "@/lib/billing/prices";
 import { SHARING_OFF } from "@/lib/app/status";
-import { longDate } from "@/lib/mail/templates/welcome";
+import { longDate } from "@/lib/dates";
 import type { V3Settings } from "@/lib/v3-settings";
 import type { Sharing } from "./settings";
 
@@ -15,6 +15,23 @@ import type { Sharing } from "./settings";
  * cutoff before it. Moving between two choices on the same side changes
  * nothing.
  */
+type EffectArgs = Parameters<typeof sharingEffect>[0];
+
+/** The member's higher monthly price, and whether it is exactly twice the standard one (the email says "doubles" only then). */
+export type SharingOffPrice = { higher: string; doubles: boolean };
+
+/**
+ * The member's own higher monthly price ("US$400", "CA$560") when this change turns sharing off for a monthly
+ * member (from sharing to matching only or off), else null: the sharing-changed email then explains the rule in
+ * Peter's words (2026-11-27). The Zack page's confirmation keeps `sharingEffect`'s line.
+ */
+export function sharingOffPrice(o: EffectArgs): SharingOffPrice | null {
+  if (o.plan !== "monthly" || o.from !== "share" || o.to === "share") return null;
+  const cur = o.currency ?? "USD";
+  const higher = amount(o.settings, "monthly", cur, "higher");
+  return { higher: money(higher, cur), doubles: higher === 2 * amount(o.settings, "monthly", cur) };
+}
+
 export function sharingEffect(o: {
   settings: V3Settings;
   plan: Plan;
@@ -35,9 +52,10 @@ export function sharingEffect(o: {
   if (band(o.from) === band(o.to)) return null;
   const standard = money(amount(o.settings, "monthly", cur), cur);
   const higher = money(amount(o.settings, "monthly", cur, "higher"), cur);
-  if (o.status === "trial" && (o.trialStartedAt || o.switchedFromPerRun)) {
+  if (o.status === "trial") {
     // The told Monday when there is one; a switched member's trial dates mean nothing (their free lists are long past).
-    const week = o.quoteWeek ?? (o.switchedFromPerRun || !o.trialStartedAt ? null : addDays(weekOf(new Date(o.trialStartedAt)), 14));
+    // With no card saved yet (trialStartedAt null) there is no first-charge date to give: the free lists start with the card.
+    const week = o.switchedFromPerRun ? (o.quoteWeek ?? null) : o.trialStartedAt ? (o.quoteWeek ?? addDays(weekOf(new Date(o.trialStartedAt)), 14)) : null;
     const before = week ? `the Sunday cutoff before your first charge (no earlier than ${longDate(week)})` : "the Sunday cutoff before your first monthly charge";
     return o.to === "share"
       ? `With sharing on at ${before}, your first month is ${standard}.`

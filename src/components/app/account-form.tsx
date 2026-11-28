@@ -24,7 +24,7 @@ export function AccountForm({ google = false, knownEmail = null }: { google?: bo
         <h2 className="text-title">Check your email.</h2>
         <p className="mt-3 max-w-[40rem] text-ink-2">
           We sent a link to <strong className="font-[600] text-ink">{state.email}</strong>. Open it on this device to confirm your address
-          and confirm your plan. It works for 15 minutes.
+          and carry on. It works for 15 minutes.
         </p>
       </div>
     );

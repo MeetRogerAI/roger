@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cancelPlan, undoCancel, type PlanDeps } from "@/lib/billing/cancel";
 import { switchPlan } from "@/lib/billing/switch";
-import { delivered, dollars, monday, newWorld, order, outcome, passHours, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
+import { delivered, dollars, firstList, leftoverPerRun, monday, newWorld, order, outcome, passHours, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 // One at a time is not offered at launch (`plans.oneAtATimeOffered` in src/data/config.ts, read through
@@ -17,6 +17,12 @@ vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import
  * order for that Monday, so it is charged once; cancelling in the trial ends at
  * once with the card removed; cancelling a subscription leaves the paid month,
  * can be undone, and the month that follows is charged once.
+ *
+ * Since plan 2026-11-26-001 monthly is the only plan: nothing offers a switch
+ * (the action refuses one to per-run), so the two switch scenarios are legacy
+ * coverage of the dormant `switchPlan` code, called directly, with a leftover
+ * per-run account for the second. Members sign up with no card and save it
+ * at their first (held) list.
  */
 let w: World;
 
@@ -42,7 +48,8 @@ const firstCharges = () => w.stripe.callsTo("subscriptions.create");
 
 async function subscriber(email: string): Promise<Member> {
   const m = await signUp(w, { email, currency: "USD", country: "US" });
-  await weeksWithRuns(w, [m], ["2026-12-07", "2026-12-14", "2026-12-21"]);
+  await firstList(w, [m], "2026-12-07");
+  await weeksWithRuns(w, [m], ["2026-12-14", "2026-12-21"]);
   expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "monthly" });
   return m;
 }
@@ -76,7 +83,7 @@ describe("switching plans", () => {
   });
 
   it("one at a time to monthly: the order for that Monday is replaced, and the Monday is charged once, at the amount the email stated (spec check 41)", async () => {
-    const m = await signUp(w, { email: "uno@example.com", currency: "USD", country: "US", plan: "per_run" });
+    const m = await leftoverPerRun(w, { email: "uno@example.com", currency: "USD", country: "US" });
     await weeksWithRuns(w, [m], ["2026-12-07", "2026-12-14"]);
     await w.at(toronto("2026-12-19", "12:00"));
     expect(await order(w, m, "2026-12-21")).toEqual({ ok: true });
@@ -133,8 +140,8 @@ describe("while one at a time is not offered (the switch off, as at launch)", ()
 
   it("a member still in the trial cannot switch to it either, and is charged with the third Cora Curation as told", async () => {
     const m = await signUp(w, { email: "tia@example.com", currency: "USD", country: "US" });
-    await weeksWithRuns(w, [m], ["2026-12-07"]);
-    await w.at(toronto("2026-12-09", "10:00"));
+    await firstList(w, [m], "2026-12-07");
+    await w.at(toronto("2026-12-10", "10:00"));
     expect(await switchPlan(w.query, plan(), { userId: m.id, to: "per_run" })).toMatchObject({ ok: false });
     expect(await userRow(w, m.id)).toMatchObject({ status: "trial", plan: "monthly" });
     await weeksWithRuns(w, [m], ["2026-12-14", "2026-12-21"]);
@@ -144,7 +151,7 @@ describe("while one at a time is not offered (the switch off, as at launch)", ()
 
   it("an account already on one at a time can still move to monthly, which is charged once with the next Cora Curation", async () => {
     offer.on = true;
-    const m = await signUp(w, { email: "una@example.com", currency: "USD", country: "US", plan: "per_run" });
+    const m = await leftoverPerRun(w, { email: "una@example.com", currency: "USD", country: "US" });
     await weeksWithRuns(w, [m], ["2026-12-07", "2026-12-14"]);
     offer.on = false;
     await w.at(toronto("2026-12-23", "10:00"));
@@ -162,7 +169,8 @@ describe("while one at a time is not offered (the switch off, as at launch)", ()
 describe("cancelling", () => {
   it("in the trial: ends at once, removes the saved card, says nothing was charged, and no list follows", async () => {
     const m = await signUp(w, { email: "tom@example.com", currency: "USD", country: "US" });
-    await weeksWithRuns(w, [m], ["2026-12-07"]);
+    // The first list held, then the card saved on the Tuesday (the list unlocked); the cancel on the Wednesday.
+    await firstList(w, [m], "2026-12-07", { cardAt: toronto("2026-12-08", "12:00") });
     await w.at(toronto("2026-12-09", "10:00"));
     expect(await cancelPlan(w.query, plan(), { userId: m.id, reason: "Not for me" })).toMatchObject({ ok: true });
     expect(await userRow(w, m.id)).toMatchObject({ status: "cancelled" });

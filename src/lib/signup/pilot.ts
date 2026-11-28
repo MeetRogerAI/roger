@@ -8,8 +8,9 @@ import { appUrl } from "@/lib/mail/layout";
 
 /**
  * Spec B.4, "Existing pilot users": an admin makes an account for a person and
- * gets a link that opens at the plan step, so the pilot users add a card and
- * start their two free lists like everyone else.
+ * gets a link that opens at Step 3, Product and Pricing (`/start/plan`). They
+ * finish sign-up there and add a card when their first list is ready, like
+ * everyone else (plan 2026-11-26-001, Unit 2; origin R26).
  *
  * The link is single-use, lasts 7 days, opens the same confirm page as every
  * sign-in link, and is shown to the admin once (only its hash is stored). It

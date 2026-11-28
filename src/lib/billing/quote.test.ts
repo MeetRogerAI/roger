@@ -4,7 +4,7 @@ import type { Transport } from "@/lib/mail/send";
 import { mergeV3 } from "@/lib/v3-settings";
 import { testDb } from "@/test-helpers/pglite-db";
 import { chargeFirst } from "./first-charge";
-import { noticeQuoteChange, quoteFrozen, sendFirstChargeReminders, sendFirstPaidNext } from "./quote";
+import { noticeQuoteChange, quotable, quoteFrozen, sendFirstChargeReminders, sendFirstPaidNext } from "./quote";
 import type { BillingGateway } from "./subscriptions";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -59,7 +59,7 @@ beforeEach(async () => {
   vi.stubEnv("STRIPE_PRICE_MONTHLY_HIGHER_USD", "price_monthly_higher_usd");
   vi.stubEnv("ADMIN_EMAILS", "");
   [{ id: uid }] = await query<{ id: string }>(
-    "insert into users (email, status, plan, currency, sharing, stripe_customer, free_lists_used) values ('ana@example.com', 'trial', 'monthly', 'USD', 'share', 'cus_1', 2) returning id",
+    "insert into users (email, status, plan, currency, sharing, stripe_customer, free_lists_used, trial_started_at) values ('ana@example.com', 'trial', 'monthly', 'USD', 'share', 'cus_1', 2, '2026-11-16T15:00:00Z') returning id",
   );
 });
 
@@ -95,6 +95,23 @@ describe("the told amount (spec check 21)", () => {
       expect(await noticeQuoteChange(query, deps(new Date(at)), uid)).toBe(true);
     }
     expect(sent.filter((m) => m.subject === "Your first charge amount changed")).toHaveLength(3);
+  });
+
+  // S18 point a review: a quote told before the tax was kept is refreshed with its tax, silently when the amount is the same.
+  it("refreshes a quote told without its tax silently, keeping when it was told, and still tells a changed amount", async () => {
+    const taxed: BillingGateway = { ...gw, preview: async (o) => ({ ...(await gw.preview(o)), taxCents: 2600 }) };
+    const old = { totalCents: 22600, currency: "USD", price: "price_monthly_usd", extraCents: 0, at: "2026-12-07T15:00:00.000Z", week: WEEK };
+    await query("update users set quote = $1", [JSON.stringify(old)]);
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T15:00:00Z")), gw: taxed }, uid)).toBe(false);
+    expect(sent).toEqual([]);
+    const [{ quote }] = await query<{ quote: Record<string, unknown> }>("select quote from users");
+    expect(quote).toMatchObject({ totalCents: 22600, taxCents: 2600, at: old.at, week: WEEK });
+    // Now kept with its tax: the same amount again changes nothing.
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T16:00:00Z")), gw: taxed }, uid)).toBe(false);
+    // A different amount is still told.
+    await switchSharing("off", "2026-12-09T17:00:00Z");
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T17:00:00Z")), gw: taxed }, uid)).toBe(true);
+    expect(sent.map((m) => m.subject)).toEqual(["Your first charge amount changed"]);
   });
 
   it("does not store an amount whose email failed; the charge then holds and tells instead of charging it", async () => {
@@ -151,5 +168,146 @@ describe("who is quoted", () => {
     await query("update users set plan = 'monthly', status = 'active'");
     expect(await sendFirstChargeReminders(query, deps(SATURDAY))).toBe(0);
     expect(sent).toEqual([]);
+  });
+});
+
+describe("a trial with no card yet (plan 2026-11-26-001, Unit 1)", () => {
+  it("is never quoted, even with a Stripe customer: no email, no stored amount, no preview", async () => {
+    // Payment creates the Stripe customer before the card is saved; trial_started_at is "card saved".
+    await query("update users set trial_started_at = null");
+    let previews = 0;
+    const counting = { ...deps(MONDAY_BEFORE), gw: { ...gw, preview: async (o: Parameters<BillingGateway["preview"]>[0]) => (previews++, gw.preview(o)) } };
+    expect(await sendFirstPaidNext(query, counting, uid)).toBe(false);
+    await switchSharing("off", "2026-12-08T12:00:00Z");
+    expect(await noticeQuoteChange(query, { ...counting, now: new Date("2026-12-08T12:00:00Z") }, uid)).toBe(false);
+    expect(await sendFirstChargeReminders(query, { ...counting, now: SATURDAY })).toBe(0);
+    expect(previews).toBe(0);
+    expect(sent).toEqual([]);
+    expect((await told()).total).toBeNull();
+  });
+
+  it("quotable: a Stripe customer alone is not a card", () => {
+    const base = { plan: "monthly", status: "trial", stripe_customer: "cus_1" };
+    expect(quotable({ ...base, trial_started_at: null })).toBe(false);
+    expect(quotable({ ...base, trial_started_at: "2026-11-16T15:00:00Z" })).toBe(true);
+    expect(quotable({ ...base, stripe_customer: null, trial_started_at: "2026-11-16T15:00:00Z" })).toBe(false);
+  });
+});
+
+describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
+  // US$200 at 13% tax; the coupon takes 20% off before tax: (20000 - 4000) * 1.13 = 18080.
+  const gone = new Set<string>();
+  const coupons: (string | null)[] = [];
+  const created: (string | null)[] = [];
+  const promoGw: BillingGateway = {
+    preview: async ({ coupon }) => {
+      coupons.push(coupon ?? null);
+      if (coupon && gone.has(coupon)) throw Object.assign(new Error(`No such coupon: '${coupon}'`), { code: "resource_missing", param: "discounts[0][coupon]" });
+      const off = coupon ? 4000 : 0;
+      return { totalCents: Math.round((20000 - off) * 1.13), currency: "USD", discountCents: off, taxCents: Math.round((20000 - off) * 0.13) };
+    },
+    subscriptions: async () => [],
+    createSubscription: async ({ coupon }) => (created.push(coupon ?? null), { kind: "succeeded", object: "sub_1", amountCents: coupon ? 18080 : 22600, currency: "USD" }),
+  };
+  const pdeps = (now: Date) => ({ ...deps(now), gw: promoGw });
+  const promo = async () => (await query<{ coupon: string | null; label: string | null }>("select promo_coupon as coupon, promo_label as label from users"))[0];
+
+  beforeEach(async () => {
+    gone.clear();
+    coupons.length = 0;
+    created.length = 0;
+    await query("update users set promo_code = 'WELCOME20', promo_coupon = 'co_20', promo_label = 'WELCOME20'");
+  });
+
+  it("the second-list email, the reminder and the charge all carry the discount, at the same told amount", async () => {
+    expect(await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid)).toBe(true);
+    expect((await query<{ quote: unknown }>("select quote from users"))[0].quote).toMatchObject({ totalCents: 18080, coupon: "co_20", discountCents: 4000, week: WEEK });
+    expect(await sendFirstChargeReminders(query, pdeps(SATURDAY))).toBe(1);
+    for (const m of sent) {
+      expect(m.text).toContain("US$180.80");
+      expect(m.text).toContain("That includes your promo code WELCOME20: US$40 off.");
+    }
+    expect(await chargeFirst(query, pdeps(MONDAY_CHARGE), uid, WEEK)).toBe("charged");
+    expect(coupons).toEqual(["co_20", "co_20", "co_20"]);
+    expect(created).toEqual(["co_20"]);
+  });
+
+  it("a coupon deleted before the second-list email is dropped: the full price is told, with no discount line", async () => {
+    gone.add("co_20");
+    expect(await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid)).toBe(true);
+    expect(await told()).toMatchObject({ total: 22600 });
+    expect(await promo()).toEqual({ coupon: null, label: null });
+    expect(sent[0].text).toContain("US$226");
+    expect(sent[0].text).not.toContain("promo code");
+    expect(await chargeFirst(query, pdeps(MONDAY_CHARGE), uid, WEEK)).toBe("charged");
+    expect(created).toEqual([null]);
+  });
+
+  it("no promo: the emails have no discount line and the quote records no coupon", async () => {
+    await query("update users set promo_code = null, promo_coupon = null, promo_label = null");
+    await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid);
+    expect(sent[0].text).not.toContain("promo code");
+    expect((await query<{ quote: unknown }>("select quote from users"))[0].quote).toMatchObject({ totalCents: 22600, coupon: null, discountCents: 0 });
+  });
+
+  // Review F5: how long the discount lasts, in both emails, and the regular month after one that ends.
+  it.each([
+    ["once", null, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$200 a month plus tax.", 22600],
+    ["repeating", 1, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$200 a month plus tax.", 22600],
+    ["repeating", 3, "That includes your promo code WELCOME20: US$40 off a month for your first 3 months. After that, it’s US$200 a month plus tax.", 22600],
+    ["forever", null, "That includes your promo code WELCOME20: US$40 off every month.", undefined],
+  ])("a %s discount (%s months): both emails word it, and the quote notes the amount after", async (duration, months, line, recurring) => {
+    await query("update users set promo_duration = $1, promo_duration_months = $2", [duration, months]);
+    expect(await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid)).toBe(true);
+    expect(await sendFirstChargeReminders(query, pdeps(SATURDAY))).toBe(1);
+    expect(sent).toHaveLength(2);
+    for (const m of sent) {
+      // The price plus the tax, never "tax included" (S18 point a).
+      expect(m.text).toContain("US$180.80 (US$160 plus US$20.80 tax)");
+      expect(m.text).not.toContain("tax included");
+      expect(m.text).toContain(line);
+    }
+    const q = (await query<{ quote: Record<string, unknown> }>("select quote from users"))[0].quote;
+    expect(q).toMatchObject({ totalCents: 18080, coupon: "co_20", discountCents: 4000 });
+    expect(q.recurringCents).toBe(recurring);
+    // The amount after is a plain preview (no coupon); the charge is still the told, discounted amount.
+    expect(await chargeFirst(query, pdeps(MONDAY_CHARGE), uid, WEEK)).toBe("charged");
+    expect(created).toEqual(["co_20"]);
+  });
+
+  it("the amount after the discount cannot be previewed: the email still goes, without that sentence", async () => {
+    await query("update users set promo_duration = 'once'");
+    const flaky: BillingGateway = { ...promoGw, preview: async (o) => (o.coupon ? promoGw.preview(o) : Promise.reject(new Error("Stripe down"))) };
+    expect(await sendFirstPaidNext(query, { ...deps(MONDAY_BEFORE), gw: flaky }, uid)).toBe(true);
+    expect(sent[0].text).toContain("That includes your promo code WELCOME20: US$40 off your first month.");
+    expect(sent[0].text).not.toContain("After that");
+  });
+
+  // Review F4: a quote told before Unit 8 has no coupon field, so a coupon alone never makes it "changed".
+  it("a quote from before Unit 8 (no coupon field) at the same amount is not told again", async () => {
+    await query("update users set quote = $1", [JSON.stringify({ totalCents: 18080, currency: "USD", price: "price_monthly_usd", extraCents: 0, at: "2026-12-07T15:00:00Z", week: WEEK })]);
+    expect(await noticeQuoteChange(query, pdeps(new Date("2026-12-09T15:00:00Z")), uid)).toBe(false);
+    expect(sent).toEqual([]);
+    // With the field, a different coupon is a change.
+    await query("update users set quote = quote || '{\"coupon\": null}'::jsonb");
+    expect(await noticeQuoteChange(query, pdeps(new Date("2026-12-09T15:00:00Z")), uid)).toBe(true);
+  });
+
+  // Review F7: an expired coupon (past redeem_by) at the quote, then at the charge.
+  it("a coupon past its redeem_by at the reminder: the full price is told, and the charge matches it", async () => {
+    await sendFirstPaidNext(query, pdeps(MONDAY_BEFORE), uid);
+    const expired: BillingGateway = {
+      ...promoGw,
+      preview: async (o) => {
+        if (o.coupon) throw Object.assign(new Error(`Coupon ${o.coupon} is expired and cannot be applied.`), { type: "StripeInvalidRequestError", code: "coupon_expired", param: "discounts" });
+        return promoGw.preview(o);
+      },
+    };
+    expect(await sendFirstChargeReminders(query, { ...deps(SATURDAY), gw: expired })).toBe(1);
+    expect(sent[1].text).toContain("US$226");
+    expect(sent[1].text).not.toContain("promo code");
+    expect(await promo()).toEqual({ coupon: null, label: null });
+    expect(await chargeFirst(query, { ...deps(MONDAY_CHARGE), gw: expired }, uid, WEEK)).toBe("charged");
+    expect(created).toEqual([null]);
   });
 });

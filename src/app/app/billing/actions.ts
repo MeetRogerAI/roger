@@ -5,14 +5,14 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUserForAction } from "@/lib/auth/access";
 import { cancelPlan, undoCancel, type PlanDeps, type PlanResult } from "@/lib/billing/cancel";
-import { startCardUpdate } from "@/lib/billing/card-setup";
+import { CHECKOUT_LIMITED, checkoutAllowed, startCardUpdate } from "@/lib/billing/card-setup";
 import { stripeGateway } from "@/lib/billing/gateway";
 import { stripeAdjustments, stripeBilling, stripePlans } from "@/lib/billing/subscriptions";
 import { switchPlan } from "@/lib/billing/switch";
 import { query } from "@/lib/db-query";
 import { field } from "@/lib/form";
 import { appUrl } from "@/lib/mail/layout";
-import { clientIp, hit, limits } from "@/lib/rate-limit";
+import { clientIp, hit } from "@/lib/rate-limit";
 import { readV3Settings } from "@/lib/v3-settings";
 
 /**
@@ -32,7 +32,15 @@ const OFF: BillingState ={ status: "error", message: "Billing isn’t switched o
 async function deps(): Promise<PlanDeps | null> {
   const plans = stripePlans();
   if (!plans) return null;
-  return { plans, gw: stripeBilling() ?? undefined, adjust: stripeAdjustments() ?? undefined, settings: await readV3Settings(), now: new Date() };
+  return {
+    plans,
+    gw: stripeBilling() ?? undefined,
+    adjust: stripeAdjustments() ?? undefined,
+    // A no-card trial's stored Payment session is settled around its cancel (review fixes Unit 9, F5).
+    card: stripeGateway() ?? undefined,
+    settings: await readV3Settings(),
+    now: new Date(),
+  };
 }
 
 function answer(r: PlanResult): BillingState {
@@ -59,11 +67,16 @@ export async function undoCancelAction(): Promise<BillingState> {
   return answer(await undoCancel(query, d, { userId: s.userId }));
 }
 
-/** Between monthly and one list at a time; the page showed the effect beside the button. */
+/**
+ * A switch to monthly. Monthly is the only plan (plan 2026-11-26-001, Unit 9;
+ * origin R1): the page offers no switch, and a switch to one list at a time
+ * posted here anyway is refused before anything is read or written. The
+ * per-run code stays dormant (Scope Boundaries).
+ */
 export async function switchAction(_prev: BillingState, fd: FormData): Promise<BillingState> {
   const s = await requireUserForAction();
   const to = field(fd, "to");
-  if (to !== "monthly" && to !== "per_run") return { status: "error", message: "Choose a plan." };
+  if (to !== "monthly") return { status: "error", message: "Monthly is the only plan." };
   if (!(await mutationAllowed(s.userId))) return TOO_MANY;
   const d = await deps();
   if (!d) return OFF;
@@ -75,14 +88,7 @@ export async function updateCardAction(): Promise<BillingState> {
   const s = await requireUserForAction();
   const gw = stripeGateway();
   if (!gw) return OFF;
-  const ip = clientIp(await headers());
-  const allowed = [
-    await hit(`checkout:user:${s.userId}`, limits.checkoutPerUser),
-    await hit(`checkout:ip:${ip}`, limits.checkoutPerIp),
-    await hit(`checkout:user-day:${s.userId}`, limits.checkoutPerUserDay),
-    await hit(`checkout:ip-day:${ip}`, limits.checkoutPerIpDay),
-  ];
-  if (allowed.includes(false)) return { status: "error", message: "Too many tries. Wait a while and try again, or write to us." };
+  if (!(await checkoutAllowed(s.userId, clientIp(await headers())))) return { status: "error", message: CHECKOUT_LIMITED };
   let r: Awaited<ReturnType<typeof startCardUpdate>>;
   try {
     r = await startCardUpdate(query, gw, {
@@ -95,5 +101,5 @@ export async function updateCardAction(): Promise<BillingState> {
     return { status: "error", message: "Something went wrong on our side. Try again in a minute." };
   }
   if (r.ok) redirect(r.url);
-  return { status: "error", message: r.reason === "no_card_yet" ? "Add your card from the sign-up first." : "This account can’t take a new card." };
+  return { status: "error", message: r.reason === "no_card_yet" ? "There is no card on this account yet. We ask for it when your first list is ready." : "This account can’t take a new card." };
 }

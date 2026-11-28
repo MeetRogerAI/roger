@@ -1,8 +1,8 @@
 # Roger v3: design and build spec for meetroger.ai
 
-Version 1.3 · November 25, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
+Version 1.5 · November 26, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/roger` (branch from `main`)
 
-**What this is.** A spec to hand to Claude Code. It replaces the Circles spec (`artifacts/Archives/Circles/Roger (CTA Circles) - design spec.md`, version 0.6) and turns meetroger.ai into the v3 product: a free trial, two ways to pay (monthly, or one list at a time), and a weekly cycle that sends each user three ideas every Monday. Strategy source: `artifacts/Strategy/Roger-Strategy-v3.1.md`. Decisions source: the design interview with Peter on November 21, 2026.
+**What this is.** A spec to hand to Claude Code. It replaces the Circles spec (`artifacts/Archives/Circles/Roger (CTA Circles) - design spec.md`, version 0.6) and turns meetroger.ai into the v3 product: a free trial, one plan (monthly) *(1.4)*, and a weekly cycle that sends each user three ideas every Monday. Strategy source: `artifacts/Strategy/Roger-Strategy-v3.1.md`. Decisions source: the design interview with Peter on November 21, 2026.
 
 **Two builders, two parts.**
 
@@ -41,24 +41,43 @@ Version 1.3 · November 25, 2026 · Owner: Peter Kuperman · Repo: `MeetRogerAI/
 - Cancelling a monthly plan keeps it active until the paid month ends; switching back to monthly carries an unbilled difference into the first charge (B.9).
 - A changed email is approved from the current address, then confirmed from the new one (B.10); Google sign-in is accepted only for addresses Google is the authority for (B.3).
 
+**What changed in 1.4** (November 26, 2026; written back from the build of `docs/plans/2026-11-26-001-feat-payment-at-first-curation-plan.md`, source `docs/brainstorms/2026-11-26-payment-at-first-curation-requirements.md` R1 to R30, and the plan's as-built notes, which win where they differ). Every changed passage carries the mark *(1.4)*. This reverses Strategy v3.1 decision 38 (card up front); the strategy file carries a dated note.
+
+- **Monthly is the only plan.** US$200 or CA$280 a month, before tax. One list at a time is no longer offered anywhere: not in sign-up, on `/app/billing` (no plan switch), in the public price block or in the FAQ. The per-run code stays in the repo, unreachable, until a cleanup after launch; leftover per-run test accounts on preview are not migrated (0.2, A.4, A.7, A.14, B.9).
+- **Sign-up is three steps, and asks for no card** (B.4). The quiz, the account, then Step 3 "Product and Pricing" with the Zack consent; it ends in `/app` onboarding as a trial with no card. The old card and done pages are gone. The welcome email is sent at Step 3.
+- **The card is asked for when the first list is ready** (B.4 Step 4, B.7, B.8). A trial with no card has its Monday list picked and **held**: the email and `/app` show the titles only and link to the new **Payment** page (Step 4 of 4, an embedded Stripe card form). Saving the card delivers the held list at once as free list 1 of 2. A newer held list replaces the older one when its week is ready. Free lists, and so the third-list charge, count only from the card.
+- **No-card clocks** (B.8, B.9). Day-2 and day-7 reminders after the first teaser; the account closes 14 days after its first teaser, or 21 days after consent if no list was ever held; a card confirmed in Stripe within 7 days of the 14-day (`no_card`) close reopens the trial; the 21-day never-connected close is not reopened. The card-saved clocks are unchanged.
+- **Payment** (B.4): Canada and the US only, a Price Box with a USD/CAD toggle and live tax, a promo code, "Due today: CA$0" (or US$0), "Start free trial". A promo code is locked in when the card is saved and applied at the first charge (B.9).
+- **Public copy** (A.4, A.5, A.7, A.14): the price block shows monthly only; the trial line is "Your first two Cora lists are free. We ask for your card when your first list is ready."; the card FAQs are rewritten and the one-at-a-time FAQ is removed. The higher-rate rule stays in the FAQ and the terms only, never in sign-up or Payment.
+- **Emails** (B.13): first list held, held reminder, the no-card closing email; the welcome is reworded and moves to Step 3.
+- **Admin** (B.12): a "First list held, no card" attention state and a "Trial · no card" status; `/admin/interest` shows a sign-up funnel by week (signed up, Zack connected, first teaser, card saved, first charge) instead of the per-run plan count.
+
+**What changed in 1.5** (Peter, November 26, 2026: Roger AI Levels and the build order):
+
+- A fourth app version, **B4: levels**, comes after B3 (B.16a, B.17), with acceptance checks 51 to 58 (B.18). It is specified in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md` (the implementation) and `Roger AI Agent Levels and Check Charts v1.1.md` (the ten levels, rules and check charts). No existing version is renumbered.
+- In B2, the 26-week brick colours are renamed **Seasons** (`--color-season-1` to `--color-season-5`), because "Level" now means only Roger AI Levels (0.7, B.15).
+- In B2, sign-up quiz question 5 offers Levels 0 to 9, with each level's "you need it when…" symptom (B.4).
+- Zack 2.1 adds a private `roger-level` block. It ships as content once B1 is live, after intake is confirmed to ignore a fenced block it does not recognise (B.5).
+- B.17 no longer lists anything that could be cut from B1. Every version is built in full.
+
 ---
 
 # Part 0. Shared context
 
 ## 0.1 The product in one paragraph
 
-Roger makes each user's AI agents better every week. An agent called Zack runs inside the user's own agent account each Sunday and writes up the week's most useful work as "plays", with private details removed. Roger pools the plays from every contributing user. Early Monday, an agent called Cora picks the three plays most worth adopting for each user and sends them, each with a playbook the user pastes into their own agent to install. New users get two free Monday lists and add a card when they start. After that they choose US$200 a month, which is presented as the clear pick, or US$200 for one list at a time *(1.3)*.
+Roger makes each user's AI agents better every week. An agent called Zack runs inside the user's own agent account each Sunday and writes up the week's most useful work as "plays", with private details removed. Roger pools the plays from every contributing user. Early Monday, an agent called Cora picks the three plays most worth adopting for each user and sends them, each with a playbook the user pastes into their own agent to install. New users get two free Monday lists and add a card when their first list is ready; after that Roger is US$200 a month, the only plan *(1.4)*.
 
 ## 0.2 Decisions
 
 | Topic | Decision |
 |---|---|
-| What is sold | Two ways to buy after the trial: US$200 a month, presented as the clear pick, or US$200 for one list at a time, ordered when wanted *(1.3)*. |
-| Prices | US$200 a month or US$200 a list. CA$280 a month or CA$280 a list *(1.3)*. Set prices, not live conversion. |
+| What is sold | *(1.4)* One plan after the trial: US$200 a month. One list at a time is no longer offered. |
+| Prices | *(1.4)* US$200 a month, or CA$280 a month. Set prices, not live conversion. |
 | The higher rate | No non-contributor plan is offered on the site or at sign-up; everyone starts as a contributor. A monthly rate of US$400 (CA$560) applies only after two missed weeks in a month, or when a user switches sharing off in the dashboard. |
 | Sales tax | HST and other applicable tax is charged from this build onward. Prices are shown before tax. |
-| Free trial | Two delivered Cora lists are free. A card is collected at sign-up. Monthly users are charged with the third list. One-at-a-time users are charged only when they order a list. |
-| What counts as a free run | Only a list actually delivered. A trial with no first list within 21 days of sign-up closes without a charge. |
+| Free trial | Two delivered Cora lists are free. *(1.4)* No card at sign-up: the card is asked for when the first list is ready, and that list is held (titles only) until it is saved. Members are charged with the third delivered list. |
+| What counts as a free run | Only a list actually delivered, after the card is saved *(1.4)*. A trial with no first list within 21 days of sign-up closes without a charge; *(1.4)* a held list with no card closes 14 days after its first teaser (B.9). |
 | Refunds | None. Cancel any time in one click. |
 | Zack | Runs automatically each Sunday under standing consent given at sign-up, and sends its report to Roger. The user can turn sharing off in the dashboard, which moves a monthly user to the higher rate. |
 | Zack transparency | A signed-in user can read every line of the instructions their Zack runs and change what it collects, using switches, lists, and one free-text box for extra rules. |
@@ -66,12 +85,13 @@ Roger makes each user's AI agents better every week. An agent called Zack runs i
 | What a user sees on Monday | Three ideas only. Cora's tiers and the full pool stay internal. |
 | Contributor rule | For monthly users. One missed week per billing month is forgiven. A second miss makes that month US$400; the difference goes on the next invoice. A miss caused by Roger never counts. Users are told at every step (B.9). |
 | Referral credit | A referrer earns a credit equal to the referred user's first payment at list price (one month, or one list), in the referrer's own currency, when that payment clears. No cap. (Version B2.) |
-| Office deals | Sponsor codes created in the admin. Sponsored users skip the card step. The brokerage receives an invoice and nothing else: no login, no reporting. (Version B2.) |
-| Group session | Weekly, hosted by Ehab, for subscribers, one guest each. A session card in the dashboard. (Version B2.) |
+| Office deals | Sponsor codes created in the admin. Sponsored users skip the card step *(1.4: they never see a held list or Payment)*. The brokerage receives an invoice and nothing else: no login, no reporting. (Version B2.) |
+| Group session | Weekly, hosted by the Roger team, for subscribers, one guest each. A session card in the dashboard. (Version B2.) |
+| Roger AI Levels | *(1.5)* Ten levels, 0 (Non-user) to 9 (Multiplier), placed by what a user's agent system actually does, with a binary check chart for each level-up. Zack 2.1 collects the evidence in a private `roger-level` block; Roger scores it; Cora uses it to choose ideas. The levels are in `Roger AI Agent Levels and Check Charts v1.1.md`; the build is in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`. Version B4, with two small pieces in B2. |
 | Audiences | The homepage is for people in real estate. `/agents` is for people who already run AI agents. |
 | Sign-up quiz | Routes people into three paths and never blocks anyone. Its answers become the profile Cora matches on. |
 | Sign-in | Email link, plus "Sign in with Google". No passwords. |
-| Admins | Peter and Ehab are both admins with the same access. |
+| Admins | Everyone on the Roger team is an admin with the same access. |
 | Where the app lives | Same repo and domain. Public pages at `/`, the app under `/app/`. |
 | Design | The site's existing system (Mona Sans, copper, ground and night), plus a small data palette for score bars and bricks. |
 | Agents supported | Every agent platform. Zack files exist for Claude, Duet, Grok Bot, and Hark; any other agent adapts one with a single prompt, or the user uploads the report. The site may say "Works with every agent." |
@@ -86,8 +106,8 @@ Version 1.0 of this spec differed from the strategy in ten places. Peter settled
 
 | # | Topic | Settled as |
 |---|---|---|
-| 1 | Single runs | The strategy stands, simplified: two free lists, then US$200 a month or US$200 a run *(1.3)*, with monthly as the clear pick. No non-contributor plan is offered. |
-| 2 | Referral script | The strategy stands: "$200 a month for a list every Monday, or $200 for a single run" *(1.3)*. |
+| 1 | Single runs | The strategy stands, simplified: two free lists, then US$200 a month or US$200 a run *(1.3)*, with monthly as the clear pick. No non-contributor plan is offered. *(1.4)* Superseded on November 26, 2026: monthly is the only plan (Strategy v3.1, dated note). |
+| 2 | Referral script | The strategy stands: "$200 a month for a list every Monday, or $200 for a single run" *(1.3)*. *(1.4)* Now "$200 a month for a list every Monday" (A.14). |
 | 3 | Time-saved claims | This spec: Roger makes no income claims and no time-saved promises in its own voice. A named user's own words are their testimonial and may include time saved. |
 | 4 | Zack's sharing rule | This spec: standing consent at sign-up, an automatic weekly send, and controls in the dashboard. |
 | 5 | Users with sharing off | This spec: matched from a private Zack run, or from their sign-up profile when Zack is off. |
@@ -95,14 +115,14 @@ Version 1.0 of this spec differed from the strategy in ten places. Peter settled
 | 7 | Sales tax | This spec: HST and other applicable tax is charged from this build. |
 | 8 | The extra $200 after a second missed week | This spec: on the next invoice, with notices before it. |
 | 9 | Office deals | This spec: sponsor codes; the brokerage gets an invoice and nothing else. |
-| 10 | Admin roles | This spec: Peter and Ehab, with equal access. |
+| 10 | Admin roles | This spec: the Roger team, with equal access. |
 
 ## 0.4 What the site and the app may and may not say
 
 | Allowed | Not allowed |
 |---|---|
 | What Zack and Cora do, step by step | Income, revenue, or productivity promises in Roger's voice |
-| "Two free Monday lists. Your card is charged only with the third." | Any wording that hides the card or the charge date |
+| "Two free Monday lists. Your card is charged only with the third." *(1.4: "Your first two Cora lists are free. We ask for your card when your first list is ready.")* | Any wording that hides the card or the charge date |
 | "Works with every agent" | A list of "supported" agents that includes one with no Zack file, without the word "adapt" |
 | The live count of public use cases, read from the database | User counts, "join hundreds", or any hard-coded number |
 | Testimonials whose switch is on, word for word, with the person's first name and last initial | The brokerage's name, or any suggestion that a brokerage is an enterprise customer |
@@ -169,7 +189,7 @@ The two builders work in the same repo. Ownership is by path so they rarely touc
 | `--color-f-ease` | Ease to copy bar | `#2c8463` |
 | `--color-f-proof` | Proof bar | `#6650b4` |
 | `--color-f-surprise` | Surprise bar | `#b0457a` |
-| `--color-level-1` to `--color-level-5` | Brick and graph colour for each level | reach, ease, proof, surprise, hours, in that order |
+| `--color-season-1` to `--color-season-5` | Brick and graph colour for each Season *(1.5: renamed from `--color-level-*` in B2)* | reach, ease, proof, surprise, hours, in that order |
 | `--color-marker` | The "you are here" dot on the graph | `#c63b2b` |
 
 Check each value for at least 3:1 contrast against `--color-ground` and `--color-surface`, and add lifted versions for night chapters. Adjust lightness if needed and keep the hue. Every bar and brick also carries a text label or number, so colour is never the only signal.
@@ -207,7 +227,7 @@ Admin-editable values live in the `settings` table with defaults in `src/data/co
 | Key | Default |
 |---|---|
 | `v3.priceUsd`, `v3.priceCad` | 200, 280 (monthly) |
-| `v3.priceRunUsd`, `v3.priceRunCad` | 200, 280 (one list) *(1.3)* |
+| `v3.priceRunUsd`, `v3.priceRunCad` | 200, 280 (one list) *(1.3)*. *(1.4)* Not offered any more; kept only for leftover per-run accounts until the cleanup. |
 | `v3.priceHigherUsd`, `v3.priceHigherCad` | 400, 560 (monthly, after two missed weeks or with sharing off) |
 | `v3.freeRuns` | 2 |
 | `v3.trialCloseDays` | 21 |
@@ -274,11 +294,11 @@ Sitemap with `v3Mode` on: `/`, `/agents`, `/pricing`, `/how-it-works`, `/faq`, `
 
 Build these once in `src/components/v3/` and reuse them across pages.
 
-1. **Brick stack.** The recurring visual (0.7). Takes a week count and a level.
-2. **Price block (night).** USD and CAD toggle, reusing the behaviour in `src/components/circles/price.tsx`: default from the `x-vercel-ip-country` header, the choice kept for the tab, the currency code always shown after the amount. Two ways to buy, side by side: monthly, marked "Most people choose this" and visually the larger of the two, and one list at a time. Under them: the trial line and the tax line. No non-contributor plan is shown anywhere on the public site.
-   - Display: "US$200 / month USD" and "US$200 / list USD", or "CA$280 / month CAD" and "CA$280 / list CAD" *(1.3)*. With CAD showing, add "plus HST". With USD showing, add "plus tax where it applies".
-   - *(1.3)* Under the monthly price, one short line: "A new list every Monday, so about US$50 a list." (CAD: "about CA$70 a list"). Under the one-list price: "One list, for one Monday." The two plans cost the same, so the block must make plain that monthly is much cheaper per list.
-   - Trial line, always directly under the prices: "Your first two Monday lists are free. We ask for a card when you start. On monthly it is charged with your third list. On one at a time it is charged only when you order a list. Cancel before then and you pay nothing."
+1. **Brick stack.** The recurring visual (0.7). Takes a week count and a Season *(1.5)*.
+2. **Price block (night).** USD and CAD toggle, reusing the behaviour in `src/components/circles/price.tsx`: default from the `x-vercel-ip-country` header, the choice kept for the tab, the currency code always shown after the amount. *(1.4)* One price, monthly; one list at a time is not shown. Under it: the trial line and the tax line. No non-contributor plan is shown anywhere on the public site.
+   - Display: "US$200 / month USD", or "CA$280 / month CAD" *(1.4)*. With CAD showing, add "plus HST". With USD showing, add "plus tax where it applies".
+   - *(1.4)* Under the price, one short line: "A new list every Monday." ~~The two plans cost the same, so the block must make plain that monthly is much cheaper per list.~~ (1.3, removed with the one-list price.)
+   - Trial line, always directly under the price *(1.4)*: "Your first two Cora lists are free. We ask for your card when your first list is ready." The higher-rate rule is not part of the price block; it lives in the FAQ and the terms.
 3. **Testimonials.** Reads `testimonials` where `cleared` is true, ordered by `position`, filtered by audience. Each shows the quote word for word, then the attribution. The whole section is absent when no row is cleared. No carousel; a simple column or grid.
 4. **Sample idea card.** One real pool play, chosen in the admin, rendered with the idea card (0.7) and opened to show the sheet. Until a play is chosen, the section is absent.
 5. **The control block.** Short section titled "You decide what Zack shares", with three points and a link to `/how-it-works#zack`:
@@ -290,7 +310,7 @@ Build these once in `src/components/v3/` and reuse them across pages.
 
 ## A.5 Homepage, in order
 
-1. **Hero (night).** Headline, sub-line, primary button "Get two free Monday lists", secondary link "See how it works". The brick stack, with three bricks arriving. Under the buttons, in small type: "Card required. Charged only with your third list."
+1. **Hero (night).** Headline, sub-line, primary button "Get two free Monday lists", secondary link "See how it works". The brick stack, with three bricks arriving. Under the buttons, in small type, the trial line *(1.4)*: "Your first two Cora lists are free. We ask for your card when your first list is ready." (Was "Card required. Charged only with your third list.")
 2. **The problem (ground).** Three short statements (copy in A.14).
 3. **How it works (night), id `how`.** Four numbered steps: set up your AI agents, Zack reviews your week, Cora picks your three ideas, paste to install. The brick stack grows across the four steps.
 4. **What arrives on Monday (ground).** The sample idea card (A.4), with one line above it: "This is one idea, as it arrives." Absent until a play is chosen.
@@ -322,13 +342,10 @@ Every start button here links to `/start?path=agents`.
 
 ## A.7 `/pricing`
 
-1. The price block, full width, with monthly first and marked as the choice most people make.
+1. The price block, full width *(1.4: monthly only)*.
 2. **What is included,** as a plain list: three ideas every Monday, each with a full playbook; your own history of every idea you have received; your Zack controls; a compounding view of what you have set up; the weekly group session (shown only once B2 is live; controlled by a flag).
-3. **Monthly or one at a time, explained.** Two short columns.
-   - Monthly: "Three ideas every Monday. Charged once a month, starting with your third list."
-   - One at a time: "Order a list for any Monday you want one. You are charged only for the lists you order."
-   - One line under both: "One list on its own costs the same as a whole month. Monthly brings a list every Monday, so it is much cheaper: about a quarter of the price per list." *(1.3)*
-4. **How contributing works.** A short paragraph, set as an explanation and not as a plan: "Roger works because everyone's Zack contributes. On monthly, if Zack misses a week, the first miss each month is forgiven. A second miss makes that month US$400. We email you both times, and the difference appears on your next invoice. If you switch sharing off in your dashboard, the monthly price is US$400. One-at-a-time lists need that week's Zack report."
+3. **How billing works** *(1.4)*. One short paragraph: "Three ideas every Monday. Your first two Cora lists are free. We ask for your card when your first list is ready, and the first charge comes with your third list. After that you are charged once a month." (Replaces "Monthly or one at a time, explained" and its *(1.3)* comparison line.)
+4. **How contributing works.** A short paragraph, set as an explanation and not as a plan: "Roger works because everyone's Zack contributes. If Zack misses a week, the first miss each month is forgiven. A second miss makes that month US$400. We email you both times, and the difference appears on your next invoice. If you switch sharing off in your dashboard, the monthly price is US$400." *(1.4: the one-at-a-time sentence removed)*
 5. **No refunds, stated plainly.** "There are no refunds. You get two free lists before any charge, and you can cancel in one click."
 6. Primary button.
 
@@ -340,7 +357,7 @@ Narrow column, long form.
 2. **Zack, in detail,** id `zack`. What he reads (the past seven days of the user's own agent activity), what he never reads, what he removes, and what the user can change. Link to the public Zack files so anyone can read them before signing up.
 3. **Cora, in detail.** She scores every play on five things: hours saved, reach, ease to copy, proof, and surprise. She never sends a user something they already run, and never names who a play came from.
 4. **The anatomy of an idea.** The sample idea card laid out with a one-line margin note on each part: Play, Trigger, Setup first, Steps, Guardrails, Output, Pitfalls seen, Done when, Paste to install. The preface paragraph is shown first, labelled "Added to the top of every playbook".
-5. **Your first two weeks.** The trial, step by step, with the card and the charge date stated again.
+5. **Your first two weeks.** The trial, step by step, with the card and the charge date stated again. *(1.4)* The card is asked for when the first list is ready, and the first charge comes with the third list.
 6. **If you have no AI agent yet.** Two sentences and a link to `/getstarted`.
 
 ## A.9 `/faq`
@@ -384,8 +401,8 @@ Rewrite both in `src/data/legal.ts`, in the existing plain style, dated November
 
 **Terms**
 
-- The trial: two free lists, a card on file, the charge with the third list, the 21-day close.
-- The monthly price, the one-list price, the contributor rule, the higher monthly rate and the two cases where it applies, and how the difference is billed.
+- The trial: two free lists, a card on file, the charge with the third list, the 21-day close. *(1.4)* The card is asked for when the first list is ready and the free lists count from it; a held list with no card closes 14 days after its first teaser.
+- The monthly price, ~~the one-list price,~~ *(1.4: monthly is the only plan)* the contributor rule, the higher monthly rate and the two cases where it applies, and how the difference is billed.
 - No refunds; cancel any time; access continues to the end of the paid month.
 - Tax is added where it applies.
 - Plays are shared so other users can use them; a user keeps the right to their own work and grants Roger the right to share the anonymised play.
@@ -426,7 +443,7 @@ Draft copy for the builder to place. Peter edits before launch.
   3. "Each idea comes with a full playbook. Paste it into your agent and it adapts itself to your setup."
 - **Closing band:** "Find out what other heavy users know."
 
-**Referral script (for Ehab and referrers; not on the site).** "I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two weeks are free, then it's $200 a month for a list every Monday, or $200 for a single run, and you can cancel any time *(1.3)*. You add a card to start and it isn't charged until the third week. They run a short group call to get you set up. Want me to connect you?"
+**Referral script (for the Roger team and referrers; not on the site).** "I've been using Roger with my AI agents for a few weeks. Every Monday it sends me three ideas that are working for other real estate people, and I set them up in a few minutes. The first two lists are free, then it's $200 a month for a list every Monday, and you can cancel any time *(1.4)*. They ask for a card when your first list is ready, and it isn't charged until the third one *(1.4)*. They run a short group call to get you set up. Want me to connect you?"
 
 **Questions**
 
@@ -453,12 +470,12 @@ Draft copy for the builder to place. Peter edits before launch.
 
 *Price and billing*
 
-- *What does it cost?* "US$200 a month, or US$200 for one list at a time, plus tax where it applies. In Canada it is CA$280 a month or CA$280 a list, plus HST." *(1.3)*
-- *When is my card charged?* "On monthly, with your third Monday list and not before. On one at a time, only when you order a list. Your first two lists are free either way, and we email you after your second list with what happens next."
-- *Why do you need a card for a free trial?* "So that nothing changes on your third Monday. If you don't want to continue, cancel in one click before then and you pay nothing."
-- *What if Zack misses a week?* "On monthly, the first miss each month is forgiven. A second miss makes that month US$400. We email you both times."
+- *What does it cost?* "US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST." *(1.4)*
+- *When is my card charged?* "With your third Monday list, and not before. Your first two Cora lists are free. We ask for your card when your first list is ready, and nothing is charged when you add it. We email you after your second list with the date and the amount." *(1.4)*
+- *Why do you need a card for a free trial?* "We ask for it when your first list is ready, so you can see your ideas are real before you add it. Adding it is what unlocks the list, and it means nothing changes on your third Monday. If you don't want to continue, cancel in one click before then and you pay nothing." *(1.4)*
+- *What if Zack misses a week?* "The first miss each month is forgiven. A second miss makes that month US$400. We email you both times." *(1.4: the higher-rate rule stays in the FAQ and the terms, and is never shown in sign-up or on Payment)*
 - *Can I get a refund?* "No. You get two free lists before any charge, and you can cancel any time."
-- *Can I buy one list at a time?* "Yes. One list costs US$200, and you order it for any Monday you want. Monthly is much cheaper: for the same US$200 you get a new list every Monday, so each list works out to about US$50." *(1.3)*
+- ~~*Can I buy one list at a time?*~~ *(1.4)* Removed: monthly is the only plan.
 
 ## A.15 Versions and sizes
 
@@ -490,7 +507,7 @@ Draft copy for the builder to place. Peter edits before launch.
 6. No page shows a user count, a hard-coded number, the brokerage's name, or an income claim.
 7. The testimonials section is absent when no quote is switched on, appears when one is, and shows each quote word for word.
 8. The sample idea section is absent until a play is chosen in the admin.
-9. The price block shows monthly as the marked choice beside one list at a time, and no non-contributor plan appears anywhere on the public site.
+9. *(1.4)* The price block shows monthly only; no one-at-a-time price and no non-contributor plan appears anywhere on the public site, and the trial line reads "Your first two Cora lists are free. We ask for your card when your first list is ready."
 10. On every page except `/agents` and `/zack`, the words "agent" and "agents" never appear without "AI" in front, outside a testimonial's own words.
 11. Forms work by keyboard alone; the accordion and the currency toggle expose their state; nothing moves under `prefers-reduced-motion`.
 12. `npm run build` and `npm run lint` pass.
@@ -501,7 +518,7 @@ Draft copy for the builder to place. Peter edits before launch.
 
 ## B.1 Goal and rules
 
-**Goal.** A person can go from the public site to a working weekly cycle without talking to anyone: sign up, connect Zack, receive two free lists, be charged with the third, and manage everything themselves. Ehab can see every user's state on one screen and step in where someone is stuck.
+**Goal.** A person can go from the public site to a working weekly cycle without talking to anyone: sign up, connect Zack, receive two free lists, be charged with the third, and manage everything themselves. The Roger team can see every user's state on one screen and step in where someone is stuck.
 
 **Rules that apply to every screen and email in the app.**
 
@@ -516,14 +533,15 @@ Draft copy for the builder to place. Peter edits before launch.
 
 | Route | Version | What it is |
 |---|---|---|
-| `/start`, `/start/account`, `/start/plan`, `/start/card`, `/start/done` | B1 | Sign-up |
+| `/start`, `/start/account`, `/start/plan` | B1 | Sign-up *(1.4: three steps; `/start/card` and `/start/done` removed)* |
+| `/start/payment`, `/start/payment/done` | B1 | *(1.4)* Payment (Step 4), reached from a held list, and its return page |
 | `/signin`, `/auth/*` | B1 | Email link and Google sign-in |
 | `/getstarted` | B1 | Public startup page with the versioned setup file |
 | `/app` | B1 | Home: status and this week's three ideas |
 | `/app/week/[date]` | B1 | Any past week's three ideas |
 | `/app/history` | B1 | Every idea received, and which are set up |
 | `/app/zack` | B1 | Zack connection, controls, instructions, run history |
-| `/app/billing` | B1 | Plan, next charge, invoices, card, cancel |
+| `/app/billing` | B1 | Plan, next charge, invoices, card, cancel *(1.4: no plan switch)* |
 | `/app/settings` | B1 | Name, display name, email, time zone, email preferences |
 | `/app/referrals`, `/app/sessions`, `/app/leaderboard` | B2 | Growth features |
 | `/r/[code]`, `/g/[token]` | B2 | Referral link and guest invitation |
@@ -543,13 +561,13 @@ Every `/app/*` and `/admin/*` page carries noindex and requires a session.
 - **Google.** "Sign in with Google" using the verified email from Google. Google's own account id is stored at first use and matched on afterwards. Google is trusted for an address only where it is the authority for it: a `@gmail.com` or `@googlemail.com` address, or a Google Workspace account whose domain is the address's domain. For any other address, an existing account must first sign in with an email link and then link Google from `/app/settings`; a new sign-up with such an address is sent the ordinary email sign-up link. Linking Google to an existing account sends a notice to that account's address. Changing the account's email unlinks Google. A Google sign-in never grants admin access, and admin addresses are never linked to Google. The button is hidden until the Google keys exist. *(1.2)*
 - **No passwords** are stored anywhere.
 - **Session:** an httpOnly, secure cookie lasting 30 days, renewed on use. Sign-out clears it.
-- **Admins:** Peter and Ehab. An admin is a signed-in user whose email is listed in the `ADMIN_EMAILS` environment variable. Both have identical access. The existing `/admin` pages move to this check, and the shared `ADMIN_PASSWORD` login is removed once it works. Until then it stays, switched by the variable itself: unset, the password login is off and every password cookie stops working. Admin pages need an email-link sign-in from the last 14 days, and the address is checked against `ADMIN_EMAILS` on every request. *(1.2)*
+- **Admins:** the Roger team. An admin is a signed-in user whose email is listed in the `ADMIN_EMAILS` environment variable. All admins have identical access. The existing `/admin` pages move to this check, and the shared `ADMIN_PASSWORD` login is removed once it works. Until then it stays, switched by the variable itself: unset, the password login is off and every password cookie stops working. Admin pages need an email-link sign-in from the last 14 days, and the address is checked against `ADMIN_EMAILS` on every request. *(1.2)*
 - **Rate limits** on sign-in requests by email and by IP.
 - The choice of auth library is the builder's. The existing HMAC cookie in `src/lib/admin-auth.ts` shows the house style.
 
 ## B.4 Sign-up
 
-Five short screens. Progress is saved after each, so a person who leaves can return by signing in.
+~~Five short screens.~~ *(1.4)* Three short steps (the quiz, the account, Product and Pricing), then a fourth, Payment, which comes later: when the person's first Cora list is ready. Sign-up asks for no card. Progress is saved after each step, so a person who leaves can return by signing in. The steps read "Step N of 4".
 
 **When sign-up is open.** *(1.2)* `/start` works on production for anyone who has the link from the day B1 ships; it does not wait for the new marketing pages, and nothing on the Circles pages links to it. The privacy and terms pages, draft or final, are live and linked from `/start` that day. With `v3.signupOpen` off, `/start` shows a short, honest "not open yet" note and an email field that saves a `leads` row and sends nothing; existing accounts keep working, and every sign-up action checks the switch again. On production it stays off until the go-live gate in the launch list is met (Zack 2.0 and Cora 2.0 approved, live Stripe keys and prices, the seed runs imported, privacy and terms linked), and an admin turns it on after `v3.cycleLive`.
 
@@ -561,7 +579,7 @@ Five short screens. Progress is saved after each, so a person who leaves can ret
 | 2 | Do you use AI agents for work today? | Not yet / Most weeks / Every day |
 | 3 | Which AI agents do you use, or plan to? | Choose any *(1.3)*: the list in `src/data/zack.ts`, "Another one" (with a text field), "Not sure yet". A star marks the primary agent: the first one ticked, or another the user picks with "Make primary". The account is set up first for the primary agent; members can switch on `/app/zack`. |
 | 4 | How many agents, bots or scheduled routines do you run? | None / 1–2 / 3–5 / 6 or more |
-| 5 | Which level sounds most like you today? *(1.3)* | One of the AI agent levels 0 to 8 (Non-user to Self-evolving), each shown with what the system does and the user's role (`src/data/agent-levels.ts`, from "Roger AI Agent Levels and Check Charts v1.0") |
+| 5 | Which level sounds most like you today? *(1.3)* | One of the AI agent levels. *(1.5, B2)* Levels 0 to 9 (Non-user to Multiplier), each shown with its "you need it when…" symptom, what the system does and the user's role (`src/data/agent-levels.ts`, from "Roger AI Agent Levels and Check Charts v1.1"). B1 shipped Levels 0 to 8 from v1.0. |
 | 6 | What do you most want help with? | Choose any, from the fixed category list (B.5) |
 | 7 | How do you feel about trying new software for work? | I avoid it / I'll try it if someone shows me / I try new tools often |
 
@@ -575,30 +593,28 @@ Five short screens. Progress is saved after each, so a person who leaves can ret
 
 **2. Account (`/start/account`).** First name and last name in separate boxes, then email link or Google *(1.3)*. When this browser already typed an email into Roger (sign-in, the waitlist, or this step before), the address is shown with "Change" instead of asked for again. In the quiz, typing a role before choosing "I work in real estate" or "Something else" selects "Something else".
 
-**3. Plan (`/start/plan`).** Two choices, with monthly selected and marked "Most people choose this".
+**3. Product and Pricing (`/start/plan`).** *(1.4)* "Step 3 of 4", headed "Product and Pricing". No plan picker: monthly is the only plan.
 
-- **Monthly, US$200 a month.** "Three ideas every Monday. Charged once a month, starting with your third list."
-- **One list at a time, US$200 each** *(1.3)*. "Order a list for any Monday you want one, after your two free lists. Monthly costs the same and brings a list every Monday." *(1.3)*
-- No non-contributor plan is offered. Everyone starts with sharing on. Sharing can be changed later on the Zack page (B.5).
-- **Consent,** required, as a checkbox the user ticks themselves: "I agree that Zack will run in my agent account each week and send his report to Roger. I can read exactly what Zack does, change what he collects, and turn this off at any time."
-- A link, "Read what Zack does first", opens the full instruction text.
-- One short line under the choices states the contributor rule for monthly: "If Zack misses two weeks in a month, that month is US$400. We always tell you first."
+- **Product.** "Zack runs in your own AI agent each week and collects what you did and what worked. Cora curates three ideas picked for you, every Monday."
+- **Consent,** required, under Product, as a checkbox the user ticks themselves (unticked to start): "I agree that Zack will run in my AI agent account each week and send Roger his report and a private matching profile. …" (the full text is in `src/components/app/plan-form.tsx`). A link, "Read what Zack does first", opens the full instruction text.
+- **Pricing.** "Roger is US$200 a month or CA$280 a month, plus tax. We'll ask for your card before Cora's first full list is shown. Your free trial includes your first two Cora lists, two Mondays." Both prices are shown, so there is no currency toggle here; the account's currency (from `cur`) is Payment's default.
+- No non-contributor plan is offered, and the contributor higher-rate rule is not shown in sign-up or on Payment; it lives in the terms and the FAQ only. Everyone starts with sharing on. Sharing can be changed later on the Zack page (B.5).
+- The button reads "Continue". It ends sign-up: the account becomes a monthly trial with no card (`status = 'trial'`, `trial_started_at` null, which keeps its meaning "card saved"), the welcome email is sent (a failed send is retried by the hourly pass), and the person goes to `/app` onboarding to connect Zack. Drafted copy, for sign-off (launch list S18).
+- ~~**4. Card (`/start/card`)** and **5. Done (`/start/done`)**~~ *(1.4)* are removed, with their terms text ("Nothing is charged today", "no earlier than {date}").
 
-**4. Card (`/start/card`).** A Stripe-hosted card step that saves the card and billing address without charging. Directly above it, in body-size type, not small print:
+**4. Payment (`/start/payment`).** *(1.4)* "Step 4 of 4", headed "Payment". It is reached only from a held first list (B.7, B.8): the teaser email, `/app` and `/app/billing` link to it; anyone else is sent to `/app`. Sponsored members never see it.
 
-> You get two free Cora curations. Your card is charged only on the third.
-> Monthly: then {price} a month plus {tax name}. Your first charge will be no earlier than {date}. We will email you the exact date and amount before it happens. Cancel any time in one click.
-> One at a time: after your two free lists, you are charged {price} plus {tax name} only when you order a list.
-
-Only the line for the chosen plan is shown.
-
-The currency shown is the one passed in `cur`, changeable here, and fixed for the account once the card is saved.
-
-**5. Done (`/start/done`).** One sentence and a button into `/app`, where the onboarding checklist is waiting.
+- **Layout.** No site or app navigation and no footer; a small Roger logo, the form, the Price Box, the trust block, and a quiet "Not now" link back to `/app` (the list stays held). From `md` the Price Box sits in a sticky column beside the form; on a phone it collapses into a "{total} / month · Details" bar above the form that opens in place. Thumb-sized (44px) inputs and button.
+- **Price Box.** A USD/CAD toggle (default the account's currency; switching opens a fresh card session and updates every line; fixed once the card is saved). Lines: "Roger monthly" with the price; tax, named with its rate (HST 13%, GST 5%, "No sales tax") once the country and postal code let Stripe calculate it, and "Calculated from your billing address" before then; the discount when a promo code is applied; "Total per month". Then **"Due today: CA$0."** (or "US$0.") **"Your first charge comes with your third list."** The currency is always named, never a bare "$" (A.16 check 5); the "$0" wording in the origin was replaced by this, for sign-off (S18). Totals are announced to screen readers. Every amount comes from Stripe's invoice preview on Roger's server, never from the browser.
+- **Promo code.** A discreet "Have a promo code?" link opens one field and Apply. A valid Stripe promotion code shows a discount line and the new total, with how long it lasts: "CA$56 off your first month", "… a month for your first 3 months", or "… every month"; for a discount that ends, the total reads "First month" and a line "Then CA$316.40 a month" follows. An invalid code shows "That code isn't valid." Codes are checked on the server and rate-limited. The code is locked in when the card is saved (B.9).
+- **Card form.** Stripe's embedded form in Roger's page (Payment Element, styled with Mona Sans, the copper accent and 8px radii). Cards only (Visa, Mastercard, Amex): no wallets, no Link, no PayPal, Interac or BNPL. Roger's own fields: name on card (from the account), country (Canada or the United States; "Another country" shows "Roger is available in Canada and the US for now" with the support address) and postal code (A1A 1A1, or a 5-digit ZIP), checked as the person leaves each field.
+- **Trust.** A padlock with "Secured by Stripe", the card brand marks, and "Payments are processed by Stripe, a PCI DSS Level 1 certified provider. Roger never sees your card number." Links, each opening in a new tab: "Terms and refunds" (`/terms`; there is no separate refund page yet), "Privacy", and the support address.
+- **The button** reads "Start free trial". Pressed once, it waits (disabled, with a spinner) until Stripe answers; one card session per account is reused, so a double press or a second tab never makes two. Stripe's errors (a decline, a bank confirmation that failed) show above the button and every entry is kept. If Stripe's form cannot load, the page says so, gives the support address and "Try again", and the button stays disabled.
+- **After the card.** The return page (`/start/payment/done`) confirms the card with Stripe on the server (the webhook does the same; whichever is first) and goes straight to the unlocked list: "Your card is saved. Here are your ideas." While Stripe is still confirming it shows "Confirming your card…" and checks again. A billing address Stripe cannot place returns to Payment with a message. Nothing is charged.
 
 **Sign-up with a free Zack report.** If `zack` is present, the report in `free_runs` for that token is attached as the user's first run and goes through intake (B.6).
 
-**Existing pilot users.** The admin can create an account for a person and send them a link that opens at the plan step, so the five current users add a card and start their two free lists like everyone else. The link works once, expires after 7 days, can be revoked, opens through the same confirm page as a sign-in link, and is never made for an admin address. *(1.2)*
+**Existing pilot users.** The admin can create an account for a person and send them a link that opens at ~~the plan step~~ *(1.4)* Step 3, Product and Pricing; pilots then reach Payment at their first list like everyone else. The link works once, expires after 7 days, can be revoked, opens through the same confirm page as a sign-in link, and is never made for an admin address. *(1.2)*
 
 ## B.5 Zack
 
@@ -745,9 +761,19 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 |---|---|
 | In trial, Zack on | Their run for this week arrived. A week without a run does not use a free list. |
 | In trial, Zack off | Every Monday from sign-up, matched from the profile |
-| Monthly or sponsored | Every Monday, whether or not their run arrived. A missing run affects price, not delivery (B.9). |
-| One at a time, after the trial | Only on a Monday they ordered, when that week's run arrived and the charge succeeded |
+| *(1.4)* In trial with no card yet (not sponsored) | Picked by the same rules as above, but **held**, not delivered: see "Held lists" below. Nothing counts as a free list until the card is saved. |
+| Monthly or sponsored | Every Monday, whether or not their run arrived. A missing run affects price, not delivery (B.9). *(1.4)* A sponsored member is never held, card or not. |
+| ~~One at a time, after the trial~~ | *(1.4)* Not offered. Leftover per-run accounts keep the old rule (only on a Monday they ordered, when that week's run arrived and the charge succeeded) until the cleanup. |
 | Payment held, cancelled and past the paid month, or trial closed | Never |
+
+### Held lists *(1.4)*
+
+- **"Has a card"** means `trial_started_at` is set (the card was saved), or the account status is active, `held` (payment held) or cancelled; a sponsored account counts as "no card needed". One shared definition is used everywhere (delivery, the charge, the quote, the billing page, the status line, the admin).
+- **A held list** is a week Cora picked (three ideas, or a short list) for a trial with no card and no sponsor. It is stored like any pick but not delivered: the Monday email and `/app` show the titles only ("Your first 3 ideas are ready", or "Your first ideas are ready" for a short week) with one button, "Add your card to see them", to Payment. The reason, the steps and the playbook are withheld on the server: the teaser is a separate template given titles only, and every other read of a pick's details requires the pick to be delivered. `/app` shows the held titles from the moment Cora finishes (about 1:00 AM), before the 7:00 email.
+- **The first teaser** stamps `first_teaser_at` with the send job's clock; the no-card close counts from it (B.9). A teaser that fails all Monday is sent by the hourly pass.
+- **A newer held list replaces the older one when its week becomes ready** (not when it is picked): Cora's step that marks the week `ready` stamps `superseded_at` on every undelivered week older than the member's newest ready week. So there is at most one held list at a time, a week that fails after its picks replaces nothing, and a replaced week is never delivered: not late, not at the unlock. Its ideas were never "sent" (Cora rule 1), so they can be picked again.
+- **Saving the card** (Payment, B.4) delivers the newest held list at once, through the normal delivery, as free list 1 of 2, with the Monday email ("Free list 1 of 2."). It is decided from stored state, so the return page, the webhook, the reconcile and an hourly sweep can each finish it, and it happens once. A card saved between Cora's 1:00 AM run and the 7:00 send unlocks that Monday's list (the older one was already replaced); the send then sends nothing more. A card saved while Cora is still picking a newer week waits for that week. A card saved with no held list has nothing to unlock; the next Monday delivers as usual.
+- **Never in a dry run:** a dry run sends no teaser and stamps nothing.
 
 ### The job
 
@@ -764,34 +790,43 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 
 ## B.8 Monday
 
-1. **6:00 AM, charge.** For each monthly trial user whose third list is ready, start their subscription and charge the card. For each one-at-a-time order whose list is ready, charge the card for that list (B.9). Users whose charge fails are held.
-2. **7:00 AM, send.** Each user with picks and no hold gets one email and sees the same three ideas at `/app`. For a trial user, this delivery counts as a free list. *(1.2)* A user is sent to only when nothing is owed: a trial user on a free list, an active monthly user (or one cancelling, while the paid month covers that Monday), a third-list user whose charge succeeded, or a paid order. Delivering a list and emailing it are separate: a user who switched the Monday email off still has the list delivered and counted. A list held for its charge is delivered by the hourly pass the moment the charge settles, later in the week, even though the week is already marked sent.
+1. **6:00 AM, charge.** For each monthly trial user whose third list is ready, start their subscription and charge the card. ~~For each one-at-a-time order whose list is ready, charge the card for that list (B.9).~~ *(1.4: leftover per-run accounts only.)* Users whose charge fails are held. *(1.4)* The charge job runs every 10 minutes until noon, also after the send; a week whose delivered list was itself a free list is never charged, so a second free list sent at 7:00 is never followed by a charge the same Monday.
+2. **7:00 AM, send.** Each user with picks and no hold gets one email and sees the same three ideas at `/app`. For a trial user, this delivery counts as a free list. *(1.4)* A trial with no card gets the held list's teaser instead (B.7, "Held lists"), and nothing is delivered or counted. *(1.2)* A user is sent to only when nothing is owed: a trial user on a free list, an active monthly user (or one cancelling, while the paid month covers that Monday), a third-list user whose charge succeeded, or a paid order. Delivering a list and emailing it are separate: a user who switched the Monday email off still has the list delivered and counted. A list held for its charge is delivered by the hourly pass the moment the charge settles, later in the week, even though the week is already marked sent.
 3. **The email.** Subject: "Your three ideas for the week of {date}". The three ideas, each with its title, the reason it fits, the time line, and one button, "Open and install". Then one status line that is always present:
    - Trial: "Free list 1 of 2." or "Free list 2 of 2. Your next list is your first paid one: {date}, {amount} plus {tax}."
    - Monthly: "Next charge {date}: {amount}." plus the contribution line from B.9.
-   - One at a time: "This list: {amount}. Order next Monday's whenever you want one." For their second free list the line reads: "Free list 2 of 2. Order your next list whenever you want one: {amount} plus {tax}."
+   - ~~One at a time: "This list: {amount}. Order next Monday's whenever you want one." …~~ *(1.4)* Leftover per-run accounts read "This list: {amount}." or "Free list 2 of 2.", each followed by "Monthly is now the only plan. Write to us if you have questions about yours."
+   - *(1.4)* Trial with no card: "Your first list arrives after Zack's first report" (or, with sharing off, "Your first list arrives on Monday"); once a list is held, "Your first ideas are ready — add a card to see them", with the link to Payment.
 4. **The view (`/app`).** Three idea cards (0.7). Opening one shows the sheet with "Copy prompt and playbook", which copies the preface, the prompt, and the playbook together. Under the sheet's title, one button: "I set this up".
 5. **"I set this up"** places a brick at once. The user's next Zack run confirms it when the play shows up in their own activity. Both states are stored. The north-star number, ideas adopted, is reported two ways: marked by the user, and confirmed by Zack.
 6. **No list this week.** A trial user with Zack on and no run gets a short note instead: "Zack hasn't sent a report yet, so there is no list this week and no free list was used. Here is how to connect him." ~~No other user ever gets an empty Monday.~~ *(1.2)* The other empty Monday is a week with no eligible plays (B.7, "No eligible plays"), which gets its own note.
+7. *(1.4)* **Trial clocks with no card.** Beside the card-saved clocks in B.9 (unchanged: they all start from the card), a trial with no card has its own: reminders on days 2 and 7 after the first teaser, a close 14 days after the first teaser, or 21 days after consent (or go-live, if later) if no list was ever held, and the day-3, 10 and 17 Zack nudges from consent, which stop once Zack has sent a run or a teaser has gone out. The table in B.9 has the details.
 
 ## B.9 Billing
 
 ### How it is built in Stripe
 
-- **At sign-up:** a customer and a saved card. No subscription and no charge.
-- **Products:** a monthly price at the standard rate and at the higher rate, and a one-list price, each in USD and CAD.
+- ~~**At sign-up:** a customer and a saved card. No subscription and no charge.~~ *(1.4)* **At sign-up:** nothing in Stripe. **On Payment (B.4):** a customer, created once when Payment first opens, and an embedded setup-mode Checkout Session (`ui_mode: 'elements'`, cards only), one per account, reused while open. Saving the card sets it as the default, writes the billing country and postal code to the customer and checks the tax location. No subscription and no charge. "Update card" on `/app/billing` stays on Stripe's hosted page, and a card-update session can never unlock a held list.
+- **Products:** a monthly price at the standard rate and at the higher rate, ~~and a one-list price,~~ each in USD and CAD. *(1.4)* Only monthly is offered; the one-list prices stay in Stripe for leftover per-run accounts until the cleanup.
 - **Tax:** Stripe Tax is on from the first charge. Prices are before tax. The billing address is collected with the card. Invoices show the tax line. This needs Peter's tax registration entered in Stripe before launch.
 - **Events handled:** card saved, invoice paid, invoice payment failed, subscription changed, subscription ended, dispute opened (alerts both admins).
 - *(1.2)* **Live and test.** Production takes real cards and makes real charges from the day B1 ships, with live keys and live prices. Preview and local builds use test keys and their own database, never production's, and the admin shows which mode is in use. Six prices: monthly standard, monthly higher and one list, each in USD and CAD.
 - *(1.2)* **The webhook endpoint** subscribes to `checkout.session.completed`, `invoice.paid`, `invoice.finalized`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted` and `customer.updated`. Events are signals: each is claimed once, the object is read again where it matters, and a daily reconcile catches anything missed.
 - *(1.2)* **In the Stripe dashboard:** Stripe's own failed-payment and renewal emails are off, so Roger's emails are the only voice; failed renewals leave the subscription unpaid rather than cancelling it, so there is still something to pay.
 - *(1.2)* **The first charge is made by the app,** not by a Stripe trial: at the charge time on the Monday of the third list the app creates the subscription off-session, set so that a failed payment creates nothing. The amount told to the user is Stripe's invoice preview, stored when the email stating it is sent; just before charging the app previews again, and if the total differs the user is held ("amount changed"), told the new amount, and charged 24 hours later. Every charge carries a claim id, so a crash or a repeated run never charges twice.
+- *(1.4)* **Promo codes.** Stripe has no customer-level discounts any more (removed in API version Basil), so a promotion code applied on Payment is checked on the server and, when the card is saved, its coupon, label and duration are stored on the account, in the same step that saves the card. The quote, the preview just before the charge and the subscription all carry that coupon (`discounts: [{coupon}]`), so the member pays what they were told. Because a coupon applied directly never counts a redemption in Stripe, Roger counts uses itself (`promo_reservations`, one per member and code): a code's last use goes to one member only, a first-time-only code is refused for a member or card that already used one, and a code used up while the member was on Payment is dropped at save, with the card still saved at the full price and the page saying so. The second-list email and the 48-hour reminder name the discount and how long it lasts ("That includes your promo code WELCOME20: CA$56 off your first month. After that, it's CA$316.40 a month, tax included."; "… off a month for your first 3 months. After that …"; "… off every month."). A coupon deleted or expired in Stripe before the charge is dropped: the member is told the full price (or, if already told the discounted amount, held as "amount changed", told the discount ended, and charged the full price 24 hours later). A discount that covers the whole first invoice subscribes the member with nothing charged.
 
 ### The trial and the first charge
 
 | Moment | What happens | What the user is told |
 |---|---|---|
-| Sign-up | Card saved. Status `trial`. | The terms above the card form. A welcome email restating them. |
+| Sign-up | ~~Card saved.~~ *(1.4)* Consent at Step 3; status `trial` with no card. | ~~The terms above the card form.~~ *(1.4)* Step 3's Pricing paragraph. A welcome email: "Your first two Cora lists are free. ~~When your first list is ready we'll ask for your card.~~ *(removed at the wording sign-off, 2026-11-26)*" |
+| *(1.4)* First list picked, no card | The list is held (B.7). Nothing counts. `first_teaser_at` is stamped. | "Your first 3 ideas are ready": the titles and a link to Payment, by email and on `/app` |
+| *(1.4)* 2 and 7 days after the first teaser, still no card | Nothing changes | "Your ideas are waiting": the newest held titles, the close date, and the link to Payment |
+| *(1.4)* Another Monday's list while one is held | The newer list replaces the held one when its week is ready; the clock does not restart | A new teaser with the new titles |
+| *(1.4)* 14 days after the first teaser, still no card | The trial closes (`no_card`). No charge. A Monday with no list because of Roger (Cora's week failed, or no eligible plays) moves the close a week; held lists never do. No teaser is sent in the day before the close. | "Your first ideas were ready, but no card was added, so your trial has closed. Nothing was charged.", ending "Want to come back? Write to us" |
+| *(1.4)* A card confirmed in Stripe at or after that close | Within 7 days of the close, the card is saved, the trial reopened and the list unlocked (one step). The close itself first completes a stored Payment session that Stripe says is confirmed, and expires an open one. Later than 7 days, the account stays closed. | The unlocked list's email |
+| *(1.4)* Card saved on Payment | The card clock starts (`trial_started_at`); the newest held list is delivered at once | The list email: "Free list 1 of 2." |
 | First list sent | Free list 1 of 2 | The status line in the email and on `/app` |
 | Second list sent | Free list 2 of 2 | An email the same day: "Your next list is your first paid one", with the date, the amount with tax, and a one-click cancel link |
 | 48 hours before the third list | Nothing changes | A reminder email with the same date and amount |
@@ -799,12 +834,17 @@ The five factors and their weights (Hours saved 30, Reach 25, Ease to copy 10, P
 | The charge fails | The list is held. The card is retried on days 1, 3 and 7. | An email each time with a link to update the card. The list is sent the moment a charge succeeds. |
 | *(1.2)* The card needs the bank's confirmation, or is declined as lost or stolen | Confirmation counts as a failed charge (nobody is there at 6:00 AM). A hard decline is not retried until the card changes; the trial still closes on day 7. A new card is tried at once. A refusal that is not about the card (the tax address, a setup problem) holds the user and alerts admins, with no update-card email. | The same email; for a hard decline, "we won't try it again" |
 | Still failing after day 7 | The trial closes. No charge. | A closing email *(1.2)* (the day-7 attempt that fails sends no "card didn't go through" email; the closing email stands alone), ending "Want to come back? Write to us" with the support address |
-| 21 days after sign-up with no first list | The trial closes. No charge. *(1.2)* The 21 days start when the card is saved or when `v3.cycleLive` first went on, whichever is later; a Monday with no list because of Roger (Cora's week failed, or no eligible plays) moves the close a week. | Nudges on days 3, 10 and 17; a closing email, ending "Want to come back? Write to us" *(1.2)* |
+| 21 days after sign-up with no first list *(1.4: card saved)* | The trial closes. No charge. *(1.2)* The 21 days start when the card is saved or when `v3.cycleLive` first went on, whichever is later; a Monday with no list because of Roger (Cora's week failed, or no eligible plays) moves the close a week. *(1.4)* This row is for a trial with a saved card only. | Nudges on days 3, 10 and 17 from the card; a closing email, ending "Want to come back? Write to us" *(1.2)* |
+| *(1.4)* 21 days with no card and no list ever held (Zack never connected, no teaser) | The trial closes (`no_first_list`). No charge. The 21 days start at consent, or when `v3.cycleLive` first went on if that is later, at the same Toronto wall time; a Monday with no list because of Roger (Cora's week failed, or no eligible plays) moves the close a week, and the close waits while a run for this week or a later one is with Cora. This close is not reopened by a later card. | Nudges on days 3, 10 and 17 from consent, until Zack sends a run or a teaser goes out; a closing email, ending "Want to come back? Write to us" |
 | *(1.2)* Free lists used, but the first paid list never comes (no run, or no eligible plays) | No charge. Each such Monday moves the first charge a week. The trial closes `v3.trialCloseDays` (21) days after its last delivered list, or after the cycle first went live if that is later, with each Monday Roger failed to give a list moving the close a week; never while a run, a picked list or a charge is on its way, and not for a member mid-switch, sponsored or cancelling | Each such Monday, "Your first charge moved" with the next date; a closing email, ending "Want to come back? Write to us" |
 | *(1.2)* The amount differs from the one told | No charge that Monday. The user is held ("amount changed"), told the new amount, and charged 24 hours later as a fresh attempt; if that fails and the day-7 close is due, the trial closes | "Your first charge amount changed", with the amount |
-| The user cancels during the trial | The trial ends at once. The saved card is removed. | A confirmation: "You have not been charged." *(1.2)* The card is removed only if the user was never charged. |
+| The user cancels during the trial | The trial ends at once. The saved card is removed. | A confirmation: "You have not been charged." *(1.2)* The card is removed only if the user was never charged. *(1.4)* A trial with no card gets the same confirmation without the card sentence; a Payment session it left open is settled first (a card Stripe already confirmed is saved and the list unlocked instead of cancelling; an open one is expired). |
 
-### One list at a time
+*(1.4)* The card-saved clocks above (the card-saved 21-day no-list close, the no-charge close, the reminders) are unchanged and all start when the card is saved. The no-card rows (the held reminders, the 14-day `no_card` close and its 7-day reopen, and the never-connected 21-day close from consent) run on their own clocks and stop the moment a card is saved, so the two never overlap. The first charge rule is unchanged: two free lists delivered after the card, then the subscription with the third.
+
+### ~~One list at a time~~ *(1.4)*
+
+*(1.4)* No longer offered: monthly is the only plan. Nothing in sign-up, `/app` or `/app/billing` offers or orders a list, and the order actions refuse any account that is not a leftover per-run account with a card. The code below stays, dormant, for leftover per-run accounts on preview until the cleanup after launch. The rest of this section is kept as the record of how those accounts behave.
 
 - After the two free lists, nothing is charged automatically.
 - The user orders with one button, "Get next Monday's list", which shows the price with tax. It is on `/app`, on `/app/billing`, and in a short prompt email each Friday that the user can switch off.
@@ -833,21 +873,22 @@ This applies to monthly users only.
 
 | # | When | Where | What it says |
 |---|---|---|---|
-| 1 | Sign-up | Plan step and welcome email | The rule in two sentences |
+| 1 | ~~Sign-up~~ *(1.4)* Before signing up | ~~Plan step and welcome email~~ *(1.4)* The FAQ and the terms (never sign-up, Payment or the welcome email) | The rule in two sentences |
 | 2 | Always | A status strip on `/app` and `/app/billing` | "Contributing. This month: 0 of 1 forgiven misses used. Next charge {date}: {amount} plus {tax}." |
 | 3 | First miss | Email and status strip | "Zack didn't send a report this week. This one is forgiven. A second miss before {date} makes this month {amount}." With the fix. |
-| 4 | Second miss | Email, status strip, and a banner on `/app` | "This is your second missed week this month, so this month is billed at {amount}. The difference of {amount} will be on your invoice of {date}." With the fix and the option to switch plans. |
+| 4 | Second miss | Email, status strip, and a banner on `/app` | "This is your second missed week this month, so this month is billed at {amount}. The difference of {amount} will be on your invoice of {date}." With the fix ~~and the option to switch plans~~ *(1.4: no plan switch; the email says the difference isn't collected if the member cancels before that invoice)*. |
 | 5 | Three days before any invoice that carries an adjustment | Email | The full amount, itemised |
 | 6 | The invoice | Invoice line | "Higher-rate adjustment for {period}: two missed weeks", or *(1.2)* "Higher-rate adjustment for {period}: Zack not sharing". On a first invoice, the plan's product name (see above). |
 
 ### Changing and cancelling
 
-- **Switch between monthly and one at a time** on `/app/billing`, in one click. Moving to one at a time takes effect when the paid month ends. Moving to monthly starts the subscription with the next list. A confirmation shows the effect before it is saved, and an email follows.
+- *(1.4)* **No plan switch.** `/app/billing` offers no switch, and the switch action accepts only a move to monthly (a leftover per-run account can still be moved there). The rest of this item is kept as the record of the dormant code.
+- ~~**Switch between monthly and one at a time** on `/app/billing`, in one click.~~ Moving to one at a time takes effect when the paid month ends. Moving to monthly starts the subscription with the next list. A confirmation shows the effect before it is saved, and an email follows.
   - *(1.2)* Monthly to one at a time: the subscription is set to end with the paid month; lists continue every Monday until then; switching back before then simply keeps it. A month's difference that would have gone on the renewal is dropped by the switch.
   - *(1.2)* One at a time to monthly: the account goes back to the first-charge path ("trial" until charged), and an order already placed for the coming Monday is cancelled in the same step, so that Monday is charged once. The email states the first charge's date and amount, which becomes the told amount. A difference dropped when the user switched away, still unbilled and from the last 62 days, is carried into that first charge (and said in the email), so switching away and back never dodges a month. If that first charge fails out on day 7, the user goes back to one at a time, not "trial closed".
   - *(1.2)* Monday uses the plan as it stood at the Sunday cutoff: a switch made between the cutoff and the end of Monday is booked for Tuesday. A switch or cancel is refused for a few minutes while a charge for the week is going through.
 - **Change sharing** on `/app/zack`. Sharing changes at once; a monthly price changes from the next invoice. *(1.2)* (As the month's difference line; see the contributor rule.)
-- **Cancel** in one click on `/app/billing`. No retention screen. One optional question, "Why are you leaving?". Under the cancel button, one plain text link: "Or switch to one list at a time." Access continues to the end of the paid month. No refund.
+- **Cancel** in one click on `/app/billing`. No retention screen. One optional question, "Why are you leaving?". ~~Under the cancel button, one plain text link: "Or switch to one list at a time."~~ *(1.4: removed.)* Access continues to the end of the paid month. No refund.
   - *(1.2)* A monthly subscriber who cancels stays active ("cancelling") until the paid month actually ends: lists continue, Zack runs are taken and the weeks are still recorded, and the account becomes cancelled only when Stripe ends the subscription. Undo is possible until then and keeps the same subscription, with no second charge; the month is settled again from its cutoffs. Nothing subscribed (the trial, a held first charge, one at a time) ends at once, with open orders cancelled. A list already charged for the week is still delivered.
 - **A renewal that fails** is retried by Stripe. After 7 days unpaid, lists are held until it is paid; the user is emailed at each step. *(1.2)* The seventh day is counted in Toronto calendar days from the first failure; a new card pays every open invoice at once, oldest first, and the hold lifts only when Stripe has nothing open. Cancelling with a renewal unpaid ends the subscription at once and leaves the open invoice to admins. While held for an unpaid renewal, Cora still picks the member's list each Monday; it is delivered when the payment goes through. A cancelled account's list is delivered only for a Monday its paid month still covers, compared by Toronto date. A cancellation that ends at once says "Want to come back? Write to us".
 - **Invoices** are listed on `/app/billing` with links to Stripe's hosted copies. "Update card" opens Stripe's own page.
@@ -859,7 +900,7 @@ This applies to monthly users only.
 | `/app` | The status strip. The onboarding checklist until it is complete. This week's three ideas. A link to last week. |
 | `/app/history` | Every idea ever sent, newest first, each marked "set up", "confirmed by Zack", or not yet. A count of bricks. (The compounding graph arrives in B2.) |
 | `/app/zack` | B.5 |
-| `/app/billing` | Plan, price, next charge with tax, the status strip, invoices, update card, switch plan, cancel |
+| `/app/billing` | Plan, price, next charge with tax, the status strip, invoices, update card, ~~switch plan,~~ cancel. *(1.4)* A trial with no card sees "No card yet. Your first list is ready, and your first two lists are free." and "Add your card" (to Payment) when a list is held, otherwise "We'll ask for your card when your first list is ready." |
 | `/app/settings` | Name, display name, email, time zone, and which emails to receive. The Monday list can be switched off; billing emails cannot. *(1.2)* Changing the email takes two links: an approval link goes to the current address (valid 60 minutes, signs nobody in), and only then a confirm link goes to the new address. The change applies when that is confirmed, then the Stripe customer is updated, other sessions end, the old address is told once, and Google is unlinked. A newer request replaces both links. Someone who has lost the old address writes to support, and an admin changes it from the user page. Also here: "Link Google" or "Unlink Google", and the Friday order reminder switch. |
 
 **Onboarding checklist,** shown at the top of `/app` until done. Each step ticks itself when the app sees it happen.
@@ -875,7 +916,7 @@ This applies to monthly users only.
 
 ## B.11 The startup page and its setup file
 
-**`/getstarted`** is public, so referrers and Ehab can send it to anyone.
+**`/getstarted`** is public, so referrers and the Roger team can send it to anyone.
 
 1. **Install.** Grok Bot is the recommended agent for someone starting from nothing: go to its site, download, open, upgrade to a paid plan of your choice, name your Chief of Staff.
 2. **Set up your starter team.** The current setup file in a block with a "Copy" button, and the instruction to paste it when the agent asks "What's the first task I can help you with?" Under the block: "Version {n}, updated {date}."
@@ -900,7 +941,7 @@ Both admins see everything. New tabs are added to `src/components/admin-ui.tsx`;
 | Column | Shows |
 |---|---|
 | User | Name, path, and the `not_ready` tag where it applies |
-| Status | Trial (free lists used), monthly, one at a time, payment held, sponsored, cancelled |
+| Status | Trial (free lists used), *(1.4)* "Trial · no card", monthly, one at a time (leftover accounts only), payment held, sponsored, cancelled |
 | Sharing | Pool, matching only, or off |
 | Zack this week | Received (time and route), missing, flagged, rejected |
 | Cora this week | Ready, sent, held, none |
@@ -909,7 +950,7 @@ Both admins see everything. New tabs are added to `src/components/admin-ui.tsx`;
 | Note | A private note either admin can edit |
 | *(1.2)* Eligible plays | How many plays are still eligible for this user, from the same rules Cora picks by |
 
-Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run, a held payment, a trial closing within five days, *(1.2)* fewer than three eligible plays), by status, and by path. Row actions, each one logged with who did it: add a run for this user, excuse a missed week, give one extra free list, send a template nudge, open in Stripe.
+Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run, a held payment, a trial closing within five days, *(1.2)* fewer than three eligible plays, *(1.4)* "First list held, no card" for every member with a held list, at any age), by status, and by path. Row actions, each one logged with who did it: add a run for this user, excuse a missed week, give one extra free list, send a template nudge, open in Stripe. *(1.4)* "Give one extra free list" is hidden for a trial with no card and refused if called ("Waiting for the member's card."); "add a run" is allowed for it.
 
 **Users.** A list and a detail page with everything about one person: profile, plan, runs, ideas sent and set up, emails sent, and the log of admin actions. *(1.2)* Also: create an account and a pilot link; link a seed contributor record to the account (B.7); change the account's email for someone who lost the old one; close and, on request, delete an account. Admin accounts cannot be changed, closed or deleted here.
 
@@ -928,29 +969,29 @@ Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run,
 | Robyn M. | Real estate, Toronto | "I'm discovering something new with this every day and it's exciting to see what's possible for the office." | Nov 11, 2026 |
 | Ken F. | Real estate, Toronto | "Everything is looking good with Grok. I am saving well over 30 minutes a day with the bots. I have created new bots to organize my database." | Nov 12, 2026 |
 
-There is no solo quote from Grace in the document; one is needed (see "Needed from Peter").
+There is no solo quote from Grace in the document. Peter confirmed the four quotes as seeded and dropped a Grace quote (November 27, 2026).
 
 **Sample idea.** Choose which pool play is shown on the public site. Choosing one requires ticking "I have read this play and it contains nothing private."
 
-**Interest.** Counts and lists: "not ready" emails, cancellation reasons, and how many users are on monthly and on one at a time.
+**Interest.** Counts and lists: "not ready" emails, cancellation reasons, and how many users are on monthly ~~and on one at a time~~. *(1.4)* **The sign-up funnel** (origin R30), the measure for reversing Strategy decision 38: for each of the last 26 sign-up weeks (Toronto, Monday to Sunday), how many people signed up, connected Zack, got a first teaser, saved a card, and were first charged. Admin and sponsored accounts are left out.
 
 ## B.13 Emails
 
-Plain and short, sent through the existing `sendEmail`. Automatic emails come from "Roger support". Ehab's personal follow-ups are written and sent by him, outside the app.
+Plain and short, sent through the existing `sendEmail`. Automatic emails come from "Roger support". The Roger team's personal follow-ups are written and sent by a team member, outside the app.
 
 | # | Email | Trigger | Version |
 |---|---|---|---|
 | 1 | Sign-in link | Requested | B1 |
-| 2 | Welcome, with the terms restated and the next step for the user's path | Card saved | B1 |
+| 2 | Welcome, with the terms restated and the next step for the user's path. *(1.4)* "Your first two Cora lists are free. ~~When your first list is ready we'll ask for your card.~~ *(removed at the wording sign-off, 2026-11-26)*" then the monthly price and "Your first charge comes with your third list"; no higher-rate rule | ~~Card saved~~ *(1.4)* Step 3 completed (retried hourly if the send failed) | B1 |
 | 3 | Zack is connected | First run or test received | B1 |
 | 4 | Zack hasn't sent a report yet | Trial days 3, 10, 17 with no run | B1 |
 | 5 | Your three ideas | Monday send | B1 |
 | 6 | No list this week, and why | Trial, Zack on, no run | B1 |
-| 7 | Your next list is your first paid one (monthly), or how to order your next list (one at a time) | After the second free list | B1 |
+| 7 | Your next list is your first paid one ~~(monthly), or how to order your next list (one at a time)~~ *(1.4: with the promo line when a code is locked in)* | After the second free list | B1 |
 | 8 | Reminder of the first charge | 48 hours before | B1 |
 | 9 | You're subscribed | First charge succeeded | B1 |
 | 10 | We couldn't charge your card | Each failed attempt | B1 |
-| 11 | Your trial has closed, no charge | Day 7 of failures, or day 21 | B1 |
+| 11 | Your trial has closed, no charge | Day 7 of failures, or day 21 *(1.4: also the no-card closes; see 33)* | B1 |
 | 12 | Missed week, forgiven | First miss in a month | B1 |
 | 13 | Second missed week, and what it costs | Second miss | B1 |
 | 14 | Your next invoice, itemised | Three days before an invoice with an adjustment | B1 |
@@ -962,7 +1003,7 @@ Plain and short, sent through the existing `sendEmail`. Automatic emails come fr
 | 20 | Your week in numbers | Wednesday 9:00 AM | B2 |
 | 21 | Someone you referred has joined; you've earned a credit | Referral events | B2 |
 | 22 | You're invited to a Roger session | Guest invited | B2 |
-| 23 | Want a list this Monday? | Fridays, to one-at-a-time users without an order | B1 |
+| 23 | Want a list this Monday? *(1.4: emails 23 to 26 reach leftover per-run accounts only)* | Fridays, to one-at-a-time users without an order | B1 |
 | 24 | Your list is ordered | Order placed or cancelled | B1 |
 | 25 | Your list, and your receipt | Order charged and sent | B1 |
 | 26 | No list this Monday, and you were not charged | An order with no Zack run by the cutoff | B1 |
@@ -970,6 +1011,11 @@ Plain and short, sent through the existing `sendEmail`. Automatic emails come fr
 | 28 | *(1.2)* Your first charge moved, or its amount changed | The first-charge Monday passed with no eligible plays; or the amount differs from the one told | B1 |
 | 29 | *(1.2)* Approve, then confirm, an email change; a Google account was linked | On request | B1 |
 | 30 | *(1.2)* Your Monday lists are paused; your payment went through | A renewal unpaid on day 7; paid | B1 |
+| 31 | *(1.4)* Your first 3 ideas are ready (first list held): the titles only, "Add your card to see why each one fits you and how to set it up. Your first two lists are free, and nothing is charged today.", and "Add your card to see them" to Payment | Monday send for a trial with no card (once per held week; retried hourly) | B1 |
+| 32 | *(1.4)* Your ideas are waiting (held reminder): the newest held titles, the free-lists line, "If no card is added by {date}, your trial closes. Nothing is charged either way." | Days 2 and 7 after the first teaser, still no card | B1 |
+| 33 | *(1.4)* Your Roger trial has closed (no card): "Your first ideas were ready, but no card was added, so your trial has closed. Nothing was charged.", then "Want to come back? Write to us" | 14 days after the first teaser with no card (a never-teasered close gets email 11's day-21 wording) | B1 |
+
+*(1.4)* Saving the card on Payment sends no second welcome: the unlocked list's email (5, "Free list 1 of 2.") is the confirmation. Emails 2, 31, 32 and 33, the Step 3 text and the Payment page text are drafted copy awaiting sign-off (launch list S18).
 
 ## B.14 Data
 
@@ -1190,11 +1236,11 @@ create table if not exists setup_files (
 |---|---|
 | **Referral links** | Every user has a link, `/r/{code}`, shown on `/app/referrals` with a "Copy" button and the referral script. Visiting it stores the code for 60 days and carries it into `/start`. The first referrer recorded for a person wins. A person cannot refer themselves. |
 | **Referral credit** | When a referred user's first invoice is paid, the referrer is credited that first payment at list price (one month, or one list) in the referrer's own currency, applied to their Stripe balance so it comes off their next invoices or orders. No cap; unused credit carries forward. A sponsored referred user earns the referrer nothing. `/app/referrals` lists each person referred, their stage (invited, in trial, paying), and the credit earned and remaining. |
-| **Wednesday stats email** | Level, bricks, contribution points, leaderboard rank, credit balance, and one invitation link. |
-| **Bricks and levels** | On `/app/history`: a 26-week compounding graph, the line in the level colour, a larger marker on the user's current week. Each idea set up is a brick. After week 26 the graph starts again in the next level's colour, up to level 5. The colour is the whole reward. |
+| **Wednesday stats email** | Season *(1.5)*, bricks, contribution points, leaderboard rank, credit balance, and one invitation link. B4 adds the user's Level and "1 step from Level N" when one core item is open. |
+| **Bricks and Seasons** *(1.5: renamed from "Bricks and levels")* | On `/app/history`: a 26-week compounding graph, the line in the Season colour, a larger marker on the user's current week. Each idea set up is a brick. After week 26 the graph starts again in the next Season's colour, up to Season 5. The colour is the whole reward. "Level" is not used here: it means Roger AI Levels (B4). |
 | **Leaderboard** | One network-wide board on `/app/leaderboard`. A user earns 1 point when Cora picks one of their plays for another user and 1 more when that user's set-up is confirmed. Users appear under a display name they choose. Counts are shown ("2 users adopted your idea"), never names. |
 | **Group session** | A card on `/app/sessions`: the next session's day, time, and Google Meet link, with "Add to calendar". Paying and sponsored users only; trial users see it greyed out with "Opens when you subscribe". A subscriber invites one guest per session by name and email; the guest receives a one-time invitation at `/g/{token}` and is recorded as that subscriber's referral. Admins set the day, time, and link, and tick who attended. |
-| **Sponsors** | In `/admin/sponsors` an admin creates a sponsor: name, currency, negotiated standard and higher monthly prices, number of seats, and a code. A person who signs up at `/start?sponsor={code}` skips the card step. Each month the admin page shows the seats in use at each price and prepares a Stripe invoice to the sponsor for an admin to send. The sponsor has no login and sees nothing about any user. The contributor rule applies to sponsored users at the sponsor's two prices. |
+| **Sponsors** | In `/admin/sponsors` an admin creates a sponsor: name, currency, negotiated standard and higher monthly prices, number of seats, and a code. A person who signs up at `/start?sponsor={code}` ~~skips the card step~~ *(1.4: is never asked for a card: no held list, no Payment)*. Each month the admin page shows the seats in use at each price and prepares a Stripe invoice to the sponsor for an admin to send. The sponsor has no login and sees nothing about any user. The contributor rule applies to sponsored users at the sponsor's two prices. A sponsor is invoiced from each sponsored user's third list, so sponsored users also get two free lists (default 6 under "Defaults to confirm", not yet confirmed). |
 
 New tables: `referrals` (referrer, referred user or email, source, generation, stage, credit, dates), `credits`, `points`, `sessions_attendance`, `session_guests`, `sponsors`.
 
@@ -1206,6 +1252,27 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 | **Pipeline** | `/admin/pipeline`: every person from first touch (lead, guest, referral, waitlist, sign-up) through trial to paying, with the date of each stage and where they came from. Replaces counting by hand. |
 | **Review bot** | `/admin/review`: on a schedule, a model reads the week's runs, flags, rejections, picks, and set-up rates and proposes specific wording changes to the Zack and Cora instruction files. An admin reads each proposal and approves or rejects it. Nothing changes without approval, and approved changes go into the repo as a normal commit. |
 | **Feedback** | Users' replies and notes are stored against their record and are part of what the review bot reads. |
+| **Cora upgrades** | Cora 2.0 change 11: a list may offer an upgrade to a play the user already runs; at most one of three picks (recommendation). Not needed for launch (Peter, 2026-11-27). |
+| **Cora adoption counts** | Cora 2.0 change 15: an idea counts as adopted when the user's next profile shows it "used this week"; "installed" and "used" reported separately, feeding the adoption measure above. Not needed for launch (Peter, 2026-11-27). |
+| **Admin read log** | Each time an admin opens a member's runs or picks, the admin action log records it. The privacy page then says so. Moved from launch list S22, 2026-11-27 (not logged at launch). |
+| **Sign in with Google** | Built and hidden until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set: a Google OAuth client (web application) with `https://meetroger.ai/auth/google/callback` and each preview base URL. Launch is email-link sign-in only (Peter, 2026-11-27; was launch list S5). |
+| **Scenario tests against the sandbox** | `SCENARIO_TARGET=sandbox` in `tests/scenarios/helpers.ts`: the scenario files run against the Stripe sandbox on test clocks and the scenario-test Neon branch (`SCENARIO_DATABASE_URL`). Includes creating that Neon branch with its non-production marker row. Replaced at launch by one test-clock journey walked on preview (Peter, 2026-11-27). |
+
+## B.16a Version B4: levels *(1.5)*
+
+Built after B3. The full specification is `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`, section 3.6, with the levels, rules and check charts in `Roger AI Agent Levels and Check Charts v1.1.md`.
+
+| Feature | What it does |
+|---|---|
+| **Level intake** | Validates Zack 2.1's private `roger-level` block (agents, routines, rules, 7 days of activity, self-report answers) and runs the privacy check on it, like the rest of the profile. |
+| **Level engine** | After each Zack run: sets each check item's live state, computes the earned level (a level never drops), and lists gaps and next-level items. |
+| **Dashboard check chart** | The user's Level and its name, the next level's check chart with live 0s and 1s, gaps flagged first, and how each item is checked. |
+| **Stats email and operations view** | The Level line in the Wednesday email; each user's Level and core gaps in the admin operations view. |
+| **Cora uses levels** | Eligibility (no play above the user's Level + 1) and three slots: fix a gap, reach the next level, best fit. |
+
+Before B4 starts: Zack 2.1 is approved and live, and Cora 2.0 change 8 (matching on "Also runs" and the profile's Setup) is built as the first B4 unit (Peter, 2026-11-27).
+
+New tables: `level_items` (user, item, live state, last evidence date), `user_levels` (user, level earned, earned at, peak).
 
 ## B.17 Versions and sizes
 
@@ -1214,7 +1281,7 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 | Piece | Half-days |
 |---|---|
 | Accounts: email link, Google, sessions, admin check, moving `/admin` off the shared password | 2.5 |
-| Sign-up: quiz, routing, account, plan and consent, card step, resume | 3 |
+| Sign-up: quiz, routing, account, ~~plan and consent, card step~~ *(1.4: Product and Pricing with consent; Payment at the first list)*, resume | 3 |
 | Stripe: customer, saved card, products and prices in two currencies, tax, subscription start, webhooks, billing page, switch, cancel | 4.5 |
 | Trial logic: counting delivered lists, the third-list charge, failed-card retries, the 21-day close, and their emails | 2.5 |
 | One list at a time: ordering, the Monday charge for orders, the Friday prompt, switching to and from monthly | 1.5 |
@@ -1230,27 +1297,21 @@ New tables: `referrals` (referrer, referred user or email, source, generation, s
 
 Add about 4 half-days for end-to-end testing with Stripe's test clock, which this version needs because most of its behaviour happens over weeks.
 
-**What could come out of B1 if time is short,** in the order I would cut:
+Every version is built in full *(1.5)*.
 
-1. Google sign-in (0.5). Email link alone works.
-2. The automatic invoice line for a second miss (1). An admin adds it by hand in Stripe from the operations view while user numbers are small. The notices stay.
-3. The model fallback for reports without a `roger-run` block (0.5). Unlisted agents wait.
-4. Run deletion by the user (0.5). An admin does it on request.
-5. The sample idea chooser and the interest page (0.5).
-
-That is about 3 half-days. Nothing else in B1 can go without breaking the trial, the charge, or the weekly cycle.
-
-**B2: growth.** About 13 half-days: referral links and credit 3.5, stats email 1, bricks and levels 2, leaderboard and points 2, group session and guests 1.5, sponsors 3.
+**B2: growth.** About 13.5 half-days *(1.5)*: referral links and credit 3.5, stats email 1, bricks and Seasons (including the rename from levels) 2, leaderboard and points 2, group session and guests 1.5, sponsors 3, quiz question 5 to Levels 0 to 9 with symptoms 0.5.
 
 **B3: measurement.** About 8 half-days: measures 2, pipeline 3, review bot 3.
+
+**B4: levels.** About 10.5 half-days *(1.5)*, after B3 (B.16a): level intake 1, level engine and storage 3, dashboard check chart 2, stats email Level line and operations view 1.5, Cora's use of levels 2, tests on the pilot users' real runs 1. Specified in `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.2.md`, section 3.6.
 
 ## B.18 Acceptance checks
 
 **Sign-up and sign-in**
 
 1. A person can complete sign-up on each of the three quiz routes; nobody is blocked.
-2. The card step shows the two-free-lists statement directly above the card form, and no charge is made at sign-up.
-3. The consent box is unticked by default, and a plan that runs Zack cannot be chosen without it.
+2. ~~The card step shows the two-free-lists statement directly above the card form, and no charge is made at sign-up.~~ *(1.4)* A person can go from `/start` to a connected Zack without entering a card; Step 3 states both monthly prices and that the card is asked for before the first full list, and nothing in Stripe is made at sign-up.
+3. The consent box is unticked by default, and ~~a plan that runs Zack cannot be chosen~~ *(1.4)* Step 3 cannot be completed without it.
 4. A sign-in link works once and stops working after 15 minutes. No password is stored anywhere.
 
 **Zack**
@@ -1300,13 +1361,36 @@ That is about 3 half-days. Nothing else in B1 can go without breaking the trial,
 35. The unlisted pages and the existing library, watches, and admin tabs work as before.
 36. `npm run build` and `npm run lint` pass.
 
-**One list at a time**
+**One list at a time** *(1.4: legacy checks for leftover per-run accounts; nothing offers it)*
 
 37. A one-at-a-time user is never charged without an order.
 38. An order for a Monday with no Zack run produces no charge, no list, and an email saying why.
 39. With sharing off, the order button is disabled and says why.
 40. Neither the public site nor sign-up offers a non-contributor plan.
 41. Switching between monthly and one at a time takes one click and never produces two charges for the same Monday.
+
+**Held lists and Payment** *(1.4)*
+
+42. No one without a card sees a list's details (reason, steps, playbook) in any page, payload or email, and no free list is counted before the card is saved. Saving the card shows the held list at once, as free list 1 of 2.
+43. A newer held list replaces the older one when its week is ready; only the newest is ever delivered, and the replaced one never is, late or at the unlock.
+44. A trial with a held list and no card gets reminders on days 2 and 7 and closes 14 days after its first teaser with one closing email, never charged; one that never connects Zack closes 21 days after consent.
+45. On a phone, Payment shows the summary bar, the card form and the button with no navigation, and asks only for the card, expiry, CVC, name, country (Canada or the US) and postal code.
+46. A double press on "Start free trial" makes one confirm; the price, currency and tax come from the server; Stripe's errors show above the button with the entries kept.
+47. A promo code applied on Payment is charged at the third list at exactly the amount told; its last use goes to one member only.
+48. Sponsored members never see a teaser or Payment and get their lists from the first Monday.
+49. The admin funnel counts sign-ups by week through Zack connected, first teaser, card saved and first charge.
+50. Monthly is the only plan offered anywhere in the product (leftover per-run test accounts on preview excepted).
+
+**Levels** *(1.5; B2 items marked, the rest B4)*
+
+51. (B2) The brick graph, its tokens and the stats email say "Season"; the word "Level" appears only for Roger AI Levels.
+52. (B2) Quiz question 5 offers Levels 0 to 9, each with its "you need it when…" symptom, and stores the answer.
+53. A run with a valid `roger-level` block is stored and scored; a run without one is still accepted and scored on its other evidence; the block never enters the shared pool.
+54. A user's earned Level never goes down. Each check item shows its live 0 or 1, and gaps below the Level are listed first.
+55. A level is never earned on self-reported items alone: every level needs at least three core items verified by Zack or Roger data.
+56. The dashboard shows the next level's check chart with how each item is checked; the operations view shows each user's Level and core gaps.
+57. Cora never picks a play whose entry level is above the user's Level + 1, and fills the three slots in order: gap, next level, best fit.
+58. Scoring the pilot users' real Zack 2.1 runs gives the levels the Roger team assigned by hand, or every difference is explained.
 
 ---
 
@@ -1317,16 +1401,16 @@ That is about 3 half-days. Nothing else in B1 can go without breaking the trial,
 | 1 | **Zack version 2.0** for Claude, Duet, Grok Bot, and Hark, with the seven changes in B.5 | The connected weekly cycle |
 | 2 | **Cora version 2.0**, with the nine changes in B.7 | The Cora job |
 | 3 | The fixed category list, confirmed | Zack, the quiz, and Cora |
-| 4 | Tax registration entered in Stripe, and a word from your accountant on charging US customers | The first charge |
+| 4 | Tax registration entered in Stripe, and a word from your accountant on charging US customers. *Accountant, November 27, 2026: no US sales tax for now (no US registration, so Stripe adds none); product tax code txcd_10103001, SaaS for business use.* | The first charge |
 | 5 | Google sign-in credentials for the project | "Sign in with Google" |
 | 6 | The letter, edited for v3 (the approved text mentions Circles and applications) | `/about` and the homepage block |
 | 7 | Headshot at `public/media/peter.jpg` and signature at `public/media/peter-signature.svg` | Nothing; both have fallbacks |
-| 8 | Each testimonial's attribution confirmed (role and city), and a quote from Grace | The testimonials section |
+| 8 | Each testimonial's attribution confirmed (role and city), and a quote from Grace. *Done November 27, 2026: the four quotes confirmed, no Grace quote.* | The testimonials section |
 | 9 | The starter setup file, version 1, read through after the two edits in B.11 | The startup page |
 | 10 | A read of the privacy and terms text, and the model provider's position on training | Launch |
-| 11 | The session day, time, and Meet link | The session card (B2) |
-| 12 | The demo video and the data for the "one real week" example | A2 |
-| 13 | Keys and settings in Vercel: Stripe secret key and webhook secret, the Stripe prices created (monthly at both rates, and one list, in both currencies), `ADMIN_EMAILS` (Peter and Ehab), and the sending address for "Roger support" | Billing, the admin, and every automatic email |
+| 11 | The session day, time, and Meet link (with B2, not launch) | The session card (B2) |
+| 12 | The demo video and the data for the "one real week" example (with A2, not launch) | A2 |
+| 13 | Keys and settings in Vercel: Stripe secret key and webhook secret, the Stripe prices created (monthly at both rates, and one list, in both currencies), `ADMIN_EMAILS` (the Roger team), and the sending address for "Roger support" | Billing, the admin, and every automatic email |
 
 Items 1 and 2 are documents, not code. They can be drafted from this spec and the existing 1.9 and 1.1 files.
 
@@ -1336,6 +1420,8 @@ The live checklist for these items and for the defaults below is `artifacts/laun
 
 These were chosen to fill gaps. Each is easy to change before it is built.
 
+Peter confirmed 1 to 4, 7, 8, 11 and 12 as written on November 27, 2026. 5 and 6 are B2 defaults, confirmed when B2 is built.
+
 1. A flagged run still counts as contributed for pricing.
 2. A trial user with Zack on gets a list only in weeks their run arrives; a trial user with Zack off gets one every Monday.
 3. Recency weights: last 4 weeks at 1, weeks 5 to 12 at 0.5, older at 0.25; a play with no evidence in 26 weeks is retired from picking.
@@ -1344,7 +1430,7 @@ These were chosen to fill gaps. Each is easy to change before it is built.
 6. A sponsor is invoiced from each sponsored user's third list, as an individual would be.
 7. Testimonials are seeded with their switches on.
 8. The "not ready" route applies only to people who answer both "not yet" and "I avoid it".
-9. Retired on November 21, 2026: single lists are sold (US$200 or CA$280 since 1.3), so there is no demand link.
+9. Retired on November 21, 2026: single lists are sold (US$200 or CA$280 since 1.3), so there is no demand link. *(1.4)* Single lists are no longer sold (November 26, 2026).
 10. The category list: Marketing, Research, Builds, Sales, Operations, Email and calendar, Listings, Client follow-up, Personal errands.
-11. A one-at-a-time order is charged on Monday at 6:00 AM only if that week's Zack run arrived. If not, there is no charge and no list, and the order does not carry over.
+11. *(1.4: leftover per-run accounts only; 11 and 12 no longer apply to anyone signing up.)* A one-at-a-time order is charged on Monday at 6:00 AM only if that week's Zack run arrived. If not, there is no charge and no list, and the order does not carry over.
 12. One-at-a-time lists need sharing switched on.

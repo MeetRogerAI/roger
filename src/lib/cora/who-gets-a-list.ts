@@ -18,6 +18,12 @@ export type ListFacts = {
   accessEnded: boolean;
   /** Held: why. An unpaid renewal is still picked for; the list waits for the payment. */
   holdReason?: string | null;
+  /**
+   * A card is saved, or the member is sponsored (billing/has-card.ts). A
+   * trial without a card is picked for as usual; at the send its list is held
+   * until the card is saved (only the titles go out).
+   */
+  hasCard: boolean;
 };
 
 export type ListDecision = { gets: boolean; why: string };
@@ -30,8 +36,11 @@ export function whoGetsAList(f: ListFacts, phase: "pick" | "send"): ListDecision
   if (f.status === "active" && f.plan === "monthly" && !f.sponsored && f.accessEnded) return { gets: false, why: "monthly ending before this week" };
   if (f.sponsored) return { gets: true, why: "sponsored: every Monday" };
   if (f.status === "trial") {
-    if (f.sharing === "off") return { gets: true, why: "trial, Zack off: matched from the profile" };
-    return f.runArrived ? { gets: true, why: "trial, run arrived" } : { gets: false, why: "trial, no run this week (a free list is not used)" };
+    const base = f.sharing === "off" ? "trial, Zack off: matched from the profile" : f.runArrived ? "trial, run arrived" : null;
+    if (!base) return { gets: false, why: "trial, no run this week (a free list is not used)" };
+    if (f.hasCard) return { gets: true, why: base };
+    // No card (plan 2026-11-26-001, Unit 3): picked as usual; at the send the list is held and only its titles go out.
+    return phase === "pick" ? { gets: true, why: `${base}; picked, held until a card is saved` } : { gets: false, why: `${base}; picked; held until card (titles-only teaser)` };
   }
   // Active, or cancelled within the paid month.
   if (f.plan === "monthly") return { gets: true, why: "monthly: every Monday" };
