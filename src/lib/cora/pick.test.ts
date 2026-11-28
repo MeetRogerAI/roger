@@ -150,3 +150,23 @@ describe("fit bounds and reason lines (11c review)", () => {
     expect(needsLine({ connections: ["Gmail", "Visit evil.example now", "x".repeat(50)], features: ["browser"] })).toBe(" It needs Gmail, browser.");
   });
 });
+
+describe("pickThree with upgrades (B3 plan Unit 12)", () => {
+  it("puts at most one upgrade on a list: the best-placed one competes, the other is left out", () => {
+    const r = pickThree([c("u1", 80, 5, { upgrade: true }), c("u2", 79, 5, { upgrade: true }), c("a", 50, 3), c("b", 40, 3)]);
+    expect(r.picks.map((p) => p.play.id)).toEqual(["u1", "a", "b"]);
+    expect(r.picks.filter((p) => p.upgrade)).toHaveLength(1);
+  });
+
+  it("an upgrade competes like any Fit 5 play, and can lose", () => {
+    const r = pickThree([c("u", 10, 5, { upgrade: true }), c("a", 90, 3), c("b", 80, 3), c("d", 70, 3)]);
+    expect(r.picks.map((p) => p.play.id)).toEqual(["a", "b", "d"]);
+  });
+
+  it("without upgrades, gives exactly what it gave before", () => {
+    const list = [c("a", 90, 1), c("b", 60, 5), c("c", 70, 3), c("d", 50, 5), c("e", 40, 3, { installable: false }), c("f", 60, 5, { frictionMatch: true })];
+    const withFlag = list.map((x) => ({ ...x, upgrade: false }));
+    expect(pickThree(withFlag).picks.map((p) => [p.play.id, p.position, p.personal])).toEqual(pickThree(list).picks.map((p) => [p.play.id, p.position, p.personal]));
+    expect(pickThree(list).picks.map((p) => p.play.id)).toEqual(["f", "b", "c"]);
+  });
+});

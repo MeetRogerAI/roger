@@ -13,6 +13,8 @@ export type Fitted = {
   frictionMatch: boolean;
   /** The user's setup has everything the play requires (change 9). */
   installable: boolean;
+  /** An upgrade to a play the user already runs (Cora change 11, only with `v3.coraUpgradesOn`): at most one per list. */
+  upgrade?: boolean;
 };
 
 export type Pick = Fitted & { position: 1 | 2 | 3; personal: number };
@@ -38,8 +40,11 @@ export function pickThree(candidates: Fitted[]): PickResult {
   // Installable first, whatever the Fit (change 9: below every play the user can install today).
   // Within each: Fit 3 or more by personal score, then Fit 1 by network score.
   const tier = (c: (typeof withScore)[number]) => (c.installable ? 0 : 2) + (c.fit >= 3 ? 0 : 1);
+  // At most one upgrade: the best-placed one competes, any other is left out (change 11).
+  let upgrades = 0;
   const chosen = [...withScore]
     .sort((a, b) => tier(a) - tier(b) || (a.fit >= 3 && b.fit >= 3 ? order(a, b) : byRank(a.play, b.play)))
+    .filter((c) => !c.upgrade || upgrades++ === 0)
     .slice(0, 3);
   const picks = chosen.map((c, i) => ({ ...c, position: (i + 1) as 1 | 2 | 3 }));
   return { outcome: picks.length === 3 ? "picked" : picks.length ? "short" : "none", picks };

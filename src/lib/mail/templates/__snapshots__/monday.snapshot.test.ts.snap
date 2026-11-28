@@ -1,0 +1,83 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the Monday email without an upgrade is unchanged > one idea, with a receipt 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">Inbox triage</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your ideas for the week of Monday, November 30</h1><div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">1. Inbox triage</p><p style="margin:4px 0 0;color:#444">Matches something your week still had you doing by hand.</p><p style="margin:4px 0 0;color:#444">About 3.5 hours a week for people who run it</p><p style="margin:10px 0 0"><a href="http://localhost:3000/app/week/2026-11-30#idea-p1" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">This week there is one idea that fit you, not three. We only send ideas that fit.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">s</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your receipt: https://example.com/r</p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your list, and your receipt",
+  "text": "Your ideas for the week of Monday, November 30
+
+1. Inbox triage
+Matches something your week still had you doing by hand.
+About 3.5 hours a week for people who run it
+Open and install: http://localhost:3000/app/week/2026-11-30#idea-p1
+
+This week there is one idea that fit you, not three. We only send ideas that fit.
+
+s
+
+Your receipt: https://example.com/r
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`the Monday email without an upgrade is unchanged > three ideas 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">Inbox triage · Listing post · Calendar prep</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your ideas for the week of Monday, November 30</h1><div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">1. Inbox triage</p><p style="margin:4px 0 0;color:#444">Matches something your week still had you doing by hand.</p><p style="margin:4px 0 0;color:#444">About 3.5 hours a week for people who run it</p><p style="margin:10px 0 0"><a href="http://localhost:3000/app/week/2026-11-30#idea-p1" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div><div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">2. Listing post</p><p style="margin:4px 0 0;color:#444">Fits the listings work your week shows.</p><p style="margin:10px 0 0"><a href="http://localhost:3000/app/week/2026-11-30#idea-p2" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div><div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">3. Calendar prep</p><p style="margin:4px 0 0;color:#444">One of the most useful email and calendar plays in the pool this week.</p><p style="margin:4px 0 0;color:#444">About 1 hours a week for people who run it</p><p style="margin:10px 0 0"><a href="http://localhost:3000/app/week/2026-11-30#idea-p3" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your next list comes Monday.</p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your three ideas for the week of Monday, November 30",
+  "text": "Your ideas for the week of Monday, November 30
+
+1. Inbox triage
+Matches something your week still had you doing by hand.
+About 3.5 hours a week for people who run it
+Open and install: http://localhost:3000/app/week/2026-11-30#idea-p1
+
+2. Listing post
+Fits the listings work your week shows.
+Open and install: http://localhost:3000/app/week/2026-11-30#idea-p2
+
+3. Calendar prep
+One of the most useful email and calendar plays in the pool this week.
+About 1 hours a week for people who run it
+Open and install: http://localhost:3000/app/week/2026-11-30#idea-p3
+
+Your next list comes Monday.
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;
+
+exports[`the Monday email without an upgrade is unchanged > two ideas 1`] = `
+{
+  "html": "<!doctype html><html><body style="margin:0;padding:0;background:#fbfbfd"><div style="display:none;max-height:0;overflow:hidden">Inbox triage · Listing post</div><div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">Your ideas for the week of Monday, November 30</h1><div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">1. Inbox triage</p><p style="margin:4px 0 0;color:#444">Matches something your week still had you doing by hand.</p><p style="margin:4px 0 0;color:#444">About 3.5 hours a week for people who run it</p><p style="margin:10px 0 0"><a href="http://localhost:3000/app/week/2026-11-30#idea-p1" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div><div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">2. Listing post</p><p style="margin:4px 0 0;color:#444">Fits the listings work your week shows.</p><p style="margin:10px 0 0"><a href="http://localhost:3000/app/week/2026-11-30#idea-p2" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">This week there are 2 ideas that fit you, not three. We only send ideas that fit.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">Your next list comes Monday.</p><p style="margin:32px 0 0;font-size:13px;line-height:1.4;color:#5d5d63">Roger support<br>hello@meetroger.ai</p></div></body></html>",
+  "subject": "Your two ideas for the week of Monday, November 30",
+  "text": "Your ideas for the week of Monday, November 30
+
+1. Inbox triage
+Matches something your week still had you doing by hand.
+About 3.5 hours a week for people who run it
+Open and install: http://localhost:3000/app/week/2026-11-30#idea-p1
+
+2. Listing post
+Fits the listings work your week shows.
+Open and install: http://localhost:3000/app/week/2026-11-30#idea-p2
+
+This week there are 2 ideas that fit you, not three. We only send ideas that fit.
+
+Your next list comes Monday.
+
+--
+
+Roger support
+
+hello@meetroger.ai",
+}
+`;

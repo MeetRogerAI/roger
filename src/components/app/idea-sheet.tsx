@@ -50,7 +50,10 @@ export function IdeaSheet({
       <div className="px-5 py-6 sm:px-8 sm:py-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">{idea.category}</p>
+            <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">
+              {idea.category}
+              {idea.upgrade && <span className="ml-2 text-ink">· {idea.upgrade.label}</span>}
+            </p>
             <h2 id={titleId} className="mt-2 text-h3">
               {idea.title}
             </h2>
@@ -66,6 +69,7 @@ export function IdeaSheet({
             <span className="font-[560] text-ink">Your score {idea.personal.score} of 100.</span> {idea.personal.reason}
           </p>
         )}
+        {idea.upgrade?.whatsBetter && <p className="mt-2 text-small text-ink-2">{idea.upgrade.whatsBetter}</p>}
         <p className="mt-6 text-lead">{idea.description}</p>
 
         <dl className="mt-8 grid gap-3 sm:grid-cols-2">

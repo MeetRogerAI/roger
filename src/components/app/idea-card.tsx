@@ -30,7 +30,10 @@ export function IdeaCard({ idea, sheetActions, initiallyOpen = false }: { idea: 
         onClick={() => dialog.current?.showModal()}
         className="group block w-full rounded-[8px] border border-rule bg-surface p-5 text-left transition-colors hover:border-rule-strong sm:p-6"
       >
-        <span className="text-meta font-semibold uppercase tracking-wider text-ink-2">{idea.category}</span>
+        <span className="text-meta font-semibold uppercase tracking-wider text-ink-2">
+          {idea.category}
+          {idea.upgrade && <span className="ml-2 text-ink">· {idea.upgrade.label}</span>}
+        </span>
         <span className="mt-2 flex items-start justify-between gap-4">
           <span className="text-title">{idea.title}</span>
           {idea.personal && (
@@ -41,6 +44,7 @@ export function IdeaCard({ idea, sheetActions, initiallyOpen = false }: { idea: 
           )}
         </span>
         <span className="mt-3 block text-small text-ink-2">{idea.personal ? idea.personal.reason : idea.description}</span>
+        {idea.upgrade?.whatsBetter && <span className="mt-1 block text-small text-ink-2">{idea.upgrade.whatsBetter}</span>}
         {idea.timeLine && (
           <span className="mt-4 block text-meta text-ink-2">
             {idea.timeLine}. An estimate from other users’ runs.

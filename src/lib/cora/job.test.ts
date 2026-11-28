@@ -399,3 +399,54 @@ describe("the Cora version on every list (B3 plan Unit 2)", () => {
     expect(await picksOf(a)).toHaveLength(3);
   });
 });
+
+describe("with v3.coraUpgradesOn off, the picks are B1's (B3 plan Unit 12)", () => {
+  // Captured from this fixture before Unit 12 was built: every pick, its scores, Fit and reason.
+  const B1_PICKS = [
+    ["a@example.com", 1, "Calendar prep", 75, 3, "Fits the email and calendar work your week shows."],
+    ["a@example.com", 2, "Follow-up drafts", 74, 3, "Fits the client follow-up work your week shows."],
+    ["a@example.com", 3, "Expense log", 68, 3, "Fits the operations work your week shows."],
+    ["b@example.com", 1, "Listing post", 74, 3, "Fits the listings work your week shows."],
+    ["b@example.com", 2, "Inbox sorter", 71, 3, "Fits the email and calendar work your week shows."],
+    ["b@example.com", 3, "Expense log", 68, 3, "Fits the operations work your week shows."],
+    ["c@example.com", 1, "Calendar prep", 75, 3, "Fits the email and calendar work your week shows."],
+    ["c@example.com", 2, "Follow-up drafts", 74, 3, "Fits the client follow-up work your week shows."],
+    ["c@example.com", 3, "Listing post", 74, 3, "Fits the listings work your week shows."],
+  ];
+  const allPicks = async () =>
+    (
+      await query<{ email: string; position: number; title: string; personal_score: number; fit: number; reason: string; kind: string; whats_better: string | null }>(
+        `select u.email, k.position, pp.title, k.personal_score, k.fit, k.reason, k.kind, k.whats_better
+         from picks k join pool_plays pp on pp.id = k.pool_play_id join users u on u.id = k.user_id order by u.email, k.position`,
+      )
+    ).map((r) => [r.email, r.position, r.title, r.personal_score, r.fit, r.reason, r.kind, r.whats_better]);
+  const b1 = B1_PICKS.map((r) => [...r, "new", null]);
+  // An upgrade model that would call every candidate better: with the switch off it must never be asked.
+  const calls: unknown[] = [];
+  const eager = { judge: async (pairs: { id: string }[]) => (calls.push(pairs), pairs.map((p) => ({ id: p.id, flags: ["guardrails" as const] }))) };
+
+  it("with no upgrade model (B1's deps), the picks are exactly B1's", async () => {
+    expect(await runCoraJob(query, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    expect(await allPicks()).toEqual(b1);
+  });
+
+  it("with an upgrade model but the switch off, the picks are exactly B1's and the model is never called", async () => {
+    calls.length = 0;
+    const settings = mergeV3([
+      { key: "v3.cycleLive", value: true },
+      { key: "v3.coraUpgradesOn", value: false },
+    ]);
+    expect(settings.coraUpgradesOn).toBe(false);
+    expect(live.coraUpgradesOn).toBe(false);
+    expect(await runCoraJob(query, deps({ upgrade: eager }), { now: ONE_AM, settings })).toMatchObject({ status: "ready" });
+    expect(await allPicks()).toEqual(b1);
+    expect(calls).toEqual([]);
+  });
+
+  it("a dry run with the switch off is B1's too", async () => {
+    calls.length = 0;
+    await runCoraJob(query, deps({ upgrade: eager }), { now: ONE_AM, settings: off, dryRun: true });
+    expect(await allPicks()).toEqual(b1);
+    expect(calls).toEqual([]);
+  });
+});

@@ -662,6 +662,40 @@ This page couldn’t be logged, so it isn’t shown. Try again in a minute.
 Roger idea ID: R-ABCD2345. Keep this ID with the idea in your Roger Upgrade Notes.
 ```
 
+**Member, Cora upgrades (B3 Unit 12, Cora change 11)** — dark until `v3.coraUpgradesOn` is on. At most one idea a week is an upgrade to a play the member already runs. With the switch off nothing below appears anywhere.
+
+- Label (`src/lib/cora/idea-view.ts`, `UPGRADE_LABEL`), after the category on the card and in the sheet (`Email and calendar · Upgrade`), and after the title in the Monday email (`2. Inbox sorter (Upgrade)`):
+
+```
+Upgrade
+```
+
+- The reason line on an upgrade pick (`src/lib/cora/upgrade.ts`, `UPGRADE_REASON`), where other picks show "Fits the … work your week shows.":
+
+```
+A better version of a play you already run.
+```
+
+- The What's better line (`whatsBetterLine` and `whatsBetterShown`), under the reason on the card, in the sheet and in the email. Built by code from fixed phrases only (never from either playbook), one of seven:
+
+```
+What's better: Adds more steps your version doesn't have.
+What's better: Adds guardrails your version doesn't have.
+What's better: Adds fixes for common pitfalls your version doesn't have.
+What's better: Adds more steps and guardrails your version doesn't have.
+What's better: Adds more steps and fixes for common pitfalls your version doesn't have.
+What's better: Adds guardrails and fixes for common pitfalls your version doesn't have.
+What's better: Adds more steps, guardrails and fixes for common pitfalls your version doesn't have.
+```
+
+- In what "Copy prompt and playbook" copies, its own paragraph after the Roger idea ID line (`UPGRADE_COPY_LINE`), so the member's agent improves their play rather than installing a second one:
+
+```
+This is an upgrade to a play you already run. Update your version with what this one adds, rather than installing a second copy.
+```
+
+- Admin, `/admin/settings`: the switch `Cora upgrades`, hint `Cora may offer one upgrade to something a member already runs. Cora runs only while the cycle is live.` (B3 Unit 1).
+
 **Admin, `/admin/measures`** (adoption table): two more columns, `Installed (next profile)` and `Used (next profile)`, each a count and a share of ideas sent; and the note under the table gains `Installed and used come from the member’s next Zack profile, matched by the idea’s Roger idea ID or its title.`
 
 **Flags for Peter:**
@@ -670,4 +704,5 @@ Roger idea ID: R-ABCD2345. Keep this ID with the idea in your Roger Upgrade Note
 - **"Only you and the Roger team see this."** The review bot (B3 Unit 7) will also read notes, through the AI Gateway, as evidence for wording changes, and never copies them into a pull request. Is "the Roger team" fair for that, or should the line say "Only you and the Roger team see this, and our review tools read it to improve Zack and Cora."?
 - **Delete works with the switch off.** A member can always delete their own note, even while notes are switched off (the save is refused). Right?
 - **A reply is filed under the week it came in** (the Monday of the date entered), as the list it's most likely about.
+- **Cora upgrades** (all of the above) are pending sign-off. "Upgrade" is also the word in "Roger Upgrade Notes"; is that confusing, or helpful? Is "A better version of a play you already run." right when the member's own version may be the one they prefer?
 - **The privacy page** should say that admin reads of runs, picks and feedback are logged, and that notes are kept with the account and erased with it. That page lives on `feat/site-v1` (launch list, Unit 14).

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { v3Defaults } from "@/data/config";
-import { buildIdeaView, formatHours, ideaIdLine, PASTE_CAUTION, type PlaySource } from "./idea-view";
+import { buildIdeaView, formatHours, ideaIdLine, PASTE_CAUTION, UPGRADE_COPY_LINE, UPGRADE_LABEL, whatsBetterShown, type PlaySource } from "./idea-view";
 
 const fixture = JSON.parse(readFileSync(new URL("../../../db/seeds/sample-play.fixture.json", import.meta.url), "utf8"));
 
@@ -85,6 +85,32 @@ describe("buildIdeaView", () => {
     expect(v.copyText.startsWith(preface)).toBe(true);
     // Everything the page and the email render, other than the copy, is as before.
     expect({ ...v, copyText: "" }).toEqual({ ...pickOnly, copyText: "" });
+  });
+
+  it("a pick that is not an upgrade gives exactly the view it gave before, with no upgrade key (B3 Unit 12)", () => {
+    const before = buildIdeaView(play, preface, { personalScore: 66, reason: "r", ideaCode: "R-ABCD2345" });
+    expect(Object.keys(before)).not.toContain("upgrade");
+    expect(buildIdeaView(play, preface, { personalScore: 66, reason: "r", ideaCode: "R-ABCD2345", kind: "new", whatsBetter: null })).toStrictEqual(before);
+    // A stray What's better on a 'new' pick shows nothing.
+    expect(buildIdeaView(play, preface, { personalScore: 66, reason: "r", ideaCode: "R-ABCD2345", kind: "new", whatsBetter: "Adds guardrails your version doesn't have." })).toStrictEqual(before);
+    expect(buildIdeaView(play, preface)).toStrictEqual(buildIdeaView(play, preface, null));
+  });
+
+  it("an upgrade pick carries the Upgrade label, the What's better line, and one line in the copy after the ID line", () => {
+    const base = buildIdeaView(play, preface, { personalScore: 80, reason: "r", ideaCode: "R-ABCD2345" });
+    const v = buildIdeaView(play, preface, { personalScore: 80, reason: "r", ideaCode: "R-ABCD2345", kind: "upgrade", whatsBetter: "Adds guardrails your version doesn't have." });
+    expect(v.upgrade).toEqual({ label: UPGRADE_LABEL, whatsBetter: "What's better: Adds guardrails your version doesn't have." });
+    expect(whatsBetterShown("Adds guardrails your version doesn't have.")).toBe("What's better: Adds guardrails your version doesn't have.");
+    expect(v.copyText).toBe([preface, PASTE_CAUTION, ideaIdLine("R-ABCD2345"), UPGRADE_COPY_LINE, play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n"));
+    // It carries the full pool playbook; everything else is as on any pick.
+    expect(v.playbookMd).toBe(play.playbookMd);
+    expect({ ...v, upgrade: undefined, copyText: "" }).toEqual({ ...base, copyText: "" });
+    expect(Object.keys(v).filter((k) => !(k in base))).toEqual(["upgrade"]);
+  });
+
+  it("an upgrade without a stored line shows no line, and is otherwise an ordinary pick", () => {
+    const v = buildIdeaView(play, preface, { personalScore: 80, reason: "r", kind: "upgrade", whatsBetter: null });
+    expect(v.upgrade).toEqual({ label: UPGRADE_LABEL, whatsBetter: null });
   });
 
   it("says counted when the basis is Actual", () => {

@@ -970,7 +970,7 @@ Tests: `src/app/admin/review/page.test.tsx` (9), `src/lib/review/before-after.te
 
 Tests: `src/lib/cora/adoption.test.ts` (19), `src/lib/cora/idea-view.test.ts` (2 new: B1's copy pinned exactly, and the ID line changing nothing else), `src/lib/intake/process.test.ts` (3 new), `src/lib/admin/measures.test.ts` (the hand calculation gains installed 3 and used 2), `src/app/admin/measures/page.test.tsx` (the two new column headers).
 
-- [ ] **Unit 12: Cora change 11, upgrades (behind `v3.coraUpgradesOn`), the last code unit**
+- [x] **Unit 12: Cora change 11, upgrades (behind `v3.coraUpgradesOn`), the last code unit**
 
 **Goal:** The B.16 row "Cora upgrades": a list may offer an upgrade to a play the member already runs, at most one of the three picks.
 
@@ -999,6 +999,16 @@ Tests: `src/lib/cora/adoption.test.ts` (19), `src/lib/cora/idea-view.test.ts` (2
 - Edge case: the What's better line never contains text from either playbook.
 
 **Verification:** The switch off changes nothing, and the switch on adds at most one upgrade.
+
+*Unit 12 as built (2026-11-27):* `src/lib/cora/upgrade.ts` (`UpgradeModel`, `gatewayUpgradeModel`, `upgradeCandidates`, `upgradePairs`, `chooseUpgrade`, `findUpgrade`, `whatsBetterLine`, `scrubForModel`, `UPGRADE_REASON`, `MAX_UPGRADE_CANDIDATES` 3, `PLAYBOOK_CHARS` 4,000), `src/lib/cora/pick.ts` (`Fitted.upgrade`), `src/lib/cora/job.ts` (`CoraDeps.upgrade`, `upgradeFor`, `RECORD_PICKS_SQL` writes `kind` and `whats_better`), `src/lib/cora/idea-view.ts` (`IdeaView.upgrade`, `UPGRADE_LABEL`, `whatsBetterShown`, `UPGRADE_COPY_LINE`), `src/lib/app/week.ts`, `src/lib/cora/send-job.ts`, `src/lib/mail/templates/monday.ts`, `src/components/app/idea-card.tsx` and `idea-sheet.tsx`, and the cron route and admin "run Cora" action (they pass `gatewayUpgradeModel`). Where the build adds to or differs from the text above:
+- **Candidates:** a pool play in the member's "already runs" set (their own play from the last four weeks merged into it), active, not declined and never delivered to them, the best three by network score. Two more conditions: someone other than the member (or their linked seed contributor) contributed to it, and its text isn't the member's own (same text, whitespace aside). One model call per member, only when a candidate is left; it sees the member's newest playbook for each candidate and the pool's, both scrubbed of emails, links and phone numbers, clipped to 4,000 characters, inside a `dataTag()` element; 50-second timeout, 1,000 output tokens, structured output, no tools.
+- **Picking:** the first candidate, in rank order, with at least one flag joins the fitted list at Fit 5 (installable as code reads the member's setup) and competes like any other play; `pickThree` keeps at most one upgrade. It can lose to three better plays. An upgrade is only considered when the member has at least one eligible new play (a "none" week stays "none").
+- **The reason line** on an upgrade is a fixed sentence, "A better version of a play you already run.", and `whats_better` is "Adds … your version doesn't have." (the What's better line is shown as "What's better: …"). Both are code templates.
+- **Shown by data, not by the switch:** the label and line appear wherever `picks.kind = 'upgrade'`, so a delivered upgrade still shows if the switch is turned off later. With the switch off no pick is ever written as one. The copy gains one paragraph after the idea ID line, so the member's agent updates their play rather than installing a second copy.
+- **Failure:** any model error, credits and key refusals included, gives no upgrade for that member, and after three in a run the rest of the run skips upgrades; the week never fails for an upgrade (unlike Fit, which fails the week on no credits).
+- **Dry runs** follow the switch like real runs, so a dry-run week with upgrades needs the switch on while the cycle is live. Flag for Peter: if he wants to read an upgrade dry run before members can get one, a dry-run-only setting would be needed.
+
+Tests: `src/lib/cora/upgrade.test.ts` (15: templates, scrub, candidates, choice, the gateway call's tag and limits, and the job with the switch on: happy path, no playbook text in the line, two candidates give one upgrade, model failure or no flags gives the normal list, never an already-sent play), `src/lib/cora/job.test.ts` (3 new: the fixture's picks pinned to B1's with no upgrade model, with the model and the switch off (never called), and for a dry run), `src/lib/cora/pick.test.ts` (3 new), `src/lib/cora/idea-view.test.ts` (3 new), `src/lib/app/week.test.ts` (1 new), `src/lib/mail/templates/monday.snapshot.test.ts` (5: three snapshots written from B1's template before the change, and the upgrade lines), `src/components/app/idea-card.test.tsx` (2). The card and sheet markup without an upgrade was also checked byte-for-byte against B1's components in a one-off test.
 
 - [ ] **Unit 13: Scenario tests against the Stripe sandbox**
 

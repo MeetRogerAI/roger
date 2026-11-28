@@ -18,6 +18,7 @@ import { addReply } from "@/lib/feedback/feedback";
 import { runChargeJob } from "@/lib/billing/charge-job";
 import { asOfAllowed, AsOfRefused, currentMonday, jobNow, moneyAsOfAllowed } from "@/lib/clock";
 import { gatewayFitModel } from "@/lib/cora/fit";
+import { gatewayUpgradeModel } from "@/lib/cora/upgrade";
 import { runCoraJob } from "@/lib/cora/job";
 import { gatewayMergeModel } from "@/lib/cora/merge";
 import { SAMPLE_PLAY_TAG } from "@/lib/cora/sample";
@@ -333,7 +334,7 @@ export async function runJobAction(_p: V3State, fd: FormData): Promise<V3State> 
   const week = currentMonday(now);
   const result = await audited(query, { by, action: `run_${job}`, detail: { week, asOf } }, async (): Promise<unknown> => {
     if (job === "cora" || job === "dry") {
-      return runCoraJob(query, { intake: gatewayModel, merge: gatewayMergeModel, fit: gatewayFitModel }, { now, settings, week, dryRun: job === "dry", budgetMs: 240_000 });
+      return runCoraJob(query, { intake: gatewayModel, merge: gatewayMergeModel, fit: gatewayFitModel, upgrade: gatewayUpgradeModel }, { now, settings, week, dryRun: job === "dry", budgetMs: 240_000 });
     }
     if (job === "send") return runSendJob(query, { settings, now, gw: gw ?? undefined, adjust: stripeAdjustments() ?? undefined }, { week });
     if (job === "charge") return runChargeJob(query, { gw: gw!, orders: stripeOrders() ?? undefined, settings, now }, { week });

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { addDays } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
-import { bricks, brickSeries, brickSummary, buildBrickSeries } from "./week";
+import { UPGRADE_COPY_LINE } from "@/lib/cora/idea-view";
+import { bricks, brickSeries, brickSummary, buildBrickSeries, weekIdeas } from "./week";
 
 /** Plan B2 Unit 2: the 26-week brick graph, one Season at a time (spec B.15). */
 
@@ -170,5 +171,37 @@ describe("brickSeries (database)", () => {
     await pick(FIRST, 1, { setUpAt: inWeek(5) });
     await pick(FIRST, 2, { setUpAt: inWeek(28) });
     expect(await brickSeries(query, userId, inWeek(29))).toMatchObject({ weekIndex: 29, season: 2, weekOfSeason: 3, points: [0, 1, 1], seasonBricks: 1, lifetime: 2 });
+  });
+});
+
+describe("weekIdeas and upgrades (B3 plan Unit 12)", () => {
+  let query: Query;
+  let userId: string;
+  const W = "2026-12-07";
+  async function pick(position: number, kind: string, whatsBetter: string | null) {
+    const [p] = await query<{ id: string }>(
+      "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ($1, 'Sales', 'd', 'the playbook', 'i', $2, $2) returning id",
+      [`t${position}`, W],
+    );
+    await query(
+      `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, delivered_at, kind, whats_better)
+       values ($1, $2, $3, $4, 70, 5, 'r', false, $5, $6, $7)`,
+      [userId, W, position, p.id, `${W}T11:00:00Z`, kind, whatsBetter],
+    );
+  }
+  beforeEach(async () => {
+    ({ query } = await testDb());
+    [{ id: userId }] = await query<{ id: string }>("insert into users (email, status, plan) values ('a@example.com', 'active', 'monthly') returning id");
+  });
+
+  it("shows the Upgrade label and What's better line only on the upgrade pick", async () => {
+    await pick(1, "new", null);
+    await pick(2, "upgrade", "Adds guardrails your version doesn't have.");
+    const [first, second] = await weekIdeas(query, userId, W, "Preface.");
+    expect("upgrade" in first).toBe(false);
+    expect(first.copyText).not.toContain(UPGRADE_COPY_LINE);
+    expect(second.upgrade).toEqual({ label: "Upgrade", whatsBetter: "What's better: Adds guardrails your version doesn't have." });
+    expect(second.copyText).toContain(UPGRADE_COPY_LINE);
+    expect(second.copyText).toContain("the playbook");
   });
 });
