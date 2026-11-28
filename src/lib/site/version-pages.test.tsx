@@ -84,10 +84,10 @@ describe("a site version before its pages are built", () => {
     for (const name of ["Vercel", "Neon", "Resend", "Stripe", "Google"]) expect(markup, name).toContain(name);
     expect(markup).toContain('<section id="free-run"');
     expect(markup).toContain(`the free run is deleted ${v3Defaults.retentionDays} days after you started it`);
-    // The whole sentence, as the page prints it: it states no position.
-    expect(trainingPosition).toBe("We are confirming the model provider’s position on training its models, and will state it here.");
+    // The provider's stated position (checked November 27, 2026), as the page prints it, and nowhere else.
+    expect(trainingPosition).toContain("Cora’s model provider is Anthropic");
     expect(markup).toContain(`>${trainingPosition}</p>`);
-    expect(markup.match(/\btrain\w*/gi)).toEqual(["training"]);
+    expect(markup.match(/\btrain\w*/gi)).toEqual(["train", "training"]);
   });
 
   it("terms state the no-refund line and no amount that differs from the defaults (U9)", async () => {

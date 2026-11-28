@@ -22,12 +22,17 @@ import { fillCopy, type Amounts } from "@/lib/site/amounts";
 const email = siteConfig.contactEmail;
 
 /**
- * The model provider's position on training is not known yet, so this sentence
- * says only that it is being confirmed. Replace it with the confirmed position
- * once the provider's position is known (spec A.13). Until then it must not
- * state or imply a position.
+ * The model provider's position on training (spec A.13; launch list S10),
+ * checked on November 27, 2026: Anthropic's Commercial Terms ("Anthropic may
+ * not train models on Customer Content from Services", effective June 17,
+ * 2025) and Vercel's AI Gateway docs ("AI Gateway does not use your prompts or
+ * responses for training purposes", September 10, 2026). Every model Roger
+ * calls is an Anthropic model through the AI Gateway (src/lib/intake/model.ts,
+ * src/lib/cora/merge.ts, src/lib/cora/fit.ts). Re-check both if the provider
+ * or the route changes.
  */
-export const trainingPosition = "We are confirming the model provider’s position on training its models, and will state it here.";
+export const trainingPosition =
+  "Cora’s model provider is Anthropic, reached through Vercel’s AI Gateway. Anthropic’s commercial terms do not allow it to train its models on what Roger sends, and Vercel does not use it for training either.";
 
 /**
  * The three passages kept from the privacy text the site already had (spec
@@ -109,6 +114,8 @@ export const sitePrivacy: LegalDoc = {
       body: [
         "We keep your runs while you have access to Roger, and for {retentionDays} days after your access ends. Cancelling does not delete your account.",
         "After that period the text of each run and its matching profile are erased, and plays that were never shared are deleted. An empty record of each run stays until your account is deleted: its week, how it arrived, the AI agent it came from and when it arrived.",
+        // Privacy decision P3 (2026-11-27): IDLE_RETENTION_DAYS in src/lib/housekeeping/retention.ts (a year).
+        "If your account is on hold, or is on an older plan than monthly, the same erasing happens once a year has passed with no run sent, no Cora Curation ordered, no charge and no sign-in.",
         "You can delete any run from your dashboard.",
         "Plays already shared stay in the pool. Other users see nothing that identifies you. Roger keeps your own copy of each shared play until your account is deleted, and a private record of which account a shared play came from, so that Cora does not send it back to you. When your account is deleted, that record is changed to say “unknown author”.",
       ],
@@ -134,9 +141,23 @@ export const sitePrivacy: LegalDoc = {
       ],
     },
     {
+      // Privacy decision P6 (2026-11-27): RECORD_MONTHS and KEEP_NOTIFICATION_KINDS in src/lib/housekeeping/retention.ts.
+      id: "records",
+      heading: "Other records we keep",
+      body: [
+        "We keep a record of each email Roger sends you for a year. The record that your welcome email went out stays until your account is deleted, so it is never sent twice.",
+        "Records of payment events from Stripe are kept for eighteen months.",
+        "If you left your email with us without signing up, for example to hear when sign-up opens or to get a starter pack, we keep it for a year from the last time you left it.",
+      ],
+    },
+    {
       id: "your-data",
       heading: "Asking what we hold, correcting it or deleting it",
-      body: [`Email ${email} to ask what we hold about you, to have it corrected or to have it deleted. We will answer within 30 days.`],
+      body: [
+        `Email ${email} to ask what we hold about you, to have it corrected or to have it deleted. We will answer within 30 days.`,
+        "You can also ask us to take your shared plays out of the pool, and we will remove them.",
+        "When an account is deleted, or its email address is changed, Roger’s admin log keeps a short record of it that includes the email address.",
+      ],
     },
   ],
 };
