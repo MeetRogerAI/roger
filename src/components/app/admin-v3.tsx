@@ -395,13 +395,13 @@ export function PlayEdit({ playId, fields }: { playId: string; fields: Record<st
  * quiet button opens a one-line confirm (no browser dialog). Once the page
  * shows the play removed (`removed`), only the outcome message stays.
  */
-export function PoolRemove({ poolPlayId, title, removed = false }: { poolPlayId: string; title: string; removed?: boolean }) {
+export function PoolRemove({ poolPlayId, title, removed = false, userId }: { poolPlayId: string; title: string; removed?: boolean; userId?: string }) {
   const [s, act, pending] = useActionState(removePoolPlayAction, idle);
   const [asking, setAsking] = useState(false);
   if (removed) return <Msg s={s} />;
   return (
     <form action={act} className="flex flex-wrap items-center gap-3">
-      <Hidden values={{ poolPlayId }} />
+      <Hidden values={userId ? { poolPlayId, userId } : { poolPlayId }} />
       <button type="button" onClick={() => setAsking((a) => !a)} className={quiet} aria-expanded={asking}>
         {asking ? "Cancel" : "Remove from pool"}
         <span className="sr-only"> “{title}”</span>

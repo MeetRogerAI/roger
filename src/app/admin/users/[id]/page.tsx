@@ -152,7 +152,7 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
                 {p.removed ? " · removed from the pool" : ""}
                 <p className="text-meta text-ink-2">{p.reason}</p>
                 <div className="mt-1.5">
-                  <PoolRemove poolPlayId={p.poolPlayId} title={p.title} removed={p.removed} />
+                  <PoolRemove poolPlayId={p.poolPlayId} title={p.title} removed={p.removed} userId={r.id} />
                 </div>
               </li>
             ))}

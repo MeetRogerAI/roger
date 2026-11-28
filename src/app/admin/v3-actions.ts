@@ -225,7 +225,9 @@ export async function removePoolPlayAction(_p: V3State, fd: FormData): Promise<V
   const by = await requireAdmin();
   const poolPlayId = idOf(fd, "poolPlayId");
   if (!poolPlayId) return bad("No such play.");
-  const r = await removeFromPool(query, by, poolPlayId);
+  // From a user's page the removal is also logged against that user (their admin log).
+  const userId = fd.get("userId") ? idOf(fd, "userId") : null;
+  const r = await removeFromPool(query, by, poolPlayId, { userId });
   if (r.ok) updateTag(SAMPLE_PLAY_TAG);
   refresh();
   return state(r);

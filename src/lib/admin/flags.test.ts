@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
 import { userPicks } from "./cora";
+import { runDetail } from "./runs";
 import { admitHeld, AUTO_BY, dropHeld, editPlay, heldCount, listAutoLog, removeFromPool } from "./flags";
 
 let query: Query;
@@ -143,6 +144,18 @@ describe("removing a play from the pool (2026-11-28)", () => {
     expect(await entry(waiting)).toMatchObject({ poolPlayId: null, inPool: false, removed: false });
     await removeFromPool(query, ADMIN, id);
     expect(await entry(fixed)).toMatchObject({ poolPlayId: id, inPool: false, removed: true });
+  });
+
+  it("a removal from a user's page is logged against that user, and the run page no longer says the play is in the pool", async () => {
+    const id = await poolPlay("Inbox triage");
+    const play = await addPlay({ position: 1, title: "Inbox triage", autoFixed: { actions: ["drafted"], reasons: [] } });
+    await query("update plays set pool_play_id = $2 where id = $1", [play, id]);
+    const [{ run_id }] = await query<{ run_id: string }>("select run_id from plays where id = $1", [play]);
+    const row = async () => (await runDetail(query, run_id))!.playRows.find((p) => p.id === play);
+    expect(await row()).toMatchObject({ inPool: true, removed: false });
+    await removeFromPool(query, ADMIN, id, { userId: uid });
+    expect(await query("select user_id, action from admin_actions")).toEqual([{ user_id: uid, action: "remove_pool_play" }]);
+    expect(await row()).toMatchObject({ inPool: false, removed: true });
   });
 
   it("a user's picks keep a removed play, marked removed", async () => {

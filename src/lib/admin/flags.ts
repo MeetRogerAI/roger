@@ -185,7 +185,7 @@ export async function editPlay(q: Query, by: string, playId: string, fields: Rec
  */
 const REMOVE_EFFECT = "Cora won’t pick it again, and lists not yet delivered skip it; emails already sent can’t be recalled.";
 
-export async function removeFromPool(q: Query, by: string, poolPlayId: string): Promise<Done> {
+export async function removeFromPool(q: Query, by: string, poolPlayId: string, o: { userId?: string | null } = {}): Promise<Done> {
   const rows = await q<{ title: string }>(
     `update pool_plays set removed_at = now(), removed_by = $2, active = false, score = null, is_public_sample = false
      where id = $1 and removed_at is null returning title`,
@@ -196,7 +196,7 @@ export async function removeFromPool(q: Query, by: string, poolPlayId: string): 
     return { ok: false, message: exists ? "Already removed from the pool." : "No such play." };
   }
   const { title } = rows[0];
-  await logAdminAction(q, { by, action: "remove_pool_play", detail: { poolPlayId, title } });
+  await logAdminAction(q, { by, userId: o.userId ?? undefined, action: "remove_pool_play", detail: { poolPlayId, title } });
   return { ok: true, message: `Removed “${title}” from the pool. ${REMOVE_EFFECT}` };
 }
 

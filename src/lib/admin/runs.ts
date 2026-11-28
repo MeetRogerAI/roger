@@ -14,7 +14,7 @@ export async function listRuns(q: Query, o: { status?: string; userId?: string; 
   );
 }
 
-export type RunDetail = RunListItem & { rawText: string; parsedBy: string | null; zackVersion: string; plays: number; playRows: { id: string; set: string; position: number; title: string; category: string; shareable: boolean; flag: unknown; inPool: boolean }[] };
+export type RunDetail = RunListItem & { rawText: string; parsedBy: string | null; zackVersion: string; plays: number; playRows: { id: string; set: string; position: number; title: string; category: string; shareable: boolean; flag: unknown; inPool: boolean; removed: boolean }[] };
 
 export async function runDetail(q: Query, id: string): Promise<RunDetail | null> {
   const [r] = await q<RunListItem & { rawText: string; parsedBy: string | null; zackVersion: string }>(
@@ -25,7 +25,9 @@ export async function runDetail(q: Query, id: string): Promise<RunDetail | null>
   );
   if (!r) return null;
   const playRows = await q<RunDetail["playRows"][number]>(
-    `select id, set_ as set, position, title, category, shareable, flag, (pool_play_id is not null) as "inPool" from plays where run_id = $1 order by set_, position`,
+    `select p.id, p.set_ as set, p.position, p.title, p.category, p.shareable, p.flag,
+            (p.pool_play_id is not null and pp.removed_at is null) as "inPool", (pp.removed_at is not null) as removed
+     from plays p left join pool_plays pp on pp.id = p.pool_play_id where p.run_id = $1 order by p.set_, p.position`,
     [id],
   );
   return { ...r, plays: playRows.length, playRows };

@@ -50,7 +50,7 @@ export default async function RunsPage({ searchParams }: PageProps<"/admin/runs"
                   {p.set}
                   {p.position}: {p.title} ({p.category}) · {p.shareable ? "shareable" : "not shareable"}
                   {p.flag ? " · flagged" : ""}
-                  {p.inPool ? " · in the pool" : ""}
+                  {p.inPool ? " · in the pool" : p.removed ? " · removed from the pool" : ""}
                 </li>
               ))}
             </ul>
