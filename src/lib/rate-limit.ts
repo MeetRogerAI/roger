@@ -36,6 +36,8 @@ export const limits = {
   sessionInvitePerUser: { limit: 10, windowSeconds: 60 * 60 },
   // Sponsor codes checked at /start (B2 Unit 10): wrong codes only; a correct code is never counted or refused.
   sponsorBadCodePerIp: { limit: 10, windowSeconds: 60 * 60 },
+  // A member's weekly note (B3 Unit 5): failed saves only (too long, empty, not a list week); a valid save is never refused.
+  feedbackBadPerUser: { limit: 20, windowSeconds: 60 * 60 },
 } satisfies Record<string, Limit>;
 
 /** The start of the window that `now` falls in, in whole seconds. */

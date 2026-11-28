@@ -1072,3 +1072,180 @@ create table if not exists email_suppressions (
   created_at timestamptz not null default now(),
   source text not null
 );
+
+-- 2026-11-27, B3 (measurement), Unit 1. Plan:
+-- docs/plans/2026-11-27-003-feat-roger-v3-b3-measurement-plan.md. Every B3
+-- table and column. The member-facing feedback note is behind v3.feedbackOn,
+-- the review bot behind v3.reviewBotOn and Cora upgrades behind
+-- v3.coraUpgradesOn, all off by default.
+--
+-- zack_instruction_fetches: the latest instructions fetch per member, kept
+-- apart for test fetches. version is the git blob SHA of the core Zack file
+-- served (src/lib/instructions/version.ts). A run received within 48 hours
+-- of a fetch is stamped with that fetch's version. Gone with the account.
+create table if not exists zack_instruction_fetches (
+  user_id uuid not null references users (id) on delete cascade,
+  test boolean not null,
+  agent text not null,
+  version text not null,
+  fetched_at timestamptz not null default now(),
+  primary key (user_id, test)
+);
+
+-- member_feedback: a member's weekly note (member_note, one per list week,
+-- edited in place, entered_by null) or a reply an admin pasted onto the
+-- record (admin_reply, entered_by is the admin). A note always has its week,
+-- so the unique index below cannot be got around with a null week_of. Gone
+-- with the account, and erased by retention with the runs.
+create table if not exists member_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users (id) on delete cascade,
+  week_of date,
+  source text not null check (source in ('member_note', 'admin_reply')),
+  body text not null check (char_length(body) between 1 and 4000),
+  entered_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (source <> 'member_note' or week_of is not null),
+  check ((source = 'admin_reply') = (entered_by is not null))
+);
+create unique index if not exists member_feedback_one_note on member_feedback (user_id, week_of) where source = 'member_note';
+create index if not exists member_feedback_user on member_feedback (user_id, created_at desc);
+create index if not exists member_feedback_created on member_feedback (created_at);
+
+-- review_runs: one row per review week (the Friday review bot). At most one
+-- done run a week, and a failed attempt is retried in the window. discarded
+-- counts the proposals validation threw away, by reason. A running row is
+-- taken over only once its lease (330 seconds from started_at) has expired;
+-- every write after the claim checks holder and attempts (the claim's token).
+-- error holds the error's class name and a fixed message, never its text.
+create table if not exists review_runs (
+  week_of date primary key,
+  status text not null default 'running' check (status in ('running', 'done', 'failed', 'skipped')),
+  holder text,
+  attempts int not null default 0,
+  model text,
+  evidence_count int,
+  proposal_count int,
+  discarded jsonb not null default '{}'::jsonb,
+  error text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+-- model_attempts counts the claims that reached the model call (B3 Unit 8):
+-- a scheduled tick claims a failed week only while it is under 3; a skipped
+-- week (no evidence) is claimed again without counting. "Run now" ignores
+-- the limit. attempts stays the claim's token and counts every claim.
+alter table review_runs add column if not exists model_attempts int not null default 0;
+-- manual_attempts counts the "Run now" claims that reached the model call
+-- (each also counted in model_attempts). Run now claims only while it is
+-- under 5 (whole-branch review), so a shared-password admin can't loop
+-- model calls.
+alter table review_runs add column if not exists manual_attempts int not null default 0;
+
+-- measure_snapshots: a measure frozen once (the December 14 checkpoint, key
+-- checkpoint-2026-12-14). Written with on conflict do nothing and never
+-- updated. value is null for no data. detail holds counts only (per-week
+-- numerators and denominators, the floor, the week starts), never a user id,
+-- so it has no foreign key and outlives every account.
+create table if not exists measure_snapshots (
+  key text primary key,
+  value numeric,
+  detail jsonb not null default '{}'::jsonb,
+  computed_at timestamptz not null default now()
+);
+
+-- review_proposals: one wording change the review bot proposed to the
+-- allowlisted instruction files, and what became of it (pending or blocked,
+-- the reads, the fenced claim, the pull request). evidence holds references
+-- only (kind and key), never member text. result_versions holds the blob SHAs
+-- of the files the bot committed, and edited_before_merge marks a pull
+-- request a person changed on GitHub before merging it.
+create table if not exists review_proposals (
+  id uuid primary key default gen_random_uuid(),
+  public_id text not null unique check (char_length(public_id) = 10),
+  review_week date not null,
+  paths text[] not null check (cardinality(paths) between 1 and 4),
+  base_versions jsonb not null default '{}'::jsonb,
+  hunks jsonb not null default '[]'::jsonb,
+  diff_text text not null default '',
+  rationale text not null default '',
+  evidence jsonb not null default '[]'::jsonb,
+  guardrail boolean not null default false,
+  guardrail_reasons jsonb not null default '[]'::jsonb,
+  blocked_reason text,
+  status text not null default 'pending' check (status in ('pending', 'blocked', 'first_read', 'approving', 'rejected', 'stale', 'dry_run', 'pr_open', 'merged', 'closed', 'superseded')),
+  first_read_by text,
+  first_read_at timestamptz,
+  approved_by text,
+  approved_at timestamptz,
+  rejected_by text,
+  rejected_at timestamptz,
+  reject_note text,
+  claim_token text,
+  claimed_at timestamptz,
+  branch text,
+  pr_number int,
+  pr_url text,
+  main_commit text,
+  result_versions jsonb,
+  merged_at timestamptz,
+  closed_at timestamptz,
+  edited_before_merge boolean not null default false,
+  branch_deleted_at timestamptz,
+  superseded_by uuid references review_proposals (id) on delete set null,
+  close_pending boolean not null default false,
+  dry_run_payload jsonb,
+  check_note text,
+  error text,
+  created_at timestamptz not null default now(),
+  check (status <> 'blocked' or blocked_reason is not null),
+  check (status not in ('pr_open', 'merged', 'closed', 'superseded') or pr_number is not null)
+);
+create index if not exists review_proposals_active on review_proposals (status) where status in ('pr_open', 'approving');
+create index if not exists review_proposals_week on review_proposals (review_week, created_at);
+create unique index if not exists review_proposals_pr on review_proposals (pr_number) where pr_number is not null;
+-- review_proposals.document_only (B3 Unit 7): the proposal edits cora.md,
+-- which no code reads, so /admin/review labels it as a document-only change
+-- that needs a matching code change, and leaves it out of before and after.
+alter table review_proposals add column if not exists document_only boolean not null default false;
+
+-- runs: the instruction version the run used, and where it came from (fetch:
+-- the member's latest fetch within 48 hours before receipt, deployed: the
+-- version deployed at receipt). Null on runs from before B3. A run whose file
+-- could not be read has a null version with source deployed.
+alter table runs add column if not exists instructions_version text;
+alter table runs add column if not exists instructions_version_source text check (instructions_version_source in ('fetch', 'deployed'));
+
+-- cora_user_weeks: the cora.md blob SHA when the row was decided, and the
+-- deploy's commit (VERCEL_GIT_COMMIT_SHA, null locally), because no code
+-- reads cora.md and the commit is what identifies the Cora that ran.
+alter table cora_user_weeks add column if not exists method_version text;
+alter table cora_user_weeks add column if not exists code_commit text;
+
+-- leads.first_seen_at: the first touch. created_at is reset by every
+-- re-save, so for leads from before B3 the best first touch left is
+-- created_at (backfilled once, below). Re-saves leave first_seen_at alone.
+alter table leads add column if not exists first_seen_at timestamptz not null default now();
+update leads set first_seen_at = created_at where first_seen_at > created_at;
+
+-- picks (B3 Unit 11, Cora change 15): when the next profile showed the idea
+-- installed, and used, and when that profile was read.
+alter table picks add column if not exists installed_at timestamptz;
+alter table picks add column if not exists used_at timestamptz;
+alter table picks add column if not exists adoption_seen_at timestamptz;
+-- picks.idea_code (B3 Unit 11): the "Roger idea ID" in each delivered idea's
+-- copied text, which the member's agent notes and Zack's next profile reports
+-- back (past_ideas[].idea_id). Random per pick ("R-" and 8 base32 characters,
+-- from gen_random_uuid), so it says nothing about the member or the play and
+-- can't be guessed. Matching only ever looks within the member's own picks,
+-- so codes need not be unique across members. Existing picks get one each
+-- when the column is added (a volatile default is evaluated per row).
+create or replace function roger_idea_code() returns text language sql volatile as $$ select 'R-' || string_agg(substr('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', get_byte(x.b, i) % 32 + 1, 1), '' order by i) from (select decode(md5(gen_random_uuid()::text), 'hex') as b) x, generate_series(0, 7) i $$;
+alter table picks add column if not exists idea_code text not null default roger_idea_code();
+-- picks (B3 Unit 12, Cora change 11): an upgrade to something the member
+-- already runs, and its What's better line. Unused while v3.coraUpgradesOn is off.
+alter table picks add column if not exists kind text not null default 'new' check (kind in ('new', 'upgrade'));
+alter table picks add column if not exists whats_better text;
+-- An earlier B3 draft added picks_user; the primary key (user_id, week_of, position) already serves it.
+drop index if exists picks_user;

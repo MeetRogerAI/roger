@@ -1,6 +1,7 @@
 import { asOfAllowed, AsOfRefused, isAtOrPast, jobNow, wallParts } from "@/lib/clock";
 import { runCoraJob } from "@/lib/cora/job";
 import { gatewayFitModel } from "@/lib/cora/fit";
+import { gatewayUpgradeModel } from "@/lib/cora/upgrade";
 import { gatewayMergeModel } from "@/lib/cora/merge";
 import { databaseMarkedNonProduction } from "@/lib/db-environment";
 import { query } from "@/lib/db-query";
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
     if (p.dow !== 1) return Response.json({ status: "skipped", note: "Cora runs on Mondays." });
     const today = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
     if (!isAtOrPast(now, today, settings.coraAt)) return Response.json({ status: "skipped", note: `Before ${settings.coraAt} Toronto.` });
-    const result = await runCoraJob(query, { intake: gatewayModel, merge: gatewayMergeModel, fit: gatewayFitModel }, { now, settings, week: today, budgetMs: 240_000 });
+    const result = await runCoraJob(query, { intake: gatewayModel, merge: gatewayMergeModel, fit: gatewayFitModel, upgrade: gatewayUpgradeModel }, { now, settings, week: today, budgetMs: 240_000 });
     return Response.json(result, { status: result.status === "failed" ? 500 : 200 });
   } catch (e) {
     if (e instanceof AsOfRefused) return Response.json({ status: "refused", note: e.message }, { status: 400 });

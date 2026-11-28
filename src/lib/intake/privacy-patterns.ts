@@ -43,6 +43,24 @@ const REPLACE: Rule[] = [
   { kind: "long_number", re: /(?<![\w.])\d(?:[\s-]?\d){7,}(?!\w|\.\d)/g, placeholder: "[a number]" },
 ];
 
+/**
+ * A Roger idea ID (picks.idea_code, src/lib/cora/adoption.ts) names one
+ * member's pick, so it never travels with a play's text into storage or the
+ * pool (whole-branch review). Intake keeps it only in the play's own
+ * `roger_idea_id` field; a profile's `past_ideas[].idea_id` is never scrubbed.
+ */
+export const IDEA_ID_PATTERN = /\bR-[A-Z2-7]{8}\b/g;
+export const IDEA_ID_PLACEHOLDER = "[a Roger idea ID]";
+
+export function replaceIdeaIds(input: string): { text: string; findings: Finding[] } {
+  const findings: Finding[] = [];
+  const text = input.replace(IDEA_ID_PATTERN, (m) => {
+    findings.push({ kind: "idea_id", found: m, placeholder: IDEA_ID_PLACEHOLDER });
+    return IDEA_ID_PLACEHOLDER;
+  });
+  return { text, findings };
+}
+
 /** Things in a playbook that could hurt whoever pastes it. Flagged for an admin; never auto-fixed. */
 const HARM: { flag: string; re: RegExp }[] = [
   { flag: "contains a link", re: /(?:\b(?:https?|ftp|javascript|data|file):|(?<![\w/])\/\/\w|\bwww\.)/i },

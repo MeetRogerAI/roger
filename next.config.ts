@@ -1,11 +1,27 @@
 import type { NextConfig } from "next";
 import { paymentCspHeaders } from "./src/lib/payment-csp";
 
+/**
+ * Zack's instructions and connector texts are read from disk at request time, and every Zack run
+ * and Cora list is stamped with the version of its instruction file (src/lib/instructions/version.ts,
+ * B3 plan Unit 2), so each route that can reach them bundles both folders. A route that reaches
+ * version.ts without a key here fails src/lib/instructions/tracing.test.ts.
+ */
+const INSTRUCTION_FILES = ["./content/zack/**/*", "./content/cora/**/*"];
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
-  // Zack's instructions and connector texts are read from disk at request time.
-  outputFileTracingIncludes: { "/api/zack/instructions": ["./content/zack/**/*"], "/app/**": ["./content/zack/**/*"] },
+  outputFileTracingIncludes: {
+    "/api/zack/instructions": INSTRUCTION_FILES,
+    "/api/zack/runs": INSTRUCTION_FILES,
+    "/api/cron/cora": INSTRUCTION_FILES,
+    "/api/cron/review": INSTRUCTION_FILES,
+    "/api/cron/housekeeping": INSTRUCTION_FILES,
+    "/app/**": INSTRUCTION_FILES,
+    "/admin/**": INSTRUCTION_FILES,
+    "/start/plan": INSTRUCTION_FILES,
+  },
   experimental: {
     // Vercel restores Turbopack's build cache between deploys, and the Tailwind
     // loader below doesn't invalidate it when globals.css changes: the Oct 24

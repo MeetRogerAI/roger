@@ -172,7 +172,7 @@ export async function deliverAndTell(q: Query, d: SendDeps, u: U, week: string):
   const orderCharged = after.order_status === "charged" || after.order_status === "sent";
   const message = mondayListEmail({
     week,
-    ideas: ideas.map((i) => ({ id: i.id, title: i.title, reason: i.personal?.reason ?? "", timeLine: i.timeLine })),
+    ideas: ideas.map((i) => ({ id: i.id, title: i.title, reason: i.personal?.reason ?? "", timeLine: i.timeLine, ...(i.upgrade ? { upgrade: i.upgrade } : {}) })),
     status: await statusFor(q, d, after),
     receipt: orderCharged ? { url: after.receipt_url } : null,
   });

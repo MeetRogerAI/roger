@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseProfileBlock, parseRunBlock } from "./parse-block";
-import { harmFlags, replaceNeverWords, replacePatterns } from "./privacy-patterns";
+import { harmFlags, replaceIdeaIds, replaceNeverWords, replacePatterns } from "./privacy-patterns";
 import { validateRun } from "./validate";
 
 const play = (over: Record<string, unknown> = {}) => ({
@@ -143,5 +143,14 @@ describe("replacePatterns, the harder cases", () => {
 
   it("does not take everyday phrases for addresses", () => {
     for (const s of ["Saves 25 minutes each way.", "About 2 hours on the road.", "5 plays in place of 4."]) expect(replacePatterns(s).text).toBe(s);
+  });
+});
+
+describe("replaceIdeaIds (whole-branch review)", () => {
+  it("replaces each Roger idea ID, whole words, upper case only, and records the kind", () => {
+    const { text, findings } = replaceIdeaIds("From R-ABCD2345 and (R-QRST7654).");
+    expect(text).toBe("From [a Roger idea ID] and ([a Roger idea ID]).");
+    expect(findings.map((f) => f.kind)).toEqual(["idea_id", "idea_id"]);
+    for (const s of ["R-ABCD234", "XR-ABCD2345", "R-ABCD23456", "R-ABCD2341"]) expect(replaceIdeaIds(s).text).toBe(s);
   });
 });

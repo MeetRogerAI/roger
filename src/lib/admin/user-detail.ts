@@ -129,7 +129,7 @@ export async function userDetail(q: Query, userId: string, s: V3Settings, now: D
       `select kind, ref, status, coalesce(sent_at, claimed_at)::text as at from notifications where recipient = $1 order by claimed_at desc limit 60`,
       [userId],
     ),
-    actionsForUser(q, userId),
+    actionsForUser(q, userId, 100, { excludeReads: true }),
     q<{ id: string; label: string; userId: string | null }>(`select id, label, user_id as "userId" from seed_contributors order by label`),
     q<CreditLine>(
       `select id, kind, status, amount_cents as "amountCents", offset_cents as "offsetCents", uncollected_cents as "uncollectedCents", currency, reason,

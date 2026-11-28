@@ -37,6 +37,8 @@ export type IdeaView = {
   howWorkedOut: string | null;
   /** What "Copy prompt and playbook" puts on the clipboard. */
   copyText: string;
+  /** Only on an upgrade pick (Cora change 11, B3 Unit 12): the key is absent on every other view. */
+  upgrade?: { label: string; whatsBetter: string | null };
 };
 
 export type PlaySource = {
@@ -53,7 +55,25 @@ export type PlaySource = {
   score: number | null;
 };
 
-export type PickSource = { personalScore: number; reason: string };
+/** `ideaCode`: the pick's "Roger idea ID" (`picks.idea_code`, B3 Unit 11), on a delivered pick only. */
+export type PickSource = { personalScore: number; reason: string; ideaCode?: string | null; kind?: string; whatsBetter?: string | null };
+
+/**
+ * Cora change 11 (B3 Unit 12): an upgrade to a play the member already runs. Shown only on a pick whose
+ * `picks.kind` is 'upgrade', which Cora writes only while `v3.coraUpgradesOn` is on. Member-visible copy:
+ * wording sign-off section 14, pending.
+ */
+export const UPGRADE_LABEL = "Upgrade";
+export const whatsBetterShown = (line: string) => `What's better: ${line}`;
+/** In the copy, after the ID line, so the member's agent improves their play rather than installing a second one. */
+export const UPGRADE_COPY_LINE = "This is an upgrade to a play you already run. Update your version with what this one adds, rather than installing a second copy.";
+
+/**
+ * The line in a delivered idea's copy that names its pick (Cora change 15):
+ * the member's agent notes it, and Zack's next profile reports it back.
+ * Member-visible copy: wording sign-off section 14, pending.
+ */
+export const ideaIdLine = (code: string) => `Roger idea ID: ${code}. Keep this ID with the idea in your Roger Upgrade Notes.`;
 
 /**
  * Added after the preface on every copy (plan, "A playbook is also untrusted
@@ -115,7 +135,11 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
     },
   };
 
-  const copyText = [preface.trim(), PASTE_CAUTION, play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
+  // The ID line goes after the caution, before the prompt. The public sample, and a pick without a code, have none.
+  const idLine = pick?.ideaCode ? [ideaIdLine(pick.ideaCode)] : [];
+  const isUpgrade = pick?.kind === "upgrade";
+  const upgradeLine = isUpgrade ? [UPGRADE_COPY_LINE] : [];
+  const copyText = [preface.trim(), PASTE_CAUTION, ...idLine, ...upgradeLine, play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
 
   return {
     id: play.id,
@@ -132,5 +156,6 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
     writtenOn: play.writtenOn ? agentName(play.writtenOn) : "",
     howWorkedOut: str(f.math),
     copyText,
+    ...(isUpgrade ? { upgrade: { label: UPGRADE_LABEL, whatsBetter: pick?.whatsBetter?.trim() ? whatsBetterShown(pick.whatsBetter.trim()) : null } } : {}),
   };
 }

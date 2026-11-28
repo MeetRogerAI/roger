@@ -43,6 +43,12 @@ async function member(
   return { id, run, pooled, unshared, pool };
 }
 
+/** A member note and an admin reply for the member (B3 Unit 5). */
+async function feedback(userId: string) {
+  await query("insert into member_feedback (user_id, week_of, source, body) values ($1, '2026-11-30', 'member_note', 'my note')", [userId]);
+  await query("insert into member_feedback (user_id, week_of, source, body, entered_by) values ($1, '2026-11-30', 'admin_reply', 'a reply', 'peter@example.com')", [userId]);
+}
+
 beforeEach(async () => {
   ({ query } = await testDb());
 });
@@ -50,13 +56,30 @@ beforeEach(async () => {
 describe("retention (spec B.14)", () => {
   it("erases runs and unshared plays 90 days after access ends, and keeps pooled plays", async () => {
     const m = await member("gone@example.com", { status: "cancelled", access_ends_at: daysAgo(91) });
-    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1 });
+    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1, feedback: 0 });
     expect(await query("select status, raw_text, parsed from runs")).toEqual([{ status: "deleted", raw_text: "", parsed: null }]);
     expect((await query<{ id: string }>("select id from plays")).map((p) => p.id)).toEqual([m.pooled]);
     expect(await query("select id from pool_plays")).toEqual([{ id: m.pool }]);
     expect(await query("select status, raw_text from zack_profiles")).toEqual([{ status: "deleted", raw_text: "" }]);
     // Nothing left to do: the next pass finds no one.
-    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toEqual({ users: 0, runs: 0, plays: 0, profiles: 0 });
+    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toEqual({ users: 0, runs: 0, plays: 0, profiles: 0, feedback: 0 });
+  });
+
+  it("erases the member's notes and admin-entered replies with the runs (B3 Unit 5)", async () => {
+    const m = await member("gone@example.com", { status: "cancelled", access_ends_at: daysAgo(91) });
+    const kept = await member("kept@example.com", { status: "cancelled", access_ends_at: daysAgo(10) });
+    await feedback(m.id);
+    await feedback(kept.id);
+    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1, feedback: 2 });
+    expect(await query("select user_id from member_feedback")).toEqual([{ user_id: kept.id }, { user_id: kept.id }]);
+  });
+
+  it("erases a member whose only data left is feedback", async () => {
+    const m = await member("notes@example.com", { status: "closed", access_ends_at: daysAgo(120) }, { run: "deleted", unshared: false, profile: false });
+    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toEqual({ users: 0, runs: 0, plays: 0, profiles: 0, feedback: 0 });
+    await feedback(m.id);
+    expect(await applyRetention(query, { now: NOW, retentionDays: 90 })).toEqual({ users: 1, runs: 0, plays: 0, profiles: 0, feedback: 2 });
+    expect(await query("select 1 from member_feedback")).toEqual([]);
   });
 
   it("leaves a member at day 89 untouched", async () => {
@@ -98,11 +121,24 @@ describe("retention for idle members (privacy P3, 2026-11-27)", () => {
   it("erases a one-at-a-time member idle for over a year, keeping their pooled plays", async () => {
     const m = await member("idle@example.com", { status: "active", plan: "per_run", ...idle(400) });
     await age(m, 366);
-    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1, feedback: 0 });
     expect(await query("select status, raw_text, parsed from runs")).toEqual([{ status: "deleted", raw_text: "", parsed: null }]);
     expect((await query<{ id: string }>("select id from plays")).map((p) => p.id)).toEqual([m.pooled]);
     expect(await query("select status, raw_text from zack_profiles")).toEqual([{ status: "deleted", raw_text: "" }]);
-    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 0, runs: 0, plays: 0, profiles: 0 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 0, runs: 0, plays: 0, profiles: 0, feedback: 0 });
+  });
+
+  it("erases an idle member's feedback too, also when it is all that is left", async () => {
+    const m = await member("idle@example.com", { status: "active", plan: "per_run", ...idle(400) });
+    await age(m, 366);
+    await feedback(m.id);
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 1, runs: 1, plays: 1, profiles: 1, feedback: 2 });
+    expect(await query("select 1 from member_feedback")).toEqual([]);
+    // Feedback alone is still data to erase.
+    const n = await member("notes@example.com", { status: "held", hold_reason: "renewal_unpaid", ...idle(400) }, { run: "deleted", unshared: false, profile: false });
+    await age(n, 400);
+    await feedback(n.id);
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 1, runs: 0, plays: 0, profiles: 0, feedback: 2 });
   });
 
   it("erases a held member idle for over a year", async () => {
@@ -153,7 +189,7 @@ describe("retention for idle members (privacy P3, 2026-11-27)", () => {
     await age(z, 400);
     const d = await member("done@example.com", { status: "active", plan: "per_run", ...idle(400) }, { run: "deleted", unshared: false, profile: false });
     await age(d, 400);
-    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 2, runs: 0, plays: 1, profiles: 1 });
+    expect(await applyIdleRetention(query, { now: NOW, clockFrom: EPOCH })).toEqual({ users: 2, runs: 0, plays: 1, profiles: 1, feedback: 0 });
   });
 
   it("counts a new account as activity even with no sign-in recorded, and erases an old one with none", async () => {

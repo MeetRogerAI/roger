@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { jar, nextHeaders, nextNavigation, outcome, resetNextFakes } from "@/test-helpers/next-fakes";
+import { testDb } from "@/test-helpers/pglite-db";
 
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/navigation", () => nextNavigation);
@@ -8,11 +9,13 @@ let settings: () => Promise<{ signupOpen: boolean }> = async () => ({ signupOpen
 vi.mock("@/lib/v3-settings", () => ({ readV3Settings: () => settings() }));
 
 const writes: unknown[][] = [];
+const statements: { text: string; params: unknown[] }[] = [];
 let allowed = true;
 vi.mock("@/lib/db", () => ({ hasDb: () => true }));
 vi.mock("@/lib/db-query", () => ({
   query: async (_text: string, params?: unknown[]) => {
     writes.push(params ?? []);
+    statements.push({ text: _text, params: params ?? [] });
     return [];
   },
 }));
@@ -56,6 +59,7 @@ beforeEach(() => {
   resetNextFakes({}, { "x-vercel-forwarded-for": "1.2.3.4" });
   settings = async () => ({ signupOpen: true });
   writes.length = 0;
+  statements.length = 0;
   allowed = true;
   startAccount.mockClear();
 });
@@ -226,6 +230,21 @@ describe("the not-open form", () => {
     expect(await saveNotOpenLead(idle, fd)).toEqual({ status: "ok" });
     expect(writes).toHaveLength(0);
   });
+
+  it("a re-save keeps first_seen_at (the first touch) and moves created_at (B3 Unit 4)", async () => {
+    const fd = new FormData();
+    fd.set("email", "ana@example.com");
+    await saveNotOpenLead(idle, fd);
+    const upsert = statements.find((s) => s.text.includes("insert into leads"))!;
+    // Replay the exact statement the action sent on a real Postgres: once, backdate, then again.
+    const { query: pg } = await testDb();
+    await pg(upsert.text, upsert.params);
+    await pg("update leads set created_at = '2026-11-01T15:00:00Z', first_seen_at = '2026-11-01T15:00:00Z'");
+    await pg(upsert.text, upsert.params);
+    const [row] = await pg<{ first_seen_at: Date; created_at: Date }>("select first_seen_at, created_at from leads");
+    expect(new Date(row.first_seen_at).toISOString()).toBe("2026-11-01T15:00:00.000Z");
+    expect(new Date(row.created_at).getTime()).toBeGreaterThan(Date.parse("2026-11-02T00:00:00Z"));
+  }, 60_000); // The first in-process Postgres of this file applies the whole schema.
 
   it("refuses too many tries from one place", async () => {
     allowed = false;

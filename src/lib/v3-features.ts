@@ -12,8 +12,20 @@ import type { V3Settings } from "./v3-settings";
  * is on, whatever sign-up or the cycle are doing then. Gating it on
  * `featureOn` would park grants (and flip them back and forth) every time
  * sign-up is paused, with no member-facing reason to.
+ *
+ * B3 (plan 2026-11-27-003, Unit 1): `feedbackOn` (the member's weekly note) is a
+ * member-facing surface and goes through featureOn like the B2 switches. Two
+ * B3 switches are read raw, by design:
+ *
+ * - `v3.reviewBotOn`: the review bot is admin-only (the Friday run and the PR
+ *   flow, which stays in dry-run while it is off). Nothing a member sees
+ *   depends on it, so it is not tied to sign-up or the cycle: the team can
+ *   review proposals before go-live.
+ * - `v3.coraUpgradesOn`: a behaviour of the Cora job, which already runs only
+ *   while `cycleLive` is on. Gating it on sign-up as well would switch upgrades
+ *   off for members already in the cycle whenever sign-up is paused.
  */
-export type FeatureSwitch = "referralsOn" | "leaderboardOn" | "statsOn" | "sponsorsOn";
+export type FeatureSwitch = "referralsOn" | "leaderboardOn" | "statsOn" | "sponsorsOn" | "feedbackOn";
 
 export function featureOn(s: Pick<V3Settings, FeatureSwitch | "signupOpen" | "cycleLive">, f: FeatureSwitch): boolean {
   return s[f] === true && s.signupOpen === true && s.cycleLive === true;

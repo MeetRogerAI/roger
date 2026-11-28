@@ -5,13 +5,16 @@ import { Suspense } from "react";
 import { CardSavedNotice } from "@/components/app/card-saved-notice";
 import { HeldIdeas } from "@/components/app/held-ideas";
 import { WeekIdeas } from "@/components/app/week-ideas";
+import { WeekNote } from "@/components/app/week-note";
 import { heldHeading, heldTeaser } from "@/lib/app/held";
 import { weekIdeas } from "@/lib/app/week";
 import { isRealDate } from "@/lib/clock";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { longDate } from "@/lib/dates";
+import { memberNote } from "@/lib/feedback/feedback";
 import { readV3Settings } from "@/lib/v3-settings";
+import { featureOn } from "@/lib/v3-features";
 
 export const metadata: Metadata = { title: "A past week" };
 
@@ -29,6 +32,9 @@ async function Week({ params, searchParams }: { params: PageProps<"/app/week/[da
   const ideas = await weekIdeas(query, session.userId, date, settings.playbookPreface);
   const valid = isRealDate(date);
   const held = !ideas.length && valid ? await heldTeaser(query, session.userId) : null;
+  // The weekly note (B3 Unit 5): only under a delivered list, and only while v3.feedbackOn is on.
+  const noting = ideas.length > 0 && featureOn(settings, "feedbackOn");
+  const note = noting ? await memberNote(query, session.userId, date) : null;
   if (held && held.week === date) {
     return (
       <div className="space-y-8">
@@ -43,7 +49,10 @@ async function Week({ params, searchParams }: { params: PageProps<"/app/week/[da
       {ideas.length > 0 && <CardSavedNotice card={card} />}
       <h1 className="text-h2">{valid ? `Your ideas for the week of ${longDate(date)}` : "That isn’t a week"}</h1>
       {ideas.length ? (
-        <WeekIdeas week={date} ideas={ideas} />
+        <>
+          <WeekIdeas week={date} ideas={ideas} />
+          {noting && <WeekNote week={date} note={note} />}
+        </>
       ) : (
         <p className="text-small text-ink-2">
           There are no ideas for you for that week.{" "}

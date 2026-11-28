@@ -214,7 +214,7 @@ describe("completeCardSetup: the card is saved and the held list unlocked", () =
     await picked(a, PREV);
     await query("insert into cora_weeks (week_of, status, phase, holder, lease_until) values ($1, 'running', 'picked', $2, now() + interval '5 minutes')", [WEEK, H]);
     const picksJson = JSON.stringify([0, 1, 2].map((i) => ({ position: i + 1, id: plays[i], personal: 70, fit: 3, reason: REASON })));
-    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 6, 3, "", false, picksJson, H]);
+    await query(RECORD_PICKS_SQL, [a, WEEK, "picked", 6, 3, "", false, picksJson, H, null, null]);
 
     const sid = await savedCard(a);
     const halfPast = new Date("2026-12-14T05:30:00Z");

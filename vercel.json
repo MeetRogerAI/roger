@@ -40,6 +40,14 @@
     {
       "path": "/api/cron/stats-check",
       "schedule": "0 18 * * 3"
+    },
+    {
+      "path": "/api/cron/review",
+      "schedule": "15,45 14-16 * * 5"
+    },
+    {
+      "path": "/api/cron/review-close",
+      "schedule": "15 17 * * 5"
     }
   ]
 }

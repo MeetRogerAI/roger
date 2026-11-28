@@ -68,11 +68,16 @@ const toAction = (r: Row): LoggedAction => ({
   createdAt: r.created_at,
 });
 
-/** The log for one user, newest first (the user page). */
-export async function actionsForUser(q: Query, userId: string, limit = 100): Promise<LoggedAction[]> {
+/**
+ * The log for one user, newest first (the user page). Page reads (read_*,
+ * src/lib/admin/read-log.ts) are left out with `excludeReads`, so every visit
+ * doesn't push the real actions off the list.
+ */
+export async function actionsForUser(q: Query, userId: string, limit = 100, o: { excludeReads?: boolean } = {}): Promise<LoggedAction[]> {
   const rows = await q<Row>(
-    `select id, admin_email, user_id, action, detail, created_at::text from admin_actions where user_id = $1 order by created_at desc, id desc limit $2`,
-    [userId, limit],
+    `select id, admin_email, user_id, action, detail, created_at::text from admin_actions
+     where user_id = $1 and (not $3 or action not like 'read\\_%') order by created_at desc, id desc limit $2`,
+    [userId, limit, o.excludeReads ?? false],
   );
   return rows.map(toAction);
 }

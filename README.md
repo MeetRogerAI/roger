@@ -44,6 +44,13 @@ Set these in the Vercel project (Settings → Environment Variables), for Produc
 | `RESEND_API_KEY` | Watch emails. Optional here: can be pasted in Admin → Connections instead, or set by the Resend integration. |
 | `X_BEARER_TOKEN`, `XAI_API_KEY` | Optional X sources for the daily intake. Can also be pasted in Admin → Connections. |
 | `SITE_URL` | Optional. Links in emails, e.g. `https://meetroger.ai` |
+| `ADMIN_EMAILS` | Who is an admin of the v3 app: the addresses, comma-separated (any capitalisation). Signed in by email link, they can open `/admin`; they also get the admin alerts and are never counted as members in the measures. Read on every request, so removing an address takes effect at once. |
+| `GITHUB_REVIEW_TOKEN` | The review bot's write token (B3). **Production only, never Preview.** A fine-grained token for `MeetRogerAI/roger` only, with Contents and Pull requests set to write, from a machine account (not a person's), so a person can be the required reviewer. Without it, or off production, the bot runs in dry run and opens no pull requests. |
+| `GITHUB_READ_TOKEN` | Optional, read-only (Contents read and Metadata), for Preview: the review bot's dry-run reads of `main`. Without it those reads are unauthenticated (60 an hour). |
+| `REVIEW_BOT_MODEL` | Optional. The review bot's model through the AI Gateway; default `anthropic/claude-opus-5.5`. |
+| `CORA_UPGRADE_MODEL` | Optional. The model that judges Cora upgrades (`v3.coraUpgradesOn`); default `anthropic/claude-sonnet-5.5`. |
+
+The scenario tests' variables (`SCENARIO_TARGET`, `SCENARIO_DATABASE_URL` and the Stripe sandbox keys and prices) are never set in Vercel: see `tests/scenarios/README.md`.
 
 The AI step (judging and rewriting posts) uses the Vercel AI Gateway, which works on Vercel with no key.
 

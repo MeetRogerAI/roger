@@ -65,9 +65,9 @@ export async function listFlags(q: Query): Promise<FlaggedPlay[]> {
 }
 
 /** Runs flagged as a whole (unreadable, or cut off for length): no plays to approve, so an admin reads the run. */
-export async function flaggedRunsWithoutPlays(q: Query): Promise<{ id: string; who: string; weekOf: string; reason: string }[]> {
+export async function flaggedRunsWithoutPlays(q: Query): Promise<{ id: string; userId: string | null; who: string; weekOf: string; reason: string }[]> {
   return q(
-    `select r.id, coalesce(u.email, 'seed: ' || sc.label) as who, to_char(r.week_of, 'YYYY-MM-DD') as "weekOf", r.reason
+    `select r.id, r.user_id as "userId", coalesce(u.email, 'seed: ' || sc.label) as who, to_char(r.week_of, 'YYYY-MM-DD') as "weekOf", r.reason
      from runs r left join users u on u.id = r.user_id left join seed_contributors sc on sc.id = r.contributor_id
      where r.status = 'flagged' and not exists (select 1 from plays p where p.run_id = r.id) order by r.week_of desc`,
   );

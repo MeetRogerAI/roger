@@ -11,18 +11,21 @@
  *   orders, plans, adjustments) and produces the webhook events Stripe would,
  *   a recording mail transport, and fake models for intake, merge and Fit.
  *
- * - `sandbox` (a seam only, not built): the same scenarios against the
- *   scenario-test Neon branch (`SCENARIO_DATABASE_URL`, reset to its baseline
- *   before each scenario and holding the non-production marker row) and the
- *   Stripe sandbox (`STRIPE_SECRET_KEY` = an `sk_test_` key, the six test
- *   `STRIPE_PRICE_*` ids). `newWorld` would then build the gateways with
- *   `stripeGateway()`, `stripeBilling()`, `stripeOrders()`, `stripePlans()`
- *   and `stripeAdjustments()`, create a Stripe test clock per scenario and
- *   attach each customer to it, and `World.advance` would move the test clock
- *   with the app clock, wait for the clock to be ready, and run the reconcile
- *   (events, then accounts) instead of delivering fake events. The `Stripe`
- *   type below is the contract both sides meet. Asking for `sandbox` today
- *   throws, so a run never mistakes fakes for the sandbox.
+ * - `sandbox` (B3 plan Unit 13): the `sandbox-*.test.ts` files, against the
+ *   Stripe sandbox on test clocks and the marked scenario-test database
+ *   (`SCENARIO_DATABASE_URL`, marked `test`). Their world is
+ *   `newSandboxWorld` (./sandbox-world.ts), built only after the refusals in
+ *   `openSandbox` (./sandbox.ts): a live key, an unmarked database, or the
+ *   production URL stops the run before anything is touched. Each sandbox
+ *   `describe` is `describe.skipIf(!sandboxEnvPresent())`, so without the
+ *   sandbox variables (the default suite, CI) they are skipped. `newWorld`
+ *   below is always the fakes world: the fakes files run unchanged in either
+ *   target.
+ *
+ *   The command: with SCENARIO_TARGET=sandbox, STRIPE_SECRET_KEY (sk_test_),
+ *   the six STRIPE_PRICE_* sandbox ids and SCENARIO_DATABASE_URL set,
+ *   `npx vitest run --config vitest.scenarios.config.ts tests/scenarios/sandbox-`
+ *   (tests/scenarios/README.md has the setup).
  *
  * Every scenario moves the clock forward only; amounts are in cents.
  */
@@ -63,6 +66,9 @@ import { testDb, testSponsor } from "@/test-helpers/pglite-db";
 
 // A scenario walks weeks of jobs; with every test file running at once it needs more than the unit-test limit.
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
+export * from "./sandbox";
+export { balance, newSandboxWorld, type SandboxMember, type SandboxWorld } from "./sandbox-world";
 
 export type Target = "fakes" | "sandbox";
 
@@ -540,10 +546,9 @@ export type World = {
 
 const mailOf = (w: { query: Query; transport: Transport }) => ({ query: w.query, transport: w.transport, sleep: async () => {} });
 
+/** The fakes world, whatever `SCENARIO_TARGET` says (the sandbox world is `newSandboxWorld`). */
 export async function newWorld(o: { start: string; settings?: { key: string; value: unknown }[] }): Promise<World> {
-  if (scenarioTarget() === "sandbox") {
-    throw new Error("SCENARIO_TARGET=sandbox is a seam only: the Stripe sandbox and the scenario Neon branch are not wired yet (see the top of tests/scenarios/helpers.ts).");
-  }
+  scenarioTarget(); // an unknown target still fails loudly
   vi.stubEnv("ADMIN_EMAILS", "peter@example.com,ehab@example.com");
   for (const [k, v] of Object.entries(PRICE_ENV)) vi.stubEnv(k, v);
   const { query } = await testDb();

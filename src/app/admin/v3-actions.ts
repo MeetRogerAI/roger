@@ -14,9 +14,11 @@ import { audited, logAdminAction } from "@/lib/admin/log";
 import { opsWeek } from "@/lib/admin/ops";
 import { addRunForUser, changeUserEmail, clearDisplayName, closeAccount, deleteAccount, giveExtraFreeList, isMonday, linkContributor, saveNote, sendNudge, type Done } from "@/lib/admin/users";
 import { excuseWeek, undoExcuseForEveryone } from "@/lib/billing/contribution";
+import { addReply } from "@/lib/feedback/feedback";
 import { runChargeJob } from "@/lib/billing/charge-job";
 import { asOfAllowed, AsOfRefused, currentMonday, jobNow, moneyAsOfAllowed } from "@/lib/clock";
 import { gatewayFitModel } from "@/lib/cora/fit";
+import { gatewayUpgradeModel } from "@/lib/cora/upgrade";
 import { runCoraJob } from "@/lib/cora/job";
 import { gatewayMergeModel } from "@/lib/cora/merge";
 import { SAMPLE_PLAY_TAG } from "@/lib/cora/sample";
@@ -32,7 +34,7 @@ import { rebuildPoints } from "@/lib/growth/points";
 import { isNudge } from "@/lib/mail/templates/admin-user";
 import { hit } from "@/lib/rate-limit";
 import { createPilotLink } from "@/lib/signup/pilot";
-import { readV3Settings } from "@/lib/v3-settings";
+import { readV3Settings, saveV3Settings } from "@/lib/v3-settings";
 
 /**
  * The v3 admin's server actions (spec B.12, plan Unit 17). Server actions are
@@ -62,6 +64,18 @@ export async function saveNoteAction(_p: V3State, fd: FormData): Promise<V3State
   if (!userId) return bad("No such user.");
   const r = await saveNote(query, by, userId, typeof fd.get("note") === "string" ? String(fd.get("note")) : "");
   refresh();
+  return state(r);
+}
+
+/** "Add a reply" on the user page (B3 Unit 5): an emailed reply pasted onto the member's record. Logged without its text. */
+export async function addFeedbackReplyAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const userId = idOf(fd, "userId");
+  if (!userId) return bad("No such user.");
+  if (await limited(by)) return bad("Too many actions in a minute. Wait a moment.");
+  const body = typeof fd.get("body") === "string" ? String(fd.get("body")).slice(0, 20_000) : "";
+  const r = await addReply(query, by, userId, { receivedOn: field(fd, "receivedOn", 10), body });
+  if (r.ok) refresh();
   return state(r);
 }
 
@@ -321,7 +335,7 @@ export async function runJobAction(_p: V3State, fd: FormData): Promise<V3State> 
   const week = currentMonday(now);
   const result = await audited(query, { by, action: `run_${job}`, detail: { week, asOf } }, async (): Promise<unknown> => {
     if (job === "cora" || job === "dry") {
-      return runCoraJob(query, { intake: gatewayModel, merge: gatewayMergeModel, fit: gatewayFitModel }, { now, settings, week, dryRun: job === "dry", budgetMs: 240_000 });
+      return runCoraJob(query, { intake: gatewayModel, merge: gatewayMergeModel, fit: gatewayFitModel, upgrade: gatewayUpgradeModel }, { now, settings, week, dryRun: job === "dry", budgetMs: 240_000 });
     }
     if (job === "send") return runSendJob(query, { settings, now, gw: gw ?? undefined, adjust: stripeAdjustments() ?? undefined }, { week });
     if (job === "charge") return runChargeJob(query, { gw: gw!, orders: stripeOrders() ?? undefined, settings, now }, { week });
@@ -396,4 +410,26 @@ export async function seedImportAction(_p: V3State, fd: FormData): Promise<V3Sta
     if (e instanceof Error && /seed run needs|must be YYYY/.test(e.message)) return bad(e.message);
     throw e;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+
+/** The B3 switches that take effect from /admin/settings (B3 plan Unit 1), all off by default. */
+const B3_SWITCHES = ["reviewBotOn", "feedbackOn", "coraUpgradesOn"] as const;
+
+/** Saves the three B3 switches together (one statement), and logs the values saved. */
+export async function saveB3SwitchesAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const patch = Object.fromEntries(B3_SWITCHES.map((k) => [k, fd.get(k) === "on"])) as Record<(typeof B3_SWITCHES)[number], boolean>;
+  try {
+    await saveV3Settings(patch);
+  } catch (e) {
+    // The error's text can hold settings or database detail: only its name is logged, and the message is fixed.
+    console.error("[admin] B3 switches not saved", e instanceof Error ? e.name : "Error");
+    return bad("Not saved. Try again.");
+  }
+  await logAdminAction(query, { by, action: "v3_switches_saved", detail: patch });
+  updateTag("settings");
+  return { status: "ok", message: "Saved.", at: Date.now() };
 }

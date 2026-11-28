@@ -15,6 +15,9 @@ type Row = {
   reason: string;
   setup_marked_at: string | null;
   setup_confirmed_at: string | null;
+  idea_code: string;
+  kind: string;
+  whats_better: string | null;
   id: string;
   title: string;
   category: string;
@@ -35,7 +38,7 @@ type Row = {
 export async function weekIdeas(q: Query, userId: string, week: string, preface: string): Promise<WeekIdea[]> {
   if (!isRealDate(week)) return [];
   const rows = await q<Row>(
-    `select k.position, k.personal_score, k.reason, k.setup_marked_at::text, k.setup_confirmed_at::text,
+    `select k.position, k.personal_score, k.reason, k.setup_marked_at::text, k.setup_confirmed_at::text, k.idea_code, k.kind, k.whats_better,
             pp.id, pp.title, pp.category, pp.description, pp.heavy_use_for, pp.playbook_md, pp.paste_to_install, pp.written_on, pp.figures,
             pp.f_hours, pp.f_reach, pp.f_ease, pp.f_proof, pp.f_surprise, pp.score
      from picks k join pool_plays pp on pp.id = k.pool_play_id
@@ -60,7 +63,7 @@ export async function weekIdeas(q: Query, userId: string, week: string, preface:
         score: r.score,
       },
       preface,
-      { personalScore: r.personal_score, reason: r.reason },
+      { personalScore: r.personal_score, reason: r.reason, ideaCode: r.idea_code, kind: r.kind, whatsBetter: r.whats_better },
     );
     return { ...view, position: r.position, setUp: Boolean(r.setup_marked_at), confirmed: Boolean(r.setup_confirmed_at) };
   });

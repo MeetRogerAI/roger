@@ -1,17 +1,22 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { FlagDecision } from "@/components/app/admin-v3";
-import { isAdmin } from "@/lib/admin-auth";
+import { adminIdentity } from "@/lib/admin-auth";
 import { EDITABLE_FIELDS, flaggedRunsWithoutPlays, listFlags } from "@/lib/admin/flags";
+import { READ_NOT_LOGGED, readsLogged } from "@/lib/admin/read-log";
 import { query } from "@/lib/db-query";
 
 const text = (v: unknown) => (typeof v === "string" ? v : "");
 
-/** Flags (spec B.6, B.12): each flagged play's text, what was flagged, and approve, edit or reject. */
+/** Flags (spec B.6, B.12): each flagged play's text, what was flagged, and approve, edit or reject. Logged as a read of those members' runs (B3 Unit 6, fail-closed). */
 export default async function FlagsPage() {
   await connection();
-  if (!(await isAdmin())) return null;
+  const by = await adminIdentity();
+  if (!by) return null;
   const [plays, runs] = await Promise.all([listFlags(query), flaggedRunsWithoutPlays(query)]);
+  if (!(await readsLogged(query, by, "/admin/flags", [{ what: "read_runs", userIds: [...plays.map((p) => p.userId), ...runs.map((r) => r.userId)] }]))) {
+    return <p role="alert" className="text-small text-error">{READ_NOT_LOGGED}</p>;
+  }
 
   return (
     <section className="max-w-[60rem] space-y-10">

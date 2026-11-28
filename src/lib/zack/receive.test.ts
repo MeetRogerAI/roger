@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import type { Transport } from "@/lib/mail/send";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileVersion, forgetFileVersions } from "@/lib/instructions/version";
 import { testDb } from "@/test-helpers/pglite-db";
+import { recordInstructionFetch } from "./instructions";
 import { checkReport, claimFreeRun, kindOf, MAX_REPORT_CHARS, reportText, sendConnected, storeReport, zackVersion, type Sender } from "./receive";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -201,5 +205,86 @@ describe("claimFreeRun", () => {
     await free("tok3", "ana@example.com", "x".repeat(MAX_REPORT_CHARS + 1), "duet");
     await query("update users set pending_zack_token = 'tok3'");
     expect(await claimFreeRun(query, user.id, "23:59")).toBe(false);
+  });
+});
+
+describe("the instruction version a run used (B3 plan Unit 2)", () => {
+  const deployed = (agent = "claude") => fileVersion(`content/zack/${agent}.md`);
+  const fetched = (at: Date, o: { test?: boolean; agent?: "claude" | "duet" | "grok-bot" | "hark"; userId?: string } = {}) =>
+    recordInstructionFetch(query, { userId: o.userId ?? user.id, test: o.test ?? false, agent: o.agent ?? "claude", now: at });
+  const stamp = async (test = false) =>
+    (await query<{ v: string | null; source: string }>("select instructions_version as v, instructions_version_source as source from runs where is_test = $1", [test]))[0];
+  // Sunday 2026-11-29, 6:00 PM and 7:00 PM Toronto (EST).
+  const sixPm = new Date("2026-11-29T23:00:00Z");
+  const sevenPm = new Date("2026-11-30T00:00:00Z");
+
+  afterEach(() => {
+    forgetFileVersions();
+    vi.restoreAllMocks();
+  });
+
+  it("stamps the version of a fetch an hour before the run, with source fetch", async () => {
+    await fetched(sixPm, { agent: "duet" });
+    await receive(run(), { now: sevenPm });
+    expect(await stamp()).toEqual({ v: deployed("duet"), source: "fetch" });
+    expect(deployed("duet")).not.toBe(deployed("claude"));
+  });
+
+  it("ignores a fetch 49 hours before receipt, and stamps the deployed version of the member's file", async () => {
+    await fetched(new Date(sevenPm.getTime() - 49 * 3600_000), { agent: "duet" });
+    await receive(run(), { now: sevenPm });
+    expect(await stamp()).toEqual({ v: deployed("claude"), source: "deployed" });
+  });
+
+  it("keeps test fetches and real runs apart, and a test run uses the test fetch", async () => {
+    await fetched(sixPm, { test: true, agent: "hark" });
+    await receive(run(), { now: sevenPm });
+    expect(await stamp()).toEqual({ v: deployed("claude"), source: "deployed" });
+    await receive(run(), { now: sevenPm, test: true });
+    expect(await stamp(true)).toEqual({ v: deployed("hark"), source: "fetch" });
+  });
+
+  it("never uses another member's fetch", async () => {
+    const [bo] = await query<{ id: string }>("insert into users (email, status, agent) values ('bo@example.com', 'trial', 'claude') returning id");
+    await fetched(sixPm, { agent: "duet", userId: bo.id });
+    await receive(run(), { now: sevenPm });
+    expect(await stamp()).toEqual({ v: deployed("claude"), source: "deployed" });
+  });
+
+  it("restamps a replacement run from the latest fetch", async () => {
+    await receive(run("first"), { now: sixPm });
+    expect(await stamp()).toMatchObject({ source: "deployed" });
+    await fetched(sixPm, { agent: "duet" });
+    await receive(run("second"), { now: sevenPm });
+    expect(await stamp()).toEqual({ v: deployed("duet"), source: "fetch" });
+  });
+
+  it("stamps an upload, and an agent with no file of its own, with the deployed version", async () => {
+    const c = checkReport(run());
+    if (!c.ok) throw new Error();
+    await storeReport(query, { ...user, agent: "chatgpt" }, c, { route: "upload", test: false, cutoff: "23:59", now: sevenPm });
+    expect(await stamp()).toEqual({ v: deployed("grok-bot"), source: "deployed" });
+  });
+
+  it("stamps a free-run claim with the deployed version of its agent's file", async () => {
+    await query("insert into free_runs (token, email, agent, report, report_at) values ('tokv', 'ana@example.com', 'hark', '# Zack The Collector (for Hark) v1.9', now())");
+    await query("update users set pending_zack_token = 'tokv'");
+    expect(await claimFreeRun(query, user.id, "23:59", sundayEvening)).toBe(true);
+    expect(await stamp()).toEqual({ v: deployed("hark"), source: "deployed" });
+  });
+
+  it("still stores the run when the Zack file is missing, with a null version", async () => {
+    forgetFileVersions();
+    vi.spyOn(process, "cwd").mockReturnValue(path.join(tmpdir(), "roger-no-such-dir"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await receive(run(), { now: sevenPm })).toMatchObject({ ok: true });
+    expect(await stamp()).toEqual({ v: null, source: "deployed" });
+    await query("insert into free_runs (token, email, agent, report, report_at) values ('tokm', 'ana@example.com', 'hark', 'free', now())");
+    await query("update runs set status = 'deleted'");
+    await query("update users set pending_zack_token = 'tokm'");
+    expect(await claimFreeRun(query, user.id, "23:59", sevenPm)).toBe(true);
+    // And a fetch while the file is missing records nothing, without throwing.
+    await expect(fetched(sixPm)).resolves.toBeUndefined();
+    expect(await query("select 1 from zack_instruction_fetches")).toHaveLength(0);
   });
 });

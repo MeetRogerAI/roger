@@ -7,12 +7,15 @@ import { CardSavedNotice } from "@/components/app/card-saved-notice";
 import { HeldIdeas } from "@/components/app/held-ideas";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { WeekIdeas } from "@/components/app/week-ideas";
+import { WeekNote } from "@/components/app/week-note";
 import { heldHeading } from "@/lib/app/held";
 import { loadHome } from "@/lib/app/home";
 import { requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { longDate } from "@/lib/dates";
+import { memberNote } from "@/lib/feedback/feedback";
 import { readV3Settings } from "@/lib/v3-settings";
+import { featureOn } from "@/lib/v3-features";
 
 export const metadata: Metadata = { title: "This week" };
 
@@ -24,6 +27,9 @@ async function Home({ searchParams }: { searchParams: PageProps<"/app">["searchP
   const settings = await readV3Settings();
   const home = await loadHome(query, session.userId, settings, new Date());
   if (!home || home.status === "signup") redirect("/start");
+  // The weekly note (B3 Unit 5): under this week's delivered list, only while v3.feedbackOn is on.
+  const noting = home.ideas.length > 0 && !!home.week && featureOn(settings, "feedbackOn");
+  const note = noting ? await memberNote(query, session.userId, home.week!) : null;
 
   return (
     <div className="space-y-10">
@@ -67,6 +73,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/app">["searchP
             </p>
           )}
           <WeekIdeas week={home.week!} ideas={home.ideas} />
+          {noting && <WeekNote week={home.week!} note={note} />}
         </>
       ) : home.held ? (
         <HeldIdeas titles={home.held.titles} />

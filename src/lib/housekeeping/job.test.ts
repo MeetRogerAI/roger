@@ -299,3 +299,77 @@ describe("credit task budget (B2 whole-branch re-review)", () => {
     expect(creditDeadline(near)).toBe(near.deadline);
   });
 });
+
+describe("review_pr_sync (B3 Unit 9 review fixes)", () => {
+  const TOKEN = "ghp_test_write_token_0123456789abcdefgh";
+  const task = () => HOURLY_TASKS.find((t) => t.name === "review_pr_sync")!;
+  const ctx = () => ({ deadline: Date.now() + 60_000, shared: new Map() }) as never;
+
+  async function mergedPr() {
+    const { fakeGitHub } = await import("@/test-helpers/fake-github");
+    const gh = fakeGitHub({ "README.md": "# Roger\n" });
+    const w = gh.gateway({ token: TOKEN, canWrite: true });
+    await w.createRef("review-bot/abcdefghij", gh.refs.get("main") as string);
+    await w.createPull({ title: "t", body: "b", head: "review-bot/abcdefghij", base: "main" });
+    gh.merge(101);
+    await query(
+      `insert into review_proposals (public_id, review_week, paths, status, pr_number, branch, result_versions) values ('abcdefghij', '2026-11-23', array['README.md'], 'pr_open', 101, 'review-bot/abcdefghij', '{}'::jsonb)`,
+    );
+    gh.calls.length = 0;
+    return { gh, w };
+  }
+
+  it("is registered, before the long Stripe reconcile", () => {
+    const names = HOURLY_TASKS.map((t) => t.name);
+    expect(names.indexOf("review_pr_sync")).toBeGreaterThan(-1);
+    expect(names.indexOf("review_pr_sync")).toBeLessThan(names.indexOf("reconcile_stripe"));
+  });
+
+  it("records a merge within the hour on live GitHub, whatever the review switch says", async () => {
+    const { w } = await mergedPr();
+    const d = { gw: {} as BillingGateway, settings, now: NOW, query, transport, reviewGitHub: { live: true as const, gw: w } };
+    expect(await task().run(query, d, ctx())).toMatchObject({ status: "synced", merged: 1 });
+    expect((await query<{ status: string }>(`select status from review_proposals`))[0].status).toBe("merged");
+  });
+
+  it("is skipped, reaching no GitHub, off production or without the token", async () => {
+    const { gh } = await mergedPr();
+    const d = { gw: {} as BillingGateway, settings, now: NOW, query, transport, reviewGitHub: { live: false as const, why: "GITHUB_REVIEW_TOKEN is not set", gw: gh.gateway({ canWrite: false }) } };
+    expect(await task().run(query, d, ctx())).toBe("skipped: GITHUB_REVIEW_TOKEN is not set");
+    // The default mode: the test environment is not production.
+    expect(await task().run(query, { gw: {} as BillingGateway, settings, now: NOW, query, transport }, ctx())).toBe("skipped: this is not the production deployment");
+    expect(gh.calls).toEqual([]);
+    expect((await query<{ status: string }>(`select status from review_proposals`))[0].status).toBe("pr_open");
+  });
+
+  it("has its own time slice: a slow GitHub stops between PRs, and the Stripe reconcile after it still runs (whole-branch review)", async () => {
+    for (let n = 101; n <= 106; n++)
+      await query(
+        `insert into review_proposals (public_id, review_week, paths, status, pr_number, branch, result_versions) values ($1, '2026-11-23', array['README.md'], 'pr_open', $2, $3, '{}'::jsonb)`,
+        [`abcdefgh${n - 100}x`.slice(0, 10), n, `review-bot/pr${n}`],
+      );
+    // Each PR read takes 20 seconds of (simulated) time.
+    const real = Date.now.bind(Date);
+    let offset = 0;
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => real() + offset);
+    const reads: number[] = [];
+    const gw = {
+      getPull: async (n: number) => {
+        reads.push(n);
+        offset += 20_000;
+        return { number: n, state: "open", merged_at: null, closed_at: null };
+      },
+    };
+    try {
+      const reconcile: HourlyTask = { name: "reconcile_stripe", run: async () => "ran" };
+      const d = { gw: {} as BillingGateway, settings, now: NOW, query, transport, reviewGitHub: { live: true as const, gw: gw as never } };
+      const out = await runHourly(query, d, [task(), reconcile], { deadline: Date.now() + 90_000 });
+      // 30 seconds: two reads (0 s and 20 s start under it), then it stops; six would have taken 120 s, past the pass.
+      expect(reads).toEqual([101, 102]);
+      expect(out.review_pr_sync).toMatchObject({ status: "synced", checked: 2 });
+      expect(out.reconcile_stripe).toBe("ran");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

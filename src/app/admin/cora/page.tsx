@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { ActionButton, CoraButtons, SeedImportForm } from "@/components/app/admin-v3";
-import { isAdmin } from "@/lib/admin-auth";
+import { adminIdentity } from "@/lib/admin-auth";
 import { notReadyReason, userPicks, weekState } from "@/lib/admin/cora";
 import { when } from "@/lib/admin/format";
 import { recentActions } from "@/lib/admin/log";
+import { READ_NOT_LOGGED, readsLogged } from "@/lib/admin/read-log";
 import { asOfAllowed, currentMonday } from "@/lib/clock";
 import { databaseMarkedNonProduction } from "@/lib/db-environment";
 import { query } from "@/lib/db-query";
@@ -15,10 +16,11 @@ export const maxDuration = 300;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Cora (spec B.12): the week, the buttons over the existing jobs, the seed import, and any user's picks (read-only). */
+/** Cora (spec B.12): the week, the buttons over the existing jobs, the seed import, and any user's picks (read-only; showing them is logged first, B3 Unit 6, fail-closed). */
 export default async function CoraPage({ searchParams }: PageProps<"/admin/cora">) {
   await connection();
-  if (!(await isAdmin())) return null;
+  const by = await adminIdentity();
+  if (!by) return null;
   const sp = await searchParams;
   const settings = await readV3Settings();
   const now = new Date();
@@ -31,6 +33,9 @@ export default async function CoraPage({ searchParams }: PageProps<"/admin/cora"
     recentActions(query, { actions: ["run_cora", "run_dry", "run_charge", "run_send", "run_hourly", "charge_and_send", "seed_import", "close_failed_week_orders"], limit: 10 }),
     databaseMarkedNonProduction().catch(() => false),
   ]);
+  if (userId && !(await readsLogged(query, by, "/admin/cora", [{ what: "read_picks", userIds: [userId] }]))) {
+    return <p role="alert" className="text-small text-error">{READ_NOT_LOGGED}</p>;
+  }
   const allowAsOf = asOfAllowed({ deployment: process.env.VERCEL_ENV ?? "development", stripeKey: process.env.STRIPE_SECRET_KEY, databaseMarkedNonProduction: nonProd });
   const reason = notReadyReason(w, settings);
 

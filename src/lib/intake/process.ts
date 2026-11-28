@@ -1,10 +1,11 @@
 import { isModelUnavailable, rethrowIfUnavailable } from "@/lib/ai/errors";
+import { recordAdoption } from "@/lib/cora/adoption";
 import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { runNeedsALookEmail } from "@/lib/mail/templates/run-needs-a-look";
 import { ModelCutOff, slicePlaybook, type IntakeModel, type ReviewFinding } from "./model";
 import { parseProfileBlock, parseRunBlock } from "./parse-block";
-import { harmFlags, phrasePattern, replaceNeverWords, replacePatterns } from "./privacy-patterns";
+import { harmFlags, normalise, phrasePattern, replaceIdeaIds, replaceNeverWords, replacePatterns } from "./privacy-patterns";
 import { validateRun, type ParsedRun, type Play } from "./validate";
 
 /**
@@ -164,10 +165,12 @@ function cleanStrings<T>(v: T, neverWords: string[]) {
       flags.add(h);
       flagFields.add(path);
     }
-    const a = replacePatterns(s);
+    // A Roger idea ID stays only in the play's own roger_idea_id field (whole-branch review).
+    const i = path === "roger_idea_id" ? { text: s, findings: [] } : replaceIdeaIds(normalise(s));
+    const a = replacePatterns(i.text);
     const b = replaceNeverWords(a.text, neverWords);
     // Recorded by kind only: the private text itself is not copied anywhere.
-    for (const x of [...a.findings, ...b.findings]) replaced.push({ kind: x.kind, placeholder: x.placeholder ?? "" });
+    for (const x of [...i.findings, ...a.findings, ...b.findings]) replaced.push({ kind: x.kind, placeholder: x.placeholder ?? "" });
     return b.text;
   });
   return { value, replaced, flags, flagFields };
@@ -307,8 +310,14 @@ async function giveUpIfLast(q: Query, run: RunRow & { attempts: number }): Promi
   return run.attempts >= MAX_ATTEMPTS ? flagWhole(q, run, REASON.unreadable) : "retry";
 }
 
-/** The private profile: parsed for matching only, never shared. */
-export async function processProfile(q: Query, id: string): Promise<Outcome> {
+/**
+ * The private profile: parsed for matching only, never shared. Once accepted,
+ * its past ideas stamp the member's own picks installed or used (Cora change
+ * 15, `recordAdoption`, at the job clock `now`). That step never fails the
+ * profile: an error is logged, and the next profile, which lists the same
+ * ideas again, stamps them then.
+ */
+export async function processProfile(q: Query, id: string, now: Date = new Date()): Promise<Outcome> {
   const [p] = await q<{ raw_text: string; revision: number }>(`select raw_text, revision from zack_profiles where id = $1 and status = 'received'`, [id]);
   if (!p) return "skipped";
   const parsed = parseProfileBlock(p.raw_text);
@@ -317,6 +326,9 @@ export async function processProfile(q: Query, id: string): Promise<Outcome> {
     `update zack_profiles set status = $3, parsed = $4, reason = $5, processed_at = now() where id = $1 and revision = $2 and status = 'received' returning id`,
     [id, p.revision, status, parsed ? JSON.stringify(parsed) : null, parsed ? "" : "The profile had no readable roger-profile block."],
   );
+  if (rows.length && status === "accepted") {
+    await recordAdoption(q, id, now).catch((e) => console.error("[intake] adoption not recorded", id, e instanceof Error ? e.message : e));
+  }
   return rows.length ? status : "skipped";
 }
 

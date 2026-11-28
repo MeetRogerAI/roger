@@ -1,7 +1,9 @@
 import { weekOf } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
+import { fileVersion, zackInstructionFile } from "@/lib/instructions/version";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { zackConnectedEmail } from "@/lib/mail/templates/zack-connected";
+import { ZACK_AGENTS, zackFileFor } from "./agents";
 
 /**
  * Stores what Zack sends (spec B.5 "Send"). Zack 2.0 sends two files each
@@ -70,6 +72,21 @@ export type Stored = { id: string; week_of: string; replaced: boolean; kind: Rep
 /** How long after a run its profile still counts for the run's week, when the two land either side of the cutoff. */
 const PROFILE_FOLLOWS_RUN_MINUTES = 60;
 
+/** A run uses the instructions the member fetched within this long before it was received (B3 plan Unit 2). */
+export const FETCH_COUNTS_FOR_HOURS = 48;
+
+/**
+ * The instruction version a run used (B3 plan Unit 2, R20), in the run's own insert: the version
+ * of the member's latest fetch (of the same kind, test or real) in the 48 hours before receipt,
+ * source 'fetch'. With none (an upload, an admin run, a hand-run), the version deployed now of the
+ * member's own Zack file, source 'deployed'; null when that file can't be read. $1 user, $7 test,
+ * $9 received at, $10 the deployed version.
+ */
+const RUN_VERSION_SQL = `f as (
+         select version from zack_instruction_fetches
+         where user_id = $1 and test = $7 and fetched_at <= $9::timestamptz and fetched_at > $9::timestamptz - interval '${FETCH_COUNTS_FOR_HOURS} hours'
+       )`;
+
 export async function storeReport(q: Query, user: Sender, c: { text: string; kind: ReportKind }, o: { route: Route; test: boolean; cutoff: string; now?: Date }): Promise<Stored> {
   const now = o.now ?? new Date();
   let week = weekOf(now, o.cutoff);
@@ -78,15 +95,18 @@ export async function storeReport(q: Query, user: Sender, c: { text: string; kin
     const rows = await q<{ id: string; replaced: boolean }>(
       `with old as (
          delete from plays where run_id in (select id from runs where user_id = $1 and week_of = $2 and is_test = $7 and status <> 'deleted')
-       )
-       insert into runs (user_id, week_of, route, agent, sharing, raw_text, is_test, zack_version, received_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ),
+       ${RUN_VERSION_SQL}
+       insert into runs (user_id, week_of, route, agent, sharing, raw_text, is_test, zack_version, received_at, instructions_version, instructions_version_source)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, coalesce((select version from f), $10),
+               case when exists (select 1 from f) then 'fetch' else 'deployed' end)
        on conflict (user_id, week_of, is_test) where user_id is not null and status <> 'deleted'
        do update set route = excluded.route, agent = excluded.agent, sharing = excluded.sharing, raw_text = excluded.raw_text,
          zack_version = excluded.zack_version, received_at = excluded.received_at, revision = runs.revision + 1,
+         instructions_version = excluded.instructions_version, instructions_version_source = excluded.instructions_version_source,
          parsed = null, parsed_by = null, status = 'received', reason = '', attempts = 0, processed_at = null
        returning id, (revision > 0) as replaced`,
-      [user.id, week, o.route, user.agent, user.sharing, c.text, o.test, zackVersion(c.text), now.toISOString()],
+      [user.id, week, o.route, user.agent, user.sharing, c.text, o.test, zackVersion(c.text), now.toISOString(), fileVersion(zackInstructionFile(zackFileFor(user.agent)))],
     );
     return { id: rows[0].id, week_of: week, replaced: Boolean(rows[0]?.replaced), kind: "run" };
   }
@@ -136,18 +156,28 @@ export async function claimFreeRun(q: Query, userId: string, cutoff: string, now
          and not exists (select 1 from runs r where r.user_id = $1 and r.week_of = $2 and not r.is_test and r.status <> 'deleted')
      ),
      ins as (
-       insert into runs (user_id, week_of, route, agent, sharing, raw_text, zack_version)
+       insert into runs (user_id, week_of, route, agent, sharing, raw_text, zack_version, instructions_version, instructions_version_source)
        select $1, $2, 'free_tool', f.agent, f.sharing, f.report,
-              coalesce(substring(f.report from '"zack_version"\\s*:\\s*"(\\d+\\.\\d+)"'), substring(f.report from 'Zack The Collector[^\\n]*?v(\\d+\\.\\d+)'), '')
+              coalesce(substring(f.report from '"zack_version"\\s*:\\s*"(\\d+\\.\\d+)"'), substring(f.report from 'Zack The Collector[^\\n]*?v(\\d+\\.\\d+)'), ''),
+              $4::jsonb ->> (case when f.agent = any($5::text[]) then f.agent else 'grok-bot' end), 'deployed'
        from f
        on conflict do nothing
        returning id
      )
      update free_runs set claimed_by = $1 where token = (select token from f) and exists (select 1 from ins)
      returning token`,
-    [userId, week, MAX_REPORT_CHARS],
+    [userId, week, MAX_REPORT_CHARS, JSON.stringify(deployedVersions()), [...ZACK_AGENTS]],
   );
   return rows.length > 0;
+}
+
+/**
+ * The deployed version of each agent's Zack file, for a run with no fetch behind it (a free-tool
+ * report brought along at sign-up is stamped 'deployed'). An agent without a file of its own uses
+ * the Grok Bot one, as zackFileFor does. A file that can't be read gives null.
+ */
+function deployedVersions(): Record<string, string | null> {
+  return Object.fromEntries(ZACK_AGENTS.map((a) => [a, fileVersion(zackInstructionFile(a))]));
 }
 
 /** Another chance for a free-tool claim that failed at trial start (plan Unit 10). Never throws. */

@@ -13,9 +13,11 @@ import { owePointsRebuildFor } from "@/lib/growth/points";
 import { mergePending, type MergeModel } from "./merge";
 import { pickThree, type Fitted } from "./pick";
 import { scorePool, WEIGHTS, type Figures, type Scored } from "./score";
+import { findUpgrade, UPGRADE_REASON, type UpgradeModel } from "./upgrade";
 import { whoGetsAList } from "./who-gets-a-list";
 import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import { FIRST_LIST_PENDING_SQL } from "./deliver";
+import { CORA_METHOD_FILE, deployCommit, fileVersion } from "@/lib/instructions/version";
 
 /**
  * The Monday Cora job (spec B.7 "The job", plan Unit 11). It takes the week's
@@ -27,7 +29,8 @@ import { FIRST_LIST_PENDING_SQL } from "./deliver";
  * on repeated errors, or at noon Toronto, and then sends nothing, alerts both
  * admins, and can never become ready.
  */
-export type CoraDeps = { intake: IntakeModel; merge: MergeModel; fit: FitModel } & MailDeps;
+/** `upgrade`: Cora change 11's model (B3 Unit 12), used only while `v3.coraUpgradesOn` is on; without it there are no upgrades. */
+export type CoraDeps = { intake: IntakeModel; merge: MergeModel; fit: FitModel; upgrade?: UpgradeModel } & MailDeps;
 export type JobOptions = { now: Date; settings: V3Settings; week?: string; dryRun?: boolean; budgetMs?: number; holder?: string };
 export type JobResult = { week: string; status: "skipped" | "busy" | "running" | "ready" | "failed" | "sent"; phase?: string; note?: string };
 
@@ -36,6 +39,16 @@ const CANDIDATES_PER_USER = 30;
 const FIT_AT_ONCE = 4;
 /** Errors in a row, across runs, before a week fails (a passing database blip is retried instead). */
 const ERRORS_BEFORE_FAILING = 3;
+
+/**
+ * What every cora_user_weeks row records about the Cora that decided it (B3 plan Unit 2, R20):
+ * the cora.md blob SHA, and the deploy's commit, since no code reads cora.md. Read when the row is
+ * written, so a week resumed across a deploy can carry two versions. Null when unknown: a missing
+ * file never costs a list.
+ */
+function methodStamp(): [string | null, string | null] {
+  return [fileVersion(CORA_METHOD_FILE), deployCommit()];
+}
 
 type WeekRow = { phase: string; dry_run: boolean; status: string; lease_free: boolean };
 
@@ -196,7 +209,7 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
     const allUsers = await loadUsers(q, o.week, { now: o.now });
     const decided = new Set((await q<{ user_id: string }>(`select user_id from cora_user_weeks where week_of = $1 and dry_run = $2`, [o.week, o.dry])).map((r) => r.user_id));
     const todo = allUsers.filter((u) => !decided.has(u.id));
-    const breaker = { failures: 0 };
+    const breaker = { failures: 0, upgradeFailures: 0 };
     for (let i = 0; i < todo.length; i += FIT_AT_ONCE) {
       if (Date.now() > o.until.getTime() || !(await renew(q, o))) return phase;
       await Promise.all(
@@ -204,8 +217,8 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
           const who = whoGetsAList(u.facts, "pick");
           if (who.gets) return pickFor(q, deps, o, u, scored, byId, breaker);
           await q(
-            `insert into cora_user_weeks (user_id, week_of, outcome, note, dry_run) values ($1, $2, 'not_eligible', $3, $4) on conflict (user_id, week_of) do nothing`,
-            [u.id, o.week, who.why, o.dry],
+            `insert into cora_user_weeks (user_id, week_of, outcome, note, dry_run, method_version, code_commit) values ($1, $2, 'not_eligible', $3, $4, $5, $6) on conflict (user_id, week_of) do nothing`,
+            [u.id, o.week, who.why, o.dry, ...methodStamp()],
           );
         }),
       );
@@ -277,18 +290,21 @@ async function rebuildContent(q: Query, week: string) {
  * The statement writes only while this worker holds the week's lease (holder and kind of run), like every
  * other write here. It supersedes nothing: a held list is replaced only once the newer week is ready
  * (SUPERSEDE_AT_READY_SQL), so a week that fails after its picks never takes the older held list away.
+ *
+ * $10 and $11 are the method version and the deploy's commit (methodStamp, B3 plan Unit 2).
+ * A pick's `kind` and `whats_better` (B3 Unit 12) are given only for an upgrade; any other pick is 'new' with none.
  */
 export const RECORD_PICKS_SQL = `with lease as (
          select 1 from cora_weeks where week_of = $2::date and holder = $9::text and status = 'running' and dry_run = $7::boolean
        ),
        cw as (
-         insert into cora_user_weeks (user_id, week_of, outcome, eligible_count, picked_count, note, dry_run)
-         select $1::uuid, $2::date, $3::text, $4::int, $5::int, $6::text, $7::boolean where exists (select 1 from lease)
+         insert into cora_user_weeks (user_id, week_of, outcome, eligible_count, picked_count, note, dry_run, method_version, code_commit)
+         select $1::uuid, $2::date, $3::text, $4::int, $5::int, $6::text, $7::boolean, $10::text, $11::text where exists (select 1 from lease)
          on conflict (user_id, week_of) do nothing returning user_id
        )
-       insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run)
-       select $1, $2, p.position, p.id, p.personal, p.fit, p.reason, $7
-       from cw, jsonb_to_recordset($8::jsonb) as p(position int, id uuid, personal int, fit int, reason text)
+       insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, kind, whats_better)
+       select $1, $2, p.position, p.id, p.personal, p.fit, p.reason, $7, coalesce(p.kind, 'new'), p.whats_better
+       from cw, jsonb_to_recordset($8::jsonb) as p(position int, id uuid, personal int, fit int, reason text, kind text, whats_better text)
        on conflict do nothing`;
 
 /**
@@ -327,9 +343,27 @@ export const SUPERSEDE_AT_READY_SQL = `with r as (
        )
        select week_of from r`;
 
-async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, scored: Scored[], byId: Map<string, PoolRow>, breaker: { failures: number }) {
-  const record = async (outcome: string, eligible: number, picks: { position: number; id: string; personal: number; fit: number; reason: string }[], note = "") => {
-    await q(RECORD_PICKS_SQL, [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks), o.holder]);
+type Breaker = { failures: number; upgradeFailures: number };
+type PickOut = { position: number; id: string; personal: number; fit: number; reason: string; kind?: "upgrade"; whats_better?: string };
+
+/**
+ * Cora change 11 (B3 Unit 12): the member's one upgrade candidate, or null. Only with `v3.coraUpgradesOn` on and an
+ * upgrade model; any failure (credits included) gives none, so the week never fails for an upgrade.
+ */
+async function upgradeFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, scored: Scored[], byId: Map<string, PoolRow>, breaker: Breaker) {
+  if (o.settings.coraUpgradesOn !== true || !deps.upgrade || breaker.upgradeFailures >= 3) return null;
+  try {
+    return await findUpgrade(q, deps.upgrade, { userId: u.id, week: o.week, ctx: u.ctx, scored: scored.filter((s) => byId.has(s.id)) });
+  } catch (e) {
+    breaker.upgradeFailures++;
+    console.error("[cora] upgrade failed; no upgrade this week", u.id, e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, scored: Scored[], byId: Map<string, PoolRow>, breaker: Breaker) {
+  const record = async (outcome: string, eligible: number, picks: PickOut[], note = "") => {
+    await q(RECORD_PICKS_SQL, [u.id, o.week, outcome, eligible, picks.length, note.slice(0, 300), o.dry, JSON.stringify(picks), o.holder, ...methodStamp()]);
   };
 
   const eligible = eligiblePlays(
@@ -364,10 +398,15 @@ async function pickFor(q: Query, deps: CoraDeps, o: StepOptions, u: CoraUser, sc
     );
     return { play: c, fit: b.fit, frictionMatch: b.frictionMatch, installable: installable(u, r), reason: reasonFor(b.why, r) };
   });
+  // An upgrade competes at Fit 5 (change 11). It is something the member already runs, so never among the eligible plays above.
+  const up = await upgradeFor(q, deps, o, u, scored, byId, breaker);
+  const upPlay = up ? scored.find((s) => s.id === up.id) : undefined;
+  if (up && upPlay) fitted.push({ play: upPlay, fit: 5, frictionMatch: false, installable: installable(u, byId.get(up.id)!), upgrade: true, reason: UPGRADE_REASON });
   const result = pickThree(fitted);
-  const picks = result.picks.map((p) => {
+  const picks = result.picks.map((p): PickOut => {
     const reason = fitted.find((f) => f.play.id === p.play.id)!.reason;
-    return { position: p.position, id: p.play.id, personal: Math.round(p.personal), fit: p.fit, reason: p.installable ? reason : `${reason}${needsLine(byId.get(p.play.id)!.requires)}` };
+    const out: PickOut = { position: p.position, id: p.play.id, personal: Math.round(p.personal), fit: p.fit, reason: p.installable ? reason : `${reason}${needsLine(byId.get(p.play.id)!.requires)}` };
+    return p.upgrade && up ? { ...out, kind: "upgrade", whats_better: up.whatsBetter } : out;
   });
   return record(result.outcome, eligible.length, picks);
 }

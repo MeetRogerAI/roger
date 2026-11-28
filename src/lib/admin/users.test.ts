@@ -262,6 +262,14 @@ describe("closing and deleting an account", () => {
     expect((await log()).map((l) => l.action)).toEqual(["close_account"]);
   });
 
+  it("deleting the account removes the member's notes and admin-entered replies (B3 Unit 5)", async () => {
+    await query("insert into member_feedback (user_id, week_of, source, body) values ($1, $2, 'member_note', 'my note')", [uid, WEEK]);
+    await query("insert into member_feedback (user_id, week_of, source, body, entered_by) values ($1, $2, 'admin_reply', 'a reply', $3)", [uid, WEEK, ADMIN]);
+    await query("update users set status = 'closed'");
+    expect(await deleteAccount(query, ADMIN, uid, "ana@example.com")).toMatchObject({ ok: true });
+    expect(await query("select 1 from member_feedback")).toEqual([]);
+  });
+
   it("won't delete while a dropped higher-rate item may still be in Stripe", async () => {
     await query("update users set status = 'closed'");
     await query("insert into pending_adjustments (user_id, period_start, amount_cents, currency, stripe_item, status) values ($1, '2026-12-03', 500, 'USD', 'ii_1', 'deleted')", [uid]);

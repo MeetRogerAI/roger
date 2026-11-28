@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import {
+  addFeedbackReplyAction,
   addRunAction,
   changeEmailAction,
   chargeAndSendAction,
@@ -18,12 +19,14 @@ import {
   pilotLinkAction,
   rebuildPointsAction,
   runJobAction,
+  saveB3SwitchesAction,
   saveNoteAction,
   saveTestimonialAction,
   seedImportAction,
   undoExcuseAction,
   type V3State,
 } from "@/app/admin/v3-actions";
+import { REPLY_MAX } from "@/lib/feedback/limits";
 
 /*
  * The interactive pieces of the v3 admin (plan Unit 17). Every action
@@ -70,7 +73,14 @@ function Hidden({ values }: { values: Record<string, string> }) {
 
 /** A one-button action with its message beside it. */
 export function ActionButton({ action, values, label: text, pendingLabel, className = quiet }: { action: "extra" | "closeOrders" | "rebuildPoints" | "clearDisplayName"; values?: Record<string, string>; label: string; pendingLabel?: string; className?: string }) {
-  const fn: Action = action === "extra" ? extraFreeListAction : action === "clearDisplayName" ? clearDisplayNameAction : action === "rebuildPoints" ? () => rebuildPointsAction() : () => closeFailedOrdersAction();
+  const fn: Action =
+    action === "extra"
+      ? extraFreeListAction
+      : action === "clearDisplayName"
+        ? clearDisplayNameAction
+        : action === "rebuildPoints"
+          ? () => rebuildPointsAction()
+          : () => closeFailedOrdersAction();
   const [s, act, pending] = useActionState(fn, idle);
   return (
     <form action={act} className="flex flex-wrap items-center gap-3">
@@ -96,6 +106,42 @@ export function NoteEditor({ userId, note, compact = false }: { userId: string; 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending || text === note} className={quiet}>
           {pending ? "Saving…" : "Save note"}
+        </button>
+        <Msg s={s} />
+      </div>
+    </form>
+  );
+}
+
+/**
+ * "Add a reply" (B3 Unit 5): paste a member's emailed reply onto their
+ * record, with the date it came in. Controlled, and emptied only once saved.
+ */
+export function FeedbackReplyForm({ userId, today }: { userId: string; today: string }) {
+  const [body, setBody] = useState("");
+  const [receivedOn, setReceivedOn] = useState(today);
+  const [s, act, pending] = useActionState(
+    clearOnOk(addFeedbackReplyAction, () => setBody("")),
+    idle,
+  );
+  return (
+    <form action={act} className="space-y-2">
+      <Hidden values={{ userId }} />
+      <div>
+        <label className={label} htmlFor={`reply-on-${userId}`}>
+          Date it came in
+        </label>
+        <input id={`reply-on-${userId}`} name="receivedOn" type="date" required value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} className={`${input} max-w-[12rem]`} />
+      </div>
+      <div>
+        <label className={label} htmlFor={`reply-${userId}`}>
+          Their reply, as they wrote it
+        </label>
+        <textarea id={`reply-${userId}`} name="body" required value={body} onChange={(e) => setBody(e.target.value)} maxLength={REPLY_MAX} rows={4} className={area} />
+      </div>
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={pending || !body.trim()} className={quiet}>
+          {pending ? "Adding…" : "Add a reply"}
         </button>
         <Msg s={s} />
       </div>
@@ -605,6 +651,37 @@ export function SeedImportForm() {
       <div className="flex items-center gap-3 sm:col-span-3">
         <button type="submit" disabled={pending} className={small}>
           {pending ? "Importing…" : "Import"}
+        </button>
+        <Msg s={s} />
+      </div>
+    </form>
+  );
+}
+
+const B3_SWITCH_ROWS = [
+  { name: "feedbackOn", label: "Weekly notes from members", hint: "The note box on /app/week. Also needs sign-up open and the cycle live." },
+  { name: "reviewBotOn", label: "Review bot", hint: "The Friday run. Pull requests open only on production with the GitHub token; otherwise every approval is a dry run." },
+  { name: "coraUpgradesOn", label: "Cora upgrades", hint: "Cora may offer one upgrade to something a member already runs. Cora runs only while the cycle is live." },
+] as const;
+
+/** The B3 switches (B3 plan Unit 1), all off by default. */
+export function B3SwitchesForm({ values }: { values: Record<(typeof B3_SWITCH_ROWS)[number]["name"], boolean> }) {
+  const [s, act, pending] = useActionState(saveB3SwitchesAction, idle);
+  return (
+    <form action={act} className="space-y-4 rounded-[var(--radius-object)] border border-rule bg-surface p-6 sm:p-8">
+      <h2 className="text-title">B3 switches</h2>
+      {B3_SWITCH_ROWS.map((r) => (
+        <label key={r.name} className="flex items-start gap-3 text-small">
+          <input type="checkbox" name={r.name} defaultChecked={values[r.name]} className="mt-0.5 size-4 accent-[var(--color-accent)]" />
+          <span>
+            <span className="font-[600]">{r.label}</span>
+            <span className="block text-ink-2">{r.hint}</span>
+          </span>
+        </label>
+      ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" disabled={pending} className={small}>
+          {pending ? "Saving…" : "Save switches"}
         </button>
         <Msg s={s} />
       </div>

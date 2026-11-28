@@ -64,12 +64,12 @@ const REVIEW_MODEL = process.env.INTAKE_REVIEW_MODEL ?? "anthropic/claude-sonnet
 const TIMEOUT_MS = 50_000;
 
 /** A tag name the report cannot know, so its text cannot close it. Attributes are set by code. */
-function dataTag(): string {
+export function dataTag(): string {
   return `data_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
 }
 
 /** ai@7 throws on a truncated object before finishReason can be read; both mean "cut off". */
-async function call<T>(f: () => Promise<{ output: T; finishReason: string }>): Promise<T> {
+export async function call<T>(f: () => Promise<{ output: T; finishReason: string }>): Promise<T> {
   try {
     const r = await f();
     if (r.finishReason === "length") throw new ModelCutOff("The model's answer was cut off.");

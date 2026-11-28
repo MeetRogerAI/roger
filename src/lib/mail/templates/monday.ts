@@ -6,20 +6,30 @@ import { longDate } from "@/lib/dates";
  * fits, the time line and one button; then the status line, always. Nothing
  * says where a play came from (spec check 14).
  */
-export type EmailIdea = { id: string; title: string; reason: string; timeLine: string | null };
+export type EmailIdea = {
+  id: string;
+  title: string;
+  reason: string;
+  timeLine: string | null;
+  /** Only on an upgrade pick (Cora change 11, B3 Unit 12): the label after the title, and the What's better line under the reason. */
+  upgrade?: { label: string; whatsBetter: string | null };
+};
+
+const heading = (i: EmailIdea, n: number) => `${n + 1}. ${i.title}${i.upgrade ? ` (${i.upgrade.label})` : ""}`;
 
 function ideasBlock(week: string, ideas: EmailIdea[]): { html: string; text: string } {
   const url = (id: string) => appUrl(`/app/week/${week}#idea-${id}`);
   const html = ideas
     .map(
       (i, n) =>
-        `<div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">${n + 1}. ${esc(i.title)}</p>` +
+        `<div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">${esc(heading(i, n))}</p>` +
         `<p style="margin:4px 0 0;color:#444">${esc(i.reason)}</p>` +
+        (i.upgrade?.whatsBetter ? `<p style="margin:4px 0 0;color:#444">${esc(i.upgrade.whatsBetter)}</p>` : "") +
         (i.timeLine ? `<p style="margin:4px 0 0;color:#444">${esc(i.timeLine)}</p>` : "") +
         `<p style="margin:10px 0 0"><a href="${esc(url(i.id))}" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div>`,
     )
     .join("");
-  const text = ideas.map((i, n) => [`${n + 1}. ${i.title}`, i.reason, i.timeLine, `Open and install: ${url(i.id)}`].filter(Boolean).join("\n")).join("\n\n");
+  const text = ideas.map((i, n) => [heading(i, n), i.reason, i.upgrade?.whatsBetter, i.timeLine, `Open and install: ${url(i.id)}`].filter(Boolean).join("\n")).join("\n\n");
   return { html, text };
 }
 

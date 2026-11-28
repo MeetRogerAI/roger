@@ -1,21 +1,27 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { isAdmin } from "@/lib/admin-auth";
+import { adminIdentity } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
+import { READ_NOT_LOGGED, readsLogged } from "@/lib/admin/read-log";
 import { listRuns, runDetail } from "@/lib/admin/runs";
 import { query } from "@/lib/db-query";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUSES = ["received", "accepted", "flagged", "rejected", "deleted"];
 
-/** Runs (spec B.12): every run with its status; open any to read it. */
+/** Runs (spec B.12): every run with its status; open any to read it. Logged as a read of every member listed (B3 Unit 6, fail-closed). */
 export default async function RunsPage({ searchParams }: PageProps<"/admin/runs">) {
   await connection();
-  if (!(await isAdmin())) return null;
+  const by = await adminIdentity();
+  if (!by) return null;
   const sp = await searchParams;
   const id = typeof sp.id === "string" && UUID.test(sp.id) ? sp.id : null;
   const status = typeof sp.status === "string" && STATUSES.includes(sp.status) ? sp.status : undefined;
   const [runs, open] = await Promise.all([listRuns(query, { status }), id ? runDetail(query, id) : null]);
+  // The open run's member first, so they are always within the 200 ids kept.
+  if (!(await readsLogged(query, by, "/admin/runs", [{ what: "read_runs", userIds: [open?.userId, ...runs.map((r) => r.userId)] }]))) {
+    return <p role="alert" className="text-small text-error">{READ_NOT_LOGGED}</p>;
+  }
 
   return (
     <section className="space-y-8">
