@@ -669,6 +669,18 @@ h2 {
   color: var(--color-ground);
 }
 /*
+ * A signed-in visitor's header from the first frame (src/lib/auth/hint-cookie.ts): the head script marks <html> from
+ * the hint cookie before paint, so "Open Roger" shows and the signed-out pair does not, while the prerendered markup
+ * still says signed out. Outside any layer, so it wins over the utilities' `invisible` until React renders the same.
+ * The mark is a global fact kept equal to the cookie on every render (useSignedInHint), never a page's marker.
+ */
+html[data-signed-in] [data-account="out"] {
+  visibility: hidden;
+}
+html[data-signed-in] [data-account="in"] {
+  visibility: visible;
+}
+/*
  * Words an admin typed (Pages): a short title of an example, or a link of the footer, may be one long word. It
  * breaks inside its tab or its link, and never makes the row, or the page, wider than the window.
  */

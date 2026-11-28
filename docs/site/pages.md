@@ -33,9 +33,9 @@ Press **Preview** on a page (or in the review). The real page opens in a new tab
 
 ## Publishing
 
-1. On Pages, press **Review and publish**.
+1. On Pages, press **Review and publish**. The **Publish** card with that button is there only while a saved draft would change the site.
 2. The review lists every change, as a visitor will read it, and two kinds of warning:
-   - **Wording warnings**: a line that breaks one of the site's wording rules (for example "agent" without "AI", a time saved, a number). Each names the rule and the words.
+   - **Wording warnings**, at the top of the review: a line that breaks one of the site's wording rules (for example "agent" without "AI", a time saved, a number). Each names the rule and the words. Press **Dismiss** on one once you have read it and it is fine: it leaves the box (the box goes with the last one), the text stays as it is, and it is still written in the admin log when you publish. A reload of the same review keeps it dismissed; a new save brings every warning back. Once all are dismissed, and there is no link or page warning, the button reads "Publish".
    - **Link warnings**: a link that would point at a section you switched off or an item you removed, or a page left with no main heading.
 3. Warnings never stop you. Press the publish button at the foot ("Publish this 1 change", or "Publish anyway" when there are warnings). Publishing is for the whole site: every draft on every page goes live together. Each wording warning you publish over is written in the admin log.
 4. Visitors see the changes from their next page view, within a few seconds.
@@ -46,7 +46,7 @@ If the screen says a change "could not be written in the admin log", the change 
 
 ## Taking it back
 
-**Undo last publish** (on Pages) puts the site back to what it showed before the last publish. Your drafts stay, to fix and publish again. Only the last publish can be undone.
+**Undo last publish** (on Pages, in the Publish card, or on its own under the heading when nothing is waiting) puts the site back to what it showed before the last publish. Your drafts stay, to fix and publish again. Only the last publish can be undone.
 
 ## Preview, production and releases
 
@@ -55,9 +55,7 @@ Preview (preview.meetroger.ai) and meetroger.ai each have their own Pages and th
 - Make your changes **on preview** and publish them there.
 - At each release, what is published on preview becomes the site's built-in wording, and meetroger.ai shows it after the release. You do not type anything twice.
 - A change you publish **on meetroger.ai** between releases is live there at once, but it is never copied back to preview. Repeat it on preview if it should survive the next release.
-- After a release, **Differs from the release** on meetroger.ai's Pages lists every edit made there that the release did not bring, with both wordings. Keep them, or press **Reset all to the release** to make meetroger.ai match the release. Reset also throws away meetroger.ai's unpublished drafts, and says how many first. Undo last publish brings the edits back.
+- After a release, **Differs from the release** on meetroger.ai's Pages lists every edit made there that the release did not bring, with both wordings. It appears only on meetroger.ai, and only when something differs; preview never shows it. Keep them, or press **Reset all to the release** to make meetroger.ai match the release. Reset also throws away meetroger.ai's unpublished drafts, and says how many first. Undo last publish brings the edits back.
 - Ask the developer not to take the release while you are still publishing on preview: anything published after the release is taken waits for the next one.
-
-Before a release, read each page and tick its checks on the launch list (the link at the top of Pages).
 
 The developer's side of a release is in `docs/site/content-release.md`.

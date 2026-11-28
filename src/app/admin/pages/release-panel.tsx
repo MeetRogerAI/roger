@@ -10,8 +10,8 @@ import { count } from "./parts";
 import { ResetToRelease } from "./publish-controls";
 
 /**
- * "Differs from the release" on the Pages screen (plan U10, R21, AE10), on every site. Production is where it
- * matters: after a release it lists each edit made there that the release did not bring, each with the release's
+ * "Differs from the release" on the Pages screen (plan U10, R21, AE10). Since November 28, 2026 (Peter) the Pages
+ * screen shows it only on production, and only when something differs. Production is where it matters: after a release it lists each edit made there that the release did not bring, each with the release's
  * wording and the site's, and one action that resets all of them. On preview, whose published content the release
  * was taken from, it is empty once the release is out, apart from whatever was published there since.
  *

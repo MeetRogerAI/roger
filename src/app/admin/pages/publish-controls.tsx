@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { publishAction, resetToReleaseAction, undoPublishAction, type PublishState } from "./actions";
+import { useDismissed } from "./review-dismissals";
 
 /**
  * The two buttons that change what visitors see (plan U5): Publish, on the
@@ -37,15 +38,19 @@ function Message({ state }: { state: PublishState }) {
 
 /**
  * Publish, on the review screen. `review` is the fingerprint of the list above the button: the server publishes
- * only when the drafts and the warnings are still the ones that list shows. `count` is how many texts will change,
- * and `warnings` how many wording warnings the owner is publishing over.
+ * only when the drafts and the warnings are still the ones that list shows. `count` is how many texts will change.
+ * `wording` names the review's wording warnings and `others` counts its link and page warnings: the button reads
+ * "Publish anyway" while any of them is still on screen, and "Publish" once every wording warning is dismissed and
+ * there is no other. Dismissing changes nothing the server does: every wording warning is logged as an override.
  */
-export function PublishButton({ review, count, warnings }: { review: string; count: number; warnings: number }) {
+export function PublishButton({ review, count, wording, others }: { review: string; count: number; wording: string[]; others: number }) {
   const { state, pending, run } = useCall(() => {
     const fd = new FormData();
     fd.set("review", review);
     return publishAction(fd);
   });
+  const { ids } = useDismissed(review);
+  const warnings = wording.filter((id) => !ids.includes(id)).length + others;
   const all = count === 1 ? "this 1 change" : `all ${count} changes`;
   return (
     <div className="space-y-3">
