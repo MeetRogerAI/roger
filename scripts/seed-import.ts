@@ -2,15 +2,17 @@
  * Imports seed runs into the pool before the admin page exists (plan Unit 11).
  *
  *   node --env-file=.env.local node_modules/vite-node/vite-node.mjs --config vitest.config.ts scripts/seed-import.ts -- \
- *     --label "Rob" --agent hark [--date YYYY-MM-DD] [--replace] --yes "artifacts/Zack Runs/Zack Run - Rob - 2026-11-12.md"
+ *     --label "Rob" --agent hark [--email rob@example.com] [--date YYYY-MM-DD] [--replace] --yes "artifacts/Zack Runs/Zack Run - Rob - 2026-11-12.md"
  *
+ * --email sets the contributor's address: an account with it is linked to the
+ * contributor now, or when it is made, so Cora never sends them their own plays.
  * Writes to whatever database DATABASE_URL names: it says which, and does
  * nothing without --yes. Needs AI Gateway credentials for intake and merging.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { gatewayMergeModel } from "@/lib/cora/merge";
-import { dateFromFileName, importSeedRun, SeedRunExists } from "@/lib/cora/seed-import";
+import { dateFromFileName, importSeedRun, SeedEmailRefused, SeedRunExists } from "@/lib/cora/seed-import";
 import { query } from "@/lib/db-query";
 import { gatewayModel } from "@/lib/intake/model";
 
@@ -37,13 +39,14 @@ const replace = flag("replace");
 const label = opt("label");
 const agent = opt("agent");
 const date = opt("date");
+const email = opt("email");
 const files = args;
 
 const fail = (msg: string) => {
   console.error(msg);
   process.exit(1);
 };
-if (!label || !agent || !files.length) fail('Usage: seed-import --label "Name" --agent hark [--date YYYY-MM-DD] [--replace] --yes <file.md> [more files]');
+if (!label || !agent || !files.length) fail('Usage: seed-import --label "Name" --agent hark [--email name@example.com] [--date YYYY-MM-DD] [--replace] --yes <file.md> [more files]');
 if (date && files.length > 1) fail("--date applies to one file; name each file with its date instead.");
 // Check every file before the first write.
 const plan = files.map((file) => {
@@ -65,12 +68,12 @@ if (!yes) fail("Nothing written. Add --yes to import into that database.");
 
 for (const p of plan) {
   try {
-    const r = await importSeedRun(query, { label: label!, agent: agent!, text: p.text, ranOn: p.ranOn, replace }, { model: gatewayModel, merge: gatewayMergeModel, query });
+    const r = await importSeedRun(query, { label: label!, agent: agent!, text: p.text, ranOn: p.ranOn, replace, email }, { model: gatewayModel, merge: gatewayMergeModel, query });
     console.log(
-      `${basename(p.file)}: week ${r.weekOf}${r.replaced ? " (replaced)" : ""}, intake ${r.intake}, pool +${r.merge.created} new, ${r.merge.joined} joined${r.merge.failed ? `, ${r.merge.failed} kept separate after an error` : ""}${r.merge.busy ? ", merge waiting: Cora is placing plays" : ""}`,
+      `${basename(p.file)}: week ${r.weekOf}${r.replaced ? " (replaced)" : ""}, intake ${r.intake}, pool +${r.merge.created} new, ${r.merge.joined} joined${r.merge.failed ? `, ${r.merge.failed} kept separate after an error` : ""}${r.merge.busy ? ", merge waiting: Cora is placing plays" : ""}${r.email ? `. ${r.email}` : ""}`,
     );
   } catch (e) {
-    if (e instanceof SeedRunExists) console.error(`${basename(p.file)}: ${e.message}`);
+    if (e instanceof SeedRunExists || e instanceof SeedEmailRefused) console.error(`${basename(p.file)}: ${e.message}`);
     else throw e;
     process.exitCode = 1;
   }

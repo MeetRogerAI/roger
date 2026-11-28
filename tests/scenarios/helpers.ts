@@ -35,6 +35,7 @@ import { finishCardSave, openEmbeddedSetup } from "@/lib/billing/card-setup";
 import type { CardSaveResult } from "@/lib/billing/card-saved";
 import { choosePromoCode } from "@/lib/billing/promo";
 import { finishSignup, sendSignupWelcome } from "@/lib/signup/finish";
+import { userForToken } from "@/lib/auth/login-link";
 import { placeOrder } from "@/lib/billing/orders";
 import { runChargeJob, type ChargeJobResult } from "@/lib/billing/charge-job";
 import type { ChargeDeps } from "@/lib/billing/first-charge";
@@ -739,17 +740,33 @@ const MEMBER_IP = "203.0.113.7";
  * the action's clock). The account is a monthly trial with no card
  * (`trial_started_at` null) and no Stripe customer: the card is asked for when
  * the first list is ready (`saveCard`). `sponsored` sets `sponsor_id` (R29:
- * lists from the first Monday, never asked for a card).
+ * lists from the first Monday, never asked for a card). `byLink` makes the
+ * account the way the sign-up link does (userForToken), so whatever happens
+ * when an account is made (a seed contributor linked by email) happens too.
  */
 export async function signUp(
   w: World,
-  o: { email: string; currency: "USD" | "CAD"; country: "CA" | "US"; sharing?: "share" | "match_only" | "off"; sponsored?: boolean },
+  o: { email: string; currency: "USD" | "CAD"; country: "CA" | "US"; sharing?: "share" | "match_only" | "off"; sponsored?: boolean; byLink?: boolean },
 ): Promise<Member> {
-  const [{ id }] = await w.query<{ id: string }>(
-    `insert into users (email, name, status, plan, sharing, currency, signup_step, email_verified_at, sponsor_id)
-     values ($1, 'Test', 'signup', 'monthly', $2, $3, 'plan', $4, $5) returning id`,
-    [o.email, o.sharing ?? "share", o.currency, w.now.toISOString(), o.sponsored ? crypto.randomUUID() : null],
-  );
+  let id: string;
+  if (o.byLink) {
+    // The sign-up link used (Step 1 to Step 3): userForToken makes the account, as on the confirm page.
+    const made = await userForToken(
+      w.query,
+      { email: o.email, purpose: "signin", userId: null, nextPath: "/start/plan", data: null, hash: "scenario",
+        newAccount: { name: "Test", path: "running", notReady: false, profile: {}, agent: "claude", currency: o.currency, ref: "", utm: "", zack: null } },
+      w.now,
+    );
+    if (!made) throw new Error("The sign-up link made no account");
+    id = made.id;
+    await w.query(`update users set sharing = $2, sponsor_id = $3 where id = $1`, [id, o.sharing ?? "share", o.sponsored ? crypto.randomUUID() : null]);
+  } else {
+    [{ id }] = await w.query<{ id: string }>(
+      `insert into users (email, name, status, plan, sharing, currency, signup_step, email_verified_at, sponsor_id)
+       values ($1, 'Test', 'signup', 'monthly', $2, $3, 'plan', $4, $5) returning id`,
+      [o.email, o.sharing ?? "share", o.currency, w.now.toISOString(), o.sponsored ? crypto.randomUUID() : null],
+    );
+  }
   const c = w.charge();
   if (!(await finishSignup(w.query, id, c.now))) throw new Error("Step 3 did not end sign-up");
   await sendSignupWelcome(w.query, id, { settings: c.settings, now: c.now, query: c.query, transport: c.transport, sleep: c.sleep });

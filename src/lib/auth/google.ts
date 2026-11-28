@@ -1,4 +1,5 @@
 import { createHash, createPublicKey, timingSafeEqual, verify, type JsonWebKey } from "node:crypto";
+import { autoLinkContributor, SIGNUP_ACTOR } from "@/lib/admin/contributors";
 import type { Query } from "@/lib/db-query";
 import { appUrl } from "@/lib/mail/layout";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
@@ -298,7 +299,10 @@ export async function completeGoogle(
      returning id, email, signup_step`,
     [claims.email, account.name, account.path, account.notReady, JSON.stringify(account.profile), account.agent, account.currency, account.ref, account.utm, account.zack, at, claims.sub],
   );
-  if (created) return signIn(created, false, true);
+  if (created) {
+    await autoLinkContributor(q, SIGNUP_ACTOR, created.id);
+    return signIn(created, false, true);
+  }
   // Made by someone else at the same moment: the same rules as an existing account.
   return (await linkExisting()) ?? refused("token");
 }
