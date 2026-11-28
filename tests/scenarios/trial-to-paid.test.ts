@@ -152,6 +152,39 @@ describe("trial to the third-list charge", () => {
   });
 });
 
+// S18 point c (Peter, 2026-11-27): a member whose Zack shares for matching only at the cutoff of the first paid
+// Monday pays the higher rate's difference on the first invoice, as its own line named for why it is owed,
+// never "Roger Monthly" twice.
+describe("the first charge with Zack not sharing", () => {
+  it("bills the plan line and one named higher-rate line on one invoice, told and charged alike", async () => {
+    await w.at("2026-12-02T16:00:00Z");
+    const m = await signUp(w, { email: "nia@example.ca", currency: "CAD", country: "CA", sharing: "match_only" });
+    await firstList(w, [m], WEEKS[0]);
+    await w.at(toronto(addDays(WEEKS[1], -1), "15:00"));
+    await sendRun(w, m);
+    await monday(w, WEEKS[1]);
+    // CA$280 + CA$280 + 13% HST: told as the price plus the tax (S18 point a).
+    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
+    expect(paidNext.text).toContain("we’ll charge CA$632.80 (CA$560 plus CA$72.80 HST) for your first month.");
+    await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
+    await sendRun(w, m);
+    expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ charged: 1, held_amount: 0 });
+
+    const creates = w.stripe.callsTo("subscriptions.create");
+    expect(creates).toHaveLength(1);
+    expect(creates[0].args).toMatchObject({ price: "price_monthly_cad", extra: { amountCents: 28000, currency: "CAD", description: "Higher monthly rate: Zack not sharing" } });
+    const [inv] = w.stripe.invoicesFor(m.customer);
+    expect(w.stripe.invoicesFor(m.customer)).toHaveLength(1);
+    expect(inv).toMatchObject({ status: "paid", totalCents: 63280 });
+    expect(inv.lines.map((l) => [l.kind, l.description, l.amountCents])).toEqual([
+      ["plan", "1 × Roger monthly", 28000],
+      ["extra", "Higher monthly rate: Zack not sharing", 28000],
+      ["tax", "HST (13%)", 7280],
+    ]);
+    expect(w.mail(m.email).find((x) => x.subject === "You’re subscribed")!.text).toContain("We charged CA$632.80 (CA$560 plus CA$72.80 HST).");
+  });
+});
+
 // Plan 2026-11-26-001, Key Technical Decisions "Pre-existing charge gap" (Unit 8): the charge cron runs every
 // 10 minutes on Monday, also after the 7:00 send. The second free list delivered at 7:00 must not make that
 // same Monday's later charge runs start the subscription: that week's list was itself free.

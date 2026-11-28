@@ -298,8 +298,10 @@ describe("tax and amount checks", () => {
     };
     expect(await chargeFirst(query, deps(SIX_AM, { gw: spy }), uid, WEEK)).toBe("charged");
     // The preview the told amount came from carries the same item.
-    expect(previews).toEqual([{ amountCents: 20000, currency: "USD" }]);
-    expect(calls).toEqual([{ price: "price_monthly_usd", extra: { amountCents: 20000, currency: "USD" } }]);
+    // The line is named for why it is owed, not after the plan's product (S18 point c).
+    const extra = { amountCents: 20000, currency: "USD", description: "Higher monthly rate: Zack not sharing" };
+    expect(previews).toEqual([extra]);
+    expect(calls).toEqual([{ price: "price_monthly_usd", extra }]);
     expect(await query("select status, reason, amount_cents, to_char(period_start, 'YYYY-MM-DD') as period_start from pending_adjustments")).toEqual([
       { status: "invoiced", reason: "not_sharing", amount_cents: 20000, period_start: WEEK },
     ]);

@@ -187,8 +187,8 @@ export function fakeStripe(now: () => Date): FakeStripe {
     coupon ? payment.couponOff(coupon, lines.reduce((s, l) => s + l.amountCents, 0), price(p).currency) : 0;
   const planLines = (p: string, extra?: FirstExtra): Line[] => [
     { kind: "plan", description: `1 × ${price(p).product}`, amountCents: price(p).cents, invoiceItem: null, price: p },
-    // add_invoice_items takes no description: Stripe names the line after the plan's product (plan Unit 14 deviation).
-    ...(extra?.amountCents ? [{ kind: "extra" as const, description: price(p).product, amountCents: extra.amountCents, invoiceItem: null, price: null }] : []),
+    // A pending invoice item with its own name, made just before the subscription, lands on its first invoice (S18 point c).
+    ...(extra?.amountCents ? [{ kind: "extra" as const, description: extra.description, amountCents: extra.amountCents, invoiceItem: null, price: null }] : []),
   ];
   const nextPayment = (customer: string): ChargeResult | null => {
     const s = scripts.get(customer)?.shift();

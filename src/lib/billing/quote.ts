@@ -5,7 +5,7 @@ import type { Rendered } from "@/lib/mail/layout";
 import { firstChargeReminderEmail, firstPaidNextEmail, quoteChangedEmail, type DiscountLine } from "@/lib/mail/templates/quote";
 import { asDuration, discountEnds, type DiscountTerms } from "./discount-words";
 import type { V3Settings } from "@/lib/v3-settings";
-import { previewFirst, sharingAtCutoff } from "./first-charge";
+import { firstExtra, previewFirst, sharingAtCutoff } from "./first-charge";
 import { carriedDifferenceCents } from "./adjustment";
 import { HAS_CARD_SQL, hasCard } from "./has-card";
 import { firstChargePricing, type Currency } from "./prices";
@@ -102,7 +102,7 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   // Exactly as the charge prices it: the standard price, plus the month's difference on the first invoice when not sharing at the cutoff.
   const { price, extraCents } = await firstChargePricing(d.settings, currency, sharing, d.gw, await carriedDifferenceCents(q, u.id));
   if (!price) return null;
-  const extra = extraCents > 0 ? { amountCents: extraCents, currency } : null;
+  const extra = await firstExtra(q, u.id, sharing, extraCents, currency);
   const { preview: p, coupon } = await previewFirst(q, d.gw, { id: u.id, promo_coupon: u.promo_coupon, stripe_customer: u.stripe_customer! }, price, extra);
   const discountCents = coupon ? (p.discountCents ?? 0) : 0;
   const quote: Quote = { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week, coupon, discountCents, ...(p.taxCents != null ? { taxCents: p.taxCents } : {}) };

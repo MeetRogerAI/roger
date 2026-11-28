@@ -39,8 +39,15 @@ export type FoundSubscription = { id: string; status: string; claimId: string | 
  * standard price, with the difference added to the first invoice only, taxed
  * like the plan line. The preview carries the same item, so the told total is
  * the charged total.
+ *
+ * `description` names the line for why it is owed ("Higher monthly rate: Zack
+ * not sharing", adjustment.ts `firstLineLabel`; S18 point c), never after the
+ * plan's product.
  */
-export type FirstExtra = { amountCents: number; currency: string } | null;
+export type FirstExtra = { amountCents: number; currency: string; description: string } | null;
+
+/** The metadata kind of the first invoice's higher-rate item. */
+export const FIRST_EXTRA_KIND = "first_month_higher_rate";
 
 /**
  * The promo locked in at card save (plan 2026-11-26-001, Unit 8): the
@@ -59,11 +66,16 @@ export interface BillingGateway {
   /** The customer's subscriptions that are live (or were made by a claim). */
   subscriptions(customer: string): Promise<FoundSubscription[]>;
   createSubscription(o: { customer: string; price: string; extra?: FirstExtra; coupon?: FirstCoupon; claimId: string; userId: string; idempotencyKey: string }): Promise<ChargeResult>;
+  /**
+   * Deletes the customer's first-invoice higher-rate items still pending (left by a first charge that did not go
+   * through), so no preview or later invoice picks one up. Called before a new first charge is previewed, when no
+   * first charge claim is open. Returns how many were removed.
+   */
+  clearFirstExtras?(customer: string): Promise<number>;
   /** A price's unit amount in cents (to bill the month's difference as Stripe prices it). */
   unitAmount?(price: string): Promise<number | null>;
 }
 
-/** A one-off line for `price`'s product, with its tax behaviour: taxed exactly like the plan line. */
 /** Stripe's tax behaviour copied as it is, or left out when the price leaves it to the account. */
 const sameTax = (t: Stripe.Price.TaxBehavior | null) => (t === "inclusive" || t === "exclusive" ? { tax_behavior: t } : {});
 
@@ -80,6 +92,48 @@ async function sameProduct(s: Stripe, price: string, extra: NonNullable<FirstExt
 
 /** The tax on an invoice or preview, in cents (Endive: `total_taxes`). */
 export const taxOf = (inv: Pick<Stripe.Invoice, "total_taxes">): number => (inv.total_taxes ?? []).reduce((n, t) => n + t.amount, 0);
+
+/** The customer's first-invoice higher-rate items not yet on any invoice. */
+async function pendingFirstExtras(s: Stripe, customer: string): Promise<Stripe.InvoiceItem[]> {
+  const out: Stripe.InvoiceItem[] = [];
+  for await (const i of s.invoiceItems.list({ customer, pending: true, limit: 100 })) if (i.metadata?.kind === FIRST_EXTRA_KIND) out.push(i);
+  return out;
+}
+
+/** Deletes the pending first-invoice items, except the one `keep` claim made; one already gone counts as deleted. */
+async function clearFirstExtras(s: Stripe, customer: string, keep: string | null): Promise<number> {
+  let n = 0;
+  for (const i of await pendingFirstExtras(s, customer)) {
+    if (keep && i.metadata?.claim_id === keep) continue;
+    try {
+      await s.invoiceItems.del(i.id);
+      n++;
+    } catch (e) {
+      if ((e as { code?: string } | null)?.code !== "resource_missing") throw e;
+    }
+  }
+  return n;
+}
+
+/**
+ * The first invoice's higher-rate item, pending on the customer until the subscription is created: the plan's
+ * product and tax behaviour (taxed exactly like the plan line), the line's name, and the claim id. Any other
+ * claim's item still pending is removed first, and this claim's is made once: a repeat finds it by its claim id
+ * (and the key makes a racing repeat return the same item).
+ */
+async function placeFirstExtra(s: Stripe, o: { customer: string; price: string; extra: NonNullable<FirstExtra>; claimId: string; idempotencyKey: string }) {
+  await clearFirstExtras(s, o.customer, o.claimId);
+  if ((await pendingFirstExtras(s, o.customer)).some((i) => i.metadata?.claim_id === o.claimId)) return;
+  await s.invoiceItems.create(
+    {
+      customer: o.customer,
+      description: o.extra.description,
+      price_data: await sameProduct(s, o.price, o.extra),
+      metadata: { kind: FIRST_EXTRA_KIND, claim_id: o.claimId },
+    },
+    { idempotencyKey: `${o.idempotencyKey}:higher-rate` },
+  );
+}
 
 const LIVE = new Set(["active", "trialing", "past_due", "unpaid"]);
 export const isLive = (s: FoundSubscription) => LIVE.has(s.status);
@@ -121,12 +175,15 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
       return (await s.prices.retrieve(price)).unit_amount;
     },
 
+    clearFirstExtras: (customer) => clearFirstExtras(s, customer, null),
+
     async preview({ customer, price, extra, coupon }) {
       const inv = await s.invoices.createPreview({
         customer,
         automatic_tax: { enabled: true },
         subscription_details: { items: [{ price }] },
-        ...(extra?.amountCents ? { invoice_items: [{ price_data: await sameProduct(s, price, extra) }] } : {}),
+        // The same line the charge makes: the plan's product, its tax behaviour, and the line's own name.
+        ...(extra?.amountCents ? { invoice_items: [{ price_data: await sameProduct(s, price, extra), description: extra.description }] } : {}),
         // The coupon locked in at card save; a deleted or expired one throws (isCouponGone), as subscription create does.
         ...(coupon ? { discounts: [{ coupon }] } : {}),
       });
@@ -140,13 +197,17 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
     },
 
     async createSubscription({ customer, price, extra, coupon, claimId, userId, idempotencyKey }) {
+      const withExtra = Boolean(extra?.amountCents);
       try {
+        // The first month's higher-rate difference, on the first invoice only, named for why it is owed. Endive's
+        // add_invoice_items takes no description (Stripe names such a line after the product, "Roger Monthly"), so
+        // it is a pending invoice item made just before the subscription, which Stripe puts on the subscription's
+        // first invoice: one invoice, one charge (S18 point c, checked in the sandbox 2026-11-27).
+        if (withExtra) await placeFirstExtra(s, { customer, price, extra: extra!, claimId, idempotencyKey });
         const sub = await s.subscriptions.create(
           {
             customer,
             items: [{ price }],
-            // The first month's higher-rate difference, on the first invoice only.
-            ...(extra?.amountCents ? { add_invoice_items: [{ price_data: await sameProduct(s, price, extra), metadata: { kind: "first_month_higher_rate" } }] } : {}),
             // The promo locked in at card save: the same coupon the told amount was previewed with.
             ...(coupon ? { discounts: [{ coupon }] } : {}),
             automatic_tax: { enabled: true },
@@ -169,8 +230,14 @@ export function stripeBilling(s: Stripe | null = stripe()): BillingGateway | nul
         };
       } catch (e) {
         // Deleted, or past redeem_by (Unit 4 spike): nothing was created; the caller re-quotes at full price.
-        if (coupon && isCouponGone(e)) return { kind: "coupon_gone", error: e instanceof Error ? e.message : String(e) };
-        return classify(e);
+        const r: ChargeResult = coupon && isCouponGone(e) ? { kind: "coupon_gone", error: e instanceof Error ? e.message : String(e) } : classify(e);
+        // A definite refusal (a decline included) creates no subscription and leaves the item pending: it is removed
+        // now, so a retry (a new claim) never finds two. An unknown outcome keeps it: the takeover repeats this call,
+        // which finds it again by its claim id.
+        if (withExtra && r.kind !== "unknown") {
+          await clearFirstExtras(s, customer, null).catch((x) => console.error("[billing] first extra left pending", { customer, claimId, message: x instanceof Error ? x.message : String(x) }));
+        }
+        return r;
       }
     },
   };
