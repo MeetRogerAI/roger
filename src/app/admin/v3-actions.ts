@@ -14,6 +14,7 @@ import { audited, logAdminAction } from "@/lib/admin/log";
 import { opsWeek } from "@/lib/admin/ops";
 import { addRunForUser, changeUserEmail, clearDisplayName, closeAccount, deleteAccount, giveExtraFreeList, isMonday, linkContributor, saveNote, sendNudge, type Done } from "@/lib/admin/users";
 import { excuseWeek, undoExcuseForEveryone } from "@/lib/billing/contribution";
+import { addReply } from "@/lib/feedback/feedback";
 import { runChargeJob } from "@/lib/billing/charge-job";
 import { asOfAllowed, AsOfRefused, currentMonday, jobNow, moneyAsOfAllowed } from "@/lib/clock";
 import { gatewayFitModel } from "@/lib/cora/fit";
@@ -62,6 +63,17 @@ export async function saveNoteAction(_p: V3State, fd: FormData): Promise<V3State
   if (!userId) return bad("No such user.");
   const r = await saveNote(query, by, userId, typeof fd.get("note") === "string" ? String(fd.get("note")) : "");
   refresh();
+  return state(r);
+}
+
+/** "Add a reply" on the user page (B3 Unit 5): an emailed reply pasted onto the member's record. Logged without its text. */
+export async function addFeedbackReplyAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const userId = idOf(fd, "userId");
+  if (!userId) return bad("No such user.");
+  const body = typeof fd.get("body") === "string" ? String(fd.get("body")).slice(0, 20_000) : "";
+  const r = await addReply(query, by, userId, { receivedOn: field(fd, "receivedOn", 10), body });
+  if (r.ok) refresh();
   return state(r);
 }
 

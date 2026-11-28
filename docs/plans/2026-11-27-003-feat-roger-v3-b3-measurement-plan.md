@@ -560,7 +560,7 @@ flowchart LR
 
 **Verification:** The pipeline agrees with the Interest page's funnel counts for the same weeks (both are tested on one seeded fixture).
 
-- [ ] **Unit 5: Stored feedback (member notes and admin-entered replies)**
+- [x] **Unit 5: Stored feedback (member notes and admin-entered replies)**
 
 **Goal:** R21: replies and notes are stored against the member's record, readable by the bot, and deleted with the account.
 
@@ -596,7 +596,9 @@ flowchart LR
 
 **Verification:** Feedback appears on both pages and goes when the account goes.
 
-- [ ] **Unit 6: Admin read logging**
+*As built (2026-11-27):* the note box is also under this week's list on `/app`, not only `/app/week/[date]`; a note needs a delivered list that week; delete is allowed with the switch off (save is refused); a reply is filed under the Monday of the date it came in; `applyRetention`/`applyIdleRetention` now return a `feedback` count; wording is in `artifacts/wording-signoff.md` section 14 (pending).
+
+- [x] **Unit 6: Admin read logging**
 
 **Goal:** The B.16 row "Admin read log" (moved from launch list S22): every time an admin opens a member's runs or picks, `admin_actions` records it.
 
@@ -625,6 +627,8 @@ flowchart LR
 - Edge case: the password admin is logged as "admin (password)".
 
 **Verification:** Every page that shows runs or picks writes a row first.
+
+*As built (2026-11-27):* `logAdminReads` writes every kind for a page view in one statement (all or nothing), skips kinds with no member ids, and stores `detail = { page, user_ids (first 200), count }`; pages use `readsLogged` and show `READ_NOT_LOGGED` on failure. The user page logs `read_runs`, `read_picks` and `read_feedback`; `/admin/cora` logs only when a member is chosen; the user page's own Admin log list leaves read rows out.
 
 - [ ] **Unit 7: Review bot core (evidence, model, validation, storage)**
 

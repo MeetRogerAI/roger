@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { ActionButton, AddRunForm, ChangeEmailForm, CloseAccountForm, DeleteAccountForm, ExcuseForm, LinkContributorForm, NoteEditor, NudgeForm } from "@/components/app/admin-v3";
-import { isAdmin } from "@/lib/admin-auth";
+import { ActionButton, AddRunForm, ChangeEmailForm, CloseAccountForm, DeleteAccountForm, ExcuseForm, FeedbackReplyForm, LinkContributorForm, NoteEditor, NudgeForm } from "@/components/app/admin-v3";
+import { adminIdentity } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
 import { ATTENTION_LABELS, excuseDefaultWeek, statusKey, stripeCustomerUrl } from "@/lib/admin/ops";
+import { READ_NOT_LOGGED, readsLogged, readsOfMember } from "@/lib/admin/read-log";
 import { userDetail } from "@/lib/admin/user-detail";
 import { leaderboardEntryOf } from "@/lib/growth/leaderboard";
 import { moneyCents } from "@/lib/billing/prices";
 import { stripeMode } from "@/lib/billing/stripe";
+import { torontoDate } from "@/lib/clock";
 import { query } from "@/lib/db-query";
+import { feedbackFor } from "@/lib/feedback/feedback";
 import { NUDGES } from "@/lib/mail/templates/admin-user";
 import { readV3Settings } from "@/lib/v3-settings";
 
@@ -25,17 +28,27 @@ function Section({ title, children, id }: { title: string; children: React.React
   );
 }
 
-/** One user (spec B.12): profile, plan, runs, ideas, emails, the admin log, and every action on them. */
+/**
+ * One user (spec B.12): profile, plan, runs, ideas, feedback, emails, the
+ * admin log, and every action on them. Showing their runs, picks, feedback,
+ * profile (quiz answers) and email history is logged first (B3 Unit 6,
+ * fail-closed): no log row, no page. The "Who read this member's data" list
+ * shows only admins, pages and kinds, so it is not itself a logged read.
+ */
 export default async function UserPage({ params }: PageProps<"/admin/users/[id]">) {
   await connection();
-  if (!(await isAdmin())) return null;
+  const by = await adminIdentity();
+  if (!by) return null;
   const { id } = await params;
   if (!UUID.test(id)) return <p className="text-small text-ink-2">No such user.</p>;
   const settings = await readV3Settings();
   const now = new Date();
   const d = await userDetail(query, id, settings, now);
   if (!d) return <p className="text-small text-ink-2">No such user.</p>;
-  const board = await leaderboardEntryOf(query, id);
+  // Who read this member's data, as it stood before this visit (read first, so this view isn't listed as its own reader).
+  const [board, feedback, readers] = await Promise.all([leaderboardEntryOf(query, id), feedbackFor(query, id), readsOfMember(query, id)]);
+  const reads = (["read_runs", "read_picks", "read_feedback", "read_profile", "read_emails"] as const).map((what) => ({ what, userIds: [id] }));
+  if (!(await readsLogged(query, by, "/admin/users/[id]", reads))) return <p role="alert" className="text-small text-error">{READ_NOT_LOGGED}</p>;
   const r = d.row;
   const quiz = d.profile as Record<string, unknown>;
 
@@ -156,6 +169,28 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
         )}
       </Section>
 
+      <Section title="Feedback" id="feedback">
+        <p className="mb-3 text-small text-ink-2">Their notes on their lists, and replies they emailed us. Private: never copy them anywhere public.</p>
+        {feedback.length === 0 ? (
+          <p className="text-small text-ink-2">No feedback yet.</p>
+        ) : (
+          <ul className="divide-y divide-rule text-small">
+            {feedback.map((f) => (
+              <li key={f.id} className="py-2">
+                <p className="text-meta text-ink-2">
+                  {f.source === "member_note" ? `Note on the week of ${f.weekOf}` : `Reply, week of ${f.weekOf ?? "?"}, added by ${f.enteredBy}`} · {when(f.updatedAt)}
+                </p>
+                {/* Member text: plain text only, never HTML (B3 Unit 5). */}
+                <p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{f.body}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-4">
+          <FeedbackReplyForm userId={r.id} today={torontoDate(now)} />
+        </div>
+      </Section>
+
       <Section title="Referral credit" id="referral-credit">
         <p className="mb-3 text-small text-ink-2">
           {d.creditBalance
@@ -208,6 +243,7 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
       </Section>
 
       <Section title="Admin log">
+        <p className="mb-2 text-meta text-ink-2">Page reads are logged too, and listed under “Who read this member’s data” below.</p>
         {d.log.length === 0 ? (
           <p className="text-small text-ink-2">No admin actions yet.</p>
         ) : (
@@ -220,6 +256,23 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
             ))}
           </ul>
         )}
+      </Section>
+
+      <Section title="Who read this member’s data" id="reads">
+        <details>
+          <summary className="cursor-pointer text-small">
+            {readers.length === 0 ? "No reads logged yet." : `The latest ${readers.length} page ${readers.length === 1 ? "view" : "views"} that showed it`}
+          </summary>
+          {readers.length > 0 && (
+            <ul className="mt-2 text-small">
+              {readers.map((x) => (
+                <li key={`${x.at}-${x.adminEmail}-${x.page}`} className="[overflow-wrap:anywhere]">
+                  {when(x.at)} · {x.adminEmail} · {x.page} · <span className="text-ink-2">{x.kinds.join(", ")}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
       </Section>
 
       <Section title="Quiz answers">

@@ -113,6 +113,82 @@ describe("an admin", () => {
   });
 });
 
+describe("the admin read log (B3 Unit 6)", () => {
+  const reads = () => current<{ admin_email: string; user_id: string | null; action: string; detail: { page: string; user_ids: string[]; count: number } }>("select admin_email, user_id, action, detail from admin_actions where action like 'read%' order by id");
+  const html = async (node: unknown) => {
+    const { prerender } = await import("react-dom/static");
+    return (await new Response((await prerender(node as React.ReactElement)).prelude).text()).replaceAll("<!-- -->", "");
+  };
+  const run = (userId: string, text: string) =>
+    current<{ id: string }>("insert into runs (user_id, week_of, route, agent, sharing, raw_text, status) values ($1, '2026-12-14', 'connector', 'hark', 'share', $2, 'flagged') returning id", [userId, text]);
+
+  it("/admin/runs listing 3 members' runs writes one row with all 3 ids, and opening one logs it too", async () => {
+    const ids = [member];
+    for (const e of ["ben@example.com", "cy@example.com"]) ids.push((await current<{ id: string }>("insert into users (email) values ($1) returning id", [e]))[0].id);
+    const runIds: string[] = [];
+    for (const u of ids) runIds.push((await run(u, `run text of ${u}`))[0].id);
+    await signInAs(adminUser);
+    await html(await withParams.runs({ searchParams: Promise.resolve({}), params: Promise.resolve({}) } as never));
+    const [row] = await reads();
+    expect(row).toMatchObject({ admin_email: "peter@example.com", user_id: null, action: "read_runs", detail: { page: "/admin/runs", count: 3 } });
+    expect([...row.detail.user_ids].sort()).toEqual([...ids].sort());
+    await html(await withParams.runs({ searchParams: Promise.resolve({ id: runIds[1] }), params: Promise.resolve({}) } as never));
+    expect((await reads())[1].detail.user_ids[0]).toBe(ids[1]);
+  });
+
+  it("/admin/flags and /admin/cora with a member chosen log before showing their data", async () => {
+    await run(member, "flagged run");
+    await signInAs(adminUser);
+    await html(await pages.flags());
+    await html(await withParams.cora({ searchParams: Promise.resolve({ user: member }), params: Promise.resolve({}) } as never));
+    // /admin/cora with nobody chosen shows no member's picks, so it logs nothing.
+    await html(await withParams.cora({ searchParams: Promise.resolve({}), params: Promise.resolve({}) } as never));
+    expect((await reads()).map((r) => [r.action, r.user_id, r.detail.page])).toEqual([
+      ["read_runs", member, "/admin/flags"],
+      ["read_picks", member, "/admin/cora"],
+    ]);
+  });
+
+  it("logs the shared-password admin as admin (password)", async () => {
+    resetNextFakes();
+    vi.stubEnv("ADMIN_PASSWORD", "hunter2");
+    expect(await signIn("hunter2")).toBe(true);
+    await html(await (await import("@/app/admin/users/[id]/page")).default({ params: Promise.resolve({ id: member }) } as never));
+    expect((await reads()).map((r) => r.admin_email)).toEqual(Array(5).fill("admin (password)"));
+  });
+
+  it("is fail-closed: when the log can't be written, no member's run text is in the HTML", async () => {
+    await run(member, "PRIVATE RUN TEXT");
+    const [{ id: runId }] = await current<{ id: string }>("select id from runs");
+    await signInAs(adminUser);
+    const real = current;
+    current = async (t, p) => {
+      if (/insert into admin_actions/.test(t)) throw new Error("log down");
+      return real(t, p);
+    };
+    const runs = await html(await withParams.runs({ searchParams: Promise.resolve({ id: runId }), params: Promise.resolve({}) } as never));
+    expect(runs).toContain("This page couldn’t be logged");
+    expect(runs).not.toContain("PRIVATE RUN TEXT");
+    expect(runs).not.toContain("ana@example.com");
+    const flags = await html(await pages.flags());
+    expect(flags).toContain("This page couldn’t be logged");
+    expect(flags).not.toContain("ana@example.com");
+    current = real;
+    expect(await reads()).toEqual([]);
+  });
+
+  it("an admin's reply is added through the real admin check, and logged without its text", async () => {
+    await signInAs(adminUser);
+    expect(await v3.addFeedbackReplyAction({ status: "idle" }, form({ userId: member, receivedOn: "2026-12-16", body: "Loved it" }))).toMatchObject({ status: "ok", message: "Reply added." });
+    expect(await current("select source, entered_by, body from member_feedback")).toEqual([{ source: "admin_reply", entered_by: "peter@example.com", body: "Loved it" }]);
+    const [log] = await current<{ action: string; detail: unknown }>("select action, detail from admin_actions");
+    expect(log.action).toBe("add_feedback");
+    expect(JSON.stringify(log.detail)).not.toContain("Loved");
+    await signInAs(member);
+    await expect(v3.addFeedbackReplyAction({ status: "idle" }, form({ userId: member, receivedOn: "2026-12-16", body: "x" }))).rejects.toThrow("Not signed in");
+  });
+});
+
 describe("the shared password", () => {
   it("works only while ADMIN_PASSWORD is set, and stops at once when it is removed", async () => {
     resetNextFakes();

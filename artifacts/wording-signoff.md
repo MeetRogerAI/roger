@@ -629,3 +629,36 @@ Harbour Realty pays for your Roger membership, so you won’t be asked for a car
 - **Releasing a seat makes the member an ordinary trial:** they will be asked for a card before their next list. Right, or should a released member be told first?
 - **A week belongs to the month its Monday is in** for the sponsor invoice (B1's monthly members use the month containing the Sunday cutoff). Only weeks from the member's third list on, while they held the seat, count toward the contributor rule.
 - **The sponsor's name is shown to its members** on Step 3 and in the welcome email. Acceptable?
+
+## 14. Feedback and admin read log wording (B3 Units 5 and 6) — pending Peter's sign-off
+
+Everything here is dark until `v3.feedbackOn` is on (with sign-up open and the cycle live). Unit 14 finishes the docs write-back.
+
+**Member, the note box** (`src/components/app/week-note.tsx`), under a delivered list on `/app` and `/app/week/[date]`:
+
+```
+A note for us
+How were this week’s ideas? Only you and the Roger team see this. We read every note to make Roger better.
+```
+
+- Buttons: `Save note` / `Saving…`; `Delete note` / `Deleting…` (only once a note is saved).
+- Results (`src/lib/feedback/feedback.ts`, `src/app/app/actions.ts`): `Note saved.`; `Note deleted.`; `Write your note first.`; `Keep your note to 2,000 characters or fewer.`; `You can leave a note only on a week you got ideas.`; `There’s no note to delete.`; `Notes are switched off just now.`; `Too many tries. Wait a few minutes.` (after 20 failed saves in an hour; a valid note is never refused).
+
+**Admin, `/admin/users/[id]`** (admins only):
+
+- Section `Feedback`: `Their notes on their lists, and replies they emailed us. Private: never copy them anywhere public.`; `No feedback yet.`; per row `Note on the week of 2026-12-14 · …` or `Reply, week of 2026-12-14, added by peter@… · …`, then the text as typed (plain text).
+- Form: `Date it came in`, `Their reply, as they wrote it`, button `Add a reply` / `Adding…`. Results: `Reply added.`; `Paste the reply first.`; `A reply can be at most 4,000 characters.`; `Enter the date the reply came in.`; `No such user.`
+- Admin log section: `Page reads (read_runs, read_picks, read_feedback) are logged too, but not listed here.`
+
+**Admin, read log refused** (`src/lib/admin/read-log.ts`), on `/admin/users/[id]`, `/admin/runs`, `/admin/flags` and `/admin/cora` (with a member chosen) when the read can't be logged:
+
+```
+This page couldn’t be logged, so it isn’t shown. Try again in a minute.
+```
+
+**Flags for Peter:**
+
+- **"Only you and the Roger team see this."** The review bot (B3 Unit 7) will also read notes, through the AI Gateway, as evidence for wording changes, and never copies them into a pull request. Is "the Roger team" fair for that, or should the line say "Only you and the Roger team see this, and our review tools read it to improve Zack and Cora."?
+- **Delete works with the switch off.** A member can always delete their own note, even while notes are switched off (the save is refused). Right?
+- **A reply is filed under the week it came in** (the Monday of the date entered), as the list it's most likely about.
+- **The privacy page** should say that admin reads of runs, picks and feedback are logged, and that notes are kept with the account and erased with it. That page lives on `feat/site-v1` (launch list, Unit 14).

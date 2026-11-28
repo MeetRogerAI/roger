@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import {
+  addFeedbackReplyAction,
   addRunAction,
   changeEmailAction,
   chargeAndSendAction,
@@ -25,6 +26,7 @@ import {
   undoExcuseAction,
   type V3State,
 } from "@/app/admin/v3-actions";
+import { REPLY_MAX } from "@/lib/feedback/limits";
 
 /*
  * The interactive pieces of the v3 admin (plan Unit 17). Every action
@@ -97,6 +99,42 @@ export function NoteEditor({ userId, note, compact = false }: { userId: string; 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending || text === note} className={quiet}>
           {pending ? "Saving…" : "Save note"}
+        </button>
+        <Msg s={s} />
+      </div>
+    </form>
+  );
+}
+
+/**
+ * "Add a reply" (B3 Unit 5): paste a member's emailed reply onto their
+ * record, with the date it came in. Controlled, and emptied only once saved.
+ */
+export function FeedbackReplyForm({ userId, today }: { userId: string; today: string }) {
+  const [body, setBody] = useState("");
+  const [receivedOn, setReceivedOn] = useState(today);
+  const [s, act, pending] = useActionState(
+    clearOnOk(addFeedbackReplyAction, () => setBody("")),
+    idle,
+  );
+  return (
+    <form action={act} className="space-y-2">
+      <Hidden values={{ userId }} />
+      <div>
+        <label className={label} htmlFor={`reply-on-${userId}`}>
+          Date it came in
+        </label>
+        <input id={`reply-on-${userId}`} name="receivedOn" type="date" required value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} className={`${input} max-w-[12rem]`} />
+      </div>
+      <div>
+        <label className={label} htmlFor={`reply-${userId}`}>
+          Their reply, as they wrote it
+        </label>
+        <textarea id={`reply-${userId}`} name="body" required value={body} onChange={(e) => setBody(e.target.value)} maxLength={REPLY_MAX} rows={4} className={area} />
+      </div>
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={pending || !body.trim()} className={quiet}>
+          {pending ? "Adding…" : "Add a reply"}
         </button>
         <Msg s={s} />
       </div>

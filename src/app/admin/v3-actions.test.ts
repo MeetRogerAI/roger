@@ -58,6 +58,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
   const idle = { status: "idle" as const };
   const calls: [string, () => Promise<unknown>][] = [
     ["saveNote", () => actions.saveNoteAction(idle, form({ userId: "x", note: "n" }))],
+    ["addFeedbackReply", () => actions.addFeedbackReplyAction(idle, form({ userId: "x", receivedOn: "2026-12-14", body: "b" }))],
     ["extraFreeList", () => actions.extraFreeListAction(idle, form({ userId: "x" }))],
     ["nudge", () => actions.nudgeAction(idle, form({ userId: "x", template: "no_run" }))],
     ["addRun", () => actions.addRunAction(idle, form({ userId: "x", report: "r" }))],

@@ -13,13 +13,19 @@ const ERASE_SQL = (chosen: string) => `with u as (${chosen}),
        update zack_profiles set status = 'deleted', raw_text = '', parsed = null, revision = revision + 1
        where user_id in (select id from u) and (status <> 'deleted' or raw_text <> '')
        returning id
-     )
-     select (select count(*) from u)::int as users, (select count(*) from r)::int as runs, (select count(*) from d)::int as plays, (select count(*) from z)::int as profiles`;
+     ),
+     f as (delete from member_feedback where user_id in (select id from u) returning id)
+     select (select count(*) from u)::int as users, (select count(*) from r)::int as runs, (select count(*) from d)::int as plays, (select count(*) from z)::int as profiles,
+            (select count(*) from f)::int as feedback`;
 
 /** What a user still holds that retention erases (as in applyRetention). */
 const HOLDS_DATA_SQL = (u: string) => `(exists (select 1 from runs r where r.user_id = ${u}.id and (r.status <> 'deleted' or r.raw_text <> '' or r.parsed is not null))
           or exists (select 1 from plays p where p.user_id = ${u}.id and p.pool_play_id is null)
-          or exists (select 1 from zack_profiles z where z.user_id = ${u}.id and (z.status <> 'deleted' or z.raw_text <> '')))`;
+          or exists (select 1 from zack_profiles z where z.user_id = ${u}.id and (z.status <> 'deleted' or z.raw_text <> ''))
+          or exists (select 1 from member_feedback f where f.user_id = ${u}.id))`;
+
+/** What one erase pass removed. */
+export type Erased = { users: number; runs: number; plays: number; profiles: number; feedback: number };
 
 /**
  * Data retention (spec 0.2 and B.14): runs are kept while a member has
@@ -27,14 +33,17 @@ const HOLDS_DATA_SQL = (u: string) => `(exists (select 1 from runs r where r.use
  * erased and their plays not in the pool removed, as deleting a run does
  * (src/lib/zack/settings.ts, deleteRun): the run row stays as an empty
  * "deleted" stub so plays already in the pool keep their place there, in
- * anonymous form. The private matching profiles sent with the runs go too.
+ * anonymous form. The private matching profiles sent with the runs go too,
+ * and so do the member's notes and admin-entered replies (member_feedback,
+ * B3 Unit 5). No job reads member_feedback as an "already done" guard, so
+ * deleting it never makes anything run again.
  *
  * Access ends at `access_ends_at`: set by a cancellation, a subscription's
  * end, and every close. An account with no end recorded is left alone.
  * Bounded per pass, so a backlog spreads over several hours.
  */
-export async function applyRetention(q: Query, o: { now: Date; retentionDays: number; limit?: number }): Promise<{ users: number; runs: number; plays: number; profiles: number }> {
-  const [r] = await q<{ users: number; runs: number; plays: number; profiles: number }>(
+export async function applyRetention(q: Query, o: { now: Date; retentionDays: number; limit?: number }): Promise<Erased> {
+  const [r] = await q<Erased>(
     ERASE_SQL(`select id from users x
        where x.status in ('cancelled', 'closed') and x.access_ends_at is not null
          and x.access_ends_at <= $1::timestamptz - make_interval(days => $2)
@@ -67,8 +76,8 @@ export const IDLE_CLOCK_FROM = "2026-11-27T05:00:00Z";
  * when a session is created or renewed) or a live session's; the account's
  * creation counts as activity too. Job clock, bounded per pass.
  */
-export async function applyIdleRetention(q: Query, o: { now: Date; idleDays?: number; limit?: number; clockFrom?: string }): Promise<{ users: number; runs: number; plays: number; profiles: number }> {
-  const [r] = await q<{ users: number; runs: number; plays: number; profiles: number }>(
+export async function applyIdleRetention(q: Query, o: { now: Date; idleDays?: number; limit?: number; clockFrom?: string }): Promise<Erased> {
+  const [r] = await q<Erased>(
     ERASE_SQL(`select x.id from users x
        where ((x.status = 'active' and x.plan = 'per_run') or x.status = 'held')
          and greatest(
