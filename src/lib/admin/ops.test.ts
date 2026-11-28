@@ -191,11 +191,16 @@ describe("eligible plays (R16, R25)", () => {
     ]);
   });
 
-  it("refuses linking one contributor to a second user", async () => {
+  it("links several contributors to one user (one person, several records, 2026-11-27)", async () => {
     const a = await user("a@example.com");
     const [{ id: other }] = await query<{ id: string }>("insert into seed_contributors (label) values ('Kim') returning id");
-    await linkContributor(query, "admin@example.com", contributor, a);
-    expect(await linkContributor(query, "admin@example.com", other, a)).toMatchObject({ ok: false });
+    await query("insert into pool_play_contributors (pool_play_id, contributor) select id, $1 from pool_plays where title = 'Two'", [`seed:${other}`]);
+    expect((await eligibleCounts(query, WEEK)).get(a)).toBe(3);
+    expect(await linkContributor(query, "admin@example.com", contributor, a)).toMatchObject({ ok: true });
+    expect(await linkContributor(query, "admin@example.com", other, a)).toMatchObject({ ok: true });
+    // Both records' plays leave the user's count.
+    expect((await eligibleCounts(query, WEEK)).get(a)).toBe(1);
+    expect(await query("select count(*)::int as n from seed_contributors where user_id = $1", [a])).toEqual([{ n: 2 }]);
   });
 });
 

@@ -50,6 +50,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["undoExcuse", () => actions.undoExcuseAction(idle, form({ week: "2026-12-14" }))],
     ["pilotLink", () => actions.pilotLinkAction(idle, form({ email: "p@example.com", name: "P" }))],
     ["linkContributor", () => actions.linkContributorAction(idle, form({ contributorId: "x" }))],
+    ["contributorEmail", () => actions.contributorEmailAction(idle, form({ contributorId: "x", email: "c@example.com" }))],
     ["closeAccount", () => actions.closeAccountAction(idle, form({ userId: "x", confirm: "yes" }))],
     ["deleteAccount", () => actions.deleteAccountAction(idle, form({ userId: "x" }))],
     ["changeEmail", () => actions.changeEmailAction(idle, form({ userId: "x", email: "z@example.com" }))],

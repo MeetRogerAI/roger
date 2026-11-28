@@ -1,3 +1,4 @@
+import { autoLinkContributor, SIGNUP_ACTOR } from "@/lib/admin/contributors";
 import type { Query } from "@/lib/db-query";
 import { hashSecret, newSecret, normaliseEmail, safeNext } from "./tokens";
 
@@ -140,7 +141,8 @@ export type SignedInUser = { id: string; email: string };
  * What a used token signs in to.
  * - Sign-in: the account for that email, marked verified. A sign-up link
  *   creates the account from its carried details if there is none yet; an
- *   account that already exists keeps its own details.
+ *   account that already exists keeps its own details. A new account is
+ *   linked to the seed contributor carrying its address (R25).
  * - Pilot: the named account, if the email still matches.
  * - Anything else (email-change links, or a purpose this code doesn't know): nobody.
  */
@@ -159,14 +161,17 @@ export async function userForToken(q: Query, t: UsedToken, now = new Date()): Pr
   }
   const a = t.newAccount;
   if (a) {
-    const rows = await q<SignedInUser>(
+    // xmax = 0: this statement inserted the row (it is not an account that existed already).
+    const rows = await q<SignedInUser & { created: boolean }>(
       `insert into users (email, name, path, not_ready, profile, agent, currency, ref, utm, pending_zack_token, signup_step, email_verified_at)
        values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, 'plan', $11)
        on conflict (email) do update set email_verified_at = coalesce(users.email_verified_at, excluded.email_verified_at)
-       returning id, email`,
+       returning id, email, (xmax = 0) as created`,
       [t.email, a.name, a.path, a.notReady, JSON.stringify(a.profile), a.agent, a.currency, a.ref, a.utm, a.zack, at],
     );
-    return rows[0] ?? null;
+    if (!rows[0]) return null;
+    if (rows[0].created) await autoLinkContributor(q, SIGNUP_ACTOR, rows[0].id);
+    return { id: rows[0].id, email: rows[0].email };
   }
   const rows = await q<SignedInUser>(`update users set email_verified_at = coalesce(email_verified_at, $2) where email = $1 returning id, email`, [t.email, at]);
   return rows[0] ?? null;

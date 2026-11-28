@@ -13,7 +13,10 @@ import { isEmail } from "@/lib/form";
 import { adminAlert, alertAdmins, sendToUser, type MailDeps } from "@/lib/mail/send";
 import { addressChangedBySupportEmail, addressMovedAwayEmail, nudgeEmail, type Nudge } from "@/lib/mail/templates/admin-user";
 import { checkReport, storeReport, type Stored } from "@/lib/zack/receive";
+import { linkContributorByEmail } from "./contributors";
 import { logAdminAction } from "./log";
+
+export { linkContributor } from "./contributors";
 
 /**
  * What an admin can do to one user (spec B.12, plan Unit 17). Each function
@@ -115,31 +118,6 @@ export async function addRunForUser(q: Query, by: string, userId: string, body: 
 /** A Monday, written YYYY-MM-DD (the week a contribution or excuse is for). */
 export function isMonday(s: string): boolean {
   return isRealDate(s) && wallParts(new Date(`${s}T17:00:00Z`)).dow === 1;
-}
-
-/**
- * Links a hidden seed contributor to a real account (R25), or unlinks it
- * (userId null). The user it was linked to is read in the same statement, so
- * an unlink is logged against that user, and a move from one user to another
- * is logged against both.
- */
-export async function linkContributor(q: Query, by: string, contributorId: string, userId: string | null): Promise<Done> {
-  try {
-    const rows = await q<{ label: string; previous: string | null }>(
-      `update seed_contributors s set user_id = $2 from (select id, user_id from seed_contributors where id = $1) old
-       where s.id = old.id returning s.label, old.user_id as previous`,
-      [contributorId, userId],
-    );
-    if (!rows.length) return no("No such contributor.");
-    const { label, previous } = rows[0];
-    if (previous && previous !== userId) await logAdminAction(q, { by, userId: previous, action: "unlink_contributor", detail: { contributorId, label, movedTo: userId } });
-    if (userId && previous !== userId) await logAdminAction(q, { by, userId, action: "link_contributor", detail: { contributorId, label, movedFrom: previous } });
-    return ok(userId ? `Linked ${label}. Cora leaves their seed plays out of this user’s lists.` : `Unlinked ${label}.`);
-  } catch (e) {
-    if (/unique|duplicate/i.test((e as Error).message)) return no("That user is already linked to another contributor.");
-    if (/foreign key/i.test((e as Error).message)) return no("No such user.");
-    throw e;
-  }
 }
 
 /**
@@ -342,6 +320,12 @@ export async function changeUserEmail(q: Query, d: MailDeps, by: string, userId:
   const toNew = await sendToUser({ id: userId, email }, "email_changed_by_support", ref, addressChangedBySupportEmail({ newEmail: email }), mail).catch(() => "failed" as const);
   const toOld = await sendToUser({ id: userId, email: u.email }, "email_moved_by_support", ref, addressMovedAwayEmail({ newEmail: email }), mail).catch(() => "failed" as const);
   await logAdminAction(q, { by, userId, action: "change_email", detail: { from: u.email, to: email, noticeToNew: toNew, noticeToOld: toOld } });
+  // A seed contributor carrying the new address is linked now (never unlinked); a failure here leaves the change made.
+  const linked = await linkContributorByEmail(q, by, userId).catch((e) => {
+    console.error("[admin] contributor link after an email change", userId, e instanceof Error ? e.message : e);
+    return null;
+  });
+  const linkNote = linked?.ok ? ` ${linked.message}` : "";
   const failed = [toNew !== "sent" && "the new address", toOld !== "sent" && "the old address"].filter(Boolean);
   if (failed.length) {
     await alertAdmins(
@@ -350,7 +334,7 @@ export async function changeUserEmail(q: Query, d: MailDeps, by: string, userId:
       adminAlert("A member's address was changed but a notice did not go", [`User ${userId}: the notice to ${failed.join(" and ")} could not be sent. Tell them another way.`]),
       mail,
     ).catch(() => {});
-    return ok(`Address changed to ${email} and they are signed out everywhere, but the notice to ${failed.join(" and ")} could not be sent. Tell them another way.`);
+    return ok(`Address changed to ${email} and they are signed out everywhere, but the notice to ${failed.join(" and ")} could not be sent. Tell them another way.${linkNote}`);
   }
-  return ok(`Address changed to ${email}. They are signed out everywhere and both addresses were told.`);
+  return ok(`Address changed to ${email}. They are signed out everywhere and both addresses were told.${linkNote}`);
 }

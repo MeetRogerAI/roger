@@ -112,9 +112,12 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
 
       <Section title="Seed contributor">
         <p className="mb-3 text-small text-ink-2">
-          {d.contributor ? `Linked to ${d.contributor.label}: Cora never picks this user a play from those seed runs.` : "Not linked. Link the hidden record of this person’s pilot runs, so Cora leaves those plays out of their lists."}
+          {d.linkedContributors.length
+            ? `Linked to ${d.linkedContributors.map((c) => c.label).join(", ")}: Cora never picks this user a play from those seed runs.`
+            : "Not linked. Link the hidden record of this person’s pilot runs, so Cora leaves those plays out of their lists."}{" "}
+          A contributor whose email (set on the Cora page) is this account’s address is linked by itself.
         </p>
-        <LinkContributorForm userId={r.id} contributors={d.contributors} linked={d.contributor?.id ?? null} />
+        <LinkContributorForm userId={r.id} contributors={d.contributors} linked={d.linkedContributors} />
       </Section>
 
       <Section title="Runs">

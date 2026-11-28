@@ -7,6 +7,7 @@ import {
   chargeAndSendAction,
   closeAccountAction,
   closeFailedOrdersAction,
+  contributorEmailAction,
   deleteAccountAction,
   excuseWeekAction,
   extraFreeListAction,
@@ -233,19 +234,22 @@ export function PilotLinkForm() {
   );
 }
 
-export function LinkContributorForm({ userId, contributors, linked }: { userId: string; contributors: { id: string; label: string; userId: string | null }[]; linked: string | null }) {
+/** One person can have several contributor records: each linked one can be unlinked, and more can be linked. */
+export function LinkContributorForm({ userId, contributors, linked }: { userId: string; contributors: { id: string; label: string; userId: string | null }[]; linked: { id: string; label: string }[] }) {
   const [s, act, pending] = useActionState(linkContributorAction, idle);
-  const free = contributors.filter((c) => !c.userId || c.userId === userId);
+  const free = contributors.filter((c) => !c.userId);
   return (
     <div className="space-y-2">
-      {linked ? (
-        <form action={act} className="flex flex-wrap items-center gap-3">
-          <Hidden values={{ contributorId: linked, userId: "" }} />
+      {linked.map((c) => (
+        <form key={c.id} action={act} className="flex flex-wrap items-center gap-3">
+          <Hidden values={{ contributorId: c.id, userId: "" }} />
+          <span className="text-small">{c.label}</span>
           <button type="submit" disabled={pending} className={quiet}>
             Unlink
           </button>
         </form>
-      ) : (
+      ))}
+      {free.length > 0 && (
         <form action={act} className="flex flex-wrap items-end gap-3">
           <Hidden values={{ userId }} />
           <div>
@@ -566,8 +570,33 @@ export function CoraButtons({ asOfAllowed }: { asOfAllowed: boolean }) {
   );
 }
 
+/**
+ * A seed contributor's email (Cora page): saved, an account with it is linked
+ * at once, and one made with it later is linked when it is created. Empty
+ * clears it (any link stays).
+ */
+export function ContributorEmailForm({ contributorId, label: name, email }: { contributorId: string; label: string; email: string | null }) {
+  const [v, setV] = useState(email ?? "");
+  const [s, act, pending] = useActionState(contributorEmailAction, idle);
+  return (
+    <form action={act} className="flex flex-wrap items-end gap-3">
+      <Hidden values={{ contributorId }} />
+      <div className="min-w-[16rem] flex-1">
+        <label className={label} htmlFor={`contrib-email-${contributorId}`}>
+          Email for {name}
+        </label>
+        <input id={`contrib-email-${contributorId}`} name="email" type="email" value={v} onChange={(e) => setV(e.target.value)} placeholder="Not set" className={input} />
+      </div>
+      <button type="submit" disabled={pending} className={quiet}>
+        {pending ? "Saving…" : "Save email"}
+      </button>
+      <Msg s={s} />
+    </form>
+  );
+}
+
 export function SeedImportForm() {
-  const empty = { label: "", agent: "", ranOn: "", text: "" };
+  const empty = { label: "", agent: "", ranOn: "", text: "", email: "" };
   const [v, setV] = useState(empty);
   const [s, act, pending] = useActionState(clearOnOk(seedImportAction, () => setV(empty)), idle);
   const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setV((x) => ({ ...x, [k]: e.target.value }));
@@ -590,6 +619,12 @@ export function SeedImportForm() {
           Run date
         </label>
         <input id="seed-date" name="ranOn" type="date" value={v.ranOn} onChange={set("ranOn")} required className={input} />
+      </div>
+      <div className="sm:col-span-3">
+        <label className={label} htmlFor="seed-email">
+          Their email (optional: links the account with it, now or at sign-up)
+        </label>
+        <input id="seed-email" name="email" type="email" value={v.email} onChange={set("email")} className={input} />
       </div>
       <div className="sm:col-span-3">
         <label className={label} htmlFor="seed-text">

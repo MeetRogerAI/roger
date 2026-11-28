@@ -785,3 +785,18 @@ alter table users add column if not exists promo_duration_months integer;
 alter table users add column if not exists signup_finished_at timestamptz;
 alter table users add column if not exists card_fingerprint text;
 create index if not exists users_card_fingerprint on users (card_fingerprint) where card_fingerprint is not null;
+
+-- 2026-11-27, auto-linking pilots (R25): a seed contributor's email address,
+-- stored lower-case, set by an admin or by the seed import. When an account
+-- has that address (at sign-up, when the email is set, or when an account's
+-- address changes to it), every contributor with it is linked to the account,
+-- so Cora leaves their seed plays out of that person's lists. One person can
+-- have several contributor records (names spelled two ways), so the address
+-- is not unique, and one account can be linked to several contributors: the
+-- unique constraint on seed_contributors.user_id is dropped whatever its
+-- name (every unique constraint on that table that covers user_id only). One
+-- line, so setup.mjs keeps it whole. A link is never undone automatically.
+alter table seed_contributors add column if not exists email text;
+create index if not exists seed_contributors_email_lower on seed_contributors (lower(email)) where email is not null;
+do $$ declare c record; begin for c in select conname from pg_constraint where conrelid = 'seed_contributors'::regclass and contype = 'u' and conkey = array[(select attnum from pg_attribute where attrelid = 'seed_contributors'::regclass and attname = 'user_id')]::int2[] loop execute format('alter table seed_contributors drop constraint %I', c.conname); end loop; end $$;
+create index if not exists seed_contributors_user on seed_contributors (user_id) where user_id is not null;
