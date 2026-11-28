@@ -658,6 +658,14 @@ h2 {
   background-color: var(--color-ink);
   color: var(--color-ground);
 }
+/*
+ * Words an admin typed (Pages): a short title of an example, or a link of the footer, may be one long word. It
+ * breaks inside its tab or its link, and never makes the row, or the page, wider than the window.
+ */
+.examples [data-example-tab],
+footer nav a {
+  overflow-wrap: anywhere;
+}
 /* On paper it is always the finished picture, whatever classes script has added and wherever the page was scrolled to */
 @media print {
   .compounding-loop [data-brick],

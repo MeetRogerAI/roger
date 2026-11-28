@@ -5,7 +5,7 @@ import { query } from "@/lib/db-query";
 import { amountNames, getAmounts } from "@/lib/site/amounts";
 import { shortened } from "@/lib/site/content/caption";
 import { asRead, draftChanges, draftCount, linksInto, listChanges, pageStatus, sectionChanges, wordingOf } from "@/lib/site/content/check";
-import { PAGES_ADDRESS, REVIEW_ADDRESS, fieldAnchor, fieldLabel, listAnchor, listWords, pageBySlug, placesIn, sectionAnchor, sectionNotes, sectionsAnchor, toggleHint, wordsFor } from "@/lib/site/content/labels";
+import { PAGES_ADDRESS, REVIEW_ADDRESS, destinationOptions, fieldAnchor, fieldLabel, listAnchor, listWords, pageBySlug, placesIn, sectionAnchor, sectionNotes, sectionsAnchor, toggleHint, wordsFor } from "@/lib/site/content/labels";
 import { applyOverlay, baseline, layoutOn, listItems, readField, sameLayout, sectionLayout, textAt } from "@/lib/site/content/model";
 import { fieldsOfItem, siteRegistry, type Field, type List } from "@/lib/site/content/registry";
 import { readStored } from "@/lib/site/content/store";
@@ -45,6 +45,23 @@ const BACK = "All pages";
 
 /** The longest text that still gets a one-line box. Longer fields are lines or paragraphs of the page, and get room to be read. */
 const ONE_LINE_MAX = 200;
+/** The fewest and the most lines a multi-line box (a playbook) is drawn with. */
+const BLOCK_ROWS_MIN = 8;
+const BLOCK_ROWS_MAX = 28;
+
+/**
+ * What the owner should know about a list beyond its limits (plan U8): for the examples, which one /how-it-works
+ * takes apart and that the plays are approved text; for the header's links, where the two buttons are.
+ */
+function listNote(listId: string): string | null {
+  if (listId === "examples") {
+    return "The plays are approved text: change them with care. Each text you change is marked “Changed from the original” and has its own reset, and “Put this list back to the original” brings back the three original examples in their order. The first example in this list is also the one the How it works page takes apart, under “The anatomy of an idea”, with a note beside each of its eight parts: move another example first, or change the first one’s playbook, and that page takes apart that one. If its playbook does not have those eight parts in that order, the page shows the notes in a list beside the whole playbook. With every example removed, the homepage has no examples section and How it works takes apart the first original example.";
+  }
+  if (listId === "nav") {
+    return "Sign in and the start button are not in this list: their words are under Buttons, above. When the links do not fit in one row beside them on a laptop’s screen, the header shows them in its menu there too, so the header never runs off the screen.";
+  }
+  return null;
+}
 
 export default async function PageEditorScreen({ params }: PageProps<"/admin/pages/[page]">) {
   await connection();
@@ -113,18 +130,28 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
   };
   const hint = (name: string): NameHint => ({ name: asPlaceholder(name), shows: wordsFor(name) ?? "an amount from Settings", now: Object.hasOwn(today, name) ? today[name] : null });
 
-  const rowsFor = (field: { kind: string; max: number }) => (field.kind === "block" || field.max > 400 ? 6 : field.max > ONE_LINE_MAX ? 3 : 1);
+  /** A playbook's box is as tall as its text, within reason: it is read and edited as a whole. */
+  const rowsFor = (field: { kind: string; max: number }, value = "") =>
+    field.kind === "block" ? Math.min(BLOCK_ROWS_MAX, Math.max(BLOCK_ROWS_MIN, value.split("\n").length + 1)) : field.max > 400 ? 6 : field.max > ONE_LINE_MAX ? 3 : 1;
+  const options = destinationOptions();
+  // The first example is the one /how-it-works takes apart, with a note for each part of its playbook (the last note is the install prompt's).
+  const noteParts = draftModel.howItWorks.anatomy.notes.slice(0, -1).map((note) => note.part);
+  const firstExample = places("examples")[0];
+  const isPlaybook = (field: { item?: { array: string }; path: readonly string[] }) => field.item?.array === "examples" && field.path.at(-1) === "playbook";
   const boxFor = (field: Field): EditorField => {
     const original = textAt(baseline, field.id);
+    const value = readField(draftModel, field) ?? wordingOf(stored.draft, field.id);
     return {
       id: field.id,
       anchor: fieldAnchor(field.id),
       name: field.name,
-      kind: field.kind === "toggle" ? "toggle" : "text",
+      kind: field.kind === "toggle" ? "toggle" : field.kind === "destination" ? "destination" : "text",
       hint: field.kind === "toggle" ? toggleHint(field) : null,
-      rows: rowsFor(field),
+      rows: rowsFor(field, value),
       max: field.max,
-      value: readField(draftModel, field) ?? wordingOf(stored.draft, field.id),
+      value,
+      ...(field.kind === "destination" ? { options } : {}),
+      ...(isPlaybook(field) ? { playbook: { pairs: field.item?.id === firstExample ? noteParts : null } } : {}),
       // A field of an item added here has no original, its tick box included: a new question is not "changed from
       // the original" because it is ticked, and unticking it is how it goes back.
       original: original ?? null,
@@ -158,7 +185,18 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
       fixed: list.min === list.max,
       items: items.map((item, i) => ({ key: item, title: `${list.item} ${i + 1}`, fields: fieldsOfItem(list, item).map(boxFor), added: !original.includes(item), waiting: mark(item) })),
       removed: original.filter((item) => !items.includes(item)).map((item) => ({ id: item, wording: wording(item), live: changes.some((change) => change.item === item && change.kind === "removed") })),
-      fresh: list.fields.map((field) => ({ name: field.name, label: field.label, kind: field.kind === "toggle" ? ("toggle" as const) : ("text" as const), rows: rowsFor(field), max: field.max, hint: field.kind === "toggle" ? toggleHint({ item: { array: list.id }, path: [field.name] }) : null })),
+      note: listNote(list.id),
+      fresh: list.fields.map((field) => ({
+        name: field.name,
+        label: field.label,
+        kind: field.kind === "toggle" ? ("toggle" as const) : field.kind === "destination" ? ("destination" as const) : ("text" as const),
+        rows: field.kind === "block" ? 12 : rowsFor(field),
+        max: field.max,
+        hint: field.kind === "toggle" ? toggleHint({ item: { array: list.id }, path: [field.name] }) : null,
+        ...(field.kind === "destination" ? { options } : {}),
+        // A new example joins at the foot: it is the first only in an empty list.
+        ...(list.id === "examples" && field.name === "playbook" ? { playbook: { pairs: items.length === 0 ? noteParts : null } } : {}),
+      })),
       changed: Object.hasOwn(stored.draft.lists, list.id),
       waiting: changes.length,
     };

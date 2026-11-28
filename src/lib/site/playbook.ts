@@ -14,6 +14,20 @@ export function playbookParts(md: string): string[] {
   return parts.map((lines) => lines.join("\n").trim()).filter((part) => part !== "");
 }
 
+/**
+ * Each playbook part beside its note, when the playbook has exactly the parts the notes name, in the notes' order:
+ * the annotated idea on /how-it-works. A play may be written another way (an example edited or put first in Pages):
+ * then there is no pairing, and the page shows the notes as a list beside the whole playbook, so no note sits
+ * beside the wrong part. The Pages editor asks the same question of a playbook as it is typed.
+ */
+export function annotate<N extends { part: string }>(md: string, notes: readonly N[]): { note: N; part: string }[] | null {
+  const parts = playbookParts(md);
+  if (parts.length !== notes.length) return null;
+  const heading = (part: string) => part.split("\n")[0].toLowerCase();
+  if (!notes.every((n, i) => /^#/.test(parts[i]) && heading(parts[i]).includes(n.part.toLowerCase()))) return null;
+  return notes.map((note, i) => ({ note, part: parts[i] }));
+}
+
 export type PlaybookStep = {
   /** The part's own heading, without the "##": "4. Steps". */
   heading: string;

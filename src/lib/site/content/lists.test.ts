@@ -99,6 +99,9 @@ describe("the entry between two lists of items (applyListEdit, diffListEdit)", (
   it("keeps a list to what its page can draw: no more than the most, no fewer than the fewest, and a fixed list is only reordered", () => {
     expect(applyListEdit(["a", "b", "c"], entry({ added: ["x-1", "x-2", "x-3"] }), { min: 0, max: 4 })).toEqual(["a", "b", "c", "x-1"]);
     expect(applyListEdit(["a", "b", "c"], entry({ removed: ["a", "b", "c"] }), { min: 2, max: 5 })).toEqual(["a", "b"]);
+    // An added item counts towards the fewest (plan U8: the header keeps one link, and may keep an added one alone).
+    expect(applyListEdit(["a", "b", "c"], entry({ removed: ["a", "b", "c"], added: ["x-1"] }), { min: 1, max: 6 })).toEqual(["x-1"]);
+    expect(applyListEdit(["a", "b", "c"], entry({ removed: ["a", "b", "c"], added: ["x-1"] }), { min: 2, max: 6 })).toEqual(["a", "x-1"]);
     // Removing makes room for what is added.
     expect(applyListEdit(["a", "b", "c"], entry({ removed: ["a"], added: ["x-1", "x-2"], order: ["x-2", "b"] }), { min: 0, max: 4 })).toEqual(["x-2", "b", "c", "x-1"]);
     expect(applyListEdit(["a", "b", "c"], entry({ removed: ["a"], added: ["x-1"], order: ["c", "a", "b"] }), { min: 3, max: 3 })).toEqual(["c", "a", "b"]);

@@ -19,7 +19,7 @@
 import type { AmountName } from "../amounts";
 import { fullName, itemTitle } from "./caption";
 import { listItems } from "./model";
-import { fieldsOfItem, siteRegistry, type Field, type List, type Page, type Registry } from "./registry";
+import { fieldsOfItem, linkTargets, siteRegistry, type Field, type List, type Page, type Registry } from "./registry";
 
 /** Where the Pages screens live. */
 export const PAGES_ADDRESS = "/admin/pages";
@@ -45,7 +45,7 @@ const covers: Record<string, string> = {
   library: "The page’s own headings and lines. The use cases themselves are on the Use cases screen.",
   faq: "Every question and answer. The homepage shows some of them too.",
   about: "The line above the letter, and the letter.",
-  shared: "The header, the footer, the buttons, the price words and the page-not-found text. These show on every page.",
+  shared: "The header’s and the footer’s links, the buttons, the price words and the page-not-found text. These show on every page.",
 };
 
 export const pageCovers = (pageId: string): string => (Object.hasOwn(covers, pageId) ? covers[pageId] : "");
@@ -93,12 +93,18 @@ export function listWords(list: List): { title: string; one: string; many: strin
     "control.points": "The points",
     "howItWorks.week.days": "The days",
     "howItWorks.firstWeeks.steps": "The steps",
+    nav: "The links in the header",
+    "footer.links": "The links in the footer",
+    examples: "The examples",
   };
   const why: Record<string, string> = {
     "home.hero.graphic.steps": "the picture beside the headline shows one step at a time, with a button for each, and it has room for that many",
     "home.problem.statements": "the page sets them three in a row, in up to two rows",
     "control.points": "the page sets them three in a row, in up to two rows",
     "howItWorks.week.days": "a week has seven days",
+    nav: "the phone’s menu lists them with Sign in under them, and the header needs one to have a menu at all",
+    "footer.links": "the footer sets them in a row that wraps",
+    examples: "the short titles are one row of buttons above the example on a wider screen, and four fit there",
   };
   const title = Object.hasOwn(titles, list.id) ? titles[list.id] : `The ${many}${list.id.startsWith("questions.") ? " of this group" : ""}`;
   const because = Object.hasOwn(why, list.id) ? `: ${why[list.id]}` : "";
@@ -233,6 +239,19 @@ export const placeholderWords: Record<AmountName | "week" | "bricks", string> = 
   week: "the week number of the stack on screen",
   bricks: "the number of ideas in the stack on screen",
 };
+
+/**
+ * The places a link of the header or the footer can be pointed at by name (plan R9), each with the name the owner
+ * picks it by: "Home", "Home — Price section", "How it works — Zack, in detail section".
+ */
+export function destinationOptions(registry: Registry = siteRegistry): { href: string; label: string }[] {
+  return linkTargets(registry).map((target) => ({ href: target.href, label: target.section ? `${target.page.label} — ${target.section.label} section` : target.page.label }));
+}
+
+/** The name of the place an address is, for the review: "Home — Price section". Null for an address that is none of those (one the owner typed). */
+export function destinationName(href: string, registry: Registry = siteRegistry): string | null {
+  return destinationOptions(registry).find((option) => option.href === href)?.label ?? null;
+}
 
 /** What a name in braces stands for, or null for a name that is none. */
 export const wordsFor = (name: string): string | null => (Object.hasOwn(placeholderWords, name) ? placeholderWords[name as keyof typeof placeholderWords] : null);

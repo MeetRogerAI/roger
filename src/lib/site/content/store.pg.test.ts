@@ -261,6 +261,23 @@ describe("undoing the last publish", () => {
     expect(await log()).toHaveLength(3);
   });
 
+  it("goes back, across the move of the header's labels to lists (plan U8), to a label published under its old name", async () => {
+    // A row written before U8: "Price" published under the old name, and published again since.
+    const old = { format: 1, text: { "nav.pricing": "Price" }, sections: {}, lists: {} };
+    await put(CONTENT_KEY, { draft: old, published: old, previous: null });
+    await saveDraft(query, [{ field: HEADLINE, text: "First headline." }]);
+    await publish(query, ADMIN, (await readStored(query)).draft);
+    const moved = { "nav.pricing.label": "Price", "footer.links.pricing.label": "Price" };
+    expect((await value()) as unknown).toMatchObject({ published: edits({ ...moved, [HEADLINE]: "First headline." }), previous: edits(moved) });
+    // Undo brings back what was live, under the new names: both links still say "Price".
+    expect(await undoPublish(query, ADMIN)).toMatchObject({ ok: true, changed: true });
+    expect(await readPublished(query)).toEqual(edits(moved));
+    // And an old row's previous, still under the old name, is read the same way.
+    await put(CONTENT_KEY, { draft: none, published: none, previous: old });
+    expect(await undoPublish(query, ADMIN)).toMatchObject({ ok: true, changed: true });
+    expect(await readPublished(query)).toEqual(edits(moved));
+  });
+
   it("goes back to no edits when that is what was published before, and does nothing on a site that never published", async () => {
     expect(await undoPublish(query, ADMIN)).toMatchObject({ ok: true, changed: false });
     expect(await value()).toBeUndefined();

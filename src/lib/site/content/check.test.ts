@@ -17,7 +17,7 @@ import { PRICE_SECTION_HREF } from "../chrome";
 import { amountsFrom } from "../amounts";
 import { ruleIds } from "../claims";
 import { captionNames } from "../compounding";
-import { TYPED_MAX, draftChanges, linkWarnings, pageStatus, reviewKey, sectionChanges, ruleWords, saveRefusal, tidyFor, wordingOf, wordingWarnings, type Change } from "./check";
+import { DESTINATION_REFUSAL, TYPED_MAX, draftChanges, linkWarnings, linksInto, pageStatus, reviewKey, sectionChanges, ruleWords, saveRefusal, tidyFor, wordingOf, wordingWarnings, type Change } from "./check";
 import { newOverlay, type Overlay } from "./format";
 import { editorAddress, fieldAnchor, fieldLabel, fieldLabels, fieldPlace, pageBySlug, pageCovers, pageSlug, placeholderWords, wordsFor } from "./labels";
 import { baseline, textAt } from "./model";
@@ -74,7 +74,31 @@ describe("what a save refuses: only what would break a page", () => {
     expect(refused(HEADLINE, "x".repeat(201))).toBe("This is 201 characters long, and the most that fits here is 200. Shorten it by 1.");
     expect(refused(HEADLINE, "x".repeat(200))).toBeNull();
     // What a save reads is far over every limit, so nothing a field could hold is cut before it is measured.
-    for (const entry of siteRegistry.fields.values()) expect(entry.max, entry.id).toBeLessThan(TYPED_MAX / 10);
+    // (An example's playbook is the longest, at 8,000: the built-in ones are about 3,300.)
+    for (const entry of siteRegistry.fields.values()) expect(entry.max, entry.id).toBeLessThan(TYPED_MAX / 5);
+  });
+
+  it("a link with no words or nowhere to go, or an address a link may not point at (plan R9, KTD12)", () => {
+    const LABEL = "nav.faq.label";
+    const HREF = "nav.faq.href";
+    expect(refused(LABEL, "   ")).toMatch(/^This cannot be left empty/);
+    expect(refused(HREF, "")).toMatch(/^This cannot be left empty/);
+    for (const bad of ["javascript:alert(1)", "//evil.test", "http://x.test", "data:text/html,x", "faq", "https://a@evil.test", "/faq{x}"]) expect(refused(HREF, bad), bad).toBe(DESTINATION_REFUSAL);
+    for (const ok of ["/faq", "/#price", "https://x.test", "mailto:a@b.test"]) expect(refused(HREF, ok), ok).toBeNull();
+    // An address is kept as typed, without the spaces around it: " /faq " is "/faq", never "/ faq".
+    expect(tidyFor(field(HREF), "  /faq ")).toBe("/faq");
+    // A header label is capped so the menu reads well; its fit in the header's row is the header's own (header-fit.ts).
+    expect(refused(LABEL, "x".repeat(25))).toMatch(/most that fits here is 24/);
+  });
+
+  it("an example's playbook keeps its lines, and refuses a name in braces, since a play holds no amounts (plan U8)", () => {
+    const PLAYBOOK = "examples.video.playbook";
+    expect(field(PLAYBOOK).kind).toBe("block");
+    expect(tidyFor(field(PLAYBOOK), "## 1. Play\r\nA line.  \r\n\r\n\r\n\r\n## 2. Trigger\r\n  - indented")).toBe("## 1. Play\nA line.\n\n## 2. Trigger\n  - indented");
+    expect(refused(PLAYBOOK, "## One\nUse {date} here.")).toMatch(/^\{date\} is not something this text can hold/);
+    // Counted once tidied: a CRLF the browser sends is one character, as the box counts it.
+    expect(refused(PLAYBOOK, "a\r\n".repeat(2666) + "a")).toBeNull();
+    expect(refused(PLAYBOOK, "a".repeat(8001))).toMatch(/most that fits here is 8000/);
   });
 
   it("a name in braces that does not exist, with the names that do", () => {
@@ -182,6 +206,38 @@ describe("what a publish would change about a page's sections (plan U6, R7)", ()
   });
 });
 
+describe("the wording rules on the examples (plan U8)", () => {
+  it("reads an added example's texts under the sample zone, and lists a claim about time saved, which may be published anyway", () => {
+    const added = {
+      "examples.x-1.label": "Inbox zero",
+      "examples.x-1.category": "Email",
+      "examples.x-1.title": "Clear the inbox",
+      "examples.x-1.summary": "Your AI agent sorts the inbox. It can save 5 hours a week.",
+      "examples.x-1.install": "Save this as a skill called Inbox zero.",
+      "examples.x-1.playbook": "## One\nSort.\n\n## Two\nReply.",
+    };
+    const draft: Overlay = { ...edits(added), lists: { examples: { order: [], removed: [], added: ["x-1"] } } };
+    const changes = draftChanges({ draft, published: newOverlay() });
+    expect(changes.filter((change) => change.fresh).map((change) => change.field.id)).toEqual(Object.keys(added));
+    const warnings = wordingWarnings(changes, amounts);
+    expect(warnings.map((warning) => [warning.field.id, warning.rule])).toEqual([["examples.x-1.summary", "time-saved"]]);
+    expect(warnings[0].field.claims).toEqual({ path: "/", zones: ["sample"] });
+    // A built-in example's text edited the same way is read the same way.
+    expect(warned({ "examples.paper.summary": "It saves 2 hours every morning." }).map((warning) => warning.rule)).toContain("time-saved");
+    // And the built-in plays, as written, raise nothing in their zone.
+    expect(warned(Object.fromEntries([...siteRegistry.fields.values()].filter((entry) => entry.id.startsWith("examples.")).map((entry) => [entry.id, original(entry.id) + " "])))).toEqual([]);
+  });
+
+  it("reads a short title as the row of tabs prints it, outside the card's zone: a figure there is listed, as the page's own check would", () => {
+    expect(siteRegistry.fields.get("examples.video.label")!.claims).toEqual({ path: "/", zones: [] });
+    // The card allows every figure of a play; the row above it does not.
+    expect(warned({ "examples.video.label": "100 Reels a week" }).map((warning) => warning.rule)).toContain("number");
+    expect(warned({ "examples.video.summary": "Makes 100 Reels a week from your camera roll." })).toEqual([]);
+    // The built-in short title with a figure in it is allowed by its own entry, wherever it is printed.
+    expect(warned({ "examples.prospects.label": "20 new prospects every day " })).toEqual([]);
+  });
+});
+
 describe("links that would point at a section that is switched off (plan R17, AE3)", () => {
   const off = (entries: Record<string, string[]>, text: Record<string, string> = {}): { draft: Overlay } => ({
     draft: { ...edits(text), sections: Object.fromEntries(Object.entries(entries).map(([page, ids]) => [page, { order: [], off: ids }])) },
@@ -199,6 +255,26 @@ describe("links that would point at a section that is switched off (plan R17, AE
     expect(warning.says).toBe("The “Pricing” link in the header and in the footer of every page points at the “Price” section of Home, which is switched off. A visitor who presses it lands at the top of the homepage instead.");
     // The link is named by the words the draft gives it.
     expect(linkWarnings(off({ home: ["price"] }, { "nav.pricing": "What it costs" }))[0].says).toContain("The “What it costs” link in the header and in the footer");
+  });
+
+  it("follows the header's and the footer's links as the draft has them, now that they are lists (plan U8)", () => {
+    const withLists = (lists: Overlay["lists"], text: Record<string, string> = {}, sections: Record<string, string[]> = { home: ["price"] }) => {
+      const base = off(sections, text);
+      return linkWarnings({ draft: { ...base.draft, lists } });
+    };
+    // Worded apart: one warning for each, each saying where it is.
+    const apart = linkWarnings(off({ home: ["price"] }, { "nav.pricing.label": "Price" }));
+    expect(apart.map((warning) => warning.says.split(" points at")[0])).toEqual(["The “Price” link in the header of every page", "The “Pricing” link in the footer of every page"]);
+    // Taken out of the header: the footer's alone.
+    expect(withLists({ nav: { order: [], removed: ["pricing"], added: [] } }).map((warning) => warning.says.split(" points at")[0])).toEqual(["The “Pricing” link in the footer of every page"]);
+    // Pointed somewhere else in both: nothing to warn about.
+    expect(withLists({}, { "nav.pricing.href": "/faq", "footer.links.pricing.href": "https://x.test" })).toEqual([]);
+    // A link added to the header, typed or picked, that lands on a section that is off.
+    const zack = withLists({ nav: { order: [], removed: [], added: ["x-zack"] } }, { "nav.x-zack.label": "Zack's files", "nav.x-zack.href": "/how-it-works#zack" }, { howItWorks: ["zack"] });
+    expect(zack.map((warning) => warning.says.split(" points at")[0])).toEqual(["The “Zack's files” link in the header of every page", `The “${v1.control.link.label}” link on the homepage, under “You decide what Zack shares”`]);
+    // Beside the section's switch, the same links are named.
+    expect(linksInto({ draft: { ...edits({ "nav.pricing.label": "Price" }) } }, "home", "price")).toEqual(["“Price” link in the header of every page", "“Pricing” link in the footer of every page"]);
+    expect(linksInto({ draft: newOverlay() }, "home", "price")).toEqual(["“Pricing” link in the header and in the footer of every page"]);
   });
 
   it("names the control block's link when the Zack section is switched off on How it works, unless the control block is off too", () => {

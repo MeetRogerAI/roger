@@ -20,13 +20,17 @@ import { fillCopy, getAmounts, type Amounts } from "./amounts";
 import { emptyOverlay, type Overlay } from "./content/format";
 import { applyOverlay } from "./content/model";
 import { getSiteContent } from "./content/read";
+import { navRow, type NavRow } from "./header-fit";
 import { isBuiltVersion, type BuiltVersion, type ServedSite } from "./version";
 
-export type ChromeLink = { href: string; label: string };
+/** `id` is the link's name in the copy, for a key: two links may share their words or their address. */
+export type ChromeLink = { href: string; label: string; id?: string };
 
 export type SiteChrome = {
   /** The header's links, in order. */
   links: ChromeLink[];
+  /** Where the header shows its links in a row: from 1024 pixels as built, from 1280, or never (src/lib/site/header-fit.ts). Below that they are in the menu. */
+  navRow: NavRow;
   /** The start button. `short` is the same words: a site version's button reads the same at every width. */
   start: ChromeLink & { short: string };
   signIn: ChromeLink;
@@ -63,7 +67,10 @@ const copyFor = (version: BuiltVersion): ChromeCopy & Pick<SharedCopy, "meta"> =
  */
 export const builtSitemapPaths = ["/", "/how-it-works", "/faq", "/about", "/zack", "/library", "/getstarted", "/privacy", "/terms"] as const;
 
-/** Where "Pricing" goes, from every page: the price section of the homepage (PriceBlock's id, which has a scroll margin for the sticky header). */
+/**
+ * Where "Pricing" goes, from every page: the price section of the homepage (PriceBlock's id, which has a scroll
+ * margin for the sticky header). The copy's "pricing" links say so (a test holds the two together).
+ */
 export const PRICE_SECTION_HREF = "/#price";
 
 /** A site version's title, description and social card line. No amounts, so static metadata can read it at build. */
@@ -112,18 +119,22 @@ export function builtPageMetadata(site: ServedSite, page: MetaPage, path: string
  */
 export function chromeFrom(copy: ChromeCopy, amounts: Amounts): SiteChrome {
   const { buttons, nav, footer, notFound } = fillCopy({ buttons: copy.buttons, nav: copy.nav, footer: copy.footer, notFound: copy.notFound }, amounts);
-  const pricing = { href: PRICE_SECTION_HREF, label: nav.pricing };
-  const howItWorks = { href: "/how-it-works", label: nav.howItWorks };
-  const library = { href: "/library", label: nav.library };
-  const faq = { href: "/faq", label: nav.faq };
-  const about = { href: "/about", label: nav.about };
+  // The links' words and addresses are the copy's lists, in their order (plan U8). The Sign in and start buttons are not among them.
+  const link = ({ id, href, label }: { id: string; href: string; label: string }): ChromeLink => ({ href, label, id });
+  const links = nav.map(link);
   return {
-    links: [howItWorks, pricing, library, faq, about],
+    links,
+    navRow: navRow(
+      links.map((entry) => entry.label),
+      buttons.signIn,
+      buttons.start,
+      buttons.openApp,
+    ),
     start: { href: "/start", label: buttons.start, short: buttons.start },
     signIn: { href: "/signin", label: buttons.signIn },
     openApp: { href: "/app", label: buttons.openApp },
     place: footer.place,
-    footer: [pricing, howItWorks, faq, about, library],
+    footer: footer.links.map(link),
     legal: [
       { href: "/privacy", label: footer.privacy },
       { href: "/terms", label: footer.terms },

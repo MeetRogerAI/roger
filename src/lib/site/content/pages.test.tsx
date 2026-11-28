@@ -118,6 +118,26 @@ describe("every public page shows the baseline", () => {
     }
   });
 
+  it("with a label of the header saved before the links were lists (plan U8): every header and footer still shows it, and nothing else changes", async () => {
+    const legacy = { format: 1, text: { "nav.faq": "FAQs", "nav.pricing": "Price" }, sections: {}, lists: {} };
+    await put({ draft: legacy, published: legacy, previous: null });
+    const noScripts = (markup: string) => markup.replace(/<script\b[\s\S]*?<\/script>/g, "");
+    for (const p of await render()) {
+      const before = noScripts(page(plain, p.path).markup);
+      const swapped = before.replaceAll(">FAQ</a>", ">FAQs</a>").replaceAll(">Pricing</a>", ">Price</a>");
+      expect(swapped, p.path).not.toBe(before);
+      // Byte for byte the baseline, with the two labels changed in the header and the footer and nowhere else.
+      // (Both still fit in one row at 1024: a longer one would move the row to 1280, src/lib/site/header-fit.ts.)
+      expect(noScripts(p.markup), p.path).toBe(swapped);
+    }
+    // The next save stores the new names, and the words stay.
+    expect(await saveDraft(current, [{ field: "home.hero.headline", text: "A draft headline." }])).toMatchObject({ ok: true });
+    const raw = (await current("select value::text as raw from settings where key = $1", [CONTENT_KEY])) as { raw: string }[];
+    const draft = JSON.parse(raw[0].raw).draft.text;
+    expect(draft).toMatchObject({ "nav.faq.label": "FAQs", "footer.links.faq.label": "FAQs", "nav.pricing.label": "Price", "footer.links.pricing.label": "Price" });
+    expect(Object.keys(draft)).not.toContain("nav.faq");
+  });
+
   it("with a draft and nothing published: a draft is on no page", async () => {
     expect(await saveDraft(current, [{ field: "home.hero.headline", text: "A draft headline." }, { field: "buttons.start", text: "A draft button" }])).toMatchObject({ ok: true, changed: true });
     sameAsPlain(await render(), "with a draft saved");
@@ -128,7 +148,8 @@ describe("what is published", () => {
   const published = {
     "buttons.start": "Start with {freeLists} free Cora Curations",
     "buttons.signIn": "Log in",
-    "nav.faq": "Questions",
+    "nav.faq.label": "Questions",
+    "footer.links.faq.label": "Questions",
     "footer.place": "Roger, Hamilton",
     cardLine: "No card needed for your first {freeLists}.",
     "notFound.title": "Nothing lives at this address",

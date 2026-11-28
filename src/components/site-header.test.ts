@@ -11,12 +11,12 @@ const sites: ServedSite[] = ["circles", "v1", "v2", "v3", "legacy"];
 const chrome = siteChrome("v1", amountsFrom(v3Defaults));
 const navFor = (path: string, site: ServedSite) => navForSite(path, site, site === "circles" || site === "legacy" ? null : chrome);
 const fiveLinks = [
-  { href: "/how-it-works", label: "How it works" },
+  { href: "/how-it-works", label: "How it works", id: "howItWorks" },
   // Not a page: the price section of the homepage (Peter, November 27, 2026).
-  { href: "/#price", label: "Pricing" },
-  { href: "/library", label: "Use cases" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/about", label: "About" },
+  { href: "/#price", label: "Pricing", id: "pricing" },
+  { href: "/library", label: "Use cases", id: "library" },
+  { href: "/faq", label: "FAQ", id: "faq" },
+  { href: "/about", label: "About", id: "about" },
 ];
 const hidden = ["/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds", "/business", "/families"];
 

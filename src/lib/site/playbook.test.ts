@@ -3,9 +3,12 @@
  * examples and against playbooks of other shapes: a play is written by
  * someone's AI agent and need not look like the bundled ones.
  */
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { SimpleMarkdown } from "@/components/app/simple-markdown";
 import { examples } from "@/data/site/examples";
-import { playbookSteps } from "./playbook";
+import { annotate, playbookParts, playbookSteps } from "./playbook";
 
 describe("playbookSteps", () => {
   it("takes each bundled example apart into its eight parts, with every line of the playbook in a heading or a body", () => {
@@ -58,6 +61,42 @@ describe("playbookSteps", () => {
       ["only headings", "## One\n## Two"],
     ] as const) {
       expect(playbookSteps(md), why).toBeNull();
+    }
+  });
+});
+
+describe("a playbook typed in Pages (plan U8): anything at all is read without throwing, and printed as text", () => {
+  const hashes = "#".repeat(8000);
+  const adversarial: [string, string][] = [
+    ["8,000 #", hashes],
+    ["8,000 # under a heading", `## One\n${hashes}\n\n## Two\ntext`],
+    ["8,000 spaces then a #", `${" ".repeat(8000)}#`],
+    ["a heading of 200 characters", `## ${"W".repeat(200)}\ntext\n\n## Two\ntext`],
+    ["nested headings", "# A\n## B\n### C\ntext\n#### D\ntext\n## E\ntext"],
+    ["only headings", "## A\n## B\n## C"],
+    // A lone CR never reaches these: plainBlock makes it a line end before the playbook is stored.
+    ["CRLF", "## One\r\ntext\r\n\r\n## Two\r\ntext"],
+    ["script text", "## <script>alert(1)</script>\n<img src=x onerror=alert(1)>\n\n## Two\n[x](javascript:alert(1))"],
+    ["emoji and right to left", "## 🚀 שלום\nטקסט 👍\n\n## Two\nمرحبا"],
+    ["an open fence", "## One\n```\n## Two\ntext"],
+  ];
+
+  it("never throws, and gives parts that are each the typed text's own lines", () => {
+    for (const [why, md] of adversarial) {
+      const started = Date.now();
+      const steps = playbookSteps(md);
+      const parts = playbookParts(md);
+      annotate(md, [{ part: "One" }, { part: "Two" }]);
+      expect(Date.now() - started, why).toBeLessThan(500);
+      if (steps) for (const step of steps) expect(step.heading !== "" && step.body !== "", why).toBe(true);
+      for (const part of parts) expect(md.replace(/\r\n?/g, "\n"), why).toContain(part);
+    }
+  });
+
+  it("prints markup typed into it as text, never as markup, and makes no link", () => {
+    for (const [why, md] of adversarial) {
+      const html = renderToStaticMarkup(createElement(SimpleMarkdown, { source: md }));
+      expect(html, why).not.toMatch(/<script|<img|href=/i);
     }
   });
 });

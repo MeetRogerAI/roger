@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { CountryDefault } from "@/components/site/shared/country-default";
 import { StartLink } from "@/components/site/shared/start-link";
-import { examples } from "@/data/site/examples";
+import { examplesFrom } from "@/data/site/examples";
 import { priceBlockCopy, questionsOn } from "@/data/site/v1";
 import { getAmounts, type Amounts } from "@/lib/site/amounts";
 import type { Overlay } from "@/lib/site/content/format";
 import { questionGroupsShown, sectionsShown, v1Copy } from "@/lib/site/content/model";
 import { getSiteContent } from "@/lib/site/content/read";
-import { exampleViews, getPlaybookPreface, type ExampleView } from "@/lib/site/sample";
+import { exampleViews, getPlaybookPreface } from "@/lib/site/sample";
 import { getTestimonials, type Testimonial } from "@/lib/site/testimonials";
 import type { BuiltVersion } from "@/lib/site/version";
 import { ClosingBand } from "./blocks/closing-band";
@@ -55,28 +55,30 @@ import { Testimonials } from "./blocks/testimonials";
 /** Reads what the page shows, all of it cached, so the page keeps its static shell. */
 export async function V1Home({ version }: { version: BuiltVersion }) {
   const [amounts, preface, testimonials, content] = await Promise.all([getAmounts(), getPlaybookPreface(), getTestimonials("re"), getSiteContent()]);
-  return <V1HomeView version={version} amounts={amounts} examples={exampleViews(examples, preface)} testimonials={testimonials} content={content} />;
+  return <V1HomeView version={version} amounts={amounts} preface={preface} testimonials={testimonials} content={content} />;
 }
 
 export function V1HomeView({
   version,
   amounts,
-  examples: shown,
+  preface,
   testimonials,
   content,
 }: {
   /** The version being served. v2 and v3 show this page until they have their own. */
   version: BuiltVersion;
   amounts: Amounts;
-  /** The examples, built with exampleViews. */
-  examples: ExampleView[];
+  /** The line added to the top of every playbook, from the settings: the examples' copy buttons put it first. */
+  preface: string;
   /** Cleared quotes for the audience "re". Empty leaves the section out. */
   testimonials: Testimonial[];
   /** Everything stored that the page should show, as one overlay on the code copy (getSiteContent). Left out, the page prints the code copy alone. */
   content?: Overlay;
 }) {
-  const { copy } = v1Copy(amounts, content);
+  const { copy, examples } = v1Copy(amounts, content);
   const home = copy.home;
+  // The examples as published, in their order (plan U8): the first is the one shown first.
+  const shown = exampleViews(examplesFrom(examples), preface);
   const priceCopy = priceBlockCopy(copy);
 
   // The homepage's questions are /faq's: a group switched off there is off here too, and the order is /faq's.
