@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { removeFromPool } from "@/lib/admin/flags";
 import type { Query } from "@/lib/db-query";
 import type { IntakeModel } from "@/lib/intake/model";
 import type { Transport } from "@/lib/mail/send";
@@ -113,7 +114,7 @@ describe("runCoraJob", () => {
 
   it("fails the week on a real error: nothing picked, both admins alerted, and it cannot become ready later (spec check 17)", async () => {
     const broken: Query = async (t, p) => {
-      if (/from pool_plays order by id/.test(t)) throw new Error("database went away");
+      if (/from pool_plays where removed_at is null order by id/.test(t)) throw new Error("database went away");
       return query(t, p);
     };
     // A passing error is retried by the next run; the third in a row fails the week.
@@ -330,5 +331,47 @@ describe("review follow-ups (11c)", () => {
     const [ua] = await loadUsers(query, WEEK, { onlyIds: [a] });
     const [{ id }] = await query<{ id: string }>("select id from pool_plays where title = 'Listing post'");
     expect(ua.ctx.ownContributions.has(id)).toBe(true);
+  });
+});
+
+describe("a play an admin removed from the pool (2026-11-28)", () => {
+  const NEXT = "2026-12-07";
+  const NEXT_ONE_AM = new Date("2026-12-07T06:05:00Z");
+  const idOf = async (title: string) => (await query<{ id: string }>("select id from pool_plays where title = $1", [title]))[0].id;
+
+  it("is never loaded, scored or picked again, even when a new play with its job joins it; lists already picked keep it", async () => {
+    await runCoraJob(query, deps(), { now: ONE_AM, settings: live });
+    const gone = await idOf("Calendar prep");
+    const picked = await query("select user_id, week_of::text from picks where pool_play_id = $1 order by user_id", [gone]);
+    expect(picked.length).toBeGreaterThan(0);
+    expect(await removeFromPool(query, "admin@example.com", gone)).toMatchObject({ ok: true });
+
+    // Next week a new member runs the same job: merge places it in the removed play, which stays out.
+    const d = await member("d@example.com");
+    await query("insert into runs (user_id, week_of, route, agent, sharing, raw_text) values ($1, $2, 'connector', 'hark', 'share', $3)", [d, NEXT, report([play("Calendar again", "calendar notes")])]);
+    expect(await runCoraJob(query, deps(), { now: NEXT_ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    expect(await query("select pool_play_id from plays where title = 'Calendar again'")).toEqual([{ pool_play_id: gone }]);
+    expect(await query("select active, score from pool_plays where id = $1", [gone])).toEqual([{ active: false, score: null }]);
+    const { loadPool } = await import("./context");
+    expect((await loadPool(query, NEXT)).rows.map((r) => r.id)).not.toContain(gone);
+    expect(await query("select 1 from picks where week_of = $1", [NEXT])).not.toHaveLength(0);
+    expect(await query("select 1 from picks where week_of = $1 and pool_play_id = $2", [NEXT, gone])).toEqual([]);
+    expect(await query("select user_id, week_of::text from picks where pool_play_id = $1 order by user_id", [gone])).toEqual(picked);
+  });
+
+  it("stays out when it is removed while the week is being scored", async () => {
+    let removed = false;
+    const racing: Query = async (t, p) => {
+      if (!removed && /update pool_plays pp set f_hours/.test(t)) {
+        removed = true;
+        await removeFromPool(query, "admin@example.com", await idOf("Calendar prep"));
+      }
+      return query(t, p);
+    };
+    expect(await runCoraJob(racing, deps(), { now: ONE_AM, settings: live })).toMatchObject({ status: "ready" });
+    expect(removed).toBe(true);
+    expect(await query("select active, score from pool_plays where title = 'Calendar prep'")).toEqual([{ active: false, score: null }]);
+    expect(await query("select 1 from picks where pool_play_id = $1", [await idOf("Calendar prep")])).toEqual([]);
+    expect(await query("select 1 from picks")).not.toHaveLength(0);
   });
 });

@@ -56,10 +56,10 @@ function toEvidence(r: EvidenceRow): Evidence {
   };
 }
 
-/** Every pool play with its shareable evidence up to `week`. */
+/** Every pool play with its shareable evidence up to `week`. A play an admin removed from the pool (2026-11-28) is never loaded, so never scored or picked. */
 export async function loadPool(q: Query, week: string): Promise<{ rows: PoolRow[]; evidence: Map<string, Evidence[]>; bodies: Map<string, Record<string, unknown>[]> }> {
   const rows = await q<PoolRow>(
-    `select id, title, category, job, heavy_use_for, description, '' as who_can_use_it, '{"connections":[],"features":[]}'::jsonb as requires, active, playbook_drafted from pool_plays order by id`,
+    `select id, title, category, job, heavy_use_for, description, '' as who_can_use_it, '{"connections":[],"features":[]}'::jsonb as requires, active, playbook_drafted from pool_plays where removed_at is null order by id`,
   );
   const ev = await q<EvidenceRow>(
     `select p.pool_play_id, coalesce(sc.user_id::text, p.user_id::text, 'seed:' || p.contributor_id::text) as contributor,

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
-import { admitHeld, AUTO_BY, dropHeld, editPlay, heldCount, listAutoLog } from "./flags";
+import { userPicks } from "./cora";
+import { admitHeld, AUTO_BY, dropHeld, editPlay, heldCount, listAutoLog, removeFromPool } from "./flags";
 
 let query: Query;
 const ADMIN = "admin@example.com";
@@ -74,6 +75,67 @@ describe("the flags log (read-only since 2026-11-27)", () => {
     expect(await editPlay(query, ADMIN, dropped, { title: "Rescued" })).toMatchObject({ ok: false });
     expect((await row(dropped)).title).toBe("Linked play");
     expect(await query("select admin_email, action from admin_actions")).toEqual([{ admin_email: ADMIN, action: "play_edited" }]);
+  });
+});
+
+describe("removing a play from the pool (2026-11-28)", () => {
+  const poolPlay = async (title: string, o: { sample?: boolean } = {}) =>
+    (
+      await query<{ id: string }>(
+        `insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen, score, is_public_sample)
+         values ($1, 'Marketing', 'd', 'p', 'i', '2026-12-14', '2026-12-14', 70, $2) returning id`,
+        [title, o.sample ?? false],
+      )
+    )[0].id;
+  const pp = async (id: string) =>
+    (await query<{ removed_at: string | null; removed_by: string | null; active: boolean; score: number | null; is_public_sample: boolean }>(
+      "select removed_at::text, removed_by, active, score, is_public_sample from pool_plays where id = $1",
+      [id],
+    ))[0];
+
+  it("marks the play removed for good, takes it out as the sample, and logs it; a second try and an unknown id change nothing", async () => {
+    const id = await poolPlay("Inbox triage", { sample: true });
+    const other = await poolPlay("Listing post");
+    const r = await removeFromPool(query, ADMIN, id);
+    expect(r).toEqual({ ok: true, message: "Removed “Inbox triage” from the pool. Cora won’t pick it again; lists already picked keep it." });
+    expect(await pp(id)).toMatchObject({ removed_at: expect.any(String), removed_by: ADMIN, active: false, score: null, is_public_sample: false });
+    expect(await pp(other)).toMatchObject({ removed_at: null, active: true, score: 70 });
+    expect(await query("select admin_email, user_id, action, detail from admin_actions")).toEqual([
+      { admin_email: ADMIN, user_id: null, action: "remove_pool_play", detail: { poolPlayId: id, title: "Inbox triage" } },
+    ]);
+
+    const stamped = (await pp(id)).removed_at;
+    expect(await removeFromPool(query, "other@example.com", id)).toEqual({ ok: false, message: "Already removed from the pool." });
+    expect(await pp(id)).toMatchObject({ removed_at: stamped, removed_by: ADMIN });
+    expect(await removeFromPool(query, ADMIN, "00000000-0000-4000-8000-000000000000")).toEqual({ ok: false, message: "No such play." });
+    expect(await query("select 1 from admin_actions")).toHaveLength(1);
+  });
+
+  it("the log names the pool play and shows a removed one as out of the pool", async () => {
+    const id = await poolPlay("Drafted play");
+    const fixed = await addPlay({ position: 1, title: "Drafted play", autoFixed: { actions: ["drafted"], reasons: [] } });
+    const waiting = await addPlay({ position: 2, title: "Outline play", autoFixed: { actions: ["outline_only"], reasons: [] } });
+    await query("update plays set pool_play_id = $2 where id = $1", [fixed, id]);
+    const entry = async (playId: string) => (await listAutoLog(query)).find((e) => e.id === playId);
+    expect(await entry(fixed)).toMatchObject({ poolPlayId: id, inPool: true, removed: false });
+    expect(await entry(waiting)).toMatchObject({ poolPlayId: null, inPool: false, removed: false });
+    await removeFromPool(query, ADMIN, id);
+    expect(await entry(fixed)).toMatchObject({ poolPlayId: id, inPool: false, removed: true });
+  });
+
+  it("a user's picks keep a removed play, marked removed", async () => {
+    const id = await poolPlay("Inbox triage");
+    const other = await poolPlay("Listing post");
+    await query(
+      `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, delivered_at)
+       values ($1, '2026-12-14', 1, $2, 70, 3, 'r', now()), ($1, '2026-12-14', 2, $3, 60, 3, 'r', now())`,
+      [uid, id, other],
+    );
+    await removeFromPool(query, ADMIN, id);
+    expect((await userPicks(query, uid)).map((p) => [p.title, p.poolPlayId, p.removed])).toEqual([
+      ["Inbox triage", id, true],
+      ["Listing post", other, false],
+    ]);
   });
 });
 

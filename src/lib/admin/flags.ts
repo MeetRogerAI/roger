@@ -8,7 +8,8 @@ import type { Done } from "./users";
  * no longer holds plays for a person: it admits what it fixed (drafted,
  * redacted, outline only) and drops harm. This page lists both, with the
  * reasons, so an admin can see what was done. An admitted play's text can
- * still be edited; a dropped play cannot be brought back from here.
+ * still be edited, and its pool play removed from the pool for good
+ * (2026-11-28); a dropped play cannot be brought back from here.
  *
  * Plays held before auto-admit are admitted or dropped by the one-off
  * backfill (scripts/auto-admit-held.ts, `admitHeld` and `dropHeld` below),
@@ -30,7 +31,12 @@ export type LogEntry = {
   reasons: string[];
   fields: string[];
   shareable: boolean;
+  /** In the pool and not removed from it. */
   inPool: boolean;
+  /** The pool play it joined, if any (removed or not). */
+  poolPlayId: string | null;
+  /** An admin took its pool play out for good ("Remove from pool", 2026-11-28). */
+  removed: boolean;
 };
 
 /** A flag still waiting for a decision (a rejected play keeps its flag, marked rejected). Only plays from before auto-admit. */
@@ -57,11 +63,13 @@ export async function listAutoLog(q: Query, o: { limit?: number } = {}): Promise
     flag: { reasons?: string[]; fields?: string[] } | null;
     auto_fixed: Partial<AutoFixed> | null;
     shareable: boolean;
-    in_pool: boolean;
+    pool_play_id: string | null;
+    removed: boolean;
   }>(
     `select p.id, p.run_id, coalesce(u.email, 'seed: ' || sc.label) as who, to_char(p.week_of, 'YYYY-MM-DD') as week_of,
-            p.title, p.category, p.body, p.flag, p.auto_fixed, p.shareable, (p.pool_play_id is not null) as in_pool
+            p.title, p.category, p.body, p.flag, p.auto_fixed, p.shareable, p.pool_play_id, (pp.removed_at is not null) as removed
      from plays p left join users u on u.id = p.user_id left join seed_contributors sc on sc.id = p.contributor_id
+       left join pool_plays pp on pp.id = p.pool_play_id
      where (p.flag is null and p.auto_fixed is not null) or coalesce((p.flag->>'auto')::boolean, false)
      order by p.week_of desc, p.run_id, p.set_, p.position
      limit $1`,
@@ -83,7 +91,9 @@ export async function listAutoLog(q: Query, o: { limit?: number } = {}): Promise
       reasons: dropped ? list(r.flag?.reasons) : list(r.auto_fixed?.reasons),
       fields: dropped ? list(r.flag?.fields) : [],
       shareable: r.shareable,
-      inPool: r.in_pool,
+      inPool: r.pool_play_id !== null && !r.removed,
+      poolPlayId: r.pool_play_id,
+      removed: r.removed,
     };
   });
 }
@@ -132,6 +142,29 @@ export async function editPlay(q: Query, by: string, playId: string, fields: Rec
   if (!rows.length) return { ok: false, message: "That play can’t be edited: it was dropped, or it is gone." };
   await logAdminAction(q, { by, userId: rows[0].user_id, action: "play_edited", detail: { playId, fields: Object.keys(edits) } });
   return { ok: true, message: "Saved. A play in the pool shows the new text after the next Cora run." };
+}
+
+/**
+ * Takes a pool play out for good (Peter, 2026-11-28: the undo for auto-admit).
+ * removed_at is the durable mark, since the Cora job sets `active` again for
+ * every play it scores: Cora never loads, scores, picks or reactivates a
+ * removed play, and a new play that merges into it stays out with it
+ * (src/lib/cora/context.ts loadPool, job.ts, merge.ts). It stops being the
+ * public sample. Lists already picked keep it; nothing is recalled.
+ */
+export async function removeFromPool(q: Query, by: string, poolPlayId: string): Promise<Done> {
+  const rows = await q<{ title: string }>(
+    `update pool_plays set removed_at = now(), removed_by = $2, active = false, score = null, is_public_sample = false
+     where id = $1 and removed_at is null returning title`,
+    [poolPlayId, by],
+  );
+  if (!rows.length) {
+    const [exists] = await q(`select 1 from pool_plays where id = $1`, [poolPlayId]);
+    return { ok: false, message: exists ? "Already removed from the pool." : "No such play." };
+  }
+  const { title } = rows[0];
+  await logAdminAction(q, { by, action: "remove_pool_play", detail: { poolPlayId, title } });
+  return { ok: true, message: `Removed “${title}” from the pool. Cora won’t pick it again; lists already picked keep it.` };
 }
 
 /**

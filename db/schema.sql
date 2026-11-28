@@ -810,3 +810,12 @@ create index if not exists seed_contributors_user on seed_contributors (user_id)
 -- a little lower, src/lib/cora/score.ts DRAFTED_PENALTY).
 alter table plays add column if not exists auto_fixed jsonb;
 alter table pool_plays add column if not exists playbook_drafted boolean not null default false;
+
+-- 2026-11-28, auto-admit (Peter): with no review, an admin can take a pool
+-- play out for good ("Remove from pool", /admin/flags and a user's picks).
+-- removed_at and removed_by mark it; active, which the weekly Cora job sets
+-- again for every play it scores, is not enough. Cora never loads, scores,
+-- picks or reactivates a removed play, and a new play that merges into it
+-- stays out with it. Lists already picked keep it.
+alter table pool_plays add column if not exists removed_at timestamptz;
+alter table pool_plays add column if not exists removed_by text;

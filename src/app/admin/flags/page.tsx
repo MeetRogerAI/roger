@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { PlayEdit } from "@/components/app/admin-v3";
+import { PlayEdit, PoolRemove } from "@/components/app/admin-v3";
 import { isAdmin } from "@/lib/admin-auth";
 import { EDITABLE_FIELDS, flaggedRunsWithoutPlays, heldCount, listAutoLog, type LogEntry } from "@/lib/admin/flags";
 import { query } from "@/lib/db-query";
@@ -17,7 +17,8 @@ function what(p: LogEntry): string {
 /**
  * Flags (spec B.6, B.12; a read-only log since 2026-11-27, Peter): what
  * intake fixed and admitted, and what it dropped for harm, with the reasons.
- * An admitted play's text can still be edited.
+ * An admitted play's text can still be edited, and its pool play removed from
+ * the pool for good (2026-11-28).
  */
 export default async function FlagsPage() {
   await connection();
@@ -30,7 +31,8 @@ export default async function FlagsPage() {
         <h1 className="text-h3">Flags</h1>
         <p className="mt-2 text-small text-ink-2">
           Nothing waits for a decision. Intake drafts a missing playbook, redacts unclear names, keeps what it can’t make safe as an outline only, and admits the play. It drops anything that could harm
-          whoever runs it. This is the log of both, newest week first. Edit an admitted play to improve its text.
+          whoever runs it. This is the log of both, newest week first. Edit an admitted play to improve its text, or remove it from the pool so Cora never picks it again (lists already
+          picked keep it).
         </p>
         {held > 0 && (
           <p className="mt-3 text-small">
@@ -50,7 +52,8 @@ export default async function FlagsPage() {
               <li key={p.id} className="rounded-[8px] border border-rule bg-surface p-5">
                 <h2 className="text-title">{p.title}</h2>
                 <p className="mt-1 text-small text-ink-2 [overflow-wrap:anywhere]">
-                  {p.category} · {p.who} · week of {p.weekOf} · {p.kind === "dropped" ? "not in the pool" : p.inPool ? "in the pool" : p.shareable ? "joins the pool at the next Cora run" : "not shared"} ·{" "}
+                  {p.category} · {p.who} · week of {p.weekOf} ·{" "}
+                  {p.kind === "dropped" ? "not in the pool" : p.removed ? "removed from the pool" : p.inPool ? "in the pool" : p.shareable ? "joins the pool at the next Cora run" : "not shared"} ·{" "}
                   <Link href={`/admin/runs?id=${p.runId}`} className="tlink">
                     read the run
                   </Link>
@@ -64,8 +67,9 @@ export default async function FlagsPage() {
                   {text(p.body.playbook_md)}
                 </pre>
                 {p.kind === "fixed" && (
-                  <div className="mt-4">
+                  <div className="mt-4 space-y-3">
                     <PlayEdit playId={p.id} fields={fields} />
+                    {p.poolPlayId && <PoolRemove poolPlayId={p.poolPlayId} title={p.title} removed={p.removed} />}
                   </div>
                 )}
               </li>

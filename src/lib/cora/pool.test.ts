@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { removeFromPool } from "@/lib/admin/flags";
 import type { Query } from "@/lib/db-query";
 import type { IntakeModel } from "@/lib/intake/model";
 import { testDb } from "@/test-helpers/pglite-db";
@@ -155,6 +156,21 @@ describe("mergePending, review follow-ups", () => {
     await runWith(b, [play("Inbox again", "inbox triage")]);
     expect(await mergePending(query, keyModel().m)).toMatchObject({ joined: 1, created: 0 });
     expect(await query("select 1 from pool_plays where active")).toHaveLength(1);
+  });
+
+  it("never revives a pool play an admin removed: the same job joins it and stays out (2026-11-28)", async () => {
+    const a = await user("a@example.com");
+    await runWith(a, [play("Inbox triage", "inbox sort")], { week: "2026-11-23" });
+    await mergePending(query, keyModel().m);
+    const [{ id }] = await query<{ id: string }>("select id from pool_plays");
+    expect(await removeFromPool(query, "admin@example.com", id)).toMatchObject({ ok: true });
+    const b = await user("b@example.com");
+    await runWith(b, [play("Inbox again", "inbox triage")]);
+    expect(await mergePending(query, keyModel().m)).toMatchObject({ joined: 1, created: 0 });
+    expect(await query("select active, removed_at is not null as removed, to_char(last_seen, 'YYYY-MM-DD') as last_seen from pool_plays")).toEqual([
+      { active: false, removed: true, last_seen: "2026-11-30" },
+    ]);
+    expect(await query("select 1 from plays where pool_play_id = $1", [id])).toHaveLength(2);
   });
 });
 

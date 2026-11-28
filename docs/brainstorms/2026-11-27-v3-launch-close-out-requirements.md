@@ -69,6 +69,7 @@ All 18 pilot runs are on production (R15 counted 13 when it was written): 26 pla
   - Harm is dropped and logged.
   - A one-time pass applies the same rules to the 38 held plays. The 26 pooled plays passed intake with no flag, so they are not checked again. Like every play, they carry the safeguard preamble in lists.
   - `/admin/flags` becomes a log of what was auto-fixed or dropped. Approve and Reject go; Edit stays.
+  - An admin can remove a play from the pool for good ("Remove from pool", on `/admin/flags` and on a user's picks). Cora never picks it again. Lists already picked are not recalled (Peter, 2026-11-28).
   - This is the safety boundary for text that other members' agents run. No play is admitted unless its harm check has completed, so a check that cannot run never admits a play. Drafted setup steps go through the same harm checks as a member's own text. The drafting and review prompts treat run text as data, so run text cannot steer them.
   - The branch merges after a security review and an adversarial review, as well as a green suite. Branch `feat/auto-admit-plays`.
 - R26. **Seed runs link to accounts by email.** A seed contributor can carry the person's email address. Every contributor with that address links to the account when the account is made, when the address is set, and when the account's email changes. Branch `feat/auto-link-pilots`.
@@ -89,7 +90,7 @@ All 18 pilot runs are on production (R15 counted 13 when it was written): 26 pla
   S14 does not wait for the pilots to sign up.
 - R30. **Working rule for these branches** (refines R3 and the Key Decisions for this pass). Each branch goes through these steps in order:
   1. Rebase it onto `main`, so the schema it applies is never older than production's.
-  2. Read the branch's `db/schema.sql` diff, then apply it to production without a separate yes. R25's change adds two columns. R26's adds a column and two indexes, and drops the rule that a contributor links to one account only. Old code does not rely on that rule, but it cannot be put back once one account links two contributors.
+  2. Read the branch's `db/schema.sql` diff, then apply it to production without a separate yes. R25's change adds four columns (two for auto-admit, two for Remove from pool). R26's adds a column and two indexes, and drops the rule that a contributor links to one account only. Old code does not rely on that rule, but it cannot be put back once one account links two contributors.
   3. Merge, and wait for the Vercel deploy.
   4. Only then run the branch's production data write: dry run, Peter's yes, apply. These writes are the pilot emails (R26) and R25's one-time pass.
 

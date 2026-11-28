@@ -964,7 +964,7 @@ Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run,
 
 **Runs.** Every run with its status. Open any to read it.
 
-**Flags.** The queue from B.6. For each flagged play: the text, what was flagged, and approve, edit, or reject. *(Peter, 2026-11-27)* A read-only log instead: what intake drafted, redacted or kept as an outline, and what it dropped for harm, each with its reasons. An admitted play can still be edited; Approve and Reject are gone.
+**Flags.** The queue from B.6. For each flagged play: the text, what was flagged, and approve, edit, or reject. *(Peter, 2026-11-27)* A read-only log instead: what intake drafted, redacted or kept as an outline, and what it dropped for harm, each with its reasons. An admitted play can still be edited; Approve and Reject are gone. *(Peter, 2026-11-28)* "Remove from pool", on each pooled play here and on each pick on a user's page, takes the pool play out for good after a one-line confirm (logged): Cora never loads, scores or picks it again, a new play with the same job joins it and stays out, and it stops being the public sample. Lists already picked keep it; nothing is recalled, and there is no undo in the admin.
 
 **Cora.** This week's status, counts (runs read, plays merged, pool size, users picked for), the times of the next charge and send, and "Run Cora now" and "Send now". The seed-import tool. A read-only view of any user's picks. *(1.2)* "Send now" is "Charge and send now" (the charge first, then the send). Also "Dry run" (B.7), and, on preview and local only, "run as of a date" for Cora, the charge, the send and the hourly pass. Every button is logged before it runs and again with its outcome.
 

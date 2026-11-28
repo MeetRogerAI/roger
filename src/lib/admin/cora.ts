@@ -95,13 +95,14 @@ export async function chargeAndSendNow(q: Query, d: ChargeDeps & SendDeps, week:
   return { done: true, charge, send };
 }
 
-export type UserPick = { weekOf: string; position: number; title: string; reason: string; fit: number; personalScore: number; dryRun: boolean; deliveredAt: string | null; openedAt: string | null; setupMarkedAt: string | null };
+export type UserPick = { weekOf: string; position: number; title: string; reason: string; fit: number; personalScore: number; dryRun: boolean; deliveredAt: string | null; openedAt: string | null; setupMarkedAt: string | null; poolPlayId: string; removed: boolean };
 
-/** A read-only view of one user's picks, newest week first (dry runs marked). */
+/** A read-only view of one user's picks, newest week first (dry runs marked). `removed`: an admin took the play out of the pool for good (2026-11-28); the pick itself stays. */
 export async function userPicks(q: Query, userId: string, limit = 60): Promise<UserPick[]> {
   return q<UserPick>(
     `select to_char(p.week_of, 'YYYY-MM-DD') as "weekOf", p.position, pp.title, p.reason, p.fit, p.personal_score as "personalScore", p.dry_run as "dryRun",
-            p.delivered_at::text as "deliveredAt", p.opened_at::text as "openedAt", p.setup_marked_at::text as "setupMarkedAt"
+            p.delivered_at::text as "deliveredAt", p.opened_at::text as "openedAt", p.setup_marked_at::text as "setupMarkedAt",
+            pp.id as "poolPlayId", (pp.removed_at is not null) as removed
      from picks p join pool_plays pp on pp.id = p.pool_play_id where p.user_id = $1 order by p.week_of desc, p.dry_run, p.position limit $2`,
     [userId, limit],
   );

@@ -131,7 +131,8 @@ export async function mergePending(
     for (const p of rows) {
       if (o.until && Date.now() > o.until.getTime()) break;
       if (!(await takeLease(q, "cora-merge", holder, 120))) return { ...tally, busy: true };
-      // Retired pool plays are candidates too: the same job revives them rather than starting over.
+      // Retired pool plays are candidates too: the same job revives them rather than starting over. A play an
+      // admin removed from the pool (removed_at) is a candidate as well, but never revived: what joins it stays out.
       const pool = await q<PoolCandidate>(`select id, title, job, description from pool_plays where category = $1 order by first_seen, id`, [p.category]);
       const candidates =
         pool.length > MAX_CANDIDATES ? [...pool].sort((a, b) => overlap(p.job + p.title, b.job + b.title) - overlap(p.job + p.title, a.job + a.title)).slice(0, MAX_CANDIDATES) : pool;
@@ -153,7 +154,7 @@ export async function mergePending(
             `with ok as (select ${STILL_SHAREABLE} as shared),
              placed as (update plays set pool_play_id = $2, merged_at = now() where id = $1 and merged_at is null returning week_of),
              seen as (
-               update pool_plays set last_seen = greatest(last_seen, (select week_of from placed)), first_seen = least(first_seen, (select week_of from placed)), active = true
+               update pool_plays set last_seen = greatest(last_seen, (select week_of from placed)), first_seen = least(first_seen, (select week_of from placed)), active = (removed_at is null)
                where id = $2 and (select shared from ok) and exists (select 1 from placed)
              ),
              who as (

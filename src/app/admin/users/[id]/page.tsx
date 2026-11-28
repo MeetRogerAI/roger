@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { ActionButton, AddRunForm, ChangeEmailForm, CloseAccountForm, DeleteAccountForm, ExcuseForm, LinkContributorForm, NoteEditor, NudgeForm } from "@/components/app/admin-v3";
+import { ActionButton, AddRunForm, ChangeEmailForm, CloseAccountForm, DeleteAccountForm, ExcuseForm, LinkContributorForm, NoteEditor, NudgeForm, PoolRemove } from "@/components/app/admin-v3";
 import { isAdmin } from "@/lib/admin-auth";
 import { when } from "@/lib/admin/format";
 import { ATTENTION_LABELS, excuseDefaultWeek, statusKey, stripeCustomerUrl } from "@/lib/admin/ops";
@@ -149,7 +149,11 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
                 {p.weekOf} #{p.position}
                 {p.dryRun ? " (dry run)" : ""}: <span className="font-[600]">{p.title}</span> · fit {p.fit} · score {p.personalScore} · {p.deliveredAt ? `sent ${when(p.deliveredAt)}` : "not sent"}
                 {p.setupMarkedAt ? ` · set up ${when(p.setupMarkedAt)}` : ""}
+                {p.removed ? " · removed from the pool" : ""}
                 <p className="text-meta text-ink-2">{p.reason}</p>
+                <div className="mt-1.5">
+                  <PoolRemove poolPlayId={p.poolPlayId} title={p.title} removed={p.removed} />
+                </div>
               </li>
             ))}
           </ul>

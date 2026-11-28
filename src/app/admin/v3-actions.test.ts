@@ -59,6 +59,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["deleteAccount", () => actions.deleteAccountAction(idle, form({ userId: "x" }))],
     ["changeEmail", () => actions.changeEmailAction(idle, form({ userId: "x", email: "z@example.com" }))],
     ["flag", () => actions.flagAction(idle, form({ playId: "x", title: "t" }))],
+    ["removePoolPlay", () => actions.removePoolPlayAction(idle, form({ poolPlayId: playId }))],
     ["launchSwitch", () => actions.launchSwitchAction(idle, form({ name: "cycleLive", on: "true", confirm: "yes" }))],
     ["saveTestimonial", () => actions.saveTestimonialAction(idle, form({ person: "X", quote: "Q" }))],
     ["testimonialSwitch", () => actions.testimonialSwitchAction(form({ id: "x", cleared: "off" }))],
@@ -85,6 +86,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     expect(await current("select 1 from admin_actions")).toEqual([]);
     expect(await current<{ free_lists_used: number }>("select free_lists_used from users")).toEqual([{ free_lists_used: 2 }]);
     expect(await current("select 1 from users where email = 'p@example.com'")).toEqual([]);
+    expect(await current("select 1 from pool_plays where removed_at is not null or not active")).toEqual([]);
   });
 });
 
@@ -123,6 +125,16 @@ describe("for an admin", () => {
     expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: nc.id }))).toMatchObject({ status: "error", message: "Waiting for the member’s card." });
     expect(await current<{ free_lists_used: number }>("select free_lists_used from users where id = $1", [nc.id])).toEqual([{ free_lists_used: 1 }]);
     expect(await current("select 1 from admin_actions")).toEqual([]);
+  });
+
+  it("removes a pool play for good, says so once, and refuses a malformed id (2026-11-28)", async () => {
+    admin = "admin@example.com";
+    const idle = { status: "idle" as const };
+    expect(await actions.removePoolPlayAction(idle, form({ poolPlayId: "not-a-uuid" }))).toMatchObject({ status: "error", message: "No such play." });
+    expect(await actions.removePoolPlayAction(idle, form({ poolPlayId: playId }))).toMatchObject({ status: "ok", message: expect.stringMatching(/^Removed “One” from the pool/) });
+    expect(await current("select removed_by, active from pool_plays where id = $1", [playId])).toEqual([{ removed_by: "admin@example.com", active: false }]);
+    expect(await actions.removePoolPlayAction(idle, form({ poolPlayId: playId }))).toMatchObject({ status: "error", message: "Already removed from the pool." });
+    expect(await current("select admin_email, action from admin_actions")).toEqual([{ admin_email: "admin@example.com", action: "remove_pool_play" }]);
   });
 
   it("refuses a sample play without the tick, and a malformed id", async () => {

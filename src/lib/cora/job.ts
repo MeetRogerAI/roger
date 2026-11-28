@@ -171,11 +171,12 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
     const plays = pool.rows.map((r) => ({ id: r.id, title: r.title, evidence: pool.evidence.get(r.id) ?? [], reachCount: users.filter((u) => couldUse(u, r)).length, drafted: r.playbook_drafted }));
     const { scored, retired } = scorePool(plays, { asOf: o.week, weights: o.settings.recencyWeights, activeUsers: users.length });
     // This is the week's snapshot: picking reads these stored scores, so every user is ranked against the same pool.
+    // A play an admin removed since the pool was loaded stays out (removed_at is the durable mark, not active).
     await q(
       `update pool_plays pp set f_hours = s.f_hours, f_reach = s.f_reach, f_ease = s.f_ease, f_proof = s.f_proof, f_surprise = s.f_surprise,
          score = s.score, figures = s.figures, active = true
        from jsonb_to_recordset($1::jsonb) as s(id uuid, f_hours int, f_reach int, f_ease int, f_proof int, f_surprise int, score int, figures jsonb)
-       where pp.id = s.id`,
+       where pp.id = s.id and pp.removed_at is null`,
       [
         JSON.stringify(
           scored.map((x) => ({ id: x.id, f_hours: x.f.hours, f_reach: x.f.reach, f_ease: x.f.ease, f_proof: x.f.proof, f_surprise: x.f.surprise, score: Math.round(x.score), figures: cardFigures(x.figures) })),
@@ -241,7 +242,7 @@ export function cardFigures(f: Figures): Record<string, unknown> {
 
 async function storedScores(q: Query): Promise<Scored[]> {
   const rows = await q<{ id: string; title: string; f_hours: number; f_reach: number; f_ease: number; f_proof: number; f_surprise: number; figures: { cora: Figures }; playbook_drafted: boolean }>(
-    `select id, title, f_hours, f_reach, f_ease, f_proof, f_surprise, figures, playbook_drafted from pool_plays where active and score is not null`,
+    `select id, title, f_hours, f_reach, f_ease, f_proof, f_surprise, figures, playbook_drafted from pool_plays where active and score is not null and removed_at is null`,
   );
   return rows.map((r) => {
     const f = { hours: r.f_hours, reach: r.f_reach, ease: r.f_ease, proof: r.f_proof, surprise: r.f_surprise };

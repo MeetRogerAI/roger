@@ -10,7 +10,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { chooseSample, clearSample, moveTestimonial, saveTestimonial, setTestimonialCleared, TESTIMONIALS_TAG } from "@/lib/admin/content";
 import { chargeAndSendNow } from "@/lib/admin/cora";
 import { setContributorEmail } from "@/lib/admin/contributors";
-import { EDITABLE_FIELDS, editPlay } from "@/lib/admin/flags";
+import { EDITABLE_FIELDS, editPlay, removeFromPool } from "@/lib/admin/flags";
 import { audited, logAdminAction } from "@/lib/admin/log";
 import { setSwitch, type LaunchSwitch } from "@/lib/admin/launch-switches";
 import { opsWeek } from "@/lib/admin/ops";
@@ -216,6 +216,17 @@ export async function flagAction(_p: V3State, fd: FormData): Promise<V3State> {
     if (typeof v === "string") fields[k] = v.slice(0, k === "playbook_md" ? 40_000 : 8_000);
   }
   const r: Done = await editPlay(query, by, playId, fields);
+  refresh();
+  return state(r);
+}
+
+/** Takes a pool play out for good (2026-11-28): Cora never picks it again; lists already picked keep it. It stops being the public sample. */
+export async function removePoolPlayAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const poolPlayId = idOf(fd, "poolPlayId");
+  if (!poolPlayId) return bad("No such play.");
+  const r = await removeFromPool(query, by, poolPlayId);
+  if (r.ok) updateTag(SAMPLE_PLAY_TAG);
   refresh();
   return state(r);
 }

@@ -17,6 +17,7 @@ import {
   linkContributorAction,
   nudgeAction,
   pilotLinkAction,
+  removePoolPlayAction,
   runJobAction,
   saveNoteAction,
   saveTestimonialAction,
@@ -386,6 +387,35 @@ export function PlayEdit({ playId, fields }: { playId: string; fields: Record<st
         </form>
       )}
     </div>
+  );
+}
+
+/**
+ * Takes a pool play out for good (2026-11-28): the undo for auto-admit. A
+ * quiet button opens a one-line confirm (no browser dialog). Once the page
+ * shows the play removed (`removed`), only the outcome message stays.
+ */
+export function PoolRemove({ poolPlayId, title, removed = false }: { poolPlayId: string; title: string; removed?: boolean }) {
+  const [s, act, pending] = useActionState(removePoolPlayAction, idle);
+  const [asking, setAsking] = useState(false);
+  if (removed) return <Msg s={s} />;
+  return (
+    <form action={act} className="flex flex-wrap items-center gap-3">
+      <Hidden values={{ poolPlayId }} />
+      <button type="button" onClick={() => setAsking((a) => !a)} className={quiet} aria-expanded={asking}>
+        {asking ? "Cancel" : "Remove from pool"}
+        <span className="sr-only"> “{title}”</span>
+      </button>
+      {asking && (
+        <>
+          <span className="text-small">Cora won’t pick it again. Lists already picked keep it.</span>
+          <button type="submit" disabled={pending} className={small}>
+            {pending ? "Removing…" : "Remove for good"}
+          </button>
+        </>
+      )}
+      <Msg s={s} />
+    </form>
   );
 }
 
