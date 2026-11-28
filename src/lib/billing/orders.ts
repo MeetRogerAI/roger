@@ -5,7 +5,7 @@ import { orderClosedRogerFailedEmail } from "@/lib/mail/templates/order-closed";
 import { listOrderedEmail, orderFailedEmail, orderNoListEmail } from "@/lib/mail/templates/charges";
 import { orderPromptEmail } from "@/lib/mail/templates/order-prompt";
 import type { V3Settings } from "@/lib/v3-settings";
-import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered } from "./offered";
+import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered, PLAN_QUESTIONS } from "./offered";
 import { chargeInFlight, claimCharge, claimedPrice, idempotencyKey, nextAttempt, stillChargeable, type Claim } from "./claims";
 import { amount, money, priceId, taxPhrase, type Currency } from "./prices";
 import type { ChargeResult, OrderCall, OrderGateway } from "./subscriptions";
@@ -31,7 +31,7 @@ export async function placeOrder(q: Query, o: { userId: string; week: string; no
   if (u.plan !== "per_run" || u.stripe_subscription) return { ok: false, message: "Your plan already includes a Cora Curation every Monday." };
   // One at a time is not offered (offered.ts): no new order, for an account still on that plan too. Nothing is charged.
   // Orders placed before are untouched: cancelOrder and the Monday charge do not read the switch.
-  if (!oneAtATimeOffered()) return { ok: false, message: `${ONE_AT_A_TIME_NOT_OFFERED} You can switch to monthly on the billing page.` };
+  if (!oneAtATimeOffered()) return { ok: false, message: `${ONE_AT_A_TIME_NOT_OFFERED} ${PLAN_QUESTIONS}` };
   // Spec check 39: the action refuses this as well as the button.
   if (u.sharing === "off") return { ok: false, message: "Cora Curations can’t be ordered while Zack is off. Turn sharing back on first." };
   if (u.status === "trial" && u.free_lists_used < o.settings.freeRuns) return { ok: false, message: "Your free Cora Curations don’t need ordering." };

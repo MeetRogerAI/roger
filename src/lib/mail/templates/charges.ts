@@ -1,4 +1,4 @@
-import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered } from "@/lib/billing/offered";
+import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered, PLAN_QUESTIONS } from "@/lib/billing/offered";
 import { chargeWords, moneyCents, type Currency } from "@/lib/billing/prices";
 import { appUrl, COME_BACK_LINE, comeBackButton, renderEmail, type Rendered } from "../layout";
 import { longDate } from "@/lib/dates";
@@ -9,7 +9,7 @@ import { longDate } from "@/lib/dates";
  * offered.ts, so that a test's mock of that module reaches it.
  */
 export function orderAgainLine(): string {
-  return oneAtATimeOffered() ? "Order again for any Monday you want one." : `${ONE_AT_A_TIME_NOT_OFFERED} You can switch to monthly on the billing page.`;
+  return oneAtATimeOffered() ? "Order again for any Monday you want one." : `${ONE_AT_A_TIME_NOT_OFFERED} ${PLAN_QUESTIONS}`;
 }
 
 /** Spec B.13: the first charge succeeded and the subscription started. */
@@ -136,7 +136,7 @@ export function orderFailedEmail(o: { week: string }): Rendered {
     heading: "Your card didn’t go through.",
     paragraphs: [`We couldn’t charge your card for the Cora Curation on ${longDate(o.week)}, so it wasn’t sent and nothing is owed.`,
       // "Ordering again" is named only while there is something to order (billing/offered.ts).
-      oneAtATimeOffered() ? "Update your card before ordering again." : `${ONE_AT_A_TIME_NOT_OFFERED} To switch to monthly, update your card on the billing page first.`,
+      oneAtATimeOffered() ? "Update your card before ordering again." : `${ONE_AT_A_TIME_NOT_OFFERED} ${PLAN_QUESTIONS}`,
     ],
     button: { label: "Update your card", url: appUrl("/app/billing") },
   });

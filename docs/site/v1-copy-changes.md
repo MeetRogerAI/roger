@@ -2,7 +2,7 @@
 
 Site version 1 uses the spec's draft copy word for word (plan R14a). This file lists every line that is not the spec's own wording, and why.
 
-**Read sections 9 and 7 first.** Section 9 is Peter's third homepage review, of November 27, 2026: "How it works" merged into the hero, the two example plays, the shorter note under the price, the closing button, and `/pricing` and `/agents` deleted. It has what is waiting for his approval. Section 7 is his review of November 26, 2026, which changed the audience, the price shown, the name of what arrives each Monday and every start button. Sections 1 to 6 are the record before that, and several lines they quote ("Monday lists", "one list at a time", "for real estate", the sample play "Client email in two tones", anything on `/pricing` or `/agents`) are no longer on the site.
+**Read sections 10, 9 and 7 first.** Section 10 is Peter’s launch wording decisions of November 28, 2026: "Cora Curation" everywhere, main’s refunds wording in the terms, the live trial-close rule, "no earlier than week 3", titles only until a card is saved, `/refunds` redirected, and "plus applicable tax". Section 9 is Peter's third homepage review, of November 27, 2026: "How it works" merged into the hero, the two example plays, the shorter note under the price, the closing button, and `/pricing` and `/agents` deleted. It has what is waiting for his approval. Section 7 is his review of November 26, 2026, which changed the audience, the price shown, the name of what arrives each Monday and every start button. Sections 1 to 6 are the record before that, and several lines they quote ("Monday lists", "one list at a time", "for real estate", the sample play "Client email in two tones", anything on `/pricing` or `/agents`) are no longer on the site.
 
 **Since the Pages editor (November 27, 2026), the wording on the site is not only in this file's sources.** A covered page prints three layers: the copy files below, then `src/data/site/released.json` (what preview had published when the last release was taken), then the edits published in that site's own Admin, Website, Pages. So a line quoted here may read differently on preview or on meetroger.ai. To see where a line comes from: open Pages on that site (an edited field is marked, with the original wording on request, and "Differs from the release" lists every edit made there since the release), and look in `released.json` for its field id. How the layers and a release work is in `docs/site/content-release.md`; how to use Pages is in `docs/site/pages.md`. Pages does not reach `/privacy`, `/terms`, `/zack`, sign-up, the app, the emails, or page titles and search descriptions: those are still only in the copy files.
 
@@ -1059,3 +1059,123 @@ Not changed: sign-up still accepts the audience "agents" in a start link, so a l
 1. **"Approve The Ideas … Say yes to the ideas you like and see them in action for you."** There is nothing to approve in the product. A Cora Curation arrives; the user opens an idea, copies its prompt and playbook, and pastes them into their own AI agent, which sets it up and asks setup questions. An idea does not go into action because the user says yes. The line this replaced described that. `/how-it-works` still does (Tuesday: "Open an idea, press copy and paste it into your AI agent.").
 2. **"Payment starts in week 3."** The first charge comes with the third Cora Curation, which is the third Monday only if one has been delivered every week. It is later when a week brings none (Zack missed the cutoff, or nothing fit) and after a declined card. It also says nothing of the card: with the hero's line and the old note both gone, the homepage says a card is asked for in one place, the answer to "When is my card charged?", and never says it is asked for at sign-up. The sign-up card step does.
 3. **"Level up your use of AI Agents Now."** No claim in it is checkable or false. It is the one start button whose words are not "Get two free Cora Curations", so a visitor may not read it as the same action.
+
+## 10. Peter's launch wording decisions, November 28, 2026
+
+Eight decisions for the launch, and one correction that needed none. Every changed string is below with its old and new wording. Everything else stays as approved. Amounts are shown as a visitor reads them today: two free Cora Curations, the third is the first paid, 21 days.
+
+### 10.1 The card line stays (decision 1)
+
+"We ask for your card when your first Cora Curation is ready." and the other card wording from commit `49b9337` are kept as they are. Nothing changed.
+
+### 10.2 "Cora Curation" everywhere (decision 2)
+
+The weekly set is called a Cora Curation on every screen and in every email a user gets. Main's newer screens and emails still said "list" in these places:
+
+| Where | Before | After |
+|---|---|---|
+| Payment (Step 4), the back link, `src/app/start/payment/page.tsx` | Back to your first list | Back to your first Cora Curation |
+| Billing, "Update card" with no card yet, `src/app/app/billing/actions.ts` | There is no card on this account yet. We ask for it when your first list is ready. | There is no card on this account yet. We ask for it when your first Cora Curation is ready. |
+| `/app` and the week page, under the locked ideas, `src/components/app/held-ideas.tsx` | Your first two lists are free. Nothing is charged today. | Your first two Cora Curations are free. Nothing is charged today. |
+| Teaser email "Your first 3 ideas are ready", `src/lib/mail/templates/held.ts` | Add your card to see why each one fits you and how to set it up. Your first two lists are free, and nothing is charged today. | Add your card to see why each one fits you and how to set it up. Your first two Cora Curations are free, and nothing is charged today. |
+| Reminder email "Your ideas are waiting", `src/lib/mail/templates/held-reminder.ts` | (the same sentence as the teaser) | (the same change) |
+| Sharing-changed email, sharing turned off, `src/lib/mail/templates/zack-page.ts` | …you can still use Roger and get your Cora lists, but your price doubles… | …you can still use Roger and get your Cora Curations, but your price doubles… |
+| The notice when a cancel crosses a card save, `src/lib/billing/cancel.ts` | Your card was saved just now, so your trial wasn’t cancelled and your first list is unlocked. To cancel anyway, cancel again. | Your card was saved just now, so your trial wasn’t cancelled and your first Cora Curation is unlocked. To cancel anyway, cancel again. |
+| The notice after a card save with nothing to show yet, `src/lib/billing/card-saved.ts` | Your card is saved. Your ideas will be here as soon as your list is ready. | Your card is saved. Your ideas will be here as soon as your Cora Curation is ready. |
+| Payment's "Due today" line, `src/lib/billing/payment-view.ts` | Due today: $0. Your first charge comes with your third list. | Due today: $0. Your first charge comes with your third Cora Curation. |
+| A leftover one-at-a-time order's Stripe invoice description, `src/lib/billing/subscriptions.ts` | Roger list for the week of {week} | Roger Cora Curation for the week of {week} |
+| Main's "Roger monthly" terms section, `src/data/legal.ts` (printed in the Circles and legacy terms, not on the v1 site) | Your free trial. Your first two weekly lists are free. We ask for your card when your first list is ready, … | Your free trial. Your first two Cora Curations are free. We ask for your card when your first Cora Curation is ready, … |
+| the same section | When you are charged. Your first charge comes with your third list. … Each receipt comes with that week’s list email. | When you are charged. Your first charge comes with your third Cora Curation. … Each receipt comes with that week’s Cora Curation email. |
+| the same section | …Roger keeps running until the end of the month you have paid for: your lists keep coming until then. … | …your Cora Curations keep coming until then. … |
+| the same section | No refunds. Because you can try Roger free for two lists and cancel any time, … | No refunds. Because you can try Roger free for two Cora Curations and cancel any time, … |
+| the same section | If a payment fails. Your lists pause until you update your card in Billing, then start again straight away. | If a payment fails. Your Cora Curations pause until you update your card in Billing, then start again straight away. |
+| Pages (admin only), what each name in braces stands for, `src/lib/site/content/labels.ts` | the price of one list at a time…; how many lists are free, as a word; which list is the first paid one / the last free one, as a word | the price of one Cora Curation at a time…; how many Cora Curations are free, as a word; which Cora Curation is the first paid one / the last free one, as a word |
+
+**Already "Cora Curation" on this branch, so not changed:** the status line under every Monday email (including the email that goes out when a saved card unlocks the first one): "Free Cora Curation 1 of 2." and "Free Cora Curation 2 of 2. Your next Cora Curation is your first paid one: …". Main still reads "Free list 1 of 2." there. This branch had already renamed it (section 8), and the merge kept the branch's wording.
+
+**Left as "list", and why:** the Circles home page and Circles terms (`src/components/circles/home.tsx`, `src/data/circles-legal.ts`), which describe Circles' own ranked list and its waiting list and are not served at launch; "list" meaning an ordinary list ("task list", "shopping list", "the never-include list", "Choose a time zone from the list.", "You’re on the list."); admin alerts and admin screens; the cron job's internal note "Lists go out on Mondays."; code names and database columns (`free_lists_used`, `{freeLists}`).
+
+### 10.3 The terms' refunds section is main's (decision 3)
+
+The section keeps its heading "Refunds and cancelling" and its anchor `#roger-monthly`, so main's Payment page link "Terms and refunds" and the new `/refunds` redirect (10.7) both land on it. Its first paragraph is replaced by main's approved paragraph, and main's payment-failure and consumer-law paragraphs are added. They are main's "Roger monthly" section (`rogerMonthlyTerms` in `src/data/legal.ts`, commit `e706187`, approved by Peter on November 26, 2026, `artifacts/terms-monthly-draft.md`), word for word, with two differences: "lists" is "Cora Curations" (decision 2), and "two" is `{freeLists}` from the settings, because the v1 terms never type an amount.
+
+| | Before | After |
+|---|---|---|
+| Paragraph 1 | There are no refunds. | No refunds. Because you can try Roger free for two Cora Curations and cancel any time, we don’t refund charges already made, including for the rest of a month after you cancel. If we charge you by mistake (for example, twice for the same month, or after your plan ended), tell us and we refund the mistaken charge in full to your card. |
+| Paragraph 2 | You can cancel any time, in one click. Your access continues to the end of the month you have paid for. | Unchanged |
+| Paragraph 3 | (none) | If a payment fails. Your Cora Curations pause until you update your card in Billing, then start again straight away. |
+| Paragraph 4 | (none) | Your rights. Nothing here takes away a right you have under the consumer law where you live. |
+
+The rest of main's section (the price, the trial, when you are charged, how cancelling works) is already said in the v1 terms' own sections, so it is not repeated.
+
+**Lines elsewhere on the site that now contradicted the terms:**
+
+| Where | Before | After |
+|---|---|---|
+| `/faq`, "Can I get a refund?" | No. You get two free Cora Curations before any charge, and you can cancel any time. | No, unless we charge you by mistake: then tell us and we refund the mistaken charge in full to your card. You get two free Cora Curations before any charge, and you can cancel any time. |
+
+Checked and not changed: the cancel email ("Nothing more will be charged, and there is no refund for the rest of the month.") says what main's paragraph says ("including for the rest of a month after you cancel"). Main's Payment page link "Terms and refunds" is unchanged.
+
+### 10.4 The trial close states the live rule (decision 4)
+
+Main's rule, read from `src/lib/housekeeping/trial.ts` and `clocks.ts`:
+
+- **Card saved, nothing delivered yet:** closes `trialCloseDays` (21, a setting) after the card was saved (or after the first go-live, if that is later).
+- **No card, a titles-only email sent:** closes `HELD_CLOSE_DAYS` (14) after the first one. This is a constant in the code, not a setting, so the copy types 14, a test holds it to the constant, and the wording check allows the 14 in that one phrase only.
+- **No card, no titles-only email:** closes `trialCloseDays` after sign-up finished.
+- **Every clock:** a week later for each Monday with no Cora Curation because of Roger (Cora's week failed, or no eligible plays; with a card saved, also a Cora Curation picked and not delivered after its Monday send).
+
+| Where | Before | After |
+|---|---|---|
+| Terms, "The free trial", last paragraph; `/how-it-works`, "Your first two weeks", last step | If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge. | If no first Cora Curation is delivered, the trial closes without a charge. With a card added, it closes 21 days after you added it. With no card, it closes 14 days after the email with your first Cora Curation’s titles, or 21 days after sign-up if no such email is sent. Each Monday with no Cora Curation because of Roger adds a week. |
+
+The sentence lives once, as `trialCloseRule` in `src/data/site/v1.ts`, and both places print it. It says "added" rather than "saved": "saved, it closes 21 days" reads as a time-saved claim to the wording check.
+
+**Not stated, as before:** main's second clock, for a trial whose free Cora Curations went out but whose first paid one never comes (no report from Zack): it closes 21 days after the last delivered one, with no charge, and the email "Your trial has closed" says so. Also not stated: a close waits while a report for that week is still with Cora, and a clock never starts before the first go-live.
+
+### 10.5 The note under the price is a minimum (decision 5)
+
+| Where | Before | After |
+|---|---|---|
+| Homepage, under the price; `/library`, the closing band | Your first two Cora Curations are free. Payment starts in week 3. | Your first two Cora Curations are free. Payment starts no earlier than week 3. |
+
+The wording check's allowance for this line now names the new phrase only. This settles section 9.8, item 2.
+
+**Kept:** "Get two Cora Curations for free and pay only after you have tried the product for two full weeks." (in "What does it cost?" and the closing band). It states a minimum, which the product keeps: the charge comes with the third Cora Curation, never earlier. One edge for Peter: a card saved mid-week unlocks the first Cora Curation that day, so the third, charged one can come ten days after the first, not fourteen. Say if "two full weeks" should change.
+
+### 10.6 The first Cora Curation is titles only until a card is saved (decision 6)
+
+Main's behaviour (`src/lib/app/held.ts`, `src/lib/cora/unlock.ts`): with no card, Cora's first Cora Curation is picked as usual but not delivered. The email, `/app` and the week page show its titles only. Once a card is saved, that Cora Curation is delivered in full at once, as free Cora Curation 1.
+
+| Where | Before | After |
+|---|---|---|
+| `/faq`, "When do you ask for my card?" | When your first Cora Curation is ready. It is not charged then: the first charge comes with your third Cora Curation. If you don’t want to continue, cancel in one click before then and you pay nothing. | When your first Cora Curation is ready. It is not charged then: the first charge comes with your third Cora Curation. Until a card is saved, your first Cora Curation shows only its titles, and the full ideas open once a card is added. If you don’t want to continue, cancel in one click before then and you pay nothing. |
+| Terms, "The free trial", second paragraph | We ask for a card when your first Cora Curation is ready, and it is kept on file. It is not charged then. | We ask for a card when your first Cora Curation is ready, and it is kept on file. It is not charged then. Until a card is saved, your first Cora Curation shows only its titles, and the full ideas open once a card is added. |
+
+### 10.7 `/refunds` redirects to the terms (decision 7)
+
+`/refunds` answers with a permanent redirect to `/terms#roger-monthly`, the "Refunds and cancelling" section (`next.config.ts`). The old page (`src/app/refunds/page.tsx`, the setups' "Refunds and the guarantee") and its text (`refunds` in `src/data/legal.ts`) are deleted; nothing else used them. It also left the legacy site's sitemap, the robots disallow list and the legacy site's footer ("Refunds"). It was never in the v1 sitemap or footer.
+
+Left as it is: the legacy setups terms (not served at launch) still say "The Refunds page sets out exactly what “working” means and how to claim."
+
+### 10.8 Tax (decision 8)
+
+| Where | Before | After |
+|---|---|---|
+| Price block, the Canadian tax note (homepage) | plus HST | plus applicable tax |
+| `/faq` and the homepage, "What does it cost?" | …In Canada it is CA$280 a month, plus HST. … | …In Canada it is CA$280 a month, plus applicable tax. … |
+
+The terms' own tax sentence, "Prices are shown before tax. HST or other tax is added where it applies.", does not say only HST, so it stays. The app and the emails keep "plus HST" for Canadian amounts (Peter's sign-off of November 27, 2026, S18 point a); they are not the v1 site.
+
+### 10.9 Correction: there is no switch to monthly
+
+The billing page offers no switch (monthly is the only plan), but four messages to an account still on one at a time said to use one. They now end with the billing page's own words, "Monthly is now the only plan. Write to us if you have questions about yours." (`PLAN_QUESTIONS`, now in `src/lib/billing/offered.ts`).
+
+| Where | Before | After |
+|---|---|---|
+| Email "No Cora Curation this week, and no charge" (and the order-closed email that shares its last line), `charges.ts` `orderAgainLine` | …Monthly brings a Cora Curation every Monday. You can switch to monthly on the billing page. | …Monthly brings a Cora Curation every Monday. Monthly is now the only plan. Write to us if you have questions about yours. |
+| The refusal of a new order, `src/lib/billing/orders.ts` | (the same sentence) | (the same change) |
+| Email "Your card didn’t go through" (an order), `charges.ts` `orderFailedEmail` | …Monthly brings a Cora Curation every Monday. To switch to monthly, update your card on the billing page first. | …Monthly brings a Cora Curation every Monday. Monthly is now the only plan. Write to us if you have questions about yours. |
+| Email "You’re back on one Cora Curation at a time", `plan-changed.ts` `backToPerRunEmail` | …Monthly brings a Cora Curation every Monday. To start monthly, update your card on the billing page, then switch to monthly again. | …Monthly brings a Cora Curation every Monday. Monthly is now the only plan. Write to us if you have questions about yours. |
+
+Not changed: the dormant plan-change emails ("Your plan is now monthly", "Your switch to … didn’t happen", "…open the billing page and switch back…"), which only a switch sends and no screen can start.

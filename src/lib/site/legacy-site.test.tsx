@@ -47,10 +47,10 @@ describe("the setup offer on a use case", () => {
 });
 
 describe("the legacy site's footer", () => {
-  it("links to Refunds, which Circles and a site version leave out", async () => {
+  it("has no Refunds link: /refunds is a redirect to the terms' refunds section (Peter, November 28, 2026)", async () => {
     const legacy = await pageMarkup(<SiteFooter site="legacy" />);
-    expect(hrefs(legacy)).toContain("/refunds");
-    expect(legacy).toContain("Refunds");
+    expect(hrefs(legacy)).not.toContain("/refunds");
+    expect(hrefs(legacy)).toContain("/terms");
     expect(legacy).toContain("Real agent use cases, read every morning in Toronto.");
     expect(hrefs(await pageMarkup(<SiteFooter site="circles" />))).not.toContain("/refunds");
     const v1 = hrefs(await pageMarkup(<SiteFooter site="v1" chrome={await getSiteChrome("v1")} />));

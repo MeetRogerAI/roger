@@ -108,7 +108,7 @@ describe("changeSharing", () => {
   // Peter's wording, 2026-11-27: the sharing-changed email for turning sharing off, in the trial and paying.
   it("emails Peter's explanation with the member's own higher price when sharing is turned off", async () => {
     const offLines = [
-      "Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.",
+      "Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora Curations, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.",
       "/app/zack) and change it back. Your price depends on whether your Zack runs share what you learn about AI agents with the network.",
     ];
     // In the trial (the first-charge variant): the same words, no first-charge sentence.

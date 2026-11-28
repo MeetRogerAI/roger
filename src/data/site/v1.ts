@@ -81,6 +81,15 @@ const zackRemoves = "Zack is instructed to replace names, clients, addresses, am
  * free Cora Curations: one arrives each Monday, so that many weeks pass first.
  */
 const valueLine = "Get {freeLists} Cora Curations for free and pay only after you have tried the product for {freeLists} full weeks.";
+/**
+ * When an unused trial closes (Peter, November 28, 2026: the site states main's
+ * live rule, src/lib/housekeeping/trial.ts and clocks.ts), said the same way in
+ * the terms (./legal.ts) and on /how-it-works. The 14 is HELD_CLOSE_DAYS in
+ * src/lib/housekeeping/clocks.ts, a constant rather than a setting, so it is
+ * typed here and a test holds it to that constant.
+ */
+export const trialCloseRule =
+  "If no first Cora Curation is delivered, the trial closes without a charge. With a card added, it closes {trialCloseDays} days after you added it. With no card, it closes 14 days after the email with your first Cora Curation’s titles, or {trialCloseDays} days after sign-up if no such email is sent. Each Monday with no Cora Curation because of Roger adds a week.";
 /** What a Cora Curation is, said once on each page that names one. */
 const curationIs = "three ideas picked for you by Cora, each with a full playbook";
 
@@ -188,7 +197,7 @@ const questions: V1QuestionGroup[] = [
       {
         id: "cost",
         q: "What does it cost?",
-        a: `{monthlyUsd} a month, plus tax where it applies. In Canada it is {monthlyCad} a month, plus HST. ${valueLine}`,
+        a: `{monthlyUsd} a month, plus tax where it applies. In Canada it is {monthlyCad} a month, plus applicable tax. ${valueLine}`,
         on: ["home"],
       },
       {
@@ -200,7 +209,7 @@ const questions: V1QuestionGroup[] = [
       {
         id: "why-a-card",
         q: "When do you ask for my card?",
-        a: "When your first Cora Curation is ready. It is not charged then: the first charge comes with your {firstPaidList} Cora Curation. If you don’t want to continue, cancel in one click before then and you pay nothing.",
+        a: "When your first Cora Curation is ready. It is not charged then: the first charge comes with your {firstPaidList} Cora Curation. Until a card is saved, your first Cora Curation shows only its titles, and the full ideas open once a card is added. If you don’t want to continue, cancel in one click before then and you pay nothing.",
         on: [],
       },
       {
@@ -212,7 +221,7 @@ const questions: V1QuestionGroup[] = [
       {
         id: "refund",
         q: "Can I get a refund?",
-        a: "No. You get {freeLists} free Cora Curations before any charge, and you can cancel any time.",
+        a: "No, unless we charge you by mistake: then tell us and we refund the mistaken charge in full to your card. You get {freeLists} free Cora Curations before any charge, and you can cancel any time.",
         on: [],
       },
     ],
@@ -242,11 +251,11 @@ export const v1 = {
   // Payment at the first Cora Curation (main, plan 2026-11-26-001, Peter): no card at sign-up. The agreed trial line, in this site's naming.
   cardLine: "We ask for your card when your first Cora Curation is ready.",
   /** Under the price (Peter's words, November 27, 2026). The week is the one of the first paid Cora Curation, from the settings. */
-  trialLine: "Your first {freeLists} Cora Curations are free. Payment starts in week {firstPaidWeek}.",
+  trialLine: "Your first {freeLists} Cora Curations are free. Payment starts no earlier than week {firstPaidWeek}.",
   price: {
     switchLabel: "Show prices in",
     perMonth: "month",
-    tax: { USD: "plus tax where it applies", CAD: "plus HST" },
+    tax: { USD: "plus tax where it applies", CAD: "plus applicable tax" },
   },
   /**
    * Shown on /zack only, so the vocabulary rule does not apply to it. The first sentence is the spec's (A.11).
@@ -452,7 +461,7 @@ export const v1 = {
         { id: "arrive", text: "Your first {freeLists} Cora Curations arrive, one each Monday. They are free. We ask for your card when the first one is ready, and it is not charged then." },
         { id: "email", text: "After your {lastFreeList} Cora Curation, we email you with what happens next." },
         { id: "charged", text: "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing." },
-        { id: "closes", text: "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge." },
+        { id: "closes", text: trialCloseRule },
       ],
     },
     noAgent: {

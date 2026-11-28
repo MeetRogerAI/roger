@@ -35,3 +35,9 @@ export function oneAtATimeOffered(): boolean {
 
 /** Said to anyone who asks for the option while it is off, and to an account still on it. */
 export const ONE_AT_A_TIME_NOT_OFFERED = "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday.";
+
+/**
+ * The billing page's and the status line's close for an account still on one at a time: there is no switch to
+ * offer (the billing page has none), so the order emails and the order refusal end with it too (November 28, 2026).
+ */
+export const PLAN_QUESTIONS = "Monthly is now the only plan. Write to us if you have questions about yours.";

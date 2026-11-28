@@ -311,7 +311,7 @@ describe("resetting a field", () => {
     expect(review).toContain("After publishing (back to the original wording)");
     await publishNow();
     expect(await faq()).not.toContain("No. You can cancel any time.");
-    expect(await faq()).toContain("No. You get two free Cora Curations before any charge, and you can cancel any time.");
+    expect(await faq()).toContain("No, unless we charge you by mistake: then tell us and we refund the mistaken charge in full to your card. You get two free Cora Curations before any charge, and you can cancel any time.");
   });
 });
 
@@ -373,7 +373,7 @@ describe("the editing screen", () => {
 
   it("shows a text that names an amount as visitors read it today, under the box that holds the name", async () => {
     const markup = await editorScreen("faq");
-    expect(words(box(markup, REFUND_A))).toContain("Visitors read: No. You get two free Cora Curations before any charge, and you can cancel any time.");
+    expect(words(box(markup, REFUND_A))).toContain("Visitors read: No, unless we charge you by mistake: then tell us and we refund the mistaken charge in full to your card. You get two free Cora Curations before any charge, and you can cancel any time.");
     expect(box(markup, "questions.getting-started.items.each-week.a")).not.toContain("data-reads");
     // A caption's two names change with the picture: nothing is filled in, and no such line is shown.
     expect(box(await editorScreen("home"), "bricks.caption.week")).not.toContain("data-reads");
@@ -382,7 +382,7 @@ describe("the editing screen", () => {
   it("says in words what a name in braces shows, where the text holds one", async () => {
     const markup = await editorScreen("faq");
     expect(words(box(markup, COST_A))).toContain("{monthlyUsd} shows the monthly price in US dollars (US$200 today).");
-    expect(words(box(markup, REFUND_A))).toContain("{freeLists} shows how many lists are free, as a word (two today).");
+    expect(words(box(markup, REFUND_A))).toContain("{freeLists} shows how many Cora Curations are free, as a word (two today).");
     // A text that holds no name has no such line.
     expect(box(markup, "questions.getting-started.items.each-week.a")).not.toContain("data-names");
     // And once for the page, every amount a text may name.
@@ -456,7 +456,7 @@ describe("review and publish", () => {
     expect(seen).toContain("What will change: 1 text");
     // As a visitor reads it: the amount, never its name in braces.
     expect(original(REFUND_A)).toContain("{freeLists}");
-    expect(seen).toContain("On the site now No. You get two free Cora Curations before any charge, and you can cancel any time.");
+    expect(seen).toContain("On the site now No, unless we charge you by mistake: then tell us and we refund the mistaken charge in full to your card. You get two free Cora Curations before any charge, and you can cancel any time.");
     expect(seen).toContain(`After publishing ${answer}`);
     expect(seen).not.toMatch(/\{\w+\}/);
     expect(seen).toContain("Wording warnings: 1");

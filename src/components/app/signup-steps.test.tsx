@@ -24,7 +24,7 @@ describe("SignupSteps", () => {
   });
 
   it("Payment links back to the first list (no 'Not now')", () => {
-    const html = renderToStaticMarkup(<SignupSteps current={4} back={{ href: "/app", label: "Back to your first list" }} />);
+    const html = renderToStaticMarkup(<SignupSteps current={4} back={{ href: "/app", label: "Back to your first Cora Curation" }} />);
     expect(html).toContain('href="/app"');
     expect(html).toContain("width:100%");
   });

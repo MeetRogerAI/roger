@@ -17,6 +17,7 @@ import { v1Copy } from "@/lib/site/content/model";
 import { nextHeaders, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
 import { at, renderSitePages, sitePagePaths, WATCH_TOKEN, type RenderedPage } from "@/test-helpers/site-pages";
+import { HELD_CLOSE_DAYS } from "@/lib/housekeeping/clocks";
 import { amountsFrom } from "./amounts";
 import { allowed, checkClaims, checkRule, describeViolations, hypeWords, readPage, readSegments, ruleIds, textPage, type ClaimsContext, type PageText, type RuleId, type Zone } from "./claims";
 import type { Testimonial } from "./testimonials";
@@ -487,18 +488,26 @@ describe("the allow-list", () => {
     }
   });
 
-  it("allows “Payment starts in week 3”, the line under the price, with the week the settings give and no other number", () => {
-    expect(check(line("Your first two Cora Curations are free. Payment starts in week 3."))).toEqual([]);
+  it("allows “Payment starts no earlier than week 3”, the line under the price, with the week the settings give and no other number", () => {
+    expect(check(line("Your first two Cora Curations are free. Payment starts no earlier than week 3."))).toEqual([]);
     // Only that phrase: the same number anywhere else is a violation.
     expect(broken("number", line("Payment begins in week 3."))).toEqual(["3"]);
     expect(broken("number", line("You pay from week 3 on."))).toEqual(["3"]);
     // Only that week: another number in the phrase is one.
-    expect(broken("number", line("Payment starts in week 4."))).toEqual(["4"]);
-    expect(broken("number", line("Payment starts in week 30."))).toEqual(["30"]);
+    expect(broken("number", line("Payment starts no earlier than week 4."))).toEqual(["4"]);
+    expect(broken("number", line("Payment starts no earlier than week 30."))).toEqual(["30"]);
     // The week follows the settings: with three free Cora Curations it is week 4, and week 3 is then a violation.
     const three = { ...context, amounts: amountsFrom({ ...v3Defaults, freeRuns: 3 }) };
-    expect(checkRule("number", line("Payment starts in week 4."), three)).toEqual([]);
-    expect(checkRule("number", line("Payment starts in week 3."), three).map((v) => v.found)).toEqual(["3"]);
+    expect(checkRule("number", line("Payment starts no earlier than week 4."), three)).toEqual([]);
+    expect(checkRule("number", line("Payment starts no earlier than week 3."), three).map((v) => v.found)).toEqual(["3"]);
+    // The line before Peter made the week a minimum (November 28, 2026) is no longer excused.
+    expect(broken("number", line("Payment starts in week 3."))).toEqual(["3"]);
+  });
+
+  it("allows the 14 of the no-card trial close in its own phrase only, and that 14 is main's HELD_CLOSE_DAYS", () => {
+    expect(HELD_CLOSE_DAYS).toBe(14);
+    expect(check(line("With no card, it closes 14 days after the email with your first Cora Curation’s titles."))).toEqual([]);
+    expect(broken("number", line("The trial closes 14 days after sign-up."))).toEqual(["14"]);
   });
 
   it("allows the short title “20 new prospects every day”, in those words only", () => {
@@ -698,7 +707,7 @@ describe(`every page of site version ${VERSION}, as rendered`, () => {
   });
 
   it("prints the note under the price in Peter's words on every page that has it, and the old note nowhere", () => {
-    const note = "Your first two Cora Curations are free. Payment starts in week 3.";
+    const note = "Your first two Cora Curations are free. Payment starts no earlier than week 3.";
     for (const pages of [bare, full]) {
       // Under the homepage's price, and under the button of /library's closing band.
       expect(pages.filter((page) => words(page).includes(note)).map((page) => page.path)).toEqual(["/", "/library"]);

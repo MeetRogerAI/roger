@@ -29,7 +29,7 @@ export function HeldIdeas({ titles }: { titles: string[] }) {
         <Link href={PAYMENT_PATH} className="btn">
           {HELD_BUTTON}
         </Link>
-        <p className="mt-3 text-small text-ink-2">Your first two lists are free. Nothing is charged today.</p>
+        <p className="mt-3 text-small text-ink-2">Your first two Cora Curations are free. Nothing is charged today.</p>
       </div>
     </div>
   );

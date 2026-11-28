@@ -122,7 +122,7 @@ export function amountNames(a: Amounts) {
     freeLists: cardinals[a.freeLists] ?? String(a.freeLists),
     /** "third", as in "charged with your third list". */
     firstPaidList: ordinals[a.freeLists] ?? `${a.freeLists + 1}th`,
-    /** "3", as in "Payment starts in week 3": one Cora Curation arrives each Monday, so the first paid one is in that week. */
+    /** "3", as in "Payment starts no earlier than week 3": one Cora Curation arrives each Monday, so the first paid one is in that week. */
     firstPaidWeek: String(a.freeLists + 1),
     /** "second", as in "we email you after your second list". */
     lastFreeList: ordinals[a.freeLists - 1] ?? `${a.freeLists}th`,

@@ -7,7 +7,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { siteConfig, v3Defaults } from "@/data/config";
 import { circlesPrivacyPreview } from "@/data/circles-legal";
-import { privacy as legacyPrivacy, type LegalDoc } from "@/data/legal";
+import { privacy as legacyPrivacy, rogerMonthlyTerms, type LegalDoc } from "@/data/legal";
+import { HELD_CLOSE_DAYS } from "@/lib/housekeeping/clocks";
 import { amountsFrom, fillAmounts, hasBareDollar, money } from "@/lib/site/amounts";
 import { siteLegal, siteLegalMeta, sitePrivacy, siteTerms, trainingPosition } from "./legal";
 import { v1 } from "./v1";
@@ -72,7 +73,8 @@ describe("both documents", () => {
     const source = textOf(sitePrivacy) + textOf(siteTerms);
     expect(source).not.toMatch(/\$\s?\d/);
     // The only digits typed are the year in the date and the 30-day promise.
-    expect(source.match(/\d+/g)).toEqual(["30", "2026", "2026"]);
+    // And the no-card close after the first titles-only email: main's HELD_CLOSE_DAYS, a constant, not a setting.
+    expect(source.match(/\d+/g)).toEqual(["30", "2026", String(HELD_CLOSE_DAYS), "2026"]);
   });
 
   it("give the contact email", () => {
@@ -368,7 +370,7 @@ describe("terms say each point in the spec's list", () => {
     expect(trial).toContain("Only a Cora Curation that is delivered to you counts as one of them.");
     expect(trial).toContain("We ask for a card when your first Cora Curation is ready, and it is kept on file. It is not charged then.");
     expect(trial).toContain("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
-    expect(trial).toContain("If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge.");
+    expect(trial).toContain("If no first Cora Curation is delivered, the trial closes without a charge. With a card added, it closes 21 days after you added it. With no card, it closes 14 days after the email with your first Cora Curation’s titles, or 21 days after sign-up if no such email is sent. Each Monday with no Cora Curation because of Roger adds a week.");
   });
 
   it("one plan, monthly, at one price in both currencies", () => {
@@ -390,7 +392,7 @@ describe("terms say each point in the spec's list", () => {
     expect(termsText.match(/cora curations?/gi) ?? []).toEqual(termsText.match(/Cora Curations?/g) ?? []);
     expect((termsText.match(/Cora Curation/g) ?? []).length).toBeGreaterThanOrEqual(8);
     // The same promises as the line under the price, /how-it-works and the FAQ make (src/data/site/v1.ts).
-    expect(fill(v1.trialLine)).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
+    expect(fill(v1.trialLine)).toBe("Your first two Cora Curations are free. Payment starts no earlier than week 3.");
     expect(fill(v1.howItWorks.firstWeeks.steps[4].text)).toBe("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
     expect(fill(v1.questions.flatMap((group) => group.items).find((item) => item.id === "card-charged")!.a)).toContain("The first charge comes with your third Cora Curation, and the charge repeats once a month after that.");
   });
@@ -416,9 +418,20 @@ describe("terms say each point in the spec's list", () => {
 
   it("no refunds, cancel any time, access to the end of the paid month", () => {
     const refunds = section(terms, "roger-monthly");
-    expect(refunds).toContain("There are no refunds.");
     expect(refunds).toContain("You can cancel any time");
     expect(refunds).toContain("Your access continues to the end of the month you have paid for.");
+  });
+
+  it("carries main's approved refund, payment-failure and consumer-law wording word for word (Peter, November 28, 2026)", () => {
+    const refunds = section(terms, "roger-monthly");
+    // Main's section, with its own name for the weekly set and the settings' count of free ones.
+    const main = (n: number) => fill(rogerMonthlyTerms.body[n].replace("two Cora Curations", "{freeLists} Cora Curations"));
+    expect(rogerMonthlyTerms.body[6]).toMatch(/^No refunds. /);
+    expect(rogerMonthlyTerms.body[7]).toMatch(/^If a payment fails. /);
+    expect(rogerMonthlyTerms.body[8]).toMatch(/^Your rights. /);
+    for (const n of [6, 7, 8]) expect(refunds).toContain(main(n));
+    expect(refunds).toContain("we refund the mistaken charge in full to your card");
+    expect(refunds).not.toContain("There are no refunds.");
   });
 
   it("tax is added where it applies", () => {
@@ -451,7 +464,8 @@ describe("the amounts in the terms", () => {
     for (const amount of shown) expect(allowed.has(amount), amount).toBe(true);
     // Every other number is the trial's close or the year.
     const others = termsText.replace(/(?:US|CA)\$[\d,]+/g, "").match(/\d+/g);
-    expect(others).toEqual([String(v3Defaults.trialCloseDays), "2026"]);
+    // The 14 is the no-card close after the first titles-only email: main's HELD_CLOSE_DAYS, a constant, not a setting.
+    expect(others).toEqual([String(v3Defaults.trialCloseDays), String(HELD_CLOSE_DAYS), String(v3Defaults.trialCloseDays), "2026"]);
   });
 
   it("state every US price with the Canadian one beside it", () => {
@@ -469,7 +483,7 @@ describe("the amounts in the terms", () => {
     expect(section(other, "contributing")).toContain("the monthly price is US$655 a month (CA$877 in Canada)");
     expect(section(other, "trial")).toContain("Your first three Cora Curations are free.");
     expect(section(other, "trial")).toContain("charged with your fourth Cora Curation");
-    expect(section(other, "trial")).toContain("within 30 days of sign-up");
+    expect(section(other, "trial")).toContain("it closes 30 days after you added it");
     expect(textOf(other)).not.toMatch(/US\$200|CA\$280|US\$400|CA\$560/);
   });
 });

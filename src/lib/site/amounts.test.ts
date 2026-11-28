@@ -43,10 +43,10 @@ describe("price wording", () => {
     expect(taxNote.USD).toBe("plus tax where it applies");
   });
 
-  it("writes CAD with its code after the amount and HST", () => {
+  it("writes CAD with its code after the amount and the tax note (Peter, November 28, 2026: “plus applicable tax”)", () => {
     expect(priceLine("CAD", amounts.monthly.CAD, "month")).toBe("CA$280 / month CAD");
     expect(priceLine("CAD", amounts.list.CAD, "list")).toBe("CA$280 / list CAD");
-    expect(taxNote.CAD).toBe("plus HST");
+    expect(taxNote.CAD).toBe("plus applicable tax");
   });
 
   it("never writes a bare dollar sign", () => {

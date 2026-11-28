@@ -29,11 +29,10 @@ const links = [
 const legal = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
-  { href: "/refunds", label: "Refunds" },
 ];
 
 /** One quiet line: what this is, where to go, the year and the small print. */
-function Line({ left, centre, year, site, small }: { left: React.ReactNode; /** `id`: a site version's link, keyed by it (two may share their words). */ centre: { href: string; label: string; id?: string }[]; year: number; site: ServedSite; /** A site version's own small print, in its own words. */ small?: { href: string; label: string }[] }) {
+function Line({ left, centre, year, small }: { left: React.ReactNode; /** `id`: a site version's link, keyed by it (two may share their words). */ centre: { href: string; label: string; id?: string }[]; year: number; site: ServedSite; /** A site version's own small print, in its own words. */ small?: { href: string; label: string }[] }) {
   return (
     <footer className="text-small text-ink-2">
       <div className="wrap grid gap-2 pb-7 pt-[18svh] md:grid-cols-[1fr_auto_1fr] md:items-baseline md:gap-6">
@@ -64,7 +63,7 @@ function Line({ left, centre, year, site, small }: { left: React.ReactNode; /** 
         {/* A site version has more links in the middle, so its small print holds one line and the middle wraps. */}
         <p className={`flex flex-wrap gap-x-5 gap-y-1 md:justify-end${small ? " md:flex-nowrap md:whitespace-nowrap" : ""}`}>
           <span>© {year}</span>
-          {(small ?? legal.filter((l) => site === "legacy" || l.href !== "/refunds")).map((l) => (
+          {(small ?? legal).map((l) => (
             <Link key={l.label} href={l.href} className="inline-block py-1 text-ink underline decoration-transparent underline-offset-4 transition-[text-decoration-color] duration-[180ms] hover:decoration-current">
               {l.label}
             </Link>
