@@ -38,7 +38,8 @@ const SHARING: { value: "share" | "match_only" | "off"; label: string; hint: str
 
 /** Spec B.5 item 2: the choice, then a confirmation that states the price effect, then saved. */
 export function SharingForm({ current }: { current: "share" | "match_only" | "off" }) {
-  const [state, action, pending] = useActionState<SharingState, FormData>(changeSharing, { status: "idle" });
+  // Each answer is stamped, so the radios can be redrawn after it (see below).
+  const [state, action, pending] = useActionState<SharingState & { at?: number }, FormData>(async (p, fd) => ({ ...(await changeSharing(p, fd)), at: Date.now() }), { status: "idle" });
   const [picked, setPicked] = useState(current);
   // The confirmed choice: the server's value, or the one just saved (the page refreshes behind it).
   const now = state.status === "saved" && state.sharing ? state.sharing : current;
@@ -47,13 +48,17 @@ export function SharingForm({ current }: { current: "share" | "match_only" | "of
   useEffect(() => {
     if (confirming) confirmRef.current?.focus();
   }, [confirming]);
+  // React 19 resets the form after each action, which puts the radios back to the choice the page
+  // started with while `picked` still holds the member's pick. Redraw them after every answer (keyed on
+  // its stamp), and send the pick in a hidden field the reset cannot change (docs/solutions/ui-bugs).
   return (
     <form action={action} className="space-y-4">
-      <fieldset className="grid gap-3">
+      <input type="hidden" name="sharing" value={picked} />
+      <fieldset key={state.at ?? 0} className="grid gap-3">
         <legend className="sr-only">Sharing</legend>
         {SHARING.map((s) => (
           <label key={s.value} className={choice}>
-            <input type="radio" name="sharing" value={s.value} checked={picked === s.value} onChange={() => setPicked(s.value)} className="mt-1 size-4 accent-accent" />
+            <input type="radio" name="sharing-choice" value={s.value} checked={picked === s.value} onChange={() => setPicked(s.value)} className="mt-1 size-4 accent-accent" />
             <span>
               <span className="block text-title">
                 {s.label}
