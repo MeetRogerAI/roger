@@ -1,6 +1,7 @@
 import { addDays, torontoDate } from "@/lib/clock";
 import { amount, chargeWords, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { ContributionStatus } from "@/lib/billing/contribution";
+import { PLAN_QUESTIONS } from "@/lib/billing/offered";
 import { holdDate } from "@/lib/billing/period";
 import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
 import { carriedMissText, notSharingText, secondMissText } from "@/lib/mail/templates/second-miss";
@@ -46,8 +47,8 @@ export type StatusFacts = {
   now: Date;
 };
 
-/** The close of a leftover per-run account's status line: monthly is the only plan, and nothing can be ordered. */
-export const PLAN_QUESTIONS = "Monthly is now the only plan. Write to us if you have questions about yours.";
+/** The close of a leftover per-run account's status line: monthly is the only plan, and nothing can be ordered. Defined with the plan switch (billing/offered.ts), whose emails say it too. */
+export { PLAN_QUESTIONS };
 
 /** Where a trial with no card saves it (Step 4, Payment). */
 export const PAYMENT_PATH = "/start/payment";
@@ -80,52 +81,52 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
   const cur = f.currency ?? "USD";
   const tax = taxPhrase(cur);
   if (f.status === "held" && f.holdReason === "renewal_unpaid") {
-    return "Your monthly payment didn’t go through, so your lists are paused. Update your card on the billing page and they start again straight away.";
+    return "Your monthly payment didn’t go through, so your Cora Curations are paused. Update your card on the billing page and they start again straight away.";
   }
   if (f.status === "held" && f.holdReason === "amount_changed") return amountChangedLine(f.quote);
-  if (f.status === "held") return "Your payment didn’t go through, so your list is waiting. Update your card on the billing page and it comes straight away.";
+  if (f.status === "held") return "Your payment didn’t go through, so your Cora Curation is waiting. Update your card on the billing page and it comes straight away.";
   if (f.status === "closed") return "Your account is closed. Nothing more will be charged.";
   if (f.status === "cancelled") {
     return f.accessEndsAt && new Date(f.accessEndsAt) > f.now
-      ? `Your plan is cancelled. Your lists continue until ${longDate(torontoDate(new Date(f.accessEndsAt)))}, and nothing more will be charged.`
+      ? `Your plan is cancelled. Your Cora Curations continue until ${longDate(torontoDate(new Date(f.accessEndsAt)))}, and nothing more will be charged.`
       : "Your plan is cancelled, and nothing more will be charged.";
   }
   if (f.status === "active" && f.endingAt) {
     return new Date(f.endingAt) > f.now
-      ? `Your plan is cancelled. Your lists continue until ${longDate(torontoDate(new Date(f.endingAt)))}, and nothing more will be charged.`
+      ? `Your plan is cancelled. Your Cora Curations continue until ${longDate(torontoDate(new Date(f.endingAt)))}, and nothing more will be charged.`
       : "Your plan is cancelled, and nothing more will be charged.";
   }
   if (f.status === "trial" && f.switchedFromPerRun) {
     const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${chargeWords(f.quote.totalCents, f.quote.currency, f.quote.taxCents)}` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
-    return `Monthly starts with your next list: ${next}.`;
+    return `Monthly starts with your next Cora Curation: ${next}.`;
   }
   // Leftover per-run states (preview only). One at a time is retired (plan 2026-11-26-001, Unit 9) and nothing can be
   // ordered any more, so these lines promise no order (review fixes Unit 9, F2).
   if (f.plan === "monthly" && f.switchingAt) {
-    return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a list every Monday. ${PLAN_QUESTIONS}`;
+    return `Monthly continues until ${longDate(torontoDate(new Date(f.switchingAt)))}, with a Cora Curation every Monday. ${PLAN_QUESTIONS}`;
   }
-  if (f.sponsored) return "Your lists are covered by your sponsor.";
+  if (f.sponsored) return "Your Cora Curations are covered by your sponsor.";
   // No card yet (sign-up ends without one): the first list is held until the card is saved.
   if (waitingForCard(f)) {
     if (f.firstTeaserAt) return "Your first ideas are ready — add a card to see them.";
-    return f.sharing === "off" ? "Your first list arrives on Monday." : "Your first list arrives after Zack’s first report.";
+    return f.sharing === "off" ? "Your first Cora Curation arrives on Monday." : "Your first Cora Curation arrives after Zack’s first report.";
   }
   if (f.status === "trial") {
-    if (f.freeListsUsed === 0) return `Your first ${f.freeRuns} lists are free.`;
+    if (f.freeListsUsed === 0) return `Your first ${f.freeRuns} Cora Curations are free.`;
     const n = Math.min(f.freeListsUsed, f.freeRuns);
-    if (n < f.freeRuns) return `Free list ${n} of ${f.freeRuns}.`;
-    if (f.plan === "per_run") return `Free list ${n} of ${f.freeRuns}. ${PLAN_QUESTIONS}`;
+    if (n < f.freeRuns) return `Free Cora Curation ${n} of ${f.freeRuns}.`;
+    if (f.plan === "per_run") return `Free Cora Curation ${n} of ${f.freeRuns}. ${PLAN_QUESTIONS}`;
     const next = f.quote
       ? `${longDate(f.quote.week)}, ${chargeWords(f.quote.totalCents, f.quote.currency, f.quote.taxCents)}`
       : `${money(amount(s, "monthly", cur, f.sharing === "share" ? "standard" : "higher"), cur)} ${tax}`;
-    return `Free list ${n} of ${f.freeRuns}. Your next list is your first paid one: ${next}.`;
+    return `Free Cora Curation ${n} of ${f.freeRuns}. Your next Cora Curation is your first paid one: ${next}.`;
   }
   if (f.plan === "per_run") {
     const paid = f.orderCents != null ? chargeWords(f.orderCents, cur, null) : `${money(amount(s, "per_run", cur), cur)} ${tax}`;
-    return `This list: ${paid}. ${PLAN_QUESTIONS}`;
+    return `This Cora Curation: ${paid}. ${PLAN_QUESTIONS}`;
   }
-  // A renewal Stripe could not collect: lists continue for now, and pause on the hold date unless it is paid.
-  if (f.status === "active" && f.renewalFailedAt) return `Your payment didn’t go through; lists pause on ${longDate(holdDate(f.renewalFailedAt))} unless it’s paid.`;
+  // A renewal Stripe could not collect: Cora Curations continue for now, and pause on the hold date unless it is paid.
+  if (f.status === "active" && f.renewalFailedAt) return `Your payment didn’t go through; Cora Curations pause on ${longDate(holdDate(f.renewalFailedAt))} unless it’s paid.`;
   const c = f.contribution ?? null;
   const higher = money(amount(s, "monthly", cur, "higher"), cur);
   // The renewal ending this billing month (from the subscription's anchor), else the first charge's anniversary.
@@ -156,8 +157,8 @@ export function changedAmountChargeDate(quote: Pick<NonNullable<StatusFacts["quo
 
 function amountChangedLine(quote: StatusFacts["quote"]): string {
   const when = changedAmountChargeDate(quote);
-  if (!quote || !when) return "Your first charge amount changed, so your list waits a day while we tell you the new amount.";
-  return `Your first charge is now ${chargeWords(quote.totalCents, quote.currency, quote.taxCents)}, not the amount we told you before. We charge it on ${longDate(when)}, and your list comes straight after; if you’d rather not, cancel on the billing page before then.`;
+  if (!quote || !when) return "Your first charge amount changed, so your Cora Curation waits a day while we tell you the new amount.";
+  return `Your first charge is now ${chargeWords(quote.totalCents, quote.currency, quote.taxCents)}, not the amount we told you before. We charge it on ${longDate(when)}, and your Cora Curation comes straight after; if you’d rather not, cancel on the billing page before then.`;
 }
 
 /** What sharing off means under the contributor rule (the strip, and the sharing confirmation on /app/zack). */

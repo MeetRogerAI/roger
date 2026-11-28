@@ -21,7 +21,7 @@ export function sharingChangedEmail(o: {
   const zackPage = { label: "Zack page", url: appUrl("/app/zack") };
   const off = o.higherPrice
     ? [
-        `Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price ${o.higherPrice.doubles ? `doubles, to ${o.higherPrice.higher} a month` : `goes up to ${o.higherPrice.higher} a month`}. This applies only to months when you are not sharing, and the difference is added to your next invoice.`,
+        `Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora Curations, but your price ${o.higherPrice.doubles ? `doubles, to ${o.higherPrice.higher} a month` : `goes up to ${o.higherPrice.higher} a month`}. This applies only to months when you are not sharing, and the difference is added to your next invoice.`,
       ]
     : null;
   return renderEmail({
@@ -75,7 +75,7 @@ export function runDeletedEmail(o: { weekOf: string }): Rendered {
     preview: `The report for ${longDate(o.weekOf)}.`,
     heading: "Zack’s report was deleted.",
     paragraphs: [
-      `The report for your list on ${longDate(o.weekOf)}, its private profile, and any of its plays not yet shared were removed. Plays already in the shared pool stay there in anonymous form.`,
+      `The report for your Cora Curation on ${longDate(o.weekOf)}, its private profile, and any of its plays not yet shared were removed. Plays already in the shared pool stay there in anonymous form.`,
     ],
     button: { label: "Open the Zack page", url: appUrl("/app/zack") },
   });

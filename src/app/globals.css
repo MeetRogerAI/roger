@@ -118,6 +118,18 @@
   html {
     scroll-padding-top: 72px;
   }
+  /* Below lg the admin pins its Menu button under the header (admin-ui.tsx): 60px of header and 64px of button.
+     Without the extra room a link to a part of a page (/admin/users/…#add-run) lands with its heading under the button. */
+  @media (max-width: 1023.98px) {
+    html:has([data-admin-nav]) {
+      scroll-padding-top: 136px;
+    }
+  }
+  /* An admin's preview of the drafts pins its bar to the foot of the window (preview-bar.tsx): 66px wide, up to 122px
+     on a phone, where it wraps. Without the room a link or field brought into view by Tab lands under the bar. */
+  html:has([data-preview-bar]) {
+    scroll-padding-bottom: 136px;
+  }
   body {
     background: var(--color-ground);
     color: var(--color-ink);
@@ -183,7 +195,7 @@
     }
   }
 
-  /* Buttons: a filled pill for the one action; everything else is a text link. */
+  /* Buttons: a filled pill for the one action. Beside it, an outlined pill for the second (the header's "Sign in"); everything else is a text link. */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -214,8 +226,11 @@
   .btn:hover {
     background: var(--color-accent-hover);
   }
-  .btn:active {
-    transform: scale(0.98);
+  /* A pressed button shrinks a little: movement, so only where motion is allowed. */
+  @media (prefers-reduced-motion: no-preference) {
+    .btn:active {
+      transform: scale(0.98);
+    }
   }
   .btn-l {
     min-height: 52px;
@@ -244,6 +259,15 @@
   }
   .btn-light:hover {
     background: #ffffff;
+  }
+  /* The second action beside a filled one: no fill, so the filled button stays the only one. For light grounds. */
+  .btn-outline {
+    background: transparent;
+    color: var(--color-ink);
+    border-color: var(--color-ink);
+  }
+  .btn-outline:hover {
+    background: var(--color-ground-2);
   }
   .btn[aria-disabled="true"] {
     background: var(--color-ground-2);
@@ -282,8 +306,11 @@
     display: inline-block;
     transition: transform 160ms var(--ease-out);
   }
-  .chev:hover::after {
-    transform: translateX(2px);
+  /* The chevron's nudge on hover: movement, so only where motion is allowed. */
+  @media (prefers-reduced-motion: no-preference) {
+    .chev:hover::after {
+      transform: translateX(2px);
+    }
   }
 
   /* Horizontal shelves line their first card up with the page column. */
@@ -517,6 +544,190 @@ h2 {
   animation: none !important;
   transform: none !important;
   opacity: 1 !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bricks in motion (site version 1: the hero's four steps and "It compounds").
+ * The markup is always the finished picture. A hidden or dimmed state exists
+ * only with motion allowed and only once script is running (html.js): the
+ * hero shows one step at a time, and the "It compounds" loop's script marks
+ * the bricks of later weeks data-out. With reduced motion or with no script,
+ * none of these rules applies and nothing moves. In print every brick and
+ * label is forced to its finished state.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /*
+   * It compounds: the loop. Only opacity and transform ever change, so nothing is laid out again.
+   * An idea that arrives eases down into its place, one after another. An idea of a later week than
+   * the loop's is out: it fades where it stands, and only once it can no longer be seen does it move
+   * back up to where it will next arrive from. So the wrap from the last week to the first is one
+   * even fade of the wall, with no idea seen to jump.
+   */
+  .js .compounding-loop [data-brick] {
+    transition:
+      opacity 320ms var(--ease-out),
+      transform 560ms var(--ease-out);
+    transition-delay: calc(max(0, var(--i, 0) - var(--from, 0)) * var(--per, 30ms));
+  }
+  .js .compounding-loop [data-brick][data-out="yes"] {
+    opacity: 0;
+    transform: translateY(-12px);
+    transition:
+      opacity 420ms var(--ease-out),
+      transform 0s linear 420ms;
+  }
+  .js .compounding-loop [data-loop-pause] {
+    display: inline-flex;
+  }
+  /* The current state's line is marked by its rule and its ink. The others keep a readable ink: nothing is dimmed below contrast */
+  .js .compounding-loop [data-loop-state] {
+    transition: border-color 300ms var(--ease-out);
+  }
+  .js .compounding-loop [data-loop-state][data-active="no"] > :first-child {
+    color: var(--color-ink-2);
+  }
+  .js .compounding-loop [data-loop-state][data-active="yes"] {
+    border-color: var(--color-level-1);
+  }
+
+  /*
+   * The hero's four steps (site version 1, the homepage). The markup is a still list of the four, each its
+   * label, number, headline, text and stack. Here it becomes a loop: the labels are the row of buttons above
+   * the frame, and the frame holds one step at a time, all four in the same grid cell, so the frame is always
+   * as tall as its tallest step and nothing under it moves when the step changes.
+   */
+  .js .hero-steps [data-step-tabs] {
+    display: grid;
+  }
+  /*
+   * A label an admin made longer than its button has room for (five steps on a phone) breaks inside it, never out
+   * of it: hyphenated where the language allows, anywhere where it does not. The buttons and their row keep the pill
+   * shape on one line (each radius is half of one line's height, which is what rounded-full gives there) and are
+   * rounded boxes on two, so no wrapped word sits over a curved edge.
+   */
+  .js .hero-steps [data-step-tabs] {
+    border-radius: 27px;
+  }
+  .js .hero-steps [data-step-tabs] > button {
+    overflow-wrap: anywhere;
+    hyphens: auto;
+    border-radius: 22px;
+  }
+  .js .hero-steps [data-step-controls] {
+    display: flex;
+  }
+  .js .hero-steps [data-step-label] {
+    display: none;
+  }
+  .js .hero-steps [data-step-list] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .js .hero-steps [data-step] {
+    grid-area: 1 / 1;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition:
+      opacity 260ms var(--ease-out),
+      transform 520ms var(--ease-out),
+      visibility 0s linear 260ms;
+  }
+  .js .hero-steps [data-step][data-active="yes"] {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition-delay: 200ms, 200ms, 0s;
+  }
+  /* The step's ideas drop onto its stack one after another as the step comes up, and are out again before it is next shown */
+  .js .hero-steps [data-step] [data-brick] {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition:
+      opacity 200ms var(--ease-out),
+      transform 0s linear 260ms;
+  }
+  .js .hero-steps [data-step][data-active="yes"] [data-brick] {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 300ms var(--ease-out),
+      transform 520ms var(--ease-spring);
+    transition-delay: calc(var(--i, 0) * 45ms + 320ms);
+  }
+}
+/*
+ * "Cora Curation Examples": with script running, the row of short titles is a set of tabs and one example
+ * shows at a time. The server marks the first one selected, so nothing moves when the script starts. With
+ * no script every example is in the page, one under another, and each short title is a link to its example.
+ */
+.js .examples [data-example-panel][data-selected="no"] {
+  display: none;
+}
+.js .examples [data-example-tab][data-selected="yes"] {
+  background-color: var(--color-ink);
+  color: var(--color-ground);
+}
+/*
+ * A signed-in visitor's header from the first frame (src/lib/auth/hint-cookie.ts): the head script marks <html> from
+ * the hint cookie before paint, so "Open Roger" shows and the signed-out pair does not, while the prerendered markup
+ * still says signed out. Outside any layer, so it wins over the utilities' `invisible` until React renders the same.
+ * The mark is a global fact kept equal to the cookie on every render (useSignedInHint), never a page's marker.
+ */
+html[data-signed-in] [data-account="out"] {
+  visibility: hidden;
+}
+html[data-signed-in] [data-account="in"] {
+  visibility: visible;
+}
+/*
+ * Words an admin typed (Pages): a short title of an example, or a link of the footer, may be one long word. It
+ * breaks inside its tab or its link, and never makes the row, or the page, wider than the window.
+ */
+.examples [data-example-tab],
+footer nav a {
+  overflow-wrap: anywhere;
+}
+/* On paper it is always the finished picture, whatever classes script has added and wherever the page was scrolled to */
+@media print {
+  .compounding-loop [data-brick],
+  .hero-steps [data-brick] {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* The hero's four steps go back to the still list, and no control is printed */
+  .hero-steps [data-step-list] {
+    gap: 2.5rem !important;
+  }
+  .hero-steps [data-step] {
+    grid-area: auto !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+  .hero-steps [data-step-label] {
+    display: block !important;
+  }
+  .hero-steps [data-step-tabs],
+  .hero-steps [data-step-controls],
+  .compounding-loop [data-loop-pause] {
+    display: none !important;
+  }
+  /* The examples are all printed, one under another */
+  .examples [data-example-tabs] {
+    display: none !important;
+  }
+  .examples [data-example-panel] {
+    display: block !important;
+  }
+  /* A brick is a filled square: without this a printer leaves the fill out */
+  .compounding-loop [data-brick],
+  .hero-steps [data-brick] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 /* The pricing stage swaps its contents in place */

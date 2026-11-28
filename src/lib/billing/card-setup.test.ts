@@ -9,6 +9,9 @@ import { fakeGateway } from "@/test-helpers/fake-card-gateway";
 import { claimEvent, handleStripeEvent } from "./webhook";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (./offered): off here, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("./offered", async (orig) => ({ ...(await orig<typeof import("./offered")>()), oneAtATimeOffered: () => offer.on }));
 
 const settings = mergeV3([]);
 const getSettings = async () => settings;
@@ -24,6 +27,7 @@ let userId: string;
 
 /** Sign-up ends at Step 3 with a trial and no card (Unit 2); the hosted card-at-sign-up page is gone (whole-branch review W8). */
 beforeEach(async () => {
+  offer.on = false;
   ({ query } = await testDb());
   sent = [];
   [{ id: userId }] = await query<{ id: string }>(

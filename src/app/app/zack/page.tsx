@@ -165,7 +165,7 @@ function RunHistory({ runs }: { runs: RunListRow[] }) {
         <li key={r.id} className="grid gap-2 py-4 text-small sm:grid-cols-[1fr_auto] sm:gap-6">
           <div>
             <p className="font-semibold">
-              List for {longDate(r.week_of)}
+              Cora Curation for {longDate(r.week_of)}
               {r.is_test && <span className="ml-2 font-normal text-ink-2">(test)</span>}
             </p>
             <p className="mt-1 text-ink-2">

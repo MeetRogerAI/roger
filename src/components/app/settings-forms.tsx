@@ -56,7 +56,7 @@ export function ProfileForm({ values, zones }: { values: ProfileValues; zones: r
           <label className="flex gap-3">
             <input type="checkbox" name="pref_monday" defaultChecked={shown.prefs.monday} className="mt-1 size-4 accent-accent" />
             <span>
-              The Monday list email
+              The Monday email with your Cora Curation
               <span className="block text-ink-2">Switched off, your ideas still arrive on this site each Monday.</span>
             </span>
           </label>

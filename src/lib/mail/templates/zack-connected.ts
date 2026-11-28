@@ -16,9 +16,9 @@ export function zackConnectedEmail(o: { test: boolean; weekOf: string }): Render
       })
     : renderEmail({
         subject: "Zack’s first report arrived",
-        preview: `It counts for your list on ${longDate(o.weekOf)}.`,
+        preview: `It counts for your Cora Curation on ${longDate(o.weekOf)}.`,
         heading: "Zack’s first report arrived.",
-        paragraphs: [`It counts for your list on ${longDate(o.weekOf)}. You don’t need to do anything.`],
+        paragraphs: [`It counts for your Cora Curation on ${longDate(o.weekOf)}. You don’t need to do anything.`],
         button: { label: "Open Roger", url: appUrl("/app") },
       });
 }

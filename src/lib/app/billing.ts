@@ -2,12 +2,13 @@ import { torontoDate } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { ANCHOR, ISO } from "@/lib/billing/adjustment";
 import { HAS_CARD_SQL, NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
+import { oneAtATimeOffered } from "@/lib/billing/offered";
 import { periodAt } from "@/lib/billing/period";
 import { amount, chargeWords, money, priceId, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { AdjustmentGateway, InvoiceRow, OrderGateway, PlanGateway } from "@/lib/billing/subscriptions";
 import { longDate } from "@/lib/dates";
 import { heldTeaser } from "./held";
-import { changedAmountChargeDate, PAYMENT_PATH } from "./status";
+import { changedAmountChargeDate, PAYMENT_PATH, PLAN_QUESTIONS } from "./status";
 import type { V3Settings } from "@/lib/v3-settings";
 
 /**
@@ -36,9 +37,9 @@ export type BillingView = {
 };
 
 /** A no-card trial with a held list (origin R8): the card is what it waits for. */
-export const NO_CARD_YET = "No card yet. Your first list is ready, and your first two lists are free.";
+export const NO_CARD_YET = "No card yet. Your first Cora Curation is ready, and your first two Cora Curations are free.";
 /** A no-card trial with nothing held yet. */
-export const CARD_LATER = "We’ll ask for your card when your first list is ready.";
+export const CARD_LATER = "We’ll ask for your card when your first Cora Curation is ready.";
 
 type U = {
   status: string;
@@ -78,7 +79,15 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
   const tax = taxPhrase(cur);
   const monthly = money(amount(s, "monthly", cur), cur);
   const run = money(amount(s, "per_run", cur), cur);
-  const planLine = u.plan === "monthly" ? `Monthly: ${monthly} a month, ${tax}, for a list every Monday.` : `One list at a time: ${run} a list, ${tax}, only for the Mondays you order.`;
+  // One at a time is named with its price only while it is offered (billing/offered.ts). An account still on it while it
+  // is not offered keeps its plan: no new order can be placed and nothing is charged (no page offers a switch since main's Unit 9).
+  const offered = oneAtATimeOffered();
+  const planLine =
+    u.plan === "monthly"
+      ? `Monthly: ${monthly} a month, ${tax}, for a Cora Curation every Monday.`
+      : offered
+        ? `One Cora Curation at a time: ${run} each, ${tax}, only for the Mondays you order.`
+        : "One Cora Curation at a time. This plan is not offered at the moment.";
   const date = (iso: string) => longDate(torontoDate(new Date(iso)));
   const accessLeft = Boolean(u.access_ends_at && new Date(u.access_ends_at) > d.now);
   const switching = u.status === "active" && u.plan_change_to === "per_run" && Boolean(u.cancel_requested_at);
@@ -99,17 +108,24 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
     const when = changedAmountChargeDate(u.quote);
     nextCharge =
       u.quote && when
-        ? `Your first charge changed to ${chargeWords(u.quote.totalCents, u.quote.currency, u.quote.taxCents)}. It is charged on ${longDate(when)}, with your list. If you’d rather not, cancel before then.`
-        : "Your first charge amount changed. It is charged a day after we told you the new amount, with your list.";
+        ? `Your first charge changed to ${chargeWords(u.quote.totalCents, u.quote.currency, u.quote.taxCents)}. It is charged on ${longDate(when)}, with your Cora Curation. If you’d rather not, cancel before then.`
+        : "Your first charge amount changed. It is charged a day after we told you the new amount, with your Cora Curation.";
   } else if (u.status === "held") nextCharge = "Your first charge is waiting for a card that works. Update your card and it is tried straight away.";
-  else if (u.status === "cancelled" || u.status === "closed") nextCharge = accessLeft && !u.at_once ? `Nothing more will be charged. Your lists continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
-  else if (cancelling) nextCharge = accessLeft ? `Nothing more will be charged. Your lists continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
-  else if (switching) nextCharge = `Nothing more is charged for monthly. It ends on ${date(u.access_ends_at!)}; after that, only the lists you order.`;
+  else if (u.status === "cancelled" || u.status === "closed") nextCharge = accessLeft && !u.at_once ? `Nothing more will be charged. Your Cora Curations continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
+  else if (cancelling) nextCharge = accessLeft ? `Nothing more will be charged. Your Cora Curations continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
+  else if (switching) nextCharge = `Nothing more is charged for monthly. It ends on ${date(u.access_ends_at!)}; after that, only the Cora Curations you order.`;
   else if (u.plan === "monthly" && u.stripe_subscription) nextCharge = await renewalLine(d, u, monthly, tax);
   else if (u.plan === "monthly" && u.status === "trial") {
-    if (u.quote) nextCharge = `Your first charge, with your third list: no earlier than ${longDate(u.quote.week)}, ${chargeWords(u.quote.totalCents, u.quote.currency, u.quote.taxCents)}.`;
-    else if (u.free_lists_used < s.freeRuns) nextCharge = `Nothing until your free lists are done. Then ${monthly} a month, ${tax}, starting with your third list.`;
-    else nextCharge = `Your first charge comes with your next list: ${monthly}, ${tax}.`;
+    if (u.quote) nextCharge = `Your first charge, with your third Cora Curation: no earlier than ${longDate(u.quote.week)}, ${chargeWords(u.quote.totalCents, u.quote.currency, u.quote.taxCents)}.`;
+    else if (u.free_lists_used < s.freeRuns) nextCharge = `Nothing until your free Cora Curations are done. Then ${monthly} a month, ${tax}, starting with your third Cora Curation.`;
+    else nextCharge = `Your first charge comes with your next Cora Curation: ${monthly}, ${tax}.`;
+  } else if (!offered) {
+    // Ordering is not named while it is not offered. One at a time: what still holds for the account. Monthly with no
+    // subscription and no trial (a sponsored member, say): there is no charge to announce.
+    nextCharge =
+      u.plan === "per_run"
+        ? `No new order can be placed. An order you placed earlier is still charged the Monday it is sent; otherwise nothing is charged. ${PLAN_QUESTIONS}`
+        : "No charge is scheduled.";
   } else nextCharge = await orderLine(d, u, run, tax);
 
   let invoices: InvoiceRow[] = [];
@@ -165,10 +181,10 @@ async function orderLine(d: BillingDeps, u: U, run: string, tax: string): Promis
   if (d.orders && u.stripe_customer && price) {
     try {
       const p = await d.orders.previewOrder({ customer: u.stripe_customer, price });
-      return `Nothing is charged unless you order. Each list is ${chargeWords(p.totalCents, p.currency as Currency, p.taxCents)}, charged the Monday it is sent.`;
+      return `Nothing is charged unless you order. Each Cora Curation is ${chargeWords(p.totalCents, p.currency as Currency, p.taxCents)}, charged the Monday it is sent.`;
     } catch (e) {
       console.error("[billing] order preview", e instanceof Error ? e.message : e);
     }
   }
-  return `Nothing is charged unless you order. Each list is ${run}, ${tax}, charged the Monday it is sent.`;
+  return `Nothing is charged unless you order. Each Cora Curation is ${run}, ${tax}, charged the Monday it is sent.`;
 }

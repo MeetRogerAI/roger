@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
-import { siteConfig } from "@/data/config";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import Link from "next/link";
 import { Suspense } from "react";
 import { StickyCta } from "@/components/client-boot";
 import { WatchSentence } from "@/components/home/watch-sentence";
 import { LibraryBrowser, LibraryStatic } from "@/components/library-browser";
 import { getUseCases } from "@/lib/library-source";
+import { ClosingBand } from "@/components/site/v1/blocks/closing-band";
+import { closingBandCopy, type V1Copy } from "@/data/site/v1";
+import { sectionsShown, v1Copy } from "@/lib/site/content/model";
+import { getSiteContent } from "@/lib/site/content/read";
+import { getAmounts } from "@/lib/site/amounts";
+import type { BuiltVersion } from "@/lib/site/version";
 
 export const metadata: Metadata = {
   title: { absolute: "Real AI agent use cases · Roger" },
@@ -15,8 +21,11 @@ export const metadata: Metadata = {
   openGraph: { url: "/library" },
 };
 
+const site = getServedSite();
+
+/** The band part-way down the list. A site version has none until its own is built. */
 function SetUpBand() {
-  if (siteConfig.flags.circlesMode) return (
+  if (site === "circles") return (
     <div className="on-night grid gap-6 rounded-[8px] bg-night p-8 text-night-ink sm:p-10 md:grid-cols-[1.2fr_1fr] md:items-center">
       <div><h2 className="text-h3">This is what people post.</h2><p className="mt-3 text-lead text-night-ink-2">A Circle gets what they don&apos;t.</p></div>
       <Link href="/apply" className="btn btn-m justify-self-start">Apply for a founding Circle</Link>
@@ -37,54 +46,126 @@ function SetUpBand() {
   );
 }
 
-export default async function LibraryPage() {
-  const items = await getUseCases();
+/**
+ * The one band a site version adds, above the footer (spec A.12): the library
+ * sentence, the primary start button and the trial line. The button has no
+ * audience, so it carries the one remembered from the homepage or the free Zack run.
+ */
+function TrialBand({ version, copy }: { version: BuiltVersion; copy: V1Copy }) {
+  return (
+    <div data-site={version} data-library-band>
+      <ClosingBand id="library-band" copy={closingBandCopy(copy, copy.library.band)} />
+    </div>
+  );
+}
 
+/** Stands in a site version's intro line for the number of use cases (src/data/site/v1.ts, `library.intro`). */
+const COUNT = "[count]";
+
+/** A line of copy with the count of use cases where it says "[count]". A line that does not say it is printed as it is. */
+function WithCount({ line, count }: { line: string; count: number }) {
+  const at = line.indexOf(COUNT);
+  if (at === -1) return <>{line}</>;
   return (
     <>
+      {line.slice(0, at)}
+      {count.toLocaleString("en-CA")}
+      {line.slice(at + COUNT.length)}
+    </>
+  );
+}
+
+/**
+ * The word for the software. A site version says "AI agent" in full, because
+ * its readers in real estate are also called agents (spec 0.4, A.16 check 10).
+ * Circles and the legacy site keep "agent".
+ */
+const agent = isBuiltVersion(site) ? "AI agent" : "agent";
+const anyAgent = isBuiltVersion(site) ? "Any AI agent" : undefined;
+
+export default async function LibraryPage() {
+  const items = await getUseCases();
+  // A site version's own words for this page are in its copy, as published. Circles and the legacy site keep theirs here, and read no stored content.
+  const [amounts, content] = isBuiltVersion(site) ? await Promise.all([getAmounts(), getSiteContent()]) : [null, null];
+  const copy = amounts && content ? v1Copy(amounts, content).copy : null;
+  const words = copy ? copy.library : null;
+
+  // The page's four sections, by their ids in the registry (src/lib/site/content/registry.ts).
+  const sections: Record<string, React.ReactNode> = {
+    intro: (
       <section aria-labelledby="library-title" className="wrap grid grid-cols-[minmax(0,1fr)] gap-6 pb-10 pt-10 md:pt-14 lg:grid-cols-[minmax(0,6fr)_minmax(0,6fr)] lg:items-end lg:gap-16">
         <h1 id="library-title" className="lines text-h2 text-stretch-display">
           <span className="line block">
             <span data-line className="block" style={{ "--i": 0 } as React.CSSProperties}>
-              The use-case
+              {words ? words.title.first : "The use-case"}
             </span>
           </span>
           <span className="line block">
             <span data-line className="block" style={{ "--i": 1 } as React.CSSProperties}>
-              library
+              {words ? words.title.second : "library"}
             </span>
           </span>
         </h1>
         <div className="after-lines">
           <p className="text-lead">
-            {items.length.toLocaleString("en-CA")} real things people’s agents did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.
+            {words ? (
+              <WithCount line={words.intro} count={items.length} />
+            ) : (
+              <>
+                {items.length.toLocaleString("en-CA")}
+                {` real things people’s ${agent}s did, in our words, each linked to the person’s own post. Read from public posts every morning. None of them are Roger clients.`}
+              </>
+            )}
           </p>
           <p className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
-            {siteConfig.flags.circlesMode ? <Link href="/apply" className="btn btn-m">Apply for a founding Circle</Link> : <Link href="/packs/solopreneur" className="btn btn-m">Get the free starter pack</Link>}
+            {site === "circles" && <Link href="/apply" className="btn btn-m">Apply for a founding Circle</Link>}
+            {site === "legacy" && <Link href="/packs/solopreneur" className="btn btn-m">Get the free starter pack</Link>}
             <Link href="#watch" className="tlink chev">
-              Watch for what you need
+              {words ? words.watchLink : "Watch for what you need"}
             </Link>
           </p>
         </div>
       </section>
-
-      <Suspense fallback={<LibraryStatic items={items} />}>
-        <LibraryBrowser items={items} band={<SetUpBand />} />
+    ),
+    rows: (
+      <Suspense fallback={<LibraryStatic items={items} showOffer={site === "legacy"} anyAgent={anyAgent} />}>
+        <LibraryBrowser items={items} showOffer={site === "legacy"} anyAgent={anyAgent} band={isBuiltVersion(site) ? null : <SetUpBand />} />
       </Suspense>
-
+    ),
+    watch: (
       <section id="watch" aria-labelledby="watch-title" className="wrap scroll-mt-32 pb-8 pt-16 md:pt-24">
-        <div id="final-cta" data-reveal>
+        {/* suppressHydrationWarning: Reveals (src/components/reveals.tsx) marks this block "is-in" as it comes on screen. Moved to
+            the top of the page (Pages, plan U6) it is on screen before this part of the page hydrates, and the class is then
+            ahead of React: a difference React leaves alone, and that `next dev` would otherwise report on every load. */}
+        <div id="final-cta" data-reveal suppressHydrationWarning>
         <h2 id="watch-title" className="text-h2">
-          Not in the library yet?
+          {words ? words.watch.title : "Not in the library yet?"}
         </h2>
         <div className="mt-6">
-          <WatchSentence />
+          <WatchSentence agent={agent} />
         </div>
-        <p className="mt-6 max-w-[36rem] text-small text-ink-2">The morning someone’s agent does it, you get one email with the link. Every email has a link to stop.</p>
+        <p className="mt-6 max-w-[36rem] text-small text-ink-2">{words ? words.watch.note : `The morning someone’s ${agent} does it, you get one email with the link. Every email has a link to stop.`}</p>
         </div>
       </section>
+    ),
+    // The one band a site version adds. Circles and the legacy site have none.
+    band: isBuiltVersion(site) && copy ? <TrialBand version={site} copy={copy} /> : null,
+  };
+  // On a site version an admin may switch a section off or move it (Pages, plan U6): the page prints the ones that
+  // are on, in the stored order. Circles and the legacy site print all of them in the code's order.
+  const shown = sectionsShown("library", content ?? undefined);
+  const part = (at: number) => (at < shown.length && Object.hasOwn(sections, shown[at]) ? sections[shown[at]] : null);
 
-      {!siteConfig.flags.circlesMode && <StickyCta actions={[{ kind: "setupCall", label: "Book a free setup call" }]} />}
+  return (
+    <>
+      {/* Four places, one for each section, written out and not mapped: the ids React gives the watch form's fields
+          depend on where it stands among these, and in the built-in order they are what they always were. */}
+      {part(0)}
+      {part(1)}
+      {part(2)}
+      {part(3)}
+
+      {site === "legacy" && <StickyCta actions={[{ kind: "setupCall", label: "Book a free setup call" }]} />}
     </>
   );
 }

@@ -63,7 +63,7 @@ async function toldCents(m: Member): Promise<number> {
   const quote = (await userRow(w, m.id)).quote as { totalCents: number; currency: string } | null;
   expect(quote).not.toBeNull();
   const told = dollars(quote!.totalCents, quote!.currency);
-  expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).toContain(told);
+  expect(w.mail(m.email).find((x) => x.subject === "Your next Cora Curation is your first paid one")!.text).toContain(told);
   return quote!.totalCents;
 }
 /** The first charge is the told amount: the paid invoice and the charge claim both carry it. */
@@ -105,7 +105,7 @@ describe("two held Mondays without a card", () => {
     expect(await delivered(w, m.id, "2026-12-14")).toHaveLength(3);
     expect(await delivered(w, m.id, "2026-12-07")).toEqual([]);
     expect((await userRow(w, m.id)).free_lists_used).toBe(1);
-    expect(w.mail(m.email).find((x) => x.subject.includes("December 14"))!.text).toContain("Free list 1 of 2.");
+    expect(w.mail(m.email).find((x) => x.subject.includes("December 14"))!.text).toContain("Free Cora Curation 1 of 2.");
 
     // Hourly passes to the next Monday: nothing delivers the replaced list late, and no reminder follows the card.
     const reminders = count(m, REMINDER);
@@ -113,11 +113,11 @@ describe("two held Mondays without a card", () => {
     expect(await delivered(w, m.id, "2026-12-07")).toEqual([]);
     expect(count(m, REMINDER)).toBe(reminders);
 
-    // Free list 2, then the first charge with the third delivered list (one subscription, at the told amount).
+    // Free Cora Curation 2, then the first charge with the third delivered list (one subscription, at the told amount).
     const [second] = await weeksWithRuns(w, [m], ["2026-12-21"]);
     expect(second.charge.first?.charged ?? 0).toBe(0);
     expect((await userRow(w, m.id)).free_lists_used).toBe(2);
-    expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).toContain("December 28");
+    expect(w.mail(m.email).find((x) => x.subject === "Your next Cora Curation is your first paid one")!.text).toContain("December 28");
     const told = await toldCents(m);
     // CA$280 plus 13% HST.
     expect(told).toBe(31640);
@@ -199,8 +199,8 @@ describe("a member who never connects Zack (spec check 23)", () => {
     expect(refs.map((r) => r.ref.split(":").pop())).toEqual(["10", "17", "3"]);
     expect(s.filter((x) => x === TEASER || x === REMINDER)).toEqual([]);
     // Spec B.8 item 6 (check 20): each Monday without a run says so, and no free list was used.
-    expect(s.filter((x) => x === "No list this week")).toHaveLength(3);
-    expect(w.mail(m.email).find((x) => x.subject === "No list this week")!.text).toContain("no free list was used");
+    expect(s.filter((x) => x === "No Cora Curation this week")).toHaveLength(3);
+    expect(w.mail(m.email).find((x) => x.subject === "No Cora Curation this week")!.text).toContain("no free one was used");
     expect(w.stripe.callsTo("customers.create")).toEqual([]);
     expect(await w.query("select 1 from charge_attempts")).toEqual([]);
   });
@@ -229,7 +229,7 @@ describe("a card confirmed in Stripe around the no-card close (the 7-day grace)"
     expect(await userRow(w, m.id)).toMatchObject({ status: "trial", closed_reason: null, access_ends_at: null, free_lists_used: 1 });
     expect((await facts(m)).trial_started_at).not.toBeNull();
     expect(await delivered(w, m.id, "2026-12-07")).toHaveLength(3);
-    expect(w.mail(m.email).find((x) => x.subject.includes("December 7"))!.text).toContain("Free list 1 of 2.");
+    expect(w.mail(m.email).find((x) => x.subject.includes("December 7"))!.text).toContain("Free Cora Curation 1 of 2.");
     expect(count(m, CLOSED)).toBe(0);
     // Reopened as a trial, not billed: the first charge is still two delivered lists away.
     await nothingCharged();
@@ -292,7 +292,7 @@ describe("a promo code refused when the card is saved on a held list", () => {
     expect((await userRow(w, m.id)).free_lists_used).toBe(2);
     const told = await toldCents(m);
     expect(told).toBe(31640);
-    expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).not.toContain("promo code");
+    expect(w.mail(m.email).find((x) => x.subject === "Your next Cora Curation is your first paid one")!.text).not.toContain("promo code");
     const [third] = await weeksWithRuns(w, [m], ["2026-12-21"]);
     expect(third.charge.first).toMatchObject({ charged: 1 });
     expect(w.stripe.callsTo("subscriptions.create").map((c) => c.args.coupon ?? null)).toEqual([null]);

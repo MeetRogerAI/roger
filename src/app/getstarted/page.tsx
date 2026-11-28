@@ -4,7 +4,7 @@ import { GoalForMember, NextStep, PublishedSetupStep } from "@/components/app/ge
 import { GetStartedStep as Step } from "@/components/app/setup-step";
 
 const title = "Get started with an AI agent";
-const description = "Install an AI agent, set up your starter team, and agree your daily goal. Then connect Zack and get your first Monday list.";
+const description = "Install an AI agent, set up your starter team, and agree your daily goal. Then connect Zack and get your first Cora Curation.";
 
 export const metadata: Metadata = {
   title: "Get started",

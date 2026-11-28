@@ -19,7 +19,7 @@ describe("Settings emails (monthly only; whole-branch review W2: the Friday remi
     expect(html).toMatch(/<input type="hidden"[^>]*name="pref_friday_prompt"[^>]*value="on"/);
     expect(html).not.toMatch(/<input type="checkbox"[^>]*name="pref_friday_prompt"/);
     expect(text).not.toMatch(ONE_AT_A_TIME);
-    expect(text).toContain("The Monday list email");
+    expect(text).toContain("The Monday email with your Cora Curation");
   });
 
   it("a choice already switched off stays off", () => {

@@ -2,7 +2,7 @@
 
 > **Superseded.** The current version is `Roger AI Agent Levels and Check Charts v1.1.md` in `C:\Users\pkupe\Aardvark\roger\artifacts`. Kept for history; do not build from this file.
 
-Version 1.0 · November 25, 2026 · Roger (meetroger.ai) · Draft for Peter's approval
+Version 1.0 · November 25, 2026 · Roger (meetroger.ai)
 Folder: `AI Agent Setup Levels/` · Companion file: `Roger Levels Build Spec - Zack 2.1, Cora 2.1 and Dashboard v1.0.md` (how Zack, Cora and the dashboard implement these levels)
 
 Labels used throughout, as in Strategy v3.1: **Decided** means Peter settled it in the November 25 interview. **Recommendation** means proposed here and not yet approved. **Estimate** means planning math.

@@ -5,9 +5,10 @@ import { MapGauge } from "@/components/map-gauge";
 import { FaqSection } from "@/components/sections";
 import { companyFaqs, companyFinal, companyWontDo, exampleMap, partner } from "@/data/company";
 import { siteConfig } from "@/data/config";
+import { hiddenLegacyRobots } from "@/lib/site/version";
 
 export const metadata: Metadata = {
-  ...(siteConfig.flags.circlesMode ? { robots: { index: false, follow: false } } : {}),
+  ...hiddenLegacyRobots(),
   title: { absolute: "Roger: AI and automation for family-owned companies · Toronto" },
   description: `We map where your company’s hours go in one two-hour session, then build and run the automations every month: quotes, orders, customer questions, invoices. On your own systems. From ${partner.priceLabel} a month.`,
   alternates: { canonical: "/companies" },

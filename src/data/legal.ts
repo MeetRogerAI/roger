@@ -14,13 +14,13 @@ export const rogerMonthlyTerms: LegalDoc["sections"][number] = {
   heading: "Roger monthly: no refunds, cancel any time",
   body: [
     "What it costs. Roger is US$200 or CA$280 a month, plus any sales tax where you live. The Payment page shows the exact amount: the price plus the tax, before you add your card.",
-    "Your free trial. Your first two weekly lists are free. We ask for your card when your first list is ready, and nothing is charged then: the Payment page says “Due today: $0”.",
-    "When you are charged. Your first charge comes with your third list. After that you are charged once a month, on the same day of the month, until you cancel. Each receipt comes with that week’s list email.",
+    "Your free trial. Your first two Cora Curations are free. We ask for your card when your first Cora Curation is ready, and nothing is charged then: the Payment page says “Due today: $0”.",
+    "When you are charged. Your first charge comes with your third Cora Curation. After that you are charged once a month, on the same day of the month, until you cancel. Each receipt comes with that week’s Cora Curation email.",
     "Cancel any time. Cancel from Billing in your account, in one click. No call, no email, no questions you have to answer.",
     "During the free trial, your account closes straight away, you are never charged, and we remove your saved card.",
-    "After your first charge, Roger keeps running until the end of the month you have paid for: your lists keep coming until then. Your plan then ends and you are not charged again. Until that day you can undo the cancellation from the same page.",
-    "No refunds. Because you can try Roger free for two lists and cancel any time, we don’t refund charges already made, including for the rest of a month after you cancel. If we charge you by mistake (for example, twice for the same month, or after your plan ended), tell us and we refund the mistaken charge in full to your card.",
-    "If a payment fails. Your lists pause until you update your card in Billing, then start again straight away.",
+    "After your first charge, Roger keeps running until the end of the month you have paid for: your Cora Curations keep coming until then. Your plan then ends and you are not charged again. Until that day you can undo the cancellation from the same page.",
+    "No refunds. Because you can try Roger free for two Cora Curations and cancel any time, we don’t refund charges already made, including for the rest of a month after you cancel. If we charge you by mistake (for example, twice for the same month, or after your plan ended), tell us and we refund the mistaken charge in full to your card.",
+    "If a payment fails. Your Cora Curations pause until you update your card in Billing, then start again straight away.",
     "Your rights. Nothing here takes away a right you have under the consumer law where you live.",
     `Questions. Email us at ${email}.`,
   ],
@@ -116,35 +116,6 @@ export const privacy: LegalDoc = {
         "You can unsubscribe from the newsletter at any time. You can ask us what we hold about you, or ask us to correct or delete it, by email.",
       ],
     },
-    { heading: "Questions", body: [`Email us at ${email}.`] },
-  ],
-};
-
-export const refunds: LegalDoc = {
-  title: "Refunds and the guarantee",
-  updated: "October 2026",
-  intro: "Every setup comes with a guarantee: if it isn’t working, you get your money back. This is exactly what that means.",
-  sections: [
-    {
-      heading: "What “working” means",
-      body: [
-        "Working means every helper or job you picked has run on its own at least once and produced output you would use.",
-        "It’s checked together at the end of the week of running (work) or at day 7 (home), and recorded in your setup report.",
-        "If we disagree, you decide.",
-      ],
-    },
-    {
-      heading: "The windows",
-      body: ["14 days from Session 1 for a work setup, or from your session for a home setup. The refund is the full amount you paid."],
-    },
-    {
-      heading: "How to claim",
-      body: [
-        `Send us one email at ${email} within the window. Say which setup it’s for. You don’t need to argue your case: if we disagree about whether it’s working, you decide.`,
-        "We refund to the original card through Stripe within 10 business days.",
-      ],
-    },
-    { heading: "Your accounts", body: ["When a refund happens, you keep your accounts. We remove our access."] },
     { heading: "Questions", body: [`Email us at ${email}.`] },
   ],
 };

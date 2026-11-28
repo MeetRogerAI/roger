@@ -17,7 +17,7 @@ export type CardSaveResult =
 /** The notice the page shows after a card save (`?card=` on the week page or /app). */
 export const CARD_SAVED_NOTICE = {
   saved: "Your card is saved. Here are your ideas.",
-  waiting: "Your card is saved. Your ideas will be here as soon as your list is ready.",
+  waiting: "Your card is saved. Your ideas will be here as soon as your Cora Curation is ready.",
   promo: "Your card is saved; that code couldn’t be applied, so the price is the regular one.",
 } as const;
 

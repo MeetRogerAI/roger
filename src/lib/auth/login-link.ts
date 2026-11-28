@@ -14,6 +14,12 @@ export const PILOT_LINK_DAYS = 7;
 export type LinkPurpose = "signin" | "pilot" | "email_change" | "email_approve";
 
 /**
+ * Links whose confirm page presses its own button once it is on screen, so the reader goes straight in.
+ * Only links that sign someone in. A change of email address always waits for the reader's own press.
+ */
+export const pressesItself = (purpose: LinkPurpose): boolean => purpose === "signin" || purpose === "pilot";
+
+/**
  * A new account's details, carried on the sign-up link and applied only when
  * the address is confirmed. Until then no account exists, so typing someone
  * else's address changes nothing of theirs.
@@ -47,9 +53,14 @@ export async function issueToken(
 ): Promise<string> {
   const token = newSecret();
   const ttl = o.ttlMs ?? (o.purpose === "pilot" ? PILOT_LINK_DAYS * 86_400_000 : LINK_MINUTES * 60_000);
+  // An email-change link is ordered after every earlier one on the account (LIVE), by created_at. The clock gives
+  // milliseconds, so two links made in one millisecond would be ordered by their random hashes and an earlier request
+  // could supersede a later one. A link made after another is stamped at least a microsecond after it.
   await q(
     `insert into login_tokens (token_hash, email, purpose, user_id, next_path, payload, created_by, expires_at, created_at)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)`,
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, case when $3 in ('email_change', 'email_approve') then greatest($9::timestamptz,
+       (select max(t.created_at) + interval '1 microsecond' from login_tokens t where t.user_id = $4 and t.purpose in ('email_change', 'email_approve')))
+       else $9::timestamptz end)`,
     [
       hashSecret(token),
       normaliseEmail(o.email),

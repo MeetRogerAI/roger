@@ -4,6 +4,9 @@ import { addDays } from "@/lib/clock";
 import { afterFreeLists, delivered, leftoverPerRun, monday, newWorld, order, outcome, play, seedPool, sendRun, subscribed, toronto, userRow, withCard, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (src/lib/billing/offered.ts). One member here orders one at a time, so a thin
+// week's order keeps being covered: the option is on here.
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => true }));
 
 /**
  * Thin weeks (R13 to R15): a pool with only two plays gives every member a
@@ -60,7 +63,7 @@ describe("thin weeks", () => {
     for (const m of [trial, third, paying, single]) {
       expect(await outcome(w, m.id, A)).toBe("short");
       expect(await delivered(w, m.id, A)).toHaveLength(2);
-      const email = w.mail(m.email).find((x) => x.subject.startsWith("Your two ideas") || x.subject === "Your list, and your receipt")!;
+      const email = w.mail(m.email).find((x) => x.subject.startsWith("Your two ideas") || x.subject === "Your Cora Curation, and your receipt")!;
       expect(email.text).toContain("not three");
     }
     // R14: a short list uses a free list, triggers the third-list charge, and an order is charged the full list price.
@@ -88,7 +91,7 @@ describe("thin weeks", () => {
     // Trial on free lists: a note, and the free list is not used.
     expect((await userRow(w, trial.id)).free_lists_used).toBe(1);
     const trialNote = w.mail(trial.email).find((x) => x.subject === "No new ideas for you this week")!;
-    expect(trialNote.text).toContain("Nothing was charged, and this week doesn’t use one of your free lists.");
+    expect(trialNote.text).toContain("Nothing was charged, and this week doesn’t use one of your free Cora Curations.");
     // Paying monthly: a note that never mentions charges, says the list is missing because of Roger and the week never
     // counts as a miss, an alert, and the week is excused (R15).
     const payingNote = w.mail(paying.email).find((x) => x.subject === "No new ideas for you this week")!;
@@ -98,7 +101,7 @@ describe("thin weeks", () => {
     expect(alert.map((x) => x.to.split(",").sort())).toEqual([["ehab@example.com", "peter@example.com"]]);
     expect(await w.query(`select result, excused_by from contribution_weeks where user_id = $1 and week_of = $2`, [paying.id, B])).toEqual([{ result: "excused", excused_by: "roger" }]);
     // One at a time: the order is closed with no charge and an email saying why; it does not carry over.
-    const why = w.mail(single.email).filter((x) => x.subject === "No list this week, and no charge");
+    const why = w.mail(single.email).filter((x) => x.subject === "No Cora Curation this week, and no charge");
     expect(why).toHaveLength(1);
     expect(why[0].text).toContain("weren’t enough new ideas");
     expect(await w.query(`select status from orders where user_id = $1 order by week_of`, [single.id])).toEqual([{ status: "sent" }, { status: "no_run" }]);

@@ -4,6 +4,11 @@ import { switchPlan } from "@/lib/billing/switch";
 import { delivered, dollars, firstList, leftoverPerRun, monday, newWorld, order, outcome, passHours, seedPool, sendRun, signUp, toronto, userRow, weeksWithRuns, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (`plans.oneAtATimeOffered` in src/data/config.ts, read through
+// src/lib/billing/offered.ts). Switching to and from it stays in place and is driven here with the option on;
+// "while one at a time is not offered" turns it off, as it is at launch.
+const offer = vi.hoisted(() => ({ on: true }));
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
 
 /**
  * Switching and cancelling (spec B.9 "Changing and cancelling"; checks 27,
@@ -22,6 +27,7 @@ vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 let w: World;
 
 beforeEach(async () => {
+  offer.on = true;
   w = await newWorld({ start: "2026-11-30T15:00:00Z" });
   await seedPool(w, { contributors: 12, playsEach: 4, ranOn: "2026-11-26" });
   await w.at("2026-12-02T16:00:00Z");
@@ -55,7 +61,7 @@ describe("switching plans", () => {
     expect(await switchPlan(w.query, plan(), { userId: m.id, to: "per_run" })).toMatchObject({ ok: true });
     expect(w.stripe.callsTo("subscriptions.update.cancel_at_period_end")).toHaveLength(1);
     expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "monthly", plan_change_to: "per_run" });
-    expect(w.subjects(m.email)).toContain("Your switch to one list at a time is booked");
+    expect(w.subjects(m.email)).toContain("Your switch to one Cora Curation at a time is booked");
 
     // The paid month runs to January 21: every Monday in it still has a list.
     await quietMondays(["2026-12-28", "2027-01-04", "2027-01-11", "2027-01-18"]);
@@ -64,7 +70,7 @@ describe("switching plans", () => {
     // Stripe ends the subscription with the month; its webhook moves the account to one at a time.
     await passHours(w, new Date("2027-01-21T14:00:00Z"), 3);
     expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "per_run", stripe_subscription: null, plan_change_to: null });
-    expect(w.subjects(m.email)).toContain("Your plan is now one list at a time");
+    expect(w.subjects(m.email)).toContain("Your plan is now one Cora Curation at a time");
     expect(w.stripe.invoiceList.filter((i) => i.billingReason === "subscription_cycle")).toEqual([]);
 
     // A Monday with a run but no order: no charge, no list (spec check 37).
@@ -103,6 +109,60 @@ describe("switching plans", () => {
     expect(w.stripe.invoiceList.map((i) => i.billingReason).sort()).toEqual(["manual", "subscription_create"]);
     expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "monthly" });
     expect(await delivered(w, m.id, "2026-12-28")).toHaveLength(3);
+  });
+});
+
+describe("while one at a time is not offered (the switch off, as at launch)", () => {
+  beforeEach(() => {
+    offer.on = false;
+  });
+
+  it("a monthly subscriber cannot switch to it: Stripe is not called, nothing is stored or emailed, and the month renews as usual", async () => {
+    const m = await subscriber("mona@example.com");
+    await w.at(toronto("2026-12-23", "10:00"));
+    const before = w.mail(m.email).length;
+    expect(await switchPlan(w.query, plan(), { userId: m.id, to: "per_run" })).toEqual({
+      ok: false,
+      message: "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday.",
+    });
+    expect(w.stripe.callsTo("subscriptions.update.cancel_at_period_end")).toEqual([]);
+    expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "monthly", plan_change_to: null, cancel_requested_at: null });
+    expect(w.mail(m.email)).toHaveLength(before);
+
+    // The paid month ends on January 21 and renews once, at the monthly price: the refusal changed nothing about the money.
+    await weeksWithRuns(w, [m], ["2026-12-28", "2027-01-04", "2027-01-11", "2027-01-18"]);
+    await passHours(w, new Date("2027-01-21T14:00:00Z"), 6);
+    const renewals = w.stripe.invoiceList.filter((i) => i.billingReason === "subscription_cycle");
+    expect(renewals).toHaveLength(1);
+    expect(renewals[0]).toMatchObject({ status: "paid", totalCents: 20000 });
+    expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "monthly" });
+  });
+
+  it("a member still in the trial cannot switch to it either, and is charged with the third Cora Curation as told", async () => {
+    const m = await signUp(w, { email: "tia@example.com", currency: "USD", country: "US" });
+    await firstList(w, [m], "2026-12-07");
+    await w.at(toronto("2026-12-10", "10:00"));
+    expect(await switchPlan(w.query, plan(), { userId: m.id, to: "per_run" })).toMatchObject({ ok: false });
+    expect(await userRow(w, m.id)).toMatchObject({ status: "trial", plan: "monthly" });
+    await weeksWithRuns(w, [m], ["2026-12-14", "2026-12-21"]);
+    expect(firstCharges()).toHaveLength(1);
+    expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "monthly" });
+  });
+
+  it("an account already on one at a time can still move to monthly, which is charged once with the next Cora Curation", async () => {
+    offer.on = true;
+    const m = await leftoverPerRun(w, { email: "una@example.com", currency: "USD", country: "US" });
+    await weeksWithRuns(w, [m], ["2026-12-07", "2026-12-14"]);
+    offer.on = false;
+    await w.at(toronto("2026-12-23", "10:00"));
+    expect(await switchPlan(w.query, plan(), { userId: m.id, to: "monthly" })).toMatchObject({ ok: true });
+    expect(await userRow(w, m.id)).toMatchObject({ status: "trial", plan: "monthly" });
+    expect(w.subjects(m.email)).toContain("Your plan is now monthly");
+    const [r] = await weeksWithRuns(w, [m], ["2026-12-28"]);
+    expect(r.charge.first).toMatchObject({ charged: 1 });
+    expect(firstCharges()).toHaveLength(1);
+    expect(w.stripe.callsTo("invoices.create.order")).toEqual([]);
+    expect(await userRow(w, m.id)).toMatchObject({ status: "active", plan: "monthly" });
   });
 });
 

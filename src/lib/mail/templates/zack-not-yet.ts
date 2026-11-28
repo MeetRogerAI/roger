@@ -10,12 +10,12 @@ export function zackNotYetEmail(o: { day: number; closesOn: string }): Rendered 
   const last = o.day >= 17;
   return renderEmail({
     subject: last ? "Your Roger trial closes soon" : "Zack hasn’t sent a report yet",
-    preview: `Your free lists start with Zack’s first report.`,
+    preview: `Your free Cora Curations start with Zack’s first report.`,
     heading: "Zack hasn’t sent a report yet.",
     paragraphs: [
-      "Your free lists start with Zack’s first weekly report. We haven’t had one from him yet, so there’s nothing to pick from.",
+      "Your free Cora Curations start with Zack’s first weekly report. We haven’t had one from him yet, so there’s nothing to pick from.",
       "The Zack page shows how to connect him. If your agent can’t send it, you can paste or upload the report there yourself.",
-      `If no list has gone out by ${longDate(o.closesOn)}, your trial closes. Nothing is charged either way.`,
+      `If no Cora Curation has gone out by ${longDate(o.closesOn)}, your trial closes. Nothing is charged either way.`,
     ],
     button: { label: "Connect Zack", url: appUrl("/app/zack") },
   });
@@ -28,7 +28,7 @@ export function trialNoChargeClosedEmail(): Rendered {
     preview: "Nothing was charged.",
     heading: "Your trial has closed.",
     paragraphs: [
-      "Your free lists went out, but we haven’t had a report from Zack in the three weeks since, so your first paid list never came and your trial has closed. Nothing was charged.",
+      "Your free Cora Curations went out, but we haven’t had a report from Zack in the three weeks since, so your first paid one never came and your trial has closed. Nothing was charged.",
       COME_BACK_LINE,
     ],
     button: comeBackButton(),
@@ -57,7 +57,7 @@ export function trialNoListClosedEmail(): Rendered {
     preview: "Nothing was charged.",
     heading: "Your trial has closed.",
     paragraphs: [
-      "We didn’t get a report from Zack in your trial’s 21 days, so no list went out and your trial has closed. Nothing was charged.",
+      "We didn’t get a report from Zack in your trial’s 21 days, so no Cora Curation went out and your trial has closed. Nothing was charged.",
       COME_BACK_LINE,
     ],
     button: comeBackButton(),

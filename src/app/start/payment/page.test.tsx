@@ -14,7 +14,7 @@ const db: { query: Query | null; userId: string | null; gw: ReturnType<typeof fa
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("next/headers", () => nextHeaders);
-vi.mock("next/navigation", () => ({ ...nextNavigation, usePathname: () => "/start/payment" }));
+vi.mock("next/navigation", () => ({ ...nextNavigation, usePathname: () => "/start/payment", useSelectedLayoutSegment: () => null }));
 vi.mock("@/lib/auth/access", async () => {
   const { Redirected } = await import("@/test-helpers/next-fakes");
   return {
@@ -29,7 +29,7 @@ vi.mock("@/lib/db-query", () => ({ query: (t: string, p?: unknown[]) => db.query
 vi.mock("@/lib/billing/gateway", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/gateway")>()), stripeGateway: () => db.gw }));
 vi.mock("@/lib/v3-settings-display", async () => {
   const m = await import("@/lib/v3-settings");
-  return { getV3SettingsForDisplay: async () => m.mergeV3([]) };
+  return { getV3SettingsForDisplay: async () => m.mergeV3([]), cachedV3SettingsForDisplay: async () => m.mergeV3([]) };
 });
 vi.mock("@/lib/v3-settings", async (orig) => {
   const m = await orig<typeof import("@/lib/v3-settings")>();
@@ -90,7 +90,7 @@ describe("/start/payment", () => {
     expect(text).toContain("Roger monthly CA$280");
     expect(text).toContain("Calculated from your billing address");
     expect(text).toContain("Total per month CA$280 + tax");
-    expect(text).toContain("Due today: $0. Your first charge comes with your third list.");
+    expect(text).toContain("Due today: $0. Your first charge comes with your third Cora Curation.");
     expect(text).toContain("Start free trial");
     expect(text).toContain("Secured by Stripe");
     expect(text).toContain("Payments are processed by Stripe, a PCI DSS Level 1 certified provider. Roger never sees your card number.");

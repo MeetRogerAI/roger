@@ -32,7 +32,7 @@ describe("amounts in the charge emails", () => {
   it("no tax collected: just the amount", () => {
     const [, , , , , usNext, usSubscribed] = all({ cad: 3640, usd: 0 });
     expect(usNext.text).toContain("that morning we’ll charge US$200 for your first month.");
-    expect(usSubscribed.text).toContain("We charged US$200. Your third list");
+    expect(usSubscribed.text).toContain("We charged US$200. Your third Cora Curation");
   });
 
   it("never says tax included", () => {

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { AdminTabs } from "@/components/admin-ui";
+import { AdminSidebar } from "@/components/admin-ui";
 import { isAdmin } from "@/lib/admin-auth";
 import { stripeMode } from "@/lib/billing/stripe";
 import { hasDb } from "@/lib/db";
@@ -33,17 +33,17 @@ async function Gate({ children }: { children: React.ReactNode }) {
       </p>
     );
   return (
-    <div className="wrap pb-24 pt-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rule pb-4">
-        <AdminTabs />
+    // The sidebar is a left column from lg and a folded menu below it. min-w-0 lets a wide table scroll inside the page column instead of widening the document.
+    <div className="wrap pb-24 pt-2 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8 lg:pt-4">
+      <AdminSidebar>
         <StripeModeBadge />
         <form action={signOutAction}>
-          <button type="submit" className="min-h-10 rounded-full px-3 text-small text-ink-2 hover:text-ink">
+          <button type="submit" className="-mx-3 min-h-10 rounded-full px-3 text-small text-ink-2 underline underline-offset-4 hover:text-ink">
             Sign out
           </button>
         </form>
-      </div>
-      <div className="mt-8">{children}</div>
+      </AdminSidebar>
+      <div className="mt-6 min-w-0 lg:mt-1">{children}</div>
     </div>
   );
 }

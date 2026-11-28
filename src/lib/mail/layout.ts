@@ -93,6 +93,9 @@ export function appUrl(path: string): string {
   const env = process.env.VERCEL_ENV;
   let base: string;
   if (process.env.APP_URL) base = process.env.APP_URL;
+  // The branch "preview" is served at its own domain: links in its emails go there, not to Vercel's branch address,
+  // so the sign-in cookie lands on the site the person is using.
+  else if (env === "preview" && process.env.VERCEL_GIT_COMMIT_REF === siteConfig.previewBranch) base = siteConfig.previewDomain;
   else if (env === "preview") base = process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : `https://${process.env.VERCEL_URL}`;
   else if (env === "production") base = process.env.SITE_URL ?? siteConfig.domain;
   // Local work: never production, even when SITE_URL was pulled from Vercel.

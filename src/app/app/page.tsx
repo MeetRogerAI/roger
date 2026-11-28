@@ -8,8 +8,9 @@ import { HeldIdeas } from "@/components/app/held-ideas";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { WeekIdeas } from "@/components/app/week-ideas";
 import { heldHeading } from "@/lib/app/held";
+import { unfinishedSignupGoesTo } from "@/lib/app/unfinished-signup";
 import { loadHome } from "@/lib/app/home";
-import { requireUser } from "@/lib/auth/access";
+import { isEmailAdmin, requireUser } from "@/lib/auth/access";
 import { query } from "@/lib/db-query";
 import { longDate } from "@/lib/dates";
 import { readV3Settings } from "@/lib/v3-settings";
@@ -23,14 +24,16 @@ async function Home({ searchParams }: { searchParams: PageProps<"/app">["searchP
   const session = await requireUser("/app");
   const settings = await readV3Settings();
   const home = await loadHome(query, session.userId, settings, new Date());
-  if (!home || home.status === "signup") redirect("/start");
+  // An admin who never finished sign-up came for the admin, not for a member's sign-up (Peter, November 28, 2026):
+  // "Open Roger" in the site header leads here, and sign-up would greet them at Step 3.
+  if (!home || home.status === "signup") redirect(unfinishedSignupGoesTo(await isEmailAdmin()));
 
   return (
     <div className="space-y-10">
       {/* After a card save with no list to show yet (Unit 5), or a promo code that could not be applied. */}
       {(card !== "saved" || home.ideas.length > 0) && <CardSavedNotice card={card} />}
       <header>
-        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : home.held ? heldHeading(home.held.count) : "Your first list is on its way"}</h1>
+        <h1 className="text-h2">{home.week ? `Your ideas for the week of ${longDate(home.week)}` : home.held ? heldHeading(home.held.count) : "Your first Cora Curation is on its way"}</h1>
         {home.statusLine !== home.missBanner && (
           <p className="mt-3 text-small text-ink-2">
             {home.statusLine}

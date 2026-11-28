@@ -16,7 +16,7 @@ import { nextHeaders, nextNavigation, resetNextFakes } from "@/test-helpers/next
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/navigation", () => nextNavigation);
 vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), cache: <T,>(f: T) => f }));
-vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), refresh: () => {}, updateTag: () => {}, revalidatePath: () => {} }));
+vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), refresh: () => {}, updateTag: () => {}, revalidatePath: () => {}, cacheLife: () => {}, cacheTag: () => {} }));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: () => {}, connection: async () => {} }));
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key", secretStatus: async () => ({}) }));
 
@@ -44,14 +44,17 @@ const pages = {
   flags: (await import("@/app/admin/flags/page")).default,
   testimonials: (await import("@/app/admin/testimonials/page")).default,
   interest: (await import("@/app/admin/interest/page")).default,
+  pagesList: (await import("@/app/admin/pages/page")).default,
+  pagesReview: (await import("@/app/admin/pages/review/page")).default,
 };
+const pagesActions = await import("@/app/admin/pages/actions");
 const withParams = {
   useCases: (await import("@/app/admin/use-cases/page")).default,
   ops: (await import("@/app/admin/ops/page")).default,
   users: (await import("@/app/admin/users/page")).default,
   runs: (await import("@/app/admin/runs/page")).default,
   cora: (await import("@/app/admin/cora/page")).default,
-  sample: (await import("@/app/admin/sample/page")).default,
+  pagesEditor: (await import("@/app/admin/pages/[page]/page")).default,
 };
 
 const form = (o: Record<string, string>) => {
@@ -97,8 +100,12 @@ describe("a signed-in member who is not an admin", () => {
     await expect(v3.pilotLinkAction({ status: "idle" }, form({ email: "x@example.com", name: "X" }))).rejects.toThrow("Not signed in");
     for (const [name, call] of oldCalls) await expect(call(), name).rejects.toThrow("Not signed in");
     expect((await leadsExport.GET()).status).toBe(401);
+    await expect(pagesActions.savePageAction(form({ page: "home", "text:home.hero.headline": "A new headline" }))).rejects.toThrow("Not signed in");
+    await expect(pagesActions.publishAction(form({ review: "x" }))).rejects.toThrow("Not signed in");
+    await expect(pagesActions.undoPublishAction()).rejects.toThrow("Not signed in");
+    expect(await current("select 1 from settings where key = 'site.content'")).toEqual([]);
     for (const page of Object.values(pages)) expect(await page()).toBeNull();
-    const props = { searchParams: Promise.resolve({}), params: Promise.resolve({ id: member }) } as never;
+    const props = { searchParams: Promise.resolve({}), params: Promise.resolve({ id: member, page: "faq" }) } as never;
     for (const page of Object.values(withParams)) expect(await page(props)).toBeNull();
     expect(await (await import("@/app/admin/users/[id]/page")).default(props)).toBeNull();
     expect((await current<{ free_lists_used: number }>("select free_lists_used from users where id = $1", [member]))[0].free_lists_used).toBe(2);
@@ -123,9 +130,9 @@ describe("an admin", () => {
   it("sees every new page, read from the database", async () => {
     await signInAs(adminUser);
     await current("insert into runs (user_id, week_of, route, agent, sharing, raw_text, status) values ($1, '2026-12-14', 'connector', 'hark', 'share', 'x', 'flagged')", [member]);
-    const props = { searchParams: Promise.resolve({ q: "ana", user: member }), params: Promise.resolve({ id: member }) } as never;
-    for (const page of [pages.flags, pages.testimonials, pages.interest]) expect(await page()).not.toBeNull();
-    for (const page of [withParams.ops, withParams.users, withParams.runs, withParams.cora, withParams.sample]) expect(await page(props)).not.toBeNull();
+    const props = { searchParams: Promise.resolve({ q: "ana", user: member }), params: Promise.resolve({ id: member, page: "faq" }) } as never;
+    for (const page of [pages.flags, pages.testimonials, pages.interest, pages.settings, pages.pagesList, pages.pagesReview]) expect(await page()).not.toBeNull();
+    for (const page of Object.values(withParams)) expect(await page(props)).not.toBeNull();
     expect(await (await import("@/app/admin/users/[id]/page")).default(props)).not.toBeNull();
   });
 

@@ -13,7 +13,7 @@ export function welcomeEmail(o: { name: string; currency: Currency; path: string
   // member's own tax words, as the price plus the tax (S18 point a).
   const price = (["USD", "CAD"] as const).map((c) => money(amount(o.settings, "monthly", c), c)).join(" / ");
   const terms = [
-    `After that, Roger is ${price} a month ${taxPhrase(o.currency)}. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.`,
+    `After that, Roger is ${price} a month ${taxPhrase(o.currency)}. Your first charge comes with your third Cora Curation, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.`,
   ];
   const next =
     o.path === "running"
@@ -21,9 +21,9 @@ export function welcomeEmail(o: { name: string; currency: Currency; path: string
       : { line: "Your next step is to set up your AI agent and the starter team. Most people finish in about half an hour.", label: "Get started" };
   return renderEmail({
     subject: "Welcome to Roger",
-    preview: "Your first two Cora lists are free.",
+    preview: "Your first two Cora Curations are free.",
     heading: `Welcome, ${o.name.split(" ")[0] || "there"}.`,
-    paragraphs: ["Your first two Cora lists are free.", ...terms, next.line],
+    paragraphs: ["Your first two Cora Curations are free.", ...terms, next.line],
     button: { label: next.label, url: appUrl("/app") },
   });
 }

@@ -12,13 +12,13 @@ describe("welcomeEmail (sent when sign-up ends at Step 3; plan 2026-11-26-001 Un
   it("says the first two lists are free, without saying when the card is asked for", () => {
     expect(ca.subject).toBe("Welcome to Roger");
     expect(ca.text).toContain("Welcome, Ana.");
-    expect(ca.text).toContain("Your first two Cora lists are free.");
+    expect(ca.text).toContain("Your first two Cora Curations are free.");
     for (const m of [ca, us]) expect(m.text).not.toContain("ask for your card");
   });
 
   // Peter, 2026-11-27: both prices for every member, then the member's own tax words.
   it("states both monthly prices, from the settings, with the tax phrase for the currency", () => {
-    expect(ca.text).toContain("After that, Roger is US$200 / CA$280 a month plus HST. Your first charge comes with your third list");
+    expect(ca.text).toContain("After that, Roger is US$200 / CA$280 a month plus HST. Your first charge comes with your third Cora Curation");
     expect(us.text).toContain("After that, Roger is US$200 / CA$280 a month plus tax where it applies.");
     const raised = welcomeEmail({ name: "Ana", currency: "CAD", path: "running", settings: { ...settings, priceUsd: 210, priceCad: 290 } });
     expect(raised.text).toContain("Roger is US$210 / CA$290 a month plus HST.");

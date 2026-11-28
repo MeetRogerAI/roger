@@ -61,8 +61,8 @@ export function PlanForm({ usd, cad, zackLink }: { usd: string; cad: string; zac
           Pricing
         </h2>
         <p className="mt-3 text-ink-2">
-          Roger is {usd} a month or {cad} a month, plus tax. We’ll ask for your card before Cora’s first full list is shown. Your free
-          trial includes your first two Cora lists, two Mondays.
+          Roger is {usd} a month or {cad} a month, plus tax. We’ll ask for your card before your first full Cora Curation is shown. Your free
+          trial includes your first two Cora Curations, two Mondays.
         </p>
       </section>
 

@@ -5,7 +5,6 @@ import {
   addRunAction,
   changeEmailAction,
   chargeAndSendAction,
-  chooseSampleAction,
   closeAccountAction,
   closeFailedOrdersAction,
   contributorEmailAction,
@@ -474,45 +473,6 @@ export function TestimonialForm({ t }: { t?: T }) {
         <Msg s={s} />
       </div>
     </form>
-  );
-}
-
-export function SampleChooser({ plays }: { plays: { id: string; title: string; category: string; isSample: boolean }[] }) {
-  const [s, act, pending] = useActionState(chooseSampleAction, idle);
-  const current = plays.find((p) => p.isSample)?.id ?? "";
-  const [chosen, setChosen] = useState(current);
-  const [readIt, setReadIt] = useState(false);
-  return (
-    <div className="space-y-4">
-      <form action={act} className="space-y-3">
-        <label className={label} htmlFor="sample-play">
-          Play to show on the public site
-        </label>
-        <select id="sample-play" name="playId" value={chosen} onChange={(e) => (setChosen(e.target.value), setReadIt(false))} className={input}>
-          <option value="">Choose a play…</option>
-          {plays.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.title} ({p.category}){p.isSample ? " — shown now" : ""}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-small">
-          <input type="checkbox" name="readIt" checked={readIt} onChange={(e) => setReadIt(e.target.checked)} /> I have read this play and it contains nothing private.
-        </label>
-        <button type="submit" disabled={pending || !chosen} className={small}>
-          {pending ? "Saving…" : "Show this play"}
-        </button>
-      </form>
-      {current && (
-        <form action={act}>
-          <Hidden values={{ clear: "yes" }} />
-          <button type="submit" disabled={pending} className={quiet}>
-            Show no sample
-          </button>
-        </form>
-      )}
-      <Msg s={s} />
-    </div>
   );
 }
 

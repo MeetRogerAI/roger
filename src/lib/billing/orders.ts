@@ -5,6 +5,7 @@ import { orderClosedRogerFailedEmail } from "@/lib/mail/templates/order-closed";
 import { listOrderedEmail, orderFailedEmail, orderNoListEmail } from "@/lib/mail/templates/charges";
 import { orderPromptEmail } from "@/lib/mail/templates/order-prompt";
 import type { V3Settings } from "@/lib/v3-settings";
+import { ONE_AT_A_TIME_NOT_OFFERED, oneAtATimeOffered, PLAN_QUESTIONS } from "./offered";
 import { chargeInFlight, claimCharge, claimedPrice, idempotencyKey, nextAttempt, stillChargeable, type Claim } from "./claims";
 import { amount, money, priceId, taxPhrase, type Currency } from "./prices";
 import type { ChargeResult, OrderCall, OrderGateway } from "./subscriptions";
@@ -25,12 +26,15 @@ export async function placeOrder(q: Query, o: { userId: string; week: string; no
     `select email, status, plan, sharing, currency, free_lists_used, cancel_requested_at, stripe_subscription from users where id = $1`,
     [o.userId],
   );
-  if (!u || !["trial", "active"].includes(u.status) || u.cancel_requested_at) return { ok: false, message: "Lists can’t be ordered on this account." };
+  if (!u || !["trial", "active"].includes(u.status) || u.cancel_requested_at) return { ok: false, message: "Cora Curations can’t be ordered on this account." };
   // A monthly month still running covers every Monday in it.
-  if (u.plan !== "per_run" || u.stripe_subscription) return { ok: false, message: "Your plan already includes a list every Monday." };
+  if (u.plan !== "per_run" || u.stripe_subscription) return { ok: false, message: "Your plan already includes a Cora Curation every Monday." };
+  // One at a time is not offered (offered.ts): no new order, for an account still on that plan too. Nothing is charged.
+  // Orders placed before are untouched: cancelOrder and the Monday charge do not read the switch.
+  if (!oneAtATimeOffered()) return { ok: false, message: `${ONE_AT_A_TIME_NOT_OFFERED} ${PLAN_QUESTIONS}` };
   // Spec check 39: the action refuses this as well as the button.
-  if (u.sharing === "off") return { ok: false, message: "Lists can’t be ordered while Zack is off. Turn sharing back on first." };
-  if (u.status === "trial" && u.free_lists_used < o.settings.freeRuns) return { ok: false, message: "Your free lists don’t need ordering." };
+  if (u.sharing === "off") return { ok: false, message: "Cora Curations can’t be ordered while Zack is off. Turn sharing back on first." };
+  if (u.status === "trial" && u.free_lists_used < o.settings.freeRuns) return { ok: false, message: "Your free Cora Curations don’t need ordering." };
   const rows = await q(
     `insert into orders (user_id, week_of) values ($1, $2)
      on conflict (user_id, week_of) do update set status = 'ordered', updated_at = now() where orders.status = 'cancelled'
@@ -202,6 +206,8 @@ export const ORDER_PROMPT_HOUR = 10;
  * preference friday_prompt).
  */
 export async function sendOrderPrompts(q: Query, d: { settings: V3Settings; now: Date } & MailDeps): Promise<number> {
+  // Nothing can be ordered while one at a time is not offered (offered.ts), so nobody is prompted to.
+  if (!oneAtATimeOffered()) return 0;
   const p = wallParts(d.now);
   if (p.dow !== 5 || p.hour < ORDER_PROMPT_HOUR) return 0;
   const week = weekOf(d.now, d.settings.runCutoff);

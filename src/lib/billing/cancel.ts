@@ -173,7 +173,7 @@ async function endNow(q: Query, d: PlanDeps, u: PlanUser, reason: string | null,
 }
 
 /** What a no-card trial is told when its card was saved in Stripe just before the cancel. */
-export const CARD_SAVED_NOT_CANCELLED = "Your card was saved just now, so your trial wasn’t cancelled and your first list is unlocked. To cancel anyway, cancel again.";
+export const CARD_SAVED_NOT_CANCELLED = "Your card was saved just now, so your trial wasn’t cancelled and your first Cora Curation is unlocked. To cancel anyway, cancel again.";
 
 /**
  * After a no-card trial's cancel (review fixes Unit 9, F5; the closing lesson
@@ -215,7 +215,7 @@ async function endAtPeriodEnd(q: Query, d: PlanDeps, u: PlanUser, reason: string
   // The month's difference will never be invoiced (there is no renewal): deleted now, restored on undo.
   await adjustmentOnCancelScheduled(q, d, u.id).catch((e) => console.error("[billing] cancel adjustment", u.id, e instanceof Error ? e.message : e));
   await finishCancellation(q, d, u.id);
-  return { ok: true, message: `Cancelled. Your lists continue until ${longDate(torontoDate(new Date(ends)))}, and nothing more will be charged.` };
+  return { ok: true, message: `Cancelled. Your Cora Curations continue until ${longDate(torontoDate(new Date(ends)))}, and nothing more will be charged.` };
 }
 
 /** A renewal Stripe confirms is unpaid: the subscription ends now; admins decide about the open invoice, so the cards stay. */

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
+import { draftMode } from "next/headers";
 import { redirect } from "next/navigation";
 import { logAdminAction } from "@/lib/admin/log";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -25,6 +26,9 @@ const str = (fd: FormData, k: string, max = 500) => {
 /** Admins sign in by email link, so signing out ends that session. */
 export async function signOutAction() {
   await endCurrentSession();
+  // And the preview of the drafts (plan U9). Without an admin session it would show nothing but the published
+  // site anyway (the content reader checks the admin on every previewed render); this takes the cookie away too.
+  (await draftMode()).disable();
   redirect("/admin");
 }
 

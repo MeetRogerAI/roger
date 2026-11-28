@@ -1,15 +1,29 @@
-import { siteConfig } from "@/data/config";
+import { SiteLegalPage } from "@/components/site/shared/site-legal";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import { circlesPrivacyPreview } from "@/data/circles-legal";
+import { siteLegalMeta } from "@/data/site/legal";
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
 import { privacy } from "@/data/legal";
 
-export const metadata: Metadata = {
-  title: "Privacy",
-  description: "What Roger collects, why, and what stays in your browser.",
-  alternates: { canonical: "/privacy" },
-};
+const site = getServedSite();
+
+// A site version has its own text and its own words for search. Circles and the legacy site keep theirs.
+export const metadata: Metadata = isBuiltVersion(site)
+  ? {
+      title: { absolute: siteLegalMeta.privacy.title },
+      description: siteLegalMeta.privacy.description,
+      alternates: { canonical: "/privacy" },
+      openGraph: { url: "/privacy", title: siteLegalMeta.privacy.headline, description: siteLegalMeta.privacy.description },
+    }
+  : {
+      title: "Privacy",
+      description: "What Roger collects, why, and what stays in your browser.",
+      alternates: { canonical: "/privacy" },
+    };
 
 export default function Page() {
-  return siteConfig.flags.circlesMode ? <LegalPage doc={circlesPrivacyPreview} reviewed={false} /> : <LegalPage doc={privacy} />;
+  if (site === "circles") return <LegalPage doc={circlesPrivacyPreview} reviewed={false} />;
+  if (isBuiltVersion(site)) return <SiteLegalPage version={site} name="privacy" />;
+  return <LegalPage doc={privacy} />;
 }

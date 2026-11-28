@@ -32,6 +32,9 @@ vi.mock("@/lib/mail/send", async (orig) => ({
     return "sent";
   },
 }));
+// The one-at-a-time switch (src/lib/billing/offered.ts): off, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
 // Any Stripe call from a sharing change would fail the test: under the contributor rule only cutoffs count.
 vi.mock("@/lib/billing/subscriptions", async (orig) => ({
   ...(await orig<typeof import("@/lib/billing/subscriptions")>()),
@@ -55,6 +58,7 @@ beforeEach(async () => {
   mailedText.length = 0;
   refreshed = 0;
   allowed = true;
+  offer.on = false;
   [{ id: signedIn }] = await current<{ id: string }>(
     "insert into users (email, status, plan, currency, sharing, agent) values ('ana@example.com', 'trial', 'monthly', 'CAD', 'share', 'hark') returning id",
   );
@@ -104,7 +108,7 @@ describe("changeSharing", () => {
   // Peter's wording, 2026-11-27: the sharing-changed email for turning sharing off, in the trial and paying.
   it("emails Peter's explanation with the member's own higher price when sharing is turned off", async () => {
     const offLines = [
-      "Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.",
+      "Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora Curations, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.",
       "/app/zack) and change it back. Your price depends on whether your Zack runs share what you learn about AI agents with the network.",
     ];
     // In the trial (the first-charge variant): the same words, no first-charge sentence.
@@ -130,9 +134,10 @@ describe("changeSharing", () => {
     expect(mailed).toEqual([]);
   });
 
-  it("tells a one-at-a-time user that lists can't be ordered with Zack off", async () => {
+  it("tells a one-at-a-time user that Cora Curations can't be ordered with Zack off, while that plan is offered", async () => {
+    offer.on = true;
     await current("update users set plan = 'per_run'");
-    expect(await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "off" })))).toMatchObject({ value: { effect: expect.stringContaining("can’t be ordered") } });
+    expect(await outcome(() => changeSharing({ status: "idle" }, form({ sharing: "off" })))).toMatchObject({ value: { effect: expect.stringContaining("Cora Curations can’t be ordered") } });
   });
 });
 

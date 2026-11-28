@@ -42,7 +42,7 @@ async function Start({ searchParams }: { searchParams: PageProps<"/start">["sear
       <>
         <h1 className="text-h2">Roger isn’t open for sign-up yet.</h1>
         <p className="mt-6 max-w-[40rem] text-lead text-ink-2">
-          We’re getting the first Monday lists ready. Leave your email and we’ll write once, when you can start. Nothing is charged and
+          We’re getting the first Cora Curations ready. Leave your email and we’ll write once, when you can start. Nothing is charged and
           nothing else is sent.
         </p>
         <NotOpenForm utm={params.utm} />

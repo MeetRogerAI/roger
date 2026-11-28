@@ -32,15 +32,11 @@ const form = (o: Record<string, string>) => {
 };
 
 let uid: string;
-let playId: string;
 beforeEach(async () => {
   ({ query: current } = await testDb());
   resetNextFakes();
   admin = null;
   [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used, trial_started_at) values ('ana@example.com', 'Ana', 'trial', 2, now()) returning id");
-  [{ id: playId }] = await current<{ id: string }>(
-    "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('One', 'Sales', 'd', 'p', 'i', '2026-12-07', '2026-12-07') returning id",
-  );
 });
 
 describe("every v3 admin action refuses a signed-in non-admin", () => {
@@ -62,7 +58,6 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["launchSwitch", () => actions.launchSwitchAction(idle, form({ name: "cycleLive", on: "true", confirm: "yes" }))],
     ["saveTestimonial", () => actions.saveTestimonialAction(idle, form({ person: "X", quote: "Q" }))],
     ["testimonialSwitch", () => actions.testimonialSwitchAction(form({ id: "x", cleared: "off" }))],
-    ["chooseSample", () => actions.chooseSampleAction(idle, form({ playId: "x", readIt: "on" }))],
     ["runJob", () => actions.runJobAction(idle, form({ job: "dry" }))],
     ["chargeAndSend", () => actions.chargeAndSendAction(idle, form({}))],
     ["closeFailedOrders", () => actions.closeFailedOrdersAction()],
@@ -123,13 +118,6 @@ describe("for an admin", () => {
     expect(await actions.extraFreeListAction({ status: "idle" }, form({ userId: nc.id }))).toMatchObject({ status: "error", message: "Waiting for the member’s card." });
     expect(await current<{ free_lists_used: number }>("select free_lists_used from users where id = $1", [nc.id])).toEqual([{ free_lists_used: 1 }]);
     expect(await current("select 1 from admin_actions")).toEqual([]);
-  });
-
-  it("refuses a sample play without the tick, and a malformed id", async () => {
-    admin = "admin@example.com";
-    expect(await actions.chooseSampleAction({ status: "idle" }, form({ playId }))).toMatchObject({ status: "error", message: expect.stringMatching(/I have read this play/) });
-    expect(await actions.chooseSampleAction({ status: "idle" }, form({ playId: "not-a-uuid", readIt: "on" }))).toMatchObject({ status: "error" });
-    expect(await actions.chooseSampleAction({ status: "idle" }, form({ playId, readIt: "on" }))).toMatchObject({ status: "ok" });
   });
 
   it("excuses everyone for a week not recorded yet only with the confirmation tick", async () => {

@@ -1,0 +1,257 @@
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { CopyTextButton } from "@/components/app/copy-text-button";
+import { SimpleMarkdown } from "@/components/app/simple-markdown";
+import { examplesFrom, firstExample } from "@/data/site/examples";
+import { zackAgents } from "@/data/zack";
+import { getAmounts, type Amounts } from "@/lib/site/amounts";
+import type { Overlay } from "@/lib/site/content/format";
+import { sectionsShown, v1Copy } from "@/lib/site/content/model";
+import { getSiteContent } from "@/lib/site/content/read";
+import { annotate, playbookParts } from "@/lib/site/playbook";
+import { getPlaybookPreface, publicIdeaView } from "@/lib/site/sample";
+import type { BuiltVersion } from "@/lib/site/version";
+import { PageHead, ReadingSection, StartBand } from "./blocks/reading";
+import { InOrder, pageParts } from "./blocks/sections";
+
+/**
+ * /how-it-works on site version 1, long form in one narrow column, in the
+ * spec's order (A.8):
+ *
+ *   1. the week                     Sunday to Wednesday
+ *   2. Zack, in detail              id "zack": the control block links here
+ *   3. Cora, in detail
+ *   4. the anatomy of an idea       the preface first, then the sample idea, a note on each part
+ *   5. your first weeks             the trial, step by step
+ *   6. if you have no AI agent yet  the link to /getstarted
+ *   then the start button
+ *
+ * That is the built-in order. An admin may switch a section off or move it
+ * (Pages, plan U6): the page prints the sections that are on, in the stored
+ * order, with a hairline between two reading sections that are neighbours,
+ * as the built-in order has (InOrder in blocks/sections.tsx). The page's
+ * title is not a section, and always comes first.
+ *
+ * The page is under the vocabulary rule ("AI agent", never "agent" alone).
+ * One block is not the site's words: the line added to the top of every
+ * playbook is a setting the app owns, printed word for word as a quotation and
+ * marked with PREFACE_MARK so the vocabulary check can leave out that block
+ * and nothing else.
+ */
+
+/** On the quotation of the playbook preface, the one block of this page that is not the site's own wording. */
+export const PREFACE_MARK = "playbook-preface";
+
+export type ZackFile = { name: string; href: string };
+
+/**
+ * The public Zack files, one link for each AI agent whose file exists, in
+ * alphabetical order. They are the files in public/zack, served as they are,
+ * so anyone can read exactly what Zack is told before signing up. /zack, the
+ * free Zack run, is not linked from here.
+ */
+export function zackFiles(agents: readonly { name: string; file: string; available: boolean }[] = zackAgents): ZackFile[] {
+  return agents
+    .filter((agent) => agent.available)
+    .map((agent) => ({ name: agent.name, href: `/zack/${agent.file}` }))
+    .sort((a, b) => a.name.localeCompare(b.name, "en"));
+}
+
+export { annotate, playbookParts };
+
+type Note = { id: string; part: string; note: string };
+
+/** Reads what the page shows, all of it cached, so the page keeps its static shell. */
+export async function V1HowItWorks({ version }: { version: BuiltVersion }) {
+  const [amounts, preface, content] = await Promise.all([getAmounts(), getPlaybookPreface(), getSiteContent()]);
+  return <V1HowItWorksView version={version} amounts={amounts} content={content} preface={preface} files={zackFiles()} />;
+}
+
+const partBox = "rounded-[8px] border border-rule bg-surface p-5 sm:p-6";
+
+export function V1HowItWorksView({
+  version,
+  amounts,
+  content,
+  preface,
+  files,
+}: {
+  /** The version being served. v2 and v3 show this page until they have their own. */
+  version: BuiltVersion;
+  amounts: Amounts;
+  /** Everything stored that the page should show, as one overlay on the code copy (getSiteContent). Left out, the page prints the code copy alone. */
+  content?: Overlay;
+  /** The line added to the top of every playbook, from the settings. */
+  preface: string;
+  /** The public Zack files (zackFiles). Empty leaves the links out. */
+  files: ZackFile[];
+}) {
+  const { copy, examples } = v1Copy(amounts, content);
+  const how = copy.howItWorks;
+  // The idea taken apart is the first of the homepage's examples, as published (plan U8). With every example
+  // removed, it is the first built-in one, as the code has it. A playbook whose parts are not the notes' (a first
+  // example changed or put first in Pages) is shown whole, with the notes beside it (annotate).
+  const [first] = examplesFrom(examples);
+  const idea = publicIdeaView((first ?? firstExample).play, preface);
+  // The last note is for the install prompt, which is not part of the playbook.
+  const playbookNotes = how.anatomy.notes.slice(0, -1);
+  const installNote = how.anatomy.notes.at(-1)!;
+  const paired = annotate(idea.playbookMd, playbookNotes);
+
+  // Each section by its id in the registry (src/lib/site/content/registry.ts), numbered as the built-in order has them.
+  const nodes: Record<string, ReactNode> = {
+    // 1. The week
+    week: (
+      <ReadingSection id="week" title={how.week.title}>
+        {/* An admin may remove every day (Pages): then there is no list, and no line under it. */}
+        {how.week.days.length > 0 && (
+          <dl className="border-b border-rule">
+            {how.week.days.map((d) => (
+              <div key={d.id} className="grid gap-x-8 gap-y-2 border-t border-rule py-6 sm:grid-cols-[7rem_minmax(0,1fr)]">
+                <dt className="text-title">{d.day}</dt>
+                <dd className="text-body">{d.body}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </ReadingSection>
+    ),
+    // 2. Zack, in detail: the control block's link lands here
+    zack: (
+      <ReadingSection id={how.zack.id} title={how.zack.title}>
+        <dl className="space-y-8">
+          {how.zack.points.map((point) => (
+            <div key={point.id}>
+              <dt className="text-title">{point.title}</dt>
+              <dd className="mt-2 text-body">{point.body}</dd>
+            </div>
+          ))}
+        </dl>
+        {files.length > 0 && (
+          <div data-zack-files className="mt-10 border-t border-rule pt-6">
+            <p className="text-title">{how.zack.filesLink.label}</p>
+            <ul className="mt-3 flex flex-wrap gap-x-8 gap-y-2">
+              {files.map((file) => (
+                <li key={file.href}>
+                  {/* A file in public/, not a page: a plain link, so nothing tries to load it as a route. */}
+                  <a href={file.href} className="tlink chev">
+                    {file.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </ReadingSection>
+    ),
+    // 3. Cora, in detail
+    cora: (
+      <ReadingSection id="cora" title={how.cora.title}>
+        <p className="text-body">{how.cora.body}</p>
+      </ReadingSection>
+    ),
+    // 4. The anatomy of an idea: the preface first, then the sample idea with a note on each part
+    anatomy: (
+      <ReadingSection id="anatomy" title={how.anatomy.title} width="wide">
+        <figure data-preface className="mx-auto max-w-[40rem]">
+          <figcaption className="text-meta font-semibold text-ink-2">{how.anatomy.prefaceLabel}</figcaption>
+          {/* Word for word from the settings, so not held to the site's vocabulary: the mark says so. */}
+          <blockquote data-verbatim={PREFACE_MARK} className="mt-3 border-l-2 border-rule-strong pl-4 text-body">
+            {preface}
+          </blockquote>
+        </figure>
+
+        {/* data-claims: the play's own text, for the claims check (src/lib/site/claims.ts). */}
+        <article aria-labelledby="anatomy-idea" data-claims="sample" className="mt-14">
+          <div className="max-w-[44rem]">
+            <p className="text-meta font-semibold uppercase tracking-wider text-ink-2">{idea.category}</p>
+            <h3 id="anatomy-idea" className="mt-2 text-h3">
+              {idea.title}
+            </h3>
+            <p className="mt-5 text-lead">{idea.description}</p>
+          </div>
+
+          {/* A note comes before its part, so it is read first; from the md breakpoint it sits in the margin beside it. */}
+          <ol data-anatomy={paired ? "paired" : "listed"} className="mt-10 space-y-6 md:space-y-4">
+            {paired ? (
+              paired.map(({ note, part }) => (
+                <AnatomyRow key={note.id} note={note}>
+                  <SimpleMarkdown source={part} className="text-small" />
+                </AnatomyRow>
+              ))
+            ) : (
+              <li className="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-8">
+                <dl className="space-y-4 md:order-2 md:pt-5">
+                  {playbookNotes.map((note) => (
+                    <div key={note.id} data-note>
+                      <dt className="text-small font-[620]">{note.part}</dt>
+                      <dd className="text-small text-ink-2">{note.note}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className={`${partBox} md:order-1`}>
+                  <SimpleMarkdown source={idea.playbookMd} className="text-small" />
+                </div>
+              </li>
+            )}
+            <AnatomyRow note={installNote}>
+              <blockquote className="border-l-2 border-rule-strong pl-4 text-small">{idea.pasteToInstall}</blockquote>
+              <CopyTextButton text={idea.copyText} label={copy.sample.install.copy} className="btn btn-m btn-ink mt-5" />
+            </AnatomyRow>
+          </ol>
+        </article>
+      </ReadingSection>
+    ),
+    // 5. Your first weeks: the trial, step by step
+    firstWeeks: (
+      <ReadingSection id="first-weeks" title={how.firstWeeks.title}>
+        {how.firstWeeks.steps.length > 0 && (
+          <ol className="border-b border-rule">
+            {how.firstWeeks.steps.map((step, i) => (
+              <li key={step.id} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 border-t border-rule py-5">
+                {/* Decoration: the list is ordered, so a screen reader already counts the steps. */}
+                <span aria-hidden="true" data-claims="numeral" className="tabular text-title text-ink-2">
+                  {i + 1}
+                </span>
+                <span className="text-body">{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </ReadingSection>
+    ),
+    // 6. If you have no AI agent yet
+    noAgent: (
+      <ReadingSection id="no-agent" title={how.noAgent.title}>
+        <p className="text-body">{how.noAgent.body}</p>
+        <p className="mt-6">
+          <Link href={how.noAgent.link.href} className="tlink chev">
+            {how.noAgent.link.label}
+          </Link>
+        </p>
+      </ReadingSection>
+    ),
+    startBand: <StartBand start={copy.buttons.start} cardLine={copy.cardLine} />,
+  };
+  const parts = pageParts("howItWorks", sectionsShown("howItWorks", content), nodes);
+
+  return (
+    <div data-site={version}>
+      <PageHead title={how.title} alone={parts[0]?.ground !== "ground"} />
+      <InOrder parts={parts} />
+    </div>
+  );
+}
+
+/** One part of the idea with its one-line note. */
+function AnatomyRow({ note, children }: { note: Note; children: ReactNode }) {
+  return (
+    <li className="grid gap-3 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-8">
+      <p data-note className="md:order-2 md:pt-5">
+        <span className="block text-small font-[620]">{note.part}</span>
+        <span className="block text-small text-ink-2">{note.note}</span>
+      </p>
+      <div className={`${partBox} md:order-1`}>{children}</div>
+    </li>
+  );
+}

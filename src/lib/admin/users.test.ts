@@ -61,9 +61,9 @@ beforeEach(async () => {
 
 describe("one extra free list", () => {
   it("moves the first-charge Monday and the member's status line, and is logged", async () => {
-    expect(await memberStatusLine(query, uid, settings, SIX_AM)).toMatch(/Free list 2 of 2\. Your next list is your first paid one/);
+    expect(await memberStatusLine(query, uid, settings, SIX_AM)).toMatch(/Free Cora Curation 2 of 2\. Your next Cora Curation is your first paid one/);
     expect(await giveExtraFreeList(query, ADMIN, uid)).toMatchObject({ ok: true });
-    expect(await memberStatusLine(query, uid, settings, SIX_AM)).toBe("Free list 1 of 2.");
+    expect(await memberStatusLine(query, uid, settings, SIX_AM)).toBe("Free Cora Curation 1 of 2.");
     expect(await u()).toMatchObject({ free_lists_used: 1, quote: null });
 
     // The Monday that would have been the first charge charges nothing now.

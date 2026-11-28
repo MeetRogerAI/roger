@@ -8,13 +8,13 @@ import { longDate } from "@/lib/dates";
  */
 export function orderPromptEmail(o: { week: string; price: string; monthlyLine: string }): Rendered {
   return renderEmail({
-    subject: "Want a list this Monday?",
+    subject: "Want a Cora Curation this Monday?",
     preview: `Order by Sunday night for ${longDate(o.week)}.`,
-    heading: "Want a list this Monday?",
+    heading: "Want a Cora Curation this Monday?",
     paragraphs: [
       `Order by Sunday night and your three ideas arrive on ${longDate(o.week)}. ${o.price}, charged that morning once Zack’s report has arrived. No report, no charge.`,
     ],
-    button: { label: "Get next Monday’s list", url: appUrl("/app/billing") },
+    button: { label: "Get next Monday’s Cora Curation", url: appUrl("/app/billing") },
     after: [o.monthlyLine],
     footer: "You can switch these Friday reminders off in your settings.",
   });

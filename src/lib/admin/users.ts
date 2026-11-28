@@ -3,6 +3,7 @@ import { retireSessionForGood } from "@/lib/billing/card-setup";
 import type { CardGateway } from "@/lib/billing/gateway";
 import { HAS_CARD_OR_SPONSORED_SQL, WAITING_FOR_CARD } from "@/lib/billing/has-card";
 import { isLive, type BillingGateway } from "@/lib/billing/subscriptions";
+import { UNKNOWN_AUTHOR } from "@/lib/cora/contributors";
 import { isRealDate, wallParts } from "@/lib/clock";
 import type { Query } from "@/lib/db-query";
 import { adminEmails } from "@/lib/auth/admin-emails";
@@ -191,9 +192,38 @@ const isAdminAddress = (email: string) => adminEmails().includes(email.toLowerCa
  * Deletes a closed account and everything that is only theirs (runs, plays
  * not yet in the pool, picks, settings). Plays already in the pool stay in
  * their anonymous form. The admin log keeps its rows, including the deleted
- * address (see the privacy note in the plan). Refused while a dropped
+ * address (see the privacy note in the plan), without what would tie the
+ * account to a seed contributor (below). Refused while a dropped
  * higher-rate item may still be in Stripe (its delete not yet confirmed):
  * deleting the account would lose the record the hourly retry needs.
+ *
+ * The private record of which account each shared play came from
+ * (`pool_play_contributors`) holds the account's id as text, with no link to
+ * `users`, so nothing cascades to it. The statement that deletes the account
+ * also changes those rows to say "unknown author" (Peter's decision,
+ * November 26, 2026), so the id kept in the admin log beside the address can
+ * no longer be tied to a play. It is one statement because there are no
+ * transactions over Neon HTTP: both steps read the deleted row from `gone`,
+ * so they do nothing unless the delete happened, and they commit with it.
+ * The table's key is (pool_play_id, contributor): where the play already has
+ * an "unknown author" row from an earlier deleted account, this account's row
+ * is deleted instead, so a play never has more than one. The hourly
+ * `unknown_authors` task (relabelOrphanContributors) is the safety net.
+ *
+ * The admin log is the other place that could tie the account to plays.
+ * `admin_actions.user_id` is a plain uuid with no link to `users`, so the
+ * account's rows are neither deleted nor emptied when it goes. Where the
+ * account was linked to a hidden seed contributor (linkContributor), its
+ * `link_contributor` and `unlink_contributor` rows name that contributor, and
+ * the contributor's "seed:<id>" rows name its plays. The same statement
+ * therefore takes out of those rows what names the contributor
+ * (`contributorId`, `label`, and the `movedTo` / `movedFrom` that would lead
+ * to another account's row for the same contributor), and takes the deleted
+ * id out of `movedTo` / `movedFrom` on other accounts' link rows, which keep
+ * their own contributor. The rows stay, so the log still shows that a link
+ * was made or removed, when and by whom. The seed contributor's own record
+ * and rows are not the account's and are left as they are: the deletion
+ * unlinks the record (`seed_contributors.user_id`, on delete set null).
  */
 export async function deleteAccount(q: Query, by: string, userId: string, confirmEmail: string): Promise<Done> {
   const [u] = await q<{ email: string; status: string; stripe_open: boolean }>(
@@ -206,12 +236,46 @@ export async function deleteAccount(q: Query, by: string, userId: string, confir
   if (u.status !== "closed") return no("Close the account first.");
   if (normaliseEmail(confirmEmail) !== u.email.toLowerCase()) return no("Type the account’s email address to confirm.");
   if (u.stripe_open) return no("A higher-rate item for this account may still be in Stripe. Wait for the hourly pass to remove it, then delete.");
-  const gone = await q<{ email: string }>(
-    `delete from users u where u.id = $1 and u.status = 'closed' and lower(u.email) <> all($2::text[])
-       and not exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced')
-     returning u.email`,
-    [userId, adminEmails()],
-  );
+  const remove = () =>
+    q<{ email: string }>(
+      `with gone as (
+         delete from users u where u.id = $1 and u.status = 'closed' and lower(u.email) <> all($2::text[])
+           and not exists (select 1 from pending_adjustments a where a.user_id = u.id and a.stripe_item is not null and a.stripe_deleted_at is null and a.status <> 'invoiced')
+         returning u.id, u.email
+       ),
+       dropped as (
+         delete from pool_play_contributors c
+         where c.contributor = (select id::text from gone)
+           and exists (select 1 from pool_play_contributors k where k.pool_play_id = c.pool_play_id and k.contributor = '${UNKNOWN_AUTHOR}')
+       ),
+       relabelled as (
+         update pool_play_contributors c set contributor = '${UNKNOWN_AUTHOR}'
+         where c.contributor = (select id::text from gone)
+           and not exists (select 1 from pool_play_contributors k where k.pool_play_id = c.pool_play_id and k.contributor = '${UNKNOWN_AUTHOR}')
+       ),
+       unlinked as (
+         update admin_actions a set detail = a.detail - 'contributorId' - 'label' - 'movedTo' - 'movedFrom'
+         where a.user_id = (select id from gone) and a.action in ('link_contributor', 'unlink_contributor')
+       ),
+       unnamed as (
+         update admin_actions a
+         set detail = a.detail
+               - (case when lower(a.detail->>'movedTo') = (select id::text from gone) then 'movedTo' else '' end)
+               - (case when lower(a.detail->>'movedFrom') = (select id::text from gone) then 'movedFrom' else '' end)
+         where a.action in ('link_contributor', 'unlink_contributor')
+           and a.user_id is distinct from (select id from gone)
+           and (select id::text from gone) in (lower(a.detail->>'movedTo'), lower(a.detail->>'movedFrom'))
+       )
+       select email from gone`,
+      [userId, adminEmails()],
+    );
+  // Two accounts that contributed the same play, deleted at the same moment, can both try to become its one
+  // "unknown author" row. The loser's whole statement fails on the table's key, so nothing of it is kept, and
+  // a second try finds the row there and deletes its own instead.
+  const gone = await remove().catch((e: unknown) => {
+    if (!/unique|duplicate/i.test(e instanceof Error ? e.message : String(e))) throw e;
+    return remove();
+  });
   if (!gone.length) return no("The account changed meanwhile. Reload and try again.");
   await logAdminAction(q, { by, userId, action: "delete_account", detail: { email: gone[0].email } });
   return ok("Account deleted.");

@@ -78,7 +78,7 @@ describe("price lines", () => {
   });
 
   it("Due today is a plain $0 in both currencies", () => {
-    expect(dueToday()).toEqual({ lead: "Due today: $0.", rest: "Your first charge comes with your third list." });
+    expect(dueToday()).toEqual({ lead: "Due today: $0.", rest: "Your first charge comes with your third Cora Curation." });
 
   });
 });

@@ -48,6 +48,9 @@ vi.mock("@/lib/billing/subscriptions", async (orig) => ({
   stripeAdjustments: () => null,
 }));
 vi.mock("@/lib/billing/gateway", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/gateway")>()), stripeGateway: () => card }));
+// The one-at-a-time switch (src/lib/billing/offered.ts): off, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
 
 const { cancelAction, switchAction, undoCancelAction, updateCardAction } = await import("./actions");
 const form = (o: Record<string, string>) => {
@@ -67,6 +70,7 @@ beforeEach(async () => {
   hits.length = 0;
   limitAfter = Infinity;
   refreshed = 0;
+  offer.on = false;
   plans = fakePlans();
   card = fakeGateway();
   const end = new Date(Date.now() + 20 * 86_400_000);

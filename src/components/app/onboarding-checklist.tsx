@@ -18,7 +18,7 @@ export async function OnboardingChecklist({ userId }: { userId: string }) {
  * as the status line says; otherwise the first list waits for Zack's first report.
  */
 export const mondayNote = (list: Pick<Checklist, "zackOff">) =>
-  list.zackOff ? "Your first list arrives on Monday morning." : "Your first list arrives on a Monday morning, once Zack has sent a report.";
+  list.zackOff ? "Your first Cora Curation arrives on Monday morning." : "Your first Cora Curation arrives on a Monday morning, once Zack has sent a report.";
 
 export function ChecklistView({ list }: { list: Checklist }) {
   const done = list.steps.filter((s) => s.done).length;

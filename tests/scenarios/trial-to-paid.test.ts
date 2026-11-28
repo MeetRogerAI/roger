@@ -73,7 +73,7 @@ describe("trial to the third-list charge", () => {
     expect(await delivered(w, ca.id, WEEKS[0])).toEqual(titles);
     const list1 = w.mail(ca.email).filter((m) => m.subject.startsWith("Your three ideas"));
     expect(list1).toHaveLength(1);
-    expect(list1[0].text).toContain("Free list 1 of 2.");
+    expect(list1[0].text).toContain("Free Cora Curation 1 of 2.");
     expect(list1[0].text).toContain("Open and install");
 
     // The second Monday: free list 2.
@@ -90,7 +90,7 @@ describe("trial to the third-list charge", () => {
 
     // After the second list: the first paid one, with the date and the amount with tax (spec check 21).
     const told = { ca: 31640, us: 20000 };
-    const paidNext = (email: string) => w.mail(email).find((m) => m.subject === "Your next list is your first paid one")!;
+    const paidNext = (email: string) => w.mail(email).find((m) => m.subject === "Your next Cora Curation is your first paid one")!;
     expect(paidNext(ca.email).text).toContain(dollars(told.ca, "CAD"));
     expect(paidNext(ca.email).text).toContain("December 21");
     expect(paidNext(us.email).text).toContain(dollars(told.us, "USD"));
@@ -166,7 +166,7 @@ describe("the first charge with Zack not sharing", () => {
     await sendRun(w, m);
     await monday(w, WEEKS[1]);
     // CA$280 + CA$280 + 13% HST, told as the price plus the tax (S18 point a).
-    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
+    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next Cora Curation is your first paid one")!;
     expect(paidNext.text).toContain("we’ll charge CA$632.80 (CA$560 plus CA$72.80 HST) for your first month.");
     await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
     await sendRun(w, m);
@@ -221,7 +221,7 @@ describe("the charge cron re-runs after the second free list", () => {
     expect(await userRow(w, m.id)).toMatchObject({ status: "trial", free_lists_used: 2, stripe_subscription: null });
     expect(w.stripe.callsTo("subscriptions.create")).toEqual([]);
     expect(await w.query("select 1 from charge_attempts")).toEqual([]);
-    expect(w.subjects(m.email)).toContain("Your next list is your first paid one");
+    expect(w.subjects(m.email)).toContain("Your next Cora Curation is your first paid one");
 
     // The third Monday: one subscription, with the third list.
     await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
@@ -264,7 +264,7 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Units 5, 8 and 10
   it("tells the discounted amount after the second list and charges exactly that with the third", async () => {
     const m = await promoMember("dee@example.ca");
     // CA$280 less 20% = CA$224, plus 13% HST = CA$253.12.
-    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
+    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next Cora Curation is your first paid one")!;
     // The price plus the tax, never "tax included" (S18 point a).
     expect(paidNext.text).toContain("we’ll charge CA$253.12 (CA$224 plus CA$29.12 HST) for your first month.");
     expect(paidNext.text).toContain("That includes your promo code WELCOME20: CA$56 off your first month. After that, it’s CA$280 a month plus HST.");
@@ -298,7 +298,7 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Units 5, 8 and 10
     ["USD", "US", { usd: 4000, cad: 5600 }, 16000, 4000],
   ] as const)("an amount-off code in %s: the told amount is the charge", async (currency, country, amountOff, told, off) => {
     const m = await promoMember(`amt-${country.toLowerCase()}@example.com`, { currency, country, code: "TAKE40", coupon: { id: "co_amt", percentOff: null, amountOff: { ...amountOff } }, duration: "forever" });
-    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
+    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next Cora Curation is your first paid one")!;
     expect(paidNext.text).toContain(dollars(told, currency));
     expect(paidNext.text).toContain(`That includes your promo code TAKE40: ${dollars(off, currency)} off every month.`);
     await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
@@ -311,7 +311,7 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Units 5, 8 and 10
   // Review F7: a coupon whose redeem_by passes after the second-list email, through the reminder and the charge.
   it("a coupon that expires (redeem_by) after the second-list email: the reminder tells the full price, and the charge matches it", async () => {
     const m = await promoMember("ivy@example.ca");
-    expect(w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!.text).toContain("CA$253.12");
+    expect(w.mail(m.email).find((x) => x.subject === "Your next Cora Curation is your first paid one")!.text).toContain("CA$253.12");
     // Expires on the Friday before the third Monday, before the 48-hour reminder.
     w.stripe.payment.coupons.get("co_20")!.redeemBy = Math.floor(toronto("2026-12-18", "12:00").getTime() / 1000);
     await passHours(w, toronto("2026-12-20", "15:00"), 6);

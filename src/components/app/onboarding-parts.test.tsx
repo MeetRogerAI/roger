@@ -52,12 +52,12 @@ describe("the checklist on /app", () => {
 
   // S18 point d (Peter, 2026-11-27): with Zack off a list comes every Monday without a report.
   it("under Wait for Monday: no report is waited for with Zack off; with Zack on, the first report is", async () => {
-    expect(await html(OnboardingChecklist({ userId: id }))).toContain("Your first list arrives on a Monday morning, once Zack has sent a report.");
+    expect(await html(OnboardingChecklist({ userId: id }))).toContain("Your first Cora Curation arrives on a Monday morning, once Zack has sent a report.");
     await current("update users set sharing = 'match_only' where id = $1", [id]);
     expect(await html(OnboardingChecklist({ userId: id }))).toContain("once Zack has sent a report.");
     await current("update users set sharing = 'off' where id = $1", [id]);
     const off = await html(OnboardingChecklist({ userId: id }));
-    expect(off).toContain("Your first list arrives on Monday morning.");
+    expect(off).toContain("Your first Cora Curation arrives on Monday morning.");
     expect(off).not.toContain("Zack has sent a report");
   });
 

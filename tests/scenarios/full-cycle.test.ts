@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { delivered, firstList, leftoverPerRun, newWorld, order, saveCard, seedPool, sendRun, signUp, toronto, userRow, vercelCron, weeksWithRuns, type CronCall, type Member, type World } from "./helpers";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+// One at a time is not offered at launch (src/lib/billing/offered.ts). This cycle includes a member ordering one at a
+// time, so the order charge keeps being driven end to end: the option is on here.
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => true }));
 
 /**
  * One complete unattended cycle (plan Unit 19; spec B.1 rule 4, B.8, check
@@ -70,7 +73,7 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
     expect(first(log, "send", "done")).toBe("2026-12-28T12:00:00.000Z");
     // This Monday's list email (or the teaser, which names no week), counted from the Sunday runs on.
     const mondayMail = (m: Member) =>
-      w.sent.slice(sentBefore).filter((x) => x.to === m.email && (x.subject === "Your list, and your receipt" || x.subject.includes("December 28") || x.subject === "Your first 3 ideas are ready"));
+      w.sent.slice(sentBefore).filter((x) => x.to === m.email && (x.subject === "Your Cora Curation, and your receipt" || x.subject.includes("December 28") || x.subject === "Your first 3 ideas are ready"));
     for (const m of [third, paying, single]) {
       expect(await delivered(w, m.id, WEEK)).toHaveLength(3);
       expect(mondayMail(m)).toHaveLength(1);
@@ -100,7 +103,7 @@ describe("one unattended cycle, Sunday runs to Monday emails", () => {
     await saveCard(w, fresh);
     expect(await delivered(w, fresh.id, WEEK)).toHaveLength(3);
     expect(await userRow(w, fresh.id)).toMatchObject({ status: "trial", free_lists_used: 1 });
-    expect(w.mail(fresh.email).find((x) => x.subject.includes("December 28"))!.text).toContain("Free list 1 of 2.");
+    expect(w.mail(fresh.email).find((x) => x.subject.includes("December 28"))!.text).toContain("Free Cora Curation 1 of 2.");
   });
 });
 

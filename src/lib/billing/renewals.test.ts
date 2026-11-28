@@ -91,7 +91,7 @@ describe("a renewal that fails", () => {
     expect((await user(uid)).status).toBe("active");
     await runHourly(query, deps(new Date("2027-01-10T05:30:00Z")));
     expect(await user(uid)).toMatchObject({ status: "held", hold_reason: "renewal_unpaid" });
-    expect(subjects().at(-1)).toBe("Your Monday lists are paused");
+    expect(subjects().at(-1)).toBe("Your Cora Curations are paused");
 
     // Monday's list is not delivered while held.
     await picksFor("2027-01-11");

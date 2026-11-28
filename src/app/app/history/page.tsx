@@ -36,7 +36,7 @@ async function History() {
           ))}
         </ul>
       ) : (
-        <p className="text-small text-ink-2">No ideas yet. Your first list arrives on a Monday morning.</p>
+        <p className="text-small text-ink-2">No ideas yet. Your first Cora Curation arrives on a Monday morning.</p>
       )}
     </div>
   );

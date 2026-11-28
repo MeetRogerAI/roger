@@ -133,7 +133,7 @@ describe("completeCardSetup: the card is saved and the held list unlocked", () =
     const [m] = lists("a@example.com");
     expect(lists("a@example.com")).toHaveLength(1);
     expect(m.subject).toBe(LIST_SUBJECT);
-    expect(m.text).toContain("Free list 1 of 2");
+    expect(m.text).toContain("Free Cora Curation 1 of 2");
     expect(m.text).toContain(REASON);
     // A second call (Stripe's webhook after the return page) changes nothing and sends nothing.
     expect(await completeCardSetup(query, gw, sid, opts())).toBe("done");
@@ -229,7 +229,7 @@ describe("completeCardSetup: the card is saved and the held list unlocked", () =
     expect(await deliveredIn(a, WEEK)).toBe(3);
     expect(await userRow(a)).toMatchObject({ free_lists_used: 1 });
     expect(sent.map((m) => m.subject)).toEqual([LIST_SUBJECT]);
-    expect(sent[0].text).toContain("Free list 1 of 2");
+    expect(sent[0].text).toContain("Free Cora Curation 1 of 2");
   });
 
   it("a replay after the member changed card through Update card leaves the new default card alone (card and tax steps run only before the save)", async () => {

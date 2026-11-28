@@ -215,9 +215,9 @@ export async function runSendJob(q: Query, d: SendDeps, o: { week: string }): Pr
         // of Roger, and the week never counts as missed (contribution.ts excuses an outcome of 'none').
         const paying = u.plan === "monthly" && u.status === "active" && !u.sponsored;
         const note = paying
-          ? "This list is missing because of Roger, not you, and this week never counts as a missed week."
+          ? "This Cora Curation is missing because of Roger, not you, and this week never counts as a missed week."
           : onFreeLists
-            ? "Nothing was charged, and this week doesn’t use one of your free lists."
+            ? "Nothing was charged, and this week doesn’t use one of your free Cora Curations."
             : u.sponsored
               ? ""
               : "Nothing was charged.";

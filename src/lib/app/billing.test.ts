@@ -4,7 +4,11 @@ import type { AdjustmentGateway } from "@/lib/billing/subscriptions";
 import { mergeV3 } from "@/lib/v3-settings";
 import { fakePlans } from "@/test-helpers/fake-plans";
 import { testDb } from "@/test-helpers/pglite-db";
-import { CARD_LATER, loadBilling, NO_CARD_YET } from "./billing";
+// The one-at-a-time switch (`plans.oneAtATimeOffered`, read through billing/offered): off, as at launch, unless a test turns it on.
+const offer = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/billing/offered", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/offered")>()), oneAtATimeOffered: () => offer.on }));
+
+const { CARD_LATER, loadBilling, NO_CARD_YET } = await import("./billing");
 
 const ONE_AT_A_TIME = /one (list )?at a time|per list|order a list|switch plan/i;
 
@@ -29,6 +33,7 @@ async function member(sql: string) {
 beforeEach(async () => {
   ({ query } = await testDb());
   plans = fakePlans();
+  offer.on = false;
   vi.stubEnv("STRIPE_PRICE_MONTHLY_USD", "price_monthly_usd");
 });
 
@@ -64,7 +69,7 @@ describe("the billing page (spec B.10)", () => {
         '{"totalCents": 22600, "taxCents": 2600, "currency": "USD", "week": "2026-12-14"}', '2026-11-23T15:00:00Z') returning id`,
     );
     expect(await loadBilling(query, t, { settings, now: SATURDAY, plans })).toMatchObject({
-      nextCharge: "Your first charge, with your third list: no earlier than Monday, December 14, US$226 (US$200 plus US$26 tax).",
+      nextCharge: "Your first charge, with your third Cora Curation: no earlier than Monday, December 14, US$226 (US$200 plus US$26 tax).",
       cancel: { label: "Cancel my trial" },
     });
     const c = await member(
@@ -73,7 +78,7 @@ describe("the billing page (spec B.10)", () => {
     expect(await loadBilling(query, c, { settings, now: SATURDAY, plans })).toMatchObject({
       cancel: null,
       undo: { until: "Sunday, January 3" },
-      nextCharge: "Nothing more will be charged. Your lists continue until Sunday, January 3.",
+      nextCharge: "Nothing more will be charged. Your Cora Curations continue until Sunday, January 3.",
     });
     // Once the subscription has ended: cancelled, nothing to undo.
     await query("update users set status = 'cancelled', access_ends_at = '2026-12-11T00:00:00Z' where id = $1", [c]);
@@ -85,6 +90,27 @@ describe("the billing page (spec B.10)", () => {
       `insert into users (email, status, plan, currency, stripe_customer, free_lists_used, switched_from_per_run_at) values ('s@example.com', 'trial', 'monthly', 'USD', 'cus_s', 2, now()) returning id`,
     );
     expect((await loadBilling(query, id, { settings, now: SATURDAY, plans }))?.cancel?.label).toBe("Cancel my account");
+  });
+
+  it("an account already on one at a time, while it is not offered: its plan with no price for one, no order to place, and no switch offered", async () => {
+    const id = await member(
+      `insert into users (email, status, plan, currency, stripe_customer, free_lists_used) values ('p@example.com', 'active', 'per_run', 'USD', 'cus_p', 2) returning id`,
+    );
+    const v = await loadBilling(query, id, { settings, now: SATURDAY, plans });
+    expect(v).toMatchObject({
+      plan: "per_run",
+      planLine: "One Cora Curation at a time. This plan is not offered at the moment.",
+      nextCharge: "No new order can be placed. An order you placed earlier is still charged the Monday it is sent; otherwise nothing is charged. Monthly is now the only plan. Write to us if you have questions about yours.",
+      cancel: { label: "Cancel my account" },
+    });
+    expect(v).not.toHaveProperty("offer");
+
+    // With the option on, the same account reads as it did: its price, and what an order costs.
+    offer.on = true;
+    expect(await loadBilling(query, id, { settings, now: SATURDAY, plans })).toMatchObject({
+      planLine: "One Cora Curation at a time: US$200 each, plus tax where it applies, only for the Mondays you order.",
+      nextCharge: "Nothing is charged unless you order. Each Cora Curation is US$200, plus tax where it applies, charged the Monday it is sent.",
+    });
   });
 });
 
@@ -132,7 +158,7 @@ describe("a trial with no card yet: what the billing page says (plan 2026-11-26-
   it("with nothing held yet: the card is asked for when the first list is ready, and no link (Payment would send them back)", async () => {
     const id = await noCard("w@example.com");
     const v = await loadBilling(query, id, { settings, now: SATURDAY, plans });
-    expect(v).toMatchObject({ nextCharge: "We’ll ask for your card when your first list is ready.", cardLink: null, canUpdateCard: false });
+    expect(v).toMatchObject({ nextCharge: "We’ll ask for your card when your first Cora Curation is ready.", cardLink: null, canUpdateCard: false });
     expect(v?.nextCharge).toBe(CARD_LATER);
   });
 
@@ -153,7 +179,7 @@ describe("a trial with no card yet: what the billing page says (plan 2026-11-26-
     expect(await loadBilling(query, s, { settings, now: SATURDAY, plans })).toMatchObject({ cardLink: null, nextCharge: expect.not.stringMatching(/card/) });
     const c = await noCard("c@example.com");
     await query("update users set trial_started_at = '2026-11-30T15:00:00Z' where id = $1", [c]);
-    expect(await loadBilling(query, c, { settings, now: SATURDAY, plans })).toMatchObject({ cardLink: null, nextCharge: expect.stringContaining("Nothing until your free lists are done") });
+    expect(await loadBilling(query, c, { settings, now: SATURDAY, plans })).toMatchObject({ cardLink: null, nextCharge: expect.stringContaining("Nothing until your free Cora Curations are done") });
   });
 });
 
@@ -165,7 +191,7 @@ describe("a leftover one-at-a-time account (preview only) still renders", () => 
     );
     const v = await loadBilling(query, id, { settings, now: SATURDAY, plans });
     expect(v).toMatchObject({ plan: "per_run", cardLink: null, cancel: { label: "Cancel my account" } });
-    expect(v?.planLine).toMatch(/^One list at a time:/);
+    expect(v?.planLine).toBe("One Cora Curation at a time. This plan is not offered at the moment.");
     expect(v).not.toHaveProperty("offer");
   });
 });

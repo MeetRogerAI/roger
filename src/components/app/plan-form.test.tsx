@@ -24,8 +24,8 @@ describe("PlanForm (Step 3, Product and Pricing; plan 2026-11-26-001 Unit 2)", (
 
   it("states both prices and the trial in lists, not weeks", () => {
     expect(text).toContain("Roger is US$200 a month or CA$280 a month, plus tax.");
-    expect(text).toContain("We’ll ask for your card before Cora’s first full list is shown.");
-    expect(text).toContain("Your free trial includes your first two Cora lists, two Mondays.");
+    expect(text).toContain("We’ll ask for your card before your first full Cora Curation is shown.");
+    expect(text).toContain("Your free trial includes your first two Cora Curations, two Mondays.");
   });
 
   it("offers no plan picker, no higher rate and no one-at-a-time; the consent box starts unticked", () => {

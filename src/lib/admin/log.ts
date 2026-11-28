@@ -28,6 +28,37 @@ export async function logAdminAction(
   return Number(row.id);
 }
 
+/** Added to the message of a change that is live while its admin log rows could not be written (logLanded). */
+export const NOT_LOGGED = " It could not be written in the admin log, so the log does not show it: the server’s log has what it would have said.";
+
+/**
+ * The log rows of a change that is already live (a publish of the site's words, its undo, a reset): all in one
+ * statement, tried twice. It never throws, because the change cannot be taken back by an error now, and an error
+ * page would tell the admin nothing happened. When both tries fail, the rows go to the server's log in full and the
+ * answer is false, for the screen to say so.
+ */
+export async function logLanded(q: Query, rows: { by: string; userId?: string | null; action: string; detail?: Record<string, unknown> }[]): Promise<boolean> {
+  if (rows.length === 0) return true;
+  const values = JSON.stringify(rows.map((r) => ({ admin_email: r.by, user_id: r.userId ?? null, action: r.action, detail: r.detail ?? {} })));
+  let failure: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await q(
+        `insert into admin_actions (admin_email, user_id, action, detail)
+         select e.r->>'admin_email', (e.r->>'user_id')::uuid, e.r->>'action', e.r->'detail'
+         from jsonb_array_elements($1::jsonb) with ordinality as e(r, n)
+         order by e.n`,
+        [values],
+      );
+      return true;
+    } catch (e) {
+      failure = e;
+    }
+  }
+  console.error("[admin] A change is live and its admin log rows could not be written:", failure instanceof Error ? failure.message : failure, values);
+  return false;
+}
+
 /**
  * Runs a long or risky admin action (a job run, a seed import) with its log
  * row written FIRST, marked "started", and completed in a finally with the

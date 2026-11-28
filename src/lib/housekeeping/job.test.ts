@@ -27,7 +27,98 @@ beforeEach(async () => {
 
 describe("the hourly pass", () => {
   it("runs the cheap database tasks first", () => {
-    expect(HOURLY_TASKS.slice(0, 4).map((t) => t.name)).toEqual(["expired_cleanup", "retention", "idle_retention", "old_records"]);
+    expect(HOURLY_TASKS.slice(0, 6).map((t) => t.name)).toEqual(["expired_cleanup", "retention", "free_run_purge", "unknown_authors", "idle_retention", "old_records"]);
+  });
+
+  it("purges free Zack runs on the retention setting, never ahead of the real clock", async () => {
+    const task = HOURLY_TASKS.find((t) => t.name === "free_run_purge")!;
+    const old = new Date(Date.now() - (settings.retentionDays + 1) * 86_400_000).toISOString();
+    const recent = new Date(Date.now() - (settings.retentionDays - 1) * 86_400_000).toISOString();
+    await query("insert into free_runs (token, email, agent, created_at) values ('old-token-0000000', 'old@example.com', 'claude', $1), ('new-token-0000000', 'new@example.com', 'claude', $2)", [old, recent]);
+    const ctx = { deadline: Date.now() + 60_000 };
+    // An "as of" run a year ahead still counts age from the real date.
+    const ahead = { gw: {} as BillingGateway, settings, now: new Date(Date.now() + 365 * 86_400_000), query, transport };
+    expect(await task.run(query, ahead, ctx)).toEqual({ deleted: 1, cleared: 0, orphaned: 0 });
+    expect(await query("select email from free_runs")).toEqual([{ email: "new@example.com" }]);
+  });
+
+  /** One free run past the retention period, so a purge that runs has something to delete. */
+  async function oldFreeRun() {
+    const old = new Date(Date.now() - (settings.retentionDays + 1) * 86_400_000).toISOString();
+    await query("insert into free_runs (token, email, agent, created_at) values ('old-token-0000000', 'old@example.com', 'claude', $1)", [old]);
+  }
+  const purged = { deleted: 1, cleared: 0, orphaned: 0 };
+  const nothingExpired = { tokens: 0, sessions: 0, states: 0, counters: 0 };
+  const noOrphans = { relabelled: 0, dropped: 0 };
+
+  it("purges free Zack runs while the cycle is not live, and runs nothing else but the other tasks that always run", async () => {
+    await oldFreeRun();
+    const d = { gw: {} as BillingGateway, settings: mergeV3([{ key: "v3.cycleLive", value: false }]), now: new Date(), query, transport };
+    expect(await runHourly(query, d)).toEqual({ skipped: "The cycle is not live.", expired_cleanup: nothingExpired, free_run_purge: purged, unknown_authors: noOrphans });
+    expect(await query("select 1 from free_runs")).toEqual([]);
+  });
+
+  it("purges free Zack runs when Stripe is not set up, and runs nothing else but the other tasks that always run", async () => {
+    await oldFreeRun();
+    const d = { gw: null, settings, now: new Date(), query, transport };
+    expect(await runHourly(query, d)).toEqual({ skipped: "Stripe is not configured.", expired_cleanup: nothingExpired, free_run_purge: purged, unknown_authors: noOrphans });
+    expect(await query("select 1 from free_runs")).toEqual([]);
+    // With neither, the cycle is the reason given, and the purge still runs.
+    await oldFreeRun();
+    expect(await runHourly(query, { ...d, settings: mergeV3([]) })).toEqual({ skipped: "The cycle is not live.", expired_cleanup: nothingExpired, free_run_purge: purged, unknown_authors: noOrphans });
+  });
+
+  it("relabels a deleted account's contributor rows while the cycle is not live and Stripe is not set up", async () => {
+    const [{ id: play }] = await query<{ id: string }>(
+      "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('One', 'Marketing', 'd', 'p', 'i', '2026-11-30', '2026-12-07') returning id",
+    );
+    await query("insert into pool_play_contributors (pool_play_id, contributor) values ($1, '3f1c2a9e-5b7d-4c1a-9e2f-0a1b2c3d4e5f')", [play]);
+    const d = { gw: null, settings: mergeV3([{ key: "v3.cycleLive", value: false }]), now: new Date(), query, transport };
+    // With no user at all the task changes nothing: that is a partly restored database, not one deleted account.
+    expect((await runHourly(query, d)).unknown_authors).toEqual(noOrphans);
+    expect(await query("select contributor from pool_play_contributors")).toEqual([{ contributor: "3f1c2a9e-5b7d-4c1a-9e2f-0a1b2c3d4e5f" }]);
+    // Another account exists, as on any real database: the row whose account is gone is relabelled.
+    await query("insert into users (email, status) values ('someone@example.com', 'active')");
+    expect((await runHourly(query, d)).unknown_authors).toEqual({ relabelled: 1, dropped: 0 });
+    expect(await query("select contributor from pool_play_contributors")).toEqual([{ contributor: "unknown author" }]);
+    expect((await runHourly(query, d)).unknown_authors).toEqual(noOrphans);
+  });
+
+  it("removes the free Zack run's expired per-IP counters while the cycle is not live and Stripe is not set up", async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    const hourAhead = new Date(Date.now() + 3_600_000).toISOString();
+    await query(
+      "insert into rate_events (key, window_start, count, expires_at) values ('zack:run:ip:203.0.113.7', 1, 3, $1), ('zack:report:ip:203.0.113.7', 1, 1, $1), ('zack:run:ip:203.0.113.8', 2, 1, $2)",
+      [hourAgo, hourAhead],
+    );
+    const d = { gw: null, settings: mergeV3([{ key: "v3.cycleLive", value: false }]), now: new Date(), query, transport };
+    const out = await runHourly(query, d);
+    expect(out.expired_cleanup).toEqual({ ...nothingExpired, counters: 2 });
+    // A counter still inside its hour is kept, so the limit it enforces still holds.
+    expect(await query("select key from rate_events")).toEqual([{ key: "zack:run:ip:203.0.113.8" }]);
+  });
+
+  it("marks only the expired clean-up, the free-run purge and the unknown-author relabel to run always, and keeps their places in the list", () => {
+    expect(HOURLY_TASKS.filter((t) => t.always).map((t) => t.name)).toEqual(["expired_cleanup", "free_run_purge", "unknown_authors"]);
+    expect(HOURLY_TASKS.slice(0, 7).map((t) => t.name)).toEqual(["expired_cleanup", "retention", "free_run_purge", "unknown_authors", "idle_retention", "old_records", "charge_takeover"]);
+  });
+
+  it("a failing free-run purge does not stop the tasks after it", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    // The real list, in its order, with the real purge. Every other task's work is replaced by a marker, so no task reaches Stripe.
+    const tasks: HourlyTask[] = HOURLY_TASKS.map((t) => (t.name === "free_run_purge" ? t : { name: t.name, always: t.always, run: async () => "ran" } as HourlyTask));
+    const failing: Query = <T>(text: string, params?: unknown[]) => (/free_runs/.test(text) ? Promise.reject(new Error("db blip")) : query<T>(text, params));
+    const d = { gw: {} as BillingGateway, settings, now: new Date(), query, transport };
+    const out = await runHourly(failing, d, tasks);
+    expect(out.free_run_purge).toEqual({ error: "db blip" });
+    const names = HOURLY_TASKS.map((t) => t.name);
+    const after = names.slice(names.indexOf("free_run_purge") + 1);
+    expect(after.length).toBeGreaterThan(10);
+    for (const name of after) expect(out[name], name).toBe("ran");
+    expect(Object.keys(out)).toEqual(names);
+    // The same when only the tasks that always run do.
+    expect(await runHourly(failing, { ...d, gw: null }, tasks)).toEqual({ skipped: "Stripe is not configured.", expired_cleanup: "ran", free_run_purge: { error: "db blip" }, unknown_authors: "ran" });
+    logged.mockRestore();
   });
 
   it("leaves tasks not started by the pass's deadline to the next pass, and hands the deadline to each task", async () => {
@@ -108,7 +199,7 @@ describe("welcome_unsent (plan 2026-11-26-001, Unit 2)", () => {
     expect(await pass()).toEqual({ welcome_unsent: 1 });
     expect(await pass()).toEqual({ welcome_unsent: 0 });
     expect(sent.map((m) => [m.to[0], m.subject])).toEqual([["ana@example.com", "Welcome to Roger"]]);
-    expect(sent[0].text).toContain("Your first two Cora lists are free.");
+    expect(sent[0].text).toContain("Your first two Cora Curations are free.");
   });
 
   it("welcomes a trial that saved its card before the retry ran", async () => {

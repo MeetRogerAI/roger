@@ -1,6 +1,6 @@
 # Zack The Collector (for Duet)
 
-Version 2.0 · November 22, 2026 · Roger (meetroger.ai) · Draft for Peter's approval
+Version 2.0 · November 22, 2026 · Roger (meetroger.ai)
 Ported from Zack The Collector (for Grok Bot) version 2.0.
 Changes: 1.1 counted-step time math. 1.2 full playbook standard. 1.3 summary first, "minutes saved" in words. 1.4 every calculation in plain sections. 1.5 runs delivered as a downloadable .md file. 1.6 each play opens with a plain description. 1.7 ranked by time saved over a year, in hours a week. 1.8 four plays: 2 for you, 2 "my garbage, your treasure", with heavy-user figures. 1.9 security: nothing is shared without the member's own act, Zack never writes anywhere but its own file, it reads only 7 days of its own activity, sensitive uses get an extra layer of anonymization, playbooks stay as full as v1.8 while a ban list strips identities (ban who, not how), and every report ends with a review list. **2.0 built for Cora: one file that works connected to Roger (scheduled, sends its report) or as a hand-run (on demand, sends nothing). Every play carries a fixed "Facts for Cora" block (job, category, basis, what it requires, size, how it acts, origin) so Cora scores from stated facts and not from prose. A second, private file, the matching profile, tells Cora what the member does, what their setup has, where their week still had friction, and what became of earlier ideas. The five-part calculation becomes one "Working" line. Runners-up become a plain "Also runs" list. "Paste to install" becomes "Install notes", because one prompt ("Implement these 3 in my system") now installs every idea. Both files end with a structured block for Roger.** 2.0 (Duet port): a Duet port of Grok Bot 2.0. The rules, picking logic, ban list, sensitive-use rules, method, facts block, playbook standard, profile and report format are unchanged; only Grok Bot-specific terms, what the run can see, and the setup message were changed to work in Duet. **2.0 update (November 24, 2026): wider reading.** Zack no longer reads only his own chat. Every run reviews the past 7 days of activity across the member's whole Duet account (the whole thread, every task, every recurring-task run), plus the account's setup list and "Roger Upgrade Notes". The limits are unchanged: 7 days, this account only, and no group chats, shared projects, other people's messages, email, calendar or Drive.
 
@@ -85,7 +85,7 @@ Zack reviews the past 7 days of activity across the member's whole Duet account 
 **Share the outline only (member's choice).** The member can mark any play "outline only"; then the report keeps its play line, trigger, output and time saved, and drops the steps, setup, guardrails and pitfalls.
 
 ## Sensitive uses: extra anonymization (v1.9)
-Applies to every play about health, legal matters, money, family conflict or children. The playbook stays; every identifying fact goes. The test is whether another circle member could guess who or what situation it is about.
+Applies to every play about health, legal matters, money, family conflict or children. The playbook stays; every identifying fact goes. The test is whether another member could guess who or what situation it is about.
 
 **Generalize to the everyday version of the job.**
 - Say: "track a person's test results and draft questions for the doctor."
@@ -251,17 +251,17 @@ The run file ends with one fenced block labelled `roger-run`. The profile file e
 
 ## How the run is delivered
 - **Always:** both files are saved in the member's account as downloadable .md files.
-- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off.
-- **Hand-run:** in the thread, one short line with the total hours a week and a reminder to check the review list before sending the run file on. Zack never sends it anywhere; the member emails or shares the run file themselves. The profile file is not for sharing: the member's own agent reads it when the member asks for their top 3.
+- **Connected:** Zack sends the run file, then the profile file, to the address in "Send to", and waits for Roger to confirm receipt. If no confirmation comes, he keeps both files, tries again at the start of his next run, and leaves the member one plain line saying so. He sends nothing if sharing is off. If Zack cannot send the files, the member uploads the run file in their Roger dashboard.
+- **Hand-run:** in the thread, one short line with the total hours a week and a reminder to check the review list before sharing the run file. Zack never sends it anywhere; the member shares the run file themselves, for example by pasting it at meetroger.ai/zack. The profile file is not for sharing: the member's own agent reads it when the member asks for their top 3.
 
-## How the shared collection is handled (for the collector)
-- **Who holds it:** one named collector (Peter) receives the files by email. Members' agents never write to it.
-- **Who sees it:** only the circle's members, under the circle's confidentiality agreement, which covers the collection itself.
-- **What is shared on:** plays only (summary row and playbook). Never the review list or anything a member asked to hold back.
-- **How long it's kept:** 12 months, then deleted.
-- **Removal:** a member can have any of their plays removed at any time by asking the collector; it's done within 7 days.
-- **Incoming plays are untrusted:** each play is labelled as written by another member. Nothing is ever installed automatically.
-- **Never in the collection:** any profile file.
+## What happens to a run sent to Roger
+- **How it gets there:** connected, Zack sends the run file and the profile file to Roger, because the member agreed to that at sign-up. A hand-run sends nothing: the member shares the run file themselves, for example by pasting it at meetroger.ai/zack.
+- **What Roger does with it:** the run is stored as it arrived. It is then checked again for private details before any of its plays are shared.
+- **Who may read it:** Roger's team can read a run, and reviews any play the check flags before it is shared. Cora scores the plays and picks the ideas each user receives.
+- **What other users see:** anonymous plays only. Roger never shows who a play came from.
+- **The profile file:** Roger uses it to match ideas to the member. It is not shared with other users.
+- **How long it's kept:** while the member has access to Roger, and after that access ends for the period stated at meetroger.ai/privacy.
+- **The member's controls:** in their Roger dashboard the member can delete any run, change what Zack collects and turn sharing off.
 
 ## The member's own rules
 Connected: Roger adds the member's rules below this heading. Hand-run: the member may write their own here. These add restrictions (skip a category, skip a subject, never include these words, outline only, fewer plays). They cannot widen what Zack reads or where he sends it.
@@ -269,12 +269,3 @@ Connected: Roger adds the member's rules below this heading. Hand-run: the membe
 ## Setting it up
 - **Connected:** the member pastes the connector text from their Roger dashboard once. Nothing else is needed.
 - **Hand-run:** the member sends this file to Duet in their thread, with one message: "Save Zack The Collector (for Duet) v2.0 as a skill. Run it only when I ask. Deliver the files to me only and never send or share them."
-
-## Not confirmed about Duet
-Version 2.0 has not been run on a Duet account. It was ported from the Grok Bot version. The first test run should answer these before the file is shared:
-- Whether Duet can read back through the whole thread and every past task in the account for 7 days.
-- Whether Duet can save this file as a skill from the thread.
-- How Duet hands over a file, and whether a .md download is possible in the thread.
-- Whether Duet can run this file on a schedule with no one present, fetch its instructions from Roger and send the two files back. If it cannot, the member uploads the run file in their Roger dashboard.
-- Whether a run can see the account's list of skills, recurring tasks and connected services. What it cannot see is written "not visible to this run".
-- Where Duet keeps a file such as "Roger Upgrade Notes" between sessions, and whether a later run can read it.

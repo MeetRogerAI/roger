@@ -113,6 +113,6 @@ describe("orders in a failed week (Unit 12b leftover)", () => {
       { week: WEEK, status: "no_run" },
       { week: "2026-12-21", status: "ordered" },
     ]);
-    expect(sent.map((m) => m.subject)).toEqual(["No list this week, and no charge"]);
+    expect(sent.map((m) => m.subject)).toEqual(["No Cora Curation this week, and no charge"]);
   });
 });

@@ -27,7 +27,7 @@ export function mondayListEmail(o: { week: string; ideas: EmailIdea[]; status: s
   const short = o.ideas.length < 3 ? [`This week there ${o.ideas.length === 1 ? "is one idea" : `are ${o.ideas.length} ideas`} that fit you, not three. We only send ideas that fit.`] : [];
   const base = renderEmail({
     subject: o.receipt
-      ? "Your list, and your receipt"
+      ? "Your Cora Curation, and your receipt"
       : `Your ${o.ideas.length === 3 ? "three ideas" : o.ideas.length === 2 ? "two ideas" : "idea"} for the week of ${longDate(o.week)}`,
     preview: o.ideas.map((i) => i.title).join(" · ").slice(0, 120),
     heading: `Your ideas for the week of ${longDate(o.week)}`,
@@ -41,10 +41,10 @@ export function mondayListEmail(o: { week: string; ideas: EmailIdea[]; status: s
 /** Spec B.8 item 6: a trial user with Zack on and no report: no list, and no free list used. */
 export function noRunThisWeekEmail(o: { week: string; status: string }): Rendered {
   return renderEmail({
-    subject: "No list this week",
-    preview: "No free list was used.",
-    heading: "No list this week.",
-    paragraphs: ["Zack hasn’t sent a report yet, so there is no list this week and no free list was used. Here is how to connect him."],
+    subject: "No Cora Curation this week",
+    preview: "No free Cora Curation was used.",
+    heading: "No Cora Curation this week.",
+    paragraphs: ["Zack hasn’t sent a report yet, so there is no Cora Curation this week and no free one was used. Here is how to connect him."],
     button: { label: "Connect Zack", url: appUrl("/app/zack") },
     after: [o.status],
   });
@@ -65,10 +65,10 @@ export function noIdeasThisWeekEmail(o: { week: string; note: string; status: st
 /** Spec B.13 email 7 (one at a time): after the second free list, how to order the next one. */
 export function orderNextEmail(o: { price: string }): Rendered {
   return renderEmail({
-    subject: "Your free lists are done",
-    preview: "Order a list whenever you want one.",
-    heading: "Your free lists are done.",
-    paragraphs: [`Order a list for any Monday you want one, until Sunday night: ${o.price}. Nothing is charged unless you order.`],
-    button: { label: "Order next Monday’s list", url: appUrl("/app") },
+    subject: "Your free Cora Curations are done",
+    preview: "Order a Cora Curation whenever you want one.",
+    heading: "Your free Cora Curations are done.",
+    paragraphs: [`Order a Cora Curation for any Monday you want one, until Sunday night: ${o.price}. Nothing is charged unless you order.`],
+    button: { label: "Order next Monday’s Cora Curation", url: appUrl("/app") },
   });
 }

@@ -1,3 +1,6 @@
+/** The Circles preview, or a site version built from the marketing spec. */
+export type SiteVersion = "circles" | "v1" | "v2" | "v3";
+
 /**
  * Everything Peter edits by hand lives here. Anything in this file ships to the
  * browser, so never put a secret or the work-balance Payment Link in it.
@@ -6,7 +9,14 @@
  */
 export const siteConfig = {
   productName: "Roger",
-  /** Feature-branch preview. Disable to restore the library-led site. */
+  /**
+   * Which public site is served: v1. Merging to main makes it live, and
+   * previews show the same. `live` is production; `preview` is Vercel
+   * previews, local development and tests; anywhere else gets `live`.
+   * Read through src/lib/site/version.ts, never from here.
+   */
+  site: { live: "v1" as SiteVersion, preview: "v1" as SiteVersion },
+  /** Applies while the site above is "circles". Disable to restore the library-led site. */
   flags: { circlesMode: true },
   circles: {
     priceUsd: 200,
@@ -18,6 +28,9 @@ export const siteConfig = {
     versionLabel: "November 13, 2026 version",
   },
   domain: "https://meetroger.ai",
+  /** The address of the git branch "preview" (Vercel's preview environment for that branch). */
+  previewDomain: "https://preview.meetroger.ai",
+  previewBranch: "preview",
   founder: {
     name: "Peter",
     /** Full name for the company pages, e.g. "Peter K…". Falls back to name. */
@@ -28,7 +41,16 @@ export const siteConfig = {
     bio: [
       "A background in coding education: years teaching people to build with new tools.",
     ] as string[],
-    photo: "" as string, // e.g. "/peter.jpg" (square, at least 480px). Hidden while empty.
+    /**
+     * Peter's photograph: a path under public/, e.g. "/media/peter.jpg" (at least 480px wide; it is cropped to 4:5).
+     * Shown once set, on the site's "Who runs this" and the company pages. Hidden while empty.
+     */
+    photo: "" as string,
+    /**
+     * Peter's signature: a path under public/, e.g. "/media/peter-signature.png" (dark ink on a clear background).
+     * Shown under his letter on the site's /about once set. While empty, his name is typed there instead.
+     */
+    signature: "" as string,
     city: "Toronto",
     links: [] as { label: string; href: string }[], // e.g. { label: "X", href: "https://x.com/…" }
   },
@@ -110,6 +132,21 @@ export const flags = {
 } as const;
 
 export type SiteConfig = typeof siteConfig;
+
+/**
+ * Which plans a person can choose. At launch Roger is monthly only (Peter,
+ * November 26, 2026): "one Cora Curation at a time" (`per_run` in the code and
+ * the database) is not offered. While this is false nobody can choose it at
+ * sign-up, switch to it, place an order on it, or be shown it or its price.
+ * The order and charge machinery for it stays in place and tested. Since the
+ * merge of main's payment-at-first-curation work, sign-up and the app have no
+ * screen for the option at all, so setting this to true no longer brings it
+ * back by itself (see src/lib/billing/offered.ts). The terms (src/data/site/legal.ts) and
+ * the marketing pages describe monthly only either way and would need the
+ * option written back in. Read through src/lib/billing/offered.ts, never from
+ * here.
+ */
+export const plans = { oneAtATimeOffered: false as boolean } as const;
 
 /**
  * Roger v3 settings (spec 0.9). Saved values in the `settings` table, under

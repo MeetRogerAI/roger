@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import { siteConfig } from "@/data/config";
 import { CirclesHome } from "@/components/circles/home";
+import { V1Home } from "@/components/site/v1/home";
+import { siteMeta } from "@/lib/site/chrome";
+import { getServedSite, isBuiltVersion } from "@/lib/site/version";
 import Image from "next/image";
 import Link from "next/link";
 import dawn from "@/assets/img/toronto-dawn.jpg";
@@ -18,11 +20,18 @@ import { livePack, packs } from "@/data/packs";
 import { getUseCases } from "@/lib/library-source";
 import { getSettings } from "@/lib/settings";
 
-export const metadata: Metadata = siteConfig.flags.circlesMode ? {
+const site = getServedSite();
+
+export const metadata: Metadata = site === "circles" ? {
   title: { absolute: "Roger Circles: Stop figuring out AI agents alone." },
   description: "A confidential Circle of eight people who use AI agents heavily for work. Trade what works, get ranked playbooks every Monday, and help each other install them.",
   alternates: { canonical: "/" },
   openGraph: { url: "/", title: "Stop figuring out AI agents alone.", description: "Eight people. Any agents. A better week of work." },
+} : isBuiltVersion(site) ? {
+  title: { absolute: siteMeta(site).title },
+  description: siteMeta(site).description,
+  alternates: { canonical: "/" },
+  openGraph: { url: "/", title: siteMeta(site).headline, description: siteMeta(site).description },
 } : {
   title: { absolute: "Roger: what people’s AI agents actually do" },
   description:
@@ -62,7 +71,8 @@ function byShelf(list: UseCase[]) {
 }
 
 export default async function LibraryHome() {
-  if (siteConfig.flags.circlesMode) return <CirclesHome />;
+  if (site === "circles") return <CirclesHome />;
+  if (isBuiltVersion(site)) return <V1Home version={site} />;
   const [all, settings] = await Promise.all([getUseCases(), getSettings()]);
   const sorted = [...all].sort((a, b) =>
     (b.addedAt ?? b.weekOf).localeCompare(a.addedAt ?? a.weekOf),

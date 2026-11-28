@@ -37,7 +37,7 @@ function runText(r: OpsRow) {
   return `${label} ${when(r.run.receivedAt)} (${r.run.route})`;
 }
 
-/** Operations (spec B.12): one row per user, with "needs attention" (spec check 30) and the row actions. */
+/** Needs attention, once "Operations" (spec B.12): one row per user, with "needs attention" (spec check 30) and the row actions. */
 export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">) {
   await connection();
   if (!(await isAdmin())) return null;
@@ -53,7 +53,7 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
   const mode = stripeMode();
 
   const chip = (href: string, text: string, on: boolean) => (
-    <Link href={href} aria-current={on ? "page" : undefined} className={`chip inline-flex min-h-10 items-center rounded-full border px-4 text-small ${on ? "border-ink bg-ink text-ground" : "border-rule-strong text-ink-2 hover:text-ink"}`}>
+    <Link key={href} href={href} aria-current={on ? "page" : undefined} className={`chip inline-flex min-h-10 items-center rounded-full border px-4 text-small ${on ? "border-ink bg-ink text-ground" : "border-rule-strong text-ink-2 hover:text-ink"}`}>
       {text}
     </Link>
   );
@@ -61,7 +61,7 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
   return (
     <section className="space-y-8">
       <header>
-        <h1 className="text-h3">Operations</h1>
+        <h1 className="text-h3">Needs attention</h1>
         <p className="mt-2 text-small text-ink-2">
           Week of {week}. {rows.length} users; {attentionCount} need attention.
         </p>
@@ -83,7 +83,8 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
       {shown.length === 0 ? (
         <p className="text-small text-ink-2">Nobody here.</p>
       ) : (
-        <div className="overflow-x-auto">
+        // relative: the note field's screen-reader label is absolutely placed, and without it it sits outside this scroller and widens the page.
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[72rem] border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-ink text-ink-2">
@@ -158,3 +159,6 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
     </section>
   );
 }
+
+/** Behind a login and read per request (await connection()): a navigation into it waits for the server, as the layout says. */
+export const instant = false;
