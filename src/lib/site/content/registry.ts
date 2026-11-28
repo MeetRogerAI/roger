@@ -24,11 +24,12 @@
  * Nothing here reads the database or knows what is stored: see ./format.ts
  * for the stored shape and ./model.ts for applying it.
  */
+import { exampleCopy } from "@/data/site/examples";
 import { letter, letterShown } from "@/data/site/letter";
 import { v1 } from "@/data/site/v1";
 import type { Zone } from "../claims";
 import { captionNames } from "../compounding";
-import { amountPlaceholderNames, plainLine, unknownPlaceholder, usableDestination } from "./text";
+import { DESTINATION_MAX, amountPlaceholderNames, plainLine, unknownPlaceholder, usableDestination } from "./text";
 
 // ---------------------------------------------------------------------------
 // The code model
@@ -48,9 +49,9 @@ const letterCopy = {
 
 /**
  * The code model: every word the covered pages print, as the code holds it (plan KTD1, the bottom layer). It is
- * the version's copy file with the letter beside it. The examples join it in a later unit.
+ * the version's copy file with the letter and the homepage's examples (src/data/site/examples.ts) beside it.
  */
-export const codeModel = { ...v1, letter: letterCopy };
+export const codeModel = { ...v1, letter: letterCopy, examples: exampleCopy };
 
 /** The shape every layer resolves to: the code model's. */
 export type SiteCopy = typeof codeModel;
@@ -227,6 +228,31 @@ const para = (label: string): FieldSpec => ({ label, max: 1500 });
 /** The longest label a hero step may have: each is a button in the row above the picture (src/components/site/v1/blocks/hero-steps.tsx). */
 export const HERO_STEP_LABEL_MAX = 10;
 
+/**
+ * THE HEADER'S AND THE FOOTER'S LINKS (plan U8, measured on November 27, 2026 in a browser).
+ *
+ * At 1024 pixels, the narrowest width that shows the header's links in a row, the five built-in links leave 34
+ * pixels free beside "Sign in" and the start button: no sixth link fits there, and neither does a longer label
+ * for one of the five. No count and no length limit can promise that edited labels fit at 1024 (twenty "W"s are
+ * 324 pixels), so the header measures its own words instead (src/lib/site/header-fit.ts): links that do not fit
+ * at 1024 are in the menu up to 1280, and links that do not fit at 1280 are in the menu at every width. The limits
+ * here are what the menu and the footer can hold and still read well: six links in the header (seven rows of the
+ * phone's menu with Sign in), eight in the footer (which wraps), a label of 24 characters.
+ */
+export const NAV_LABEL_MAX = 24;
+export const NAV_LINKS_MAX = 6;
+export const FOOTER_LINKS_MAX = 8;
+/**
+ * THE EXAMPLES (plan U8, measured). Below 640 pixels the short titles are stacked, one row each, so any number fits
+ * at 375; from 640 they are one row of pills no wider than 44rem, where four of the longest titles take four lines
+ * each at 640 and three at 768, and five take five. Four examples, and a short title no longer than the longest
+ * built-in one by much.
+ */
+export const EXAMPLES_MAX = 4;
+export const EXAMPLE_LABEL_MAX = 40;
+/** The longest playbook: the built-in ones are about 3,000 characters. */
+export const PLAYBOOK_MAX = 8000;
+
 /** A section with no words of its own: the night band a reading page ends on. Its button and its line are under Shared. */
 const startBand: SectionSpec = { id: "startBand", label: "Start button band", ground: "night" };
 
@@ -276,6 +302,16 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
               "sample.playbook.title": short("Card: second heading"),
               "sample.playbook.steps": short("Card: word after the step count"),
               "sample.playbook.whole": short("Card: row for a playbook with no numbered parts"),
+              // The plays themselves (src/data/site/examples.ts): approved text, printed in the card's claims zone. No
+              // name in braces: a play holds no amounts, and "{…}" would be read as one. The short title is the one
+              // exception: it is printed on the row of tabs above the card, outside the card's zone (example-tabs.tsx),
+              // so it is checked as the page checks it, where a figure in it is a claim.
+              "examples.*.label": { label: "Short title, on the row of examples", max: EXAMPLE_LABEL_MAX, placeholders: [] },
+              "examples.*.category": { label: "Line above the title", max: 80, placeholders: [], zones: ["sample"] },
+              "examples.*.title": { label: "Title", max: 200, placeholders: [], zones: ["sample"] },
+              "examples.*.summary": { label: "Summary", max: 1500, placeholders: [], zones: ["sample"] },
+              "examples.*.install": { label: "What To Copy: the install prompt", max: 1500, placeholders: [], zones: ["sample"] },
+              "examples.*.playbook": { label: "Playbook", kind: "block", max: PLAYBOOK_MAX, placeholders: [], zones: ["sample"] },
             },
           },
           {
@@ -450,21 +486,21 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
           },
           {
             id: "nav",
-            label: "Header and footer links",
+            label: "Header links",
             fixed: true,
-            fields: {
-              "nav.howItWorks": short("How it works"),
-              "nav.pricing": short("Pricing"),
-              "nav.library": short("Use cases"),
-              "nav.faq": short("FAQ"),
-              "nav.about": short("About"),
-            },
+            fields: { "nav.*.label": { label: "Words", max: NAV_LABEL_MAX }, "nav.*.href": { label: "Goes to", kind: "destination", max: DESTINATION_MAX } },
           },
           {
             id: "footer",
             label: "Footer",
             fixed: true,
-            fields: { "footer.place": short("Place, beside the contact email"), "footer.privacy": short("Link to Privacy"), "footer.terms": short("Link to Terms") },
+            fields: {
+              "footer.place": short("Place, beside the contact email"),
+              "footer.links.*.label": { label: "Words", max: NAV_LABEL_MAX },
+              "footer.links.*.href": { label: "Goes to", kind: "destination", max: DESTINATION_MAX },
+              "footer.privacy": short("Link to Privacy"),
+              "footer.terms": short("Link to Terms"),
+            },
           },
           {
             id: "price",
@@ -503,6 +539,12 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
       // The groups are /faq's sections, not a list; each group's questions are one.
       questions: { item: null },
       "questions.*.items": { item: "Question", list: "Questions", max: 20, toggles: { home: { label: "Show on the homepage", key: "on", value: "home" } } },
+      // The header keeps one link at least: below 375 pixels "Sign in" is reached through the menu, which a header
+      // with no links does not draw. The footer may have none: it then shows its small print alone.
+      nav: { item: "Link", list: "Header links", min: 1, max: NAV_LINKS_MAX },
+      "footer.links": { item: "Link", list: "Footer links", max: FOOTER_LINKS_MAX },
+      // Every example removed: the homepage has no examples section, and /how-it-works takes apart the first built-in one.
+      examples: { item: "Example", list: "Cora Curation examples", max: EXAMPLES_MAX },
       // Text only: each anatomy note is paired with a playbook part by its place, and the Zack points follow the Zack instructions.
       "howItWorks.zack.points": { item: "Point" },
       "howItWorks.anatomy.notes": { item: "Note" },
@@ -768,6 +810,25 @@ export function fieldsOfItem(list: List, itemId: string, registry: Registry = si
 
 /** The site's registry: the code model under the site's spec. Built once, when the module loads, so a copy and a spec that disagree fail at once. */
 export const siteRegistry: Registry = buildRegistry(codeModel, siteSpec(codeModel));
+
+/** A place on the site a link can be pointed at by name (plan R9): a covered page, or a section of one that has an anchor. */
+export type LinkTarget = { href: string; page: Page; section: Section | null };
+
+/**
+ * Every place a link of the header or the footer can be pointed at by name, in the order the pages and their
+ * sections are listed: each covered page ("/faq"), then each of its sections that a link can land on ("/faq#cost"
+ * is not one: only sections). The homepage's sections are "/#price", not "/#price" after another "/". Shared has
+ * no page of its own and is not here.
+ */
+export function linkTargets(registry: Registry = siteRegistry): LinkTarget[] {
+  const out: LinkTarget[] = [];
+  for (const page of registry.pages) {
+    if (page.id === "shared") continue;
+    out.push({ href: page.path, page, section: null });
+    for (const section of page.sections) if (section.anchor !== null) out.push({ href: `${page.path}#${section.anchor}`, page, section });
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // What a field can hold

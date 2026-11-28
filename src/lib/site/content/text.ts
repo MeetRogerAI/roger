@@ -114,25 +114,29 @@ const BACKSLASH = 92;
 
 /**
  * True for an address a link may point at (plan KTD12): a path on this site, which starts with exactly one "/";
- * an "https://" address with a host; or a "mailto:" address. Everything else is refused where it is typed and
- * dropped where it is read, because the address is printed into an href and "javascript:" must never reach one.
+ * an "https://" address with a host and no name or password in it; or a "mailto:" address with an "@". Everything
+ * else is refused where it is typed and dropped where it is read, because the address is printed into an href and
+ * "javascript:" must never reach one. So "javascript:", "data:", "http://", "//evil.test" (another site, with this
+ * one's scheme) and "HTTPS://" (the scheme is matched as written, in lower case) are all refused.
  *
- * No space, control character or backslash anywhere: a browser reads "/\evil.test" and "/<tab>/evil.test" as
- * another site's address. The scheme is matched as written, in lower case.
+ * No space, control character, unseen character or backslash anywhere: a browser reads "/\evil.test" and
+ * "/<tab>/evil.test" as another site's address. No braces either: the header's words are filled with the amounts,
+ * and "{name}" in an address would be read as an amount's name ("%7B" is how an address writes a brace).
  */
 export function usableDestination(value: unknown): value is string {
   if (typeof value !== "string" || value === "" || value.length > DESTINATION_MAX) return false;
-  if (/\s/.test(value) || value.replace(UNSEEN, "") !== value) return false;
+  if (/\s/.test(value) || value.replace(UNSEEN, "") !== value || /[{}]/.test(value)) return false;
   for (const ch of value) {
     const code = ch.codePointAt(0) ?? 0;
     if (isControl(code) || code === BACKSLASH) return false;
   }
   if (value.startsWith("/")) return !value.startsWith("//");
-  if (value.startsWith("mailto:")) return value.length > "mailto:".length;
+  if (value.startsWith("mailto:")) return /^mailto:[^@/]+@[^@/]+$/.test(value.split("?")[0]);
   if (!value.startsWith("https://")) return false;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && url.hostname !== "";
+    // A name and password before the host ("https://good.test@evil.test") make an address read as another one.
+    return url.protocol === "https:" && url.hostname !== "" && url.username === "" && url.password === "" && !value.slice("https://".length).split(/[/?#]/)[0].includes("@");
   } catch {
     return false;
   }

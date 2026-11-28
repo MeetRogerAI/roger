@@ -35,7 +35,7 @@ import { captionNames } from "../compounding";
 import { shortened } from "./caption";
 import type { Overlay } from "./format";
 import { applyOverlay, baseline, layoutOn, listItems, readField, sameLayout, sectionLayout, textAt } from "./model";
-import { TOGGLE_OFF, TOGGLE_ON, fieldsOfItem, isAddedId, resolveField, siteRegistry, type Field, type List, type Page, type Registry, type Section } from "./registry";
+import { TOGGLE_OFF, TOGGLE_ON, fieldsOfItem, isAddedId, linkTargets, resolveField, siteRegistry, type Field, type List, type Page, type Registry, type Section } from "./registry";
 import { canonical } from "./store";
 import { asPlaceholder, placeholdersIn, plainBlock, plainLine, unknownPlaceholder, usableDestination } from "./text";
 
@@ -61,6 +61,14 @@ export const TYPED_MAX = 50_000;
 export const tooLongToRead = (field: Field): string => `This is far longer than fits here: the most is ${field.max} characters. Shorten it and save again.`;
 
 /**
+ * What a link may point at (plan KTD12), in the owner's words: the refusal of every other address. A page of this
+ * site, another site's "https://" address, or an email address; nothing else, because whatever is typed here is
+ * what a visitor's browser is told to open.
+ */
+export const DESTINATION_REFUSAL =
+  "A link cannot point there. Pick a page from the list, or type an address that starts with “/” for a page of this site (such as /faq), with “https://” for another site, or with “mailto:” for an email address. It cannot hold spaces or braces.";
+
+/**
  * Why a tidied text cannot be saved in this field, in the owner's words, or null when it can (plan KTD10). Only
  * what would break a page is refused: no words at all, more than the field holds, a name in braces that does not
  * exist, and an address a link may not point at. Whether the wording is wise is a warning at publish, not this.
@@ -71,8 +79,9 @@ export function saveRefusal(field: Field, text: string, hasOriginal = true): str
   if (field.kind === "toggle") return text === TOGGLE_ON || text === TOGGLE_OFF ? null : "This can only be switched on or off. Reload the page and try again.";
   if (plainLine(text) === "") return hasOriginal ? "This cannot be left empty. To get the first wording back, use “Reset to the original wording”." : "This cannot be left empty.";
   if (text.length > field.max) return `This is ${text.length} characters long, and the most that fits here is ${field.max}. Shorten it by ${text.length - field.max}.`;
-  if (field.kind === "destination") return usableDestination(text) ? null : "This is not an address a link can use. Start it with “/” for a page of this site, or with “https://”.";
+  if (field.kind === "destination") return usableDestination(text) ? null : DESTINATION_REFUSAL;
   const unknown = unknownPlaceholder(text, field.placeholders);
+  if (unknown && field.placeholders.length === 0) return `${unknown} is not something this text can hold: a name in braces would be read as an amount, and this text has none. Take out the braces, or write it another way.`;
   if (unknown) return `${unknown} is not a name this text can use, so it would show on the page as typed. Check the spelling. The names that work here: ${field.placeholders.map(asPlaceholder).join(", ")}.`;
   return null;
 }
@@ -316,24 +325,61 @@ export function draftCount(content: { draft: Overlay; published: Overlay }, base
 // ---------------------------------------------------------------------------
 
 /**
- * The links the site's own code draws to a section of a covered page, as they are today. Each is named by the
- * field that holds its words, so the warning can quote the link as the owner has worded it.
+ * The links of the page bodies that the code draws to a section of a covered page. Each is named by the field that
+ * holds its words, so the warning can quote the link as the owner has worded it.
  *
- * THIS IS THE WHOLE OF WHAT THIS UNIT WARNS ABOUT. Links an admin types, links to an item of a list, and a page
- * left without its main heading are U9's, which replaces this table with the links the draft would render.
+ * The header's and the footer's links are not here: they are lists an admin edits (plan U8), and chromeLinks reads
+ * them from the draft, wherever each one now points. Links an admin types elsewhere, links to an item of a list,
+ * and a page left without its main heading are U9's, which replaces this table with the links the draft would
+ * render.
  */
 const builtInLinks: readonly { label: string; where: string; from: { page: string; section: string } | null; to: { page: string; section: string } }[] = [
-  // chrome.ts, PRICE_SECTION_HREF: the header and the footer, on every page.
-  { label: "nav.pricing", where: "in the header and in the footer of every page", from: null, to: { page: "home", section: "price" } },
   // v1.ts, control.link.href.
   { label: "control.link.label", where: "on the homepage, under “You decide what Zack shares”", from: { page: "home", section: "control" }, to: { page: "howItWorks", section: "zack" } },
   // src/app/library/page.tsx, "#watch".
   { label: "library.watchLink", where: "at the top of the Use cases page", from: { page: "library", section: "intro" }, to: { page: "library", section: "watch" } },
 ];
 
+/** The two lists of links on every page, and where each is. */
+const CHROME_LISTS = [
+  { list: "nav", where: "in the header" },
+  { list: "footer.links", where: "in the footer" },
+] as const;
+
+/**
+ * The header's and the footer's links as the draft has them that land on a section of a covered page, with their
+ * words and where they are. A link with the same words and address in both lists is one entry, "in the header and
+ * in the footer of every page", as it is for "Pricing" as built.
+ */
+function chromeLinks(content: { draft: Overlay }, base: unknown, registry: Registry): { label: string; where: string; from: null; to: { page: string; section: string } }[] {
+  const model = applyOverlay(base, content.draft, registry);
+  const targets = new Map(linkTargets(registry).flatMap((target) => (target.section ? [[target.href, { page: target.page.id, section: target.section.id }] as const] : [])));
+  const found: { label: string; href: string; lists: string[] }[] = [];
+  for (const { list, where } of CHROME_LISTS) {
+    const spec = registry.lists.get(list);
+    if (!spec) continue;
+    for (const item of listItems(model, list, registry)) {
+      const [label, href] = ["label", "href"].map((key) => resolveField(`${list}.${item}.${key}`, registry)).map((field) => (field ? (readField(model, field) ?? "") : ""));
+      if (!targets.has(href)) continue;
+      const same = found.find((entry) => entry.label === label && entry.href === href);
+      if (same) {
+        if (!same.lists.includes(where)) same.lists.push(where);
+      } else found.push({ label, href, lists: [where] });
+    }
+  }
+  return found.map((entry) => ({ label: entry.label, where: `${entry.lists.join(" and ")} of every page`, from: null, to: targets.get(entry.href)! }));
+}
+
+/** Every link that lands on a section, with its words as the draft has them. */
+function linksToSections(content: { draft: Overlay }, base: unknown, registry: Registry) {
+  return [...chromeLinks(content, base, registry), ...builtInLinks.map((link) => ({ ...link, label: wordingOf(content.draft, link.label, base, registry) }))];
+}
+
 /** The site's own links that land on a section, each as words to follow "The": "“Pricing” link in the header and in the footer of every page". For the note beside the section's switch. */
 export function linksInto(content: { draft: Overlay }, pageId: string, sectionId: string, base: unknown = baseline, registry: Registry = siteRegistry): string[] {
-  return builtInLinks.filter((link) => link.to.page === pageId && link.to.section === sectionId).map((link) => `“${wordingOf(content.draft, link.label, base, registry)}” link ${link.where}`);
+  return linksToSections(content, base, registry)
+    .filter((link) => link.to.page === pageId && link.to.section === sectionId)
+    .map((link) => `“${link.label}” link ${link.where}`);
 }
 
 export type LinkWarning = {
@@ -356,11 +402,11 @@ export type LinkWarning = {
 export function linkWarnings(content: { draft: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): LinkWarning[] {
   const out: LinkWarning[] = [];
   const isOff = (at: { page: string; section: string }) => layoutOn(content.draft, at.page, base, registry).off.includes(at.section);
-  for (const link of builtInLinks) {
+  for (const link of linksToSections(content, base, registry)) {
     const page = registry.pages.find((entry) => entry.id === link.to.page);
     const section = page?.sections.find((entry) => entry.id === link.to.section);
     if (!page || !section || section.anchor === null || !isOff(link.to) || (link.from && isOff(link.from))) continue;
-    const words = wordingOf(content.draft, link.label, base, registry);
+    const words = link.label;
     const lands = page.id === "home" ? "the top of the homepage" : `the top of the ${page.label} page`;
     out.push({
       page,

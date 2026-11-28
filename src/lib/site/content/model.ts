@@ -304,11 +304,13 @@ export function applyListEdit(below: readonly string[], edit: ListEdit | undefin
   if (!edit) return [...below];
   const fixed = bounds.min === bounds.max;
   const removed = fixed ? [] : below.filter((id) => edit.removed.includes(id));
-  // Never fewer than the page can draw: the first of the removed ones stay.
-  const stay = removed.slice(0, Math.max(0, bounds.min - (below.length - removed.length)));
+  const addable = fixed ? [] : [...new Set(edit.added)].filter((id) => isAddedId(id) && !below.includes(id) && !edit.removed.includes(id));
+  // Never fewer than the page can draw: the first of the removed ones stay. The added ones count: a header whose
+  // built-in links are all removed and that has one added keeps that one alone, as the editor's count says.
+  const stay = removed.slice(0, Math.max(0, bounds.min - (below.length - removed.length) - addable.length));
   const kept = below.filter((id) => !removed.includes(id) || stay.includes(id));
   const room = Math.max(0, bounds.max - kept.length);
-  const added = fixed ? [] : [...new Set(edit.added)].filter((id) => isAddedId(id) && !below.includes(id) && !edit.removed.includes(id)).slice(0, room);
+  const added = addable.slice(0, room);
   return mergeOrder([...kept, ...added], edit.order);
 }
 
@@ -434,8 +436,9 @@ export function composeOverlays(released: Overlay, own: Overlay, registry: Regis
  * an edit are filled like any other.
  *
  * `copy` is the version's copy file. `letter` is Peter's letter as /about prints it, which is his wording and not
- * the site's, so it is handed over beside the copy and not inside it. `zack` is the free Zack run's copy, which
- * Pages does not cover.
+ * the site's, so it is handed over beside the copy and not inside it. `examples` are the homepage's examples, in
+ * their order (src/data/site/examples.ts, examplesFrom, makes them plays again). `zack` is the free Zack run's copy,
+ * which Pages does not cover.
  */
 /** An overlay's section entries alone, read leniently like everything stored. */
 const sectionEdits = (overlay: Overlay, registry: Registry) => (Object.keys(overlay.sections).length === 0 ? {} : parseOverlay({ ...emptyOverlay, sections: overlay.sections }, registry).sections);
@@ -469,7 +472,7 @@ export function questionGroupsShown<G extends { id: string }>(groups: readonly G
   return sectionsShown("faq", overlay).flatMap((id) => groups.filter((group) => group.id === id));
 }
 
-export function v1Copy(amounts: Amounts, overlay: Overlay = emptyOverlay): { copy: V1Copy; letter: SiteCopy["letter"]; zack: V1ZackCopy } {
-  const { letter, ...copy } = fillCopy(applyOverlay(codeModel, overlay), amounts);
-  return { copy, letter, zack: fillCopy(v1Zack, amounts) };
+export function v1Copy(amounts: Amounts, overlay: Overlay = emptyOverlay): { copy: V1Copy; letter: SiteCopy["letter"]; examples: SiteCopy["examples"]; zack: V1ZackCopy } {
+  const { letter, examples, ...copy } = fillCopy(applyOverlay(codeModel, overlay), amounts);
+  return { copy, letter, examples, zack: fillCopy(v1Zack, amounts) };
 }

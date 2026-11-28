@@ -6,6 +6,7 @@
  * list’s items. The lists have their own file too: ./lists.test.ts.
  */
 import { describe, expect, it } from "vitest";
+import { examples as builtInExamples, examplesFrom } from "@/data/site/examples";
 import { v3Defaults } from "@/data/config";
 import { letterShown } from "@/data/site/letter";
 import { questionsOn, v1, v1Zack } from "@/data/site/v1";
@@ -51,9 +52,17 @@ const COST = "questions.price-and-billing.items.cost.a";
 const ALONE = "home.problem.statements.alone.text";
 
 describe("the layers", () => {
-  it("has the code model as the copy file with Peter's letter beside it, as /about prints it", () => {
-    const { letter, ...copy } = codeModel;
+  it("has the code model as the copy file with Peter's letter and the homepage's examples beside it, as the pages print them", () => {
+    const { letter, examples, ...copy } = codeModel;
     expect(copy).toEqual(v1);
+    // Each example's words, from its play (src/data/site/examples.ts), and nothing that is not editable.
+    expect(examples.map((example) => example.id)).toEqual(builtInExamples.map((example) => example.id));
+    for (const [i, example] of examples.entries()) {
+      const { label, play } = builtInExamples[i];
+      expect(example).toEqual({ id: example.id, label, category: play.category, title: play.title, summary: play.description, install: play.pasteToInstall, playbook: play.playbookMd });
+    }
+    // And they come back as the same plays.
+    expect(examplesFrom(examples)).toEqual(builtInExamples);
     expect(letter.paragraphs).toEqual(letterShown.map((p) => ({ id: p.id, text: p.shown })));
     expect(letter.greeting).toBe("Hey there,");
   });
@@ -354,7 +363,7 @@ describe("diffToOverlay", () => {
       // Equal to the base: not an edit.
       { [HEADLINE]: v1.home.hero.headline, [SUB]: "A new sub-line." },
       { [HEADLINE]: v1.home.hero.headline, "buttons.start": v1.buttons.start },
-      // Unusable: never applied, so never read back.
+      // Unusable: never applied, so never read back. "nav.faq" is an old name, read as its two new ones (plan U8).
       { [HEADLINE]: "", [SUB]: "It costs {nothing}.", "home.hero.kicker": "x", "nav.faq": "Questions" },
     ];
     for (const text of cases) {
@@ -362,7 +371,7 @@ describe("diffToOverlay", () => {
       expect(diffToOverlay(codeModel, applyOverlay(codeModel, stored)), JSON.stringify(text)).toEqual(normaliseOverlay(codeModel, stored));
     }
     expect(diffToOverlay(codeModel, applyOverlay(codeModel, edits(cases[3]))).text).toEqual({ [SUB]: "A new sub-line." });
-    expect(diffToOverlay(codeModel, applyOverlay(codeModel, edits(cases[5]))).text).toEqual({ "nav.faq": "Questions" });
+    expect(diffToOverlay(codeModel, applyOverlay(codeModel, edits(cases[5]))).text).toEqual({ "nav.faq.label": "Questions", "footer.links.faq.label": "Questions" });
   });
 
   it("applied to the base again, gives the model's wording", () => {

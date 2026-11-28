@@ -33,7 +33,7 @@ const legal = [
 ];
 
 /** One quiet line: what this is, where to go, the year and the small print. */
-function Line({ left, centre, year, site, small }: { left: React.ReactNode; centre: { href: string; label: string }[]; year: number; site: ServedSite; /** A site version's own small print, in its own words. */ small?: { href: string; label: string }[] }) {
+function Line({ left, centre, year, site, small }: { left: React.ReactNode; /** `id`: a site version's link, keyed by it (two may share their words). */ centre: { href: string; label: string; id?: string }[]; year: number; site: ServedSite; /** A site version's own small print, in its own words. */ small?: { href: string; label: string }[] }) {
   return (
     <footer className="text-small text-ink-2">
       <div className="wrap grid gap-2 pb-7 pt-[18svh] md:grid-cols-[1fr_auto_1fr] md:items-baseline md:gap-6">
@@ -41,13 +41,23 @@ function Line({ left, centre, year, site, small }: { left: React.ReactNode; cent
         {centre.length > 0 && (
           <nav aria-label="Footer">
             <ul className="flex flex-wrap gap-x-6 gap-y-1">
-              {centre.map((l) => (
-                <li key={l.label}>
-                  <Link href={l.href} className="inline-block py-1 text-ink underline decoration-transparent underline-offset-4 transition-[text-decoration-color] duration-[180ms] hover:decoration-current">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
+              {centre.map((l) => {
+                const className = "inline-block py-1 text-ink underline decoration-transparent underline-offset-4 transition-[text-decoration-color] duration-[180ms] hover:decoration-current";
+                return (
+                  <li key={l.id ?? l.label}>
+                    {/* An address an admin typed for another site, or an email address, is a plain link in the same tab (site-header.tsx, SiteLink). */}
+                    {l.href.startsWith("/") ? (
+                      <Link href={l.href} className={className}>
+                        {l.label}
+                      </Link>
+                    ) : (
+                      <a href={l.href} className={className}>
+                        {l.label}
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </nav>
         )}

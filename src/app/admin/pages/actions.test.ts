@@ -59,7 +59,7 @@ const { default: QuestionsPage } = await import("../questions/page");
 const { LAUNCH_LIST_URL } = await import("./launch-list");
 const { CONTENT_TAG, getSiteContent } = await import("@/lib/site/content/read");
 const { CONTENT_KEY, LEGACY_QUESTIONS_KEY, readStored } = await import("@/lib/site/content/store");
-const { draftChanges, reviewKey, wordingWarnings } = await import("@/lib/site/content/check");
+const { DESTINATION_REFUSAL, draftChanges, reviewKey, wordingWarnings } = await import("@/lib/site/content/check");
 const { baseline, textAt } = await import("@/lib/site/content/model");
 const { newOverlay } = await import("@/lib/site/content/format");
 const { getAmounts } = await import("@/lib/site/amounts");
@@ -1060,7 +1060,7 @@ describe("a page's lists (plan U7, R8)", () => {
     expect(markup).not.toContain(`id="field-${STARTED}.which-agents.q"`);
     // Home's lists are Home's.
     const homeScreen = await editorScreen("home");
-    expect([...homeScreen.matchAll(/data-list="([^"]+)"/g)].map((m) => m[1])).toEqual([STEPS, STATEMENTS, POINTS]);
+    expect([...homeScreen.matchAll(/data-list="([^"]+)"/g)].map((m) => m[1])).toEqual([STEPS, STATEMENTS, "examples", POINTS]);
     expect(words(listBlock(homeScreen, STATEMENTS))).toContain("It can hold up to 6 statements: the page sets them three in a row, in up to two rows.");
   });
 
@@ -1171,5 +1171,136 @@ describe("a page's lists (plan U7, R8)", () => {
     // Put back, the item returns with that wording, as a change to review.
     await press("home", STATEMENTS, "back", { item: "told" });
     expect(words(await reviewScreen())).toContain("Home, The problem: statement “Typed while it is removed.” is put back, as number 1 of 3.");
+  });
+});
+
+describe("the header's and the footer's links, and the examples (plan U8)", () => {
+  beforeEach(() => {
+    admin = OWNER;
+  });
+  const press = (page: string, list: string, op: string, more: Record<string, string> = {}) => listAction(form({ page, list, op, ...more }));
+  const add = (page: string, list: string, texts: Record<string, string>) => press(page, list, "add", Object.fromEntries(Object.entries(texts).map(([key, value]) => [`new:${key}`, value])));
+  const draft = async () => (await readStored(current)).draft;
+  const chrome = async () => (await import("@/lib/site/chrome")).getSiteChrome("v1");
+  const play = { label: "Weekly invoice chaser", category: "Getting paid", title: "Chase unpaid invoices", summary: "Each Friday the AI agent drafts a reminder for each unpaid invoice.", install: "Save this as a skill called Invoice chaser.", playbook: "## What it does\nDrafts reminders.\n\n## Steps\n1. Read the ledger.\n2. Draft." };
+
+  it("adds a link to the header that points at a page by its address, publishes it, and the header shows it last and the footer does not", async () => {
+    const state = await add("shared", "nav", { label: " Run Zack ", href: " /zack " });
+    expect(state).toMatchObject({ status: "ok" });
+    const id = state.added!;
+    expect((await draft()).text).toEqual({ [`nav.${id}.label`]: "Run Zack", [`nav.${id}.href`]: "/zack" });
+    // A draft: the header is as it was.
+    expect((await chrome()).links.map((link) => link.label)).toEqual(["How it works", "Pricing", "Use cases", "FAQ", "About"]);
+    expect(await publishNow()).toMatchObject({ status: "ok" });
+    const after = await chrome();
+    expect(after.links.at(-1)).toEqual({ id, label: "Run Zack", href: "/zack" });
+    expect(after.footer.map((link) => link.label)).toEqual(["Pricing", "How it works", "FAQ", "About", "Use cases"]);
+    // Six links: the header shows them in a row from 1280 pixels, in its menu below that.
+    expect(after.navRow).toBe("xl");
+  });
+
+  it("refuses a link with no words or nowhere to go, and an address a link may not point at, beside the field, and stores nothing", async () => {
+    for (const bad of ["javascript:alert(1)", "//evil.test", "http://x.test", "data:text/html,x", " https://user:pw@x.test", "faq"]) {
+      expect(await add("shared", "nav", { label: "Bad", href: bad }), bad).toMatchObject({ status: "error", errors: { href: DESTINATION_REFUSAL } });
+    }
+    expect(await add("shared", "nav", { label: "  ", href: "/faq" })).toMatchObject({ status: "error", errors: { label: "This cannot be left empty." } });
+    expect(await add("shared", "footer.links", { label: "Help" })).toMatchObject({ status: "error", errors: { href: "This cannot be left empty." } });
+    expect(await stored()).toBeUndefined();
+    // A built-in link's address saved with Save draft is held to the same rule.
+    expect(await savePageAction(typed("shared", { "nav.faq.href": "javascript:alert(1)" }))).toMatchObject({ status: "error", errors: { "nav.faq.href": DESTINATION_REFUSAL } });
+    expect(await savePageAction(typed("shared", { "nav.faq.label": "" }))).toMatchObject({ status: "error", errors: { "nav.faq.label": expect.stringContaining("cannot be left empty") } });
+    expect(await stored()).toBeUndefined();
+    for (const ok of ["/#price", "https://x.test", "mailto:a@b.test", "/faq"]) expect(await savePageAction(typed("shared", { "nav.faq.href": ok })), ok).toMatchObject({ status: "ok" });
+  });
+
+  it("holds the header to six links and one at least, and the footer to eight, on the server", async () => {
+    expect(await add("shared", "nav", { label: "Six", href: "/zack" })).toMatchObject({ status: "ok" });
+    expect(await add("shared", "nav", { label: "Seven", href: "/zack" })).toMatchObject({ status: "error", message: expect.stringContaining("already has 6 links") });
+    for (const item of ["howItWorks", "pricing", "library", "faq", "about"]) expect(await press("shared", "nav", "remove", { item }), item).toMatchObject({ status: "ok" });
+    expect((await chrome()).links).toHaveLength(5);
+    const left = (await readStored(current)).draft;
+    expect(Object.keys(left.lists)).toEqual(["nav"]);
+    // The last link of the header stays: the menu needs one.
+    const [last] = (await import("@/lib/site/content/model")).itemsOn(left, "nav");
+    expect(await press("shared", "nav", "remove", { item: last })).toMatchObject({ status: "error", message: expect.stringContaining("at least 1 link") });
+    for (let i = 0; i < 3; i++) expect(await add("shared", "footer.links", { label: `Link ${i}`, href: "/zack" }), String(i)).toMatchObject({ status: "ok" });
+    expect(await add("shared", "footer.links", { label: "Ninth", href: "/zack" })).toMatchObject({ status: "error", message: expect.stringContaining("already has 8 links") });
+    // A list of another page is refused whatever the form says.
+    expect(await press("home", "nav", "up", { item: "faq" })).toMatchObject({ status: "error" });
+  });
+
+  it("reorders the footer's links and puts one back, the small print staying where it is", async () => {
+    await press("shared", "footer.links", "down", { item: "pricing" });
+    await press("shared", "footer.links", "remove", { item: "about" });
+    await publishNow();
+    let after = await chrome();
+    expect(after.footer.map((link) => link.id)).toEqual(["howItWorks", "pricing", "faq", "library"]);
+    expect(after.legal.map((link) => link.href)).toEqual(["/privacy", "/terms"]);
+    await press("shared", "footer.links", "back", { item: "about" });
+    await publishNow();
+    after = await chrome();
+    expect(after.footer.map((link) => link.id)).toEqual(["howItWorks", "pricing", "faq", "about", "library"]);
+    await press("shared", "footer.links", "reset");
+    await publishNow();
+    expect((await chrome()).footer.map((link) => link.id)).toEqual(["pricing", "howItWorks", "faq", "about", "library"]);
+  });
+
+  it("offers each covered page and each section with an anchor by name on the editing screen, and says where a link goes in the review", async () => {
+    const screen = await editorScreen("shared");
+    const select = screen.split('id="input-nav.pricing.href-pick"')[1].split("</select>")[0];
+    for (const option of ["Home", "Home — Price section", "How it works", "How it works — Zack, in detail section", "FAQ", "FAQ — Price and billing section", "Use cases", "Use cases — Not in the library yet? section", "About", "Another address (type it below)"]) expect(words(select), option).toContain(option);
+    expect(select).toMatch(/<option value="\/#price" selected="">Home — Price section<\/option>/);
+    // An address that is none of them shows in its own box.
+    await savePageAction(typed("shared", { "nav.faq.href": "https://help.example.test/faq" }));
+    const typedScreen = await editorScreen("shared");
+    expect(typedScreen).toMatch(/<input id="input-nav\.faq\.href" type="text"[^>]*value="https:\/\/help\.example\.test\/faq"/);
+    await savePageAction(typed("shared", { "nav.pricing.href": "/faq" }));
+    const review = words(await reviewScreen());
+    expect(review).toContain("On the site now Home — Price section (/#price) After publishing FAQ (/faq)");
+    expect(review).toContain("After publishing https://help.example.test/faq");
+    // The header's list says where the two buttons are.
+    expect(words(screen)).toContain("Sign in and the start button are not in this list");
+  });
+
+  it("adds an example, holds the list to four, and shows it on the homepage after publishing, a removed first example's tab gone (AE8)", async () => {
+    const state = await add("home", "examples", play);
+    expect(state).toMatchObject({ status: "ok", message: expect.stringContaining("Added: example “Weekly invoice chaser” is number 4 of 4.") });
+    expect(await add("home", "examples", { ...play, label: "Fifth" })).toMatchObject({ status: "error", message: expect.stringContaining("already has 4 examples") });
+    await press("home", "examples", "remove", { item: "video" });
+    expect(await home()).toContain("On-demand video creation");
+    const review = words(await reviewScreen());
+    expect(review).toContain("Home, Cora Curation examples: a new example “Weekly invoice chaser” is added, as number 3 of 3.");
+    expect(review).toContain("Home, Cora Curation examples: example 1 “On-demand video creation” is removed.");
+    await publishNow();
+    const page = await home();
+    expect(page).not.toContain("On-demand video creation");
+    expect(page).toContain("Weekly invoice chaser");
+    expect(page.indexOf("20 new prospects every day")).toBeLessThan(page.indexOf("Weekly invoice chaser"));
+  });
+
+  it("refuses an example with a text missing, or a name in braces in its playbook, and keeps a playbook's lines", async () => {
+    expect(await add("home", "examples", { ...play, playbook: "" })).toMatchObject({ status: "error", errors: { playbook: "This cannot be left empty." } });
+    expect(await add("home", "examples", { ...play, playbook: "## One\nOn {date}." })).toMatchObject({ status: "error", errors: { playbook: expect.stringContaining("{date} is not something this text can hold") } });
+    expect(await stored()).toBeUndefined();
+    await savePageAction(typed("home", { "examples.video.playbook": "## 1. Play\r\nOne line.\r\n\r\n\r\n## 2. Trigger\r\nAnother." }));
+    expect((await draft()).text["examples.video.playbook"]).toBe("## 1. Play\nOne line.\n\n## 2. Trigger\nAnother.");
+  });
+
+  it("says under each playbook what the card makes of it, and for the first example whether How it works can pair its notes", async () => {
+    const screen = await editorScreen("home");
+    const video = box(screen, "examples.video.playbook");
+    expect(video).toContain('data-playbook-check="ok"');
+    expect(words(video)).toContain("The card finds 8 parts");
+    expect(words(video)).toContain("How it works takes this first example apart, with a note beside each of its parts.");
+    // The paper's seventh part is "Pitfalls to watch for": not first, nothing is said about How it works.
+    expect(words(box(screen, "examples.paper.playbook"))).not.toContain("How it works");
+    // A box as tall as a playbook.
+    expect(video).toMatch(/<textarea[^>]*rows="28"/);
+    // The examples' note names the reset and the first example.
+    expect(words(screen)).toContain("The plays are approved text");
+    await savePageAction(typed("home", { "examples.video.playbook": "#1. Play\nText." }));
+    const broken = words(box(await editorScreen("home"), "examples.video.playbook"));
+    expect(broken).toContain("The card cannot find this playbook’s parts.");
+    expect(broken).toContain("This playbook does not have them, so that page shows the notes in a list beside the whole playbook.");
   });
 });

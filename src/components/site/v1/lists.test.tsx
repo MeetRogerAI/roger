@@ -28,15 +28,12 @@ vi.hoisted(() => {
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));
 
-const { exampleViews, publicIdeaView } = await import("@/lib/site/sample");
 const { V1HomeView } = await import("./home");
 const { V1FaqView } = await import("./faq");
 const { V1HowItWorksView } = await import("./how-it-works");
 
 const amounts = amountsFrom(v3Defaults);
 const preface = v3Defaults.playbookPreface;
-const shown = exampleViews(examples, preface);
-const idea = publicIdeaView(firstExample.play, preface);
 
 const STATEMENTS = "home.problem.statements";
 const STEPS = "home.hero.graphic.steps";
@@ -48,9 +45,9 @@ const BILLING = "questions.price-and-billing.items";
 const entry = (parts: Partial<ListEdit>): ListEdit => ({ order: [], removed: [], added: [], ...parts });
 const stored = (lists: Overlay["lists"], text: Overlay["text"] = {}): Overlay => ({ ...emptyOverlay, text, lists });
 
-const home = (content?: Overlay) => pageMarkup(<V1HomeView version="v1" amounts={amounts} examples={shown} testimonials={[]} content={content} />);
+const home = (content?: Overlay) => pageMarkup(<V1HomeView version="v1" amounts={amounts} preface={preface} testimonials={[]} content={content} />);
 const faq = (content?: Overlay) => pageMarkup(<V1FaqView version="v1" amounts={amounts} content={content} />);
-const how = (content?: Overlay) => pageMarkup(<V1HowItWorksView version="v1" amounts={amounts} idea={idea} preface={preface} files={[]} content={content} />);
+const how = (content?: Overlay) => pageMarkup(<V1HowItWorksView version="v1" amounts={amounts} preface={preface} files={[]} content={content} />);
 const text = (markup: string) =>
   markup
     .replace(/<script\b[\s\S]*?<\/script>/g, "")
@@ -273,5 +270,110 @@ describe("the questions (AE8)", () => {
     const names = [...page.matchAll(/<details[^>]*\sname="([^"]*)"/g)].map((m) => m[1]);
     expect(names).toHaveLength(copy.questions.flatMap((group) => group.items).length + 1);
     expect(new Set(names)).toEqual(new Set(["faq-questions"]));
+  });
+});
+
+describe("the Cora Curation examples (plan U8, AE8)", () => {
+  const EXAMPLES = "examples";
+  /** The examples section, to the next section of the page: its cards hold sections of their own. */
+  const ofExamples = (markup: string) => {
+    const start = markup.indexOf('<section id="examples"');
+    expect(start).toBeGreaterThan(-1);
+    const end = markup.indexOf('<section id=', start + 1);
+    return markup.slice(start, end === -1 ? undefined : end);
+  };
+  const tabs = (markup: string) => [...markup.matchAll(/data-example-tab="([^"]*)"/g)].map((m) => m[1]);
+  const panels = (markup: string) => [...markup.matchAll(/data-example-panel="([^"]*)" data-selected="(yes|no)"/g)].map((m) => [m[1], m[2]]);
+  const added = (id: string, playbook: string, more: Record<string, string> = {}) => ({
+    [`${EXAMPLES}.${id}.label`]: "Weekly invoice chaser",
+    [`${EXAMPLES}.${id}.category`]: "Getting paid",
+    [`${EXAMPLES}.${id}.title`]: "Chase unpaid invoices every Friday",
+    [`${EXAMPLES}.${id}.summary`]: "Each Friday the AI agent lists unpaid invoices and drafts a polite reminder for each.",
+    [`${EXAMPLES}.${id}.install`]: "Save this as a skill called Invoice chaser.",
+    [`${EXAMPLES}.${id}.playbook`]: playbook,
+    ...more,
+  });
+
+  it("with no list entry, prints the three examples as before", async () => {
+    const section_ = ofExamples(await home());
+    expect(tabs(section_)).toEqual(examples.map((example) => example.id));
+    expect(text(section_)).toContain(examples[2].play.title);
+  });
+
+  it("covers AE8: with the first example removed, its tab and its card are gone and the first remaining one is the one shown", async () => {
+    const page = ofExamples(await home(stored({ [EXAMPLES]: entry({ removed: ["video"] }) })));
+    expect(tabs(page)).toEqual(["prospects", "paper"]);
+    expect(panels(page)).toEqual([
+      ["prospects", "yes"],
+      ["paper", "no"],
+    ]);
+    expect(text(page)).not.toContain(examples[0].play.title);
+    expect(page).not.toContain('id="examples-video"');
+  });
+
+  it("prints the examples in a new order, the first of them shown", async () => {
+    const page = ofExamples(await home(stored({ [EXAMPLES]: entry({ order: ["paper", "video", "prospects"] }) })));
+    expect(tabs(page)).toEqual(["paper", "video", "prospects"]);
+    expect(panels(page)[0]).toEqual(["paper", "yes"]);
+  });
+
+  it("prints an added example with a playbook of three headed parts as a card of three steps, folded, with its text in the page, and no scores or figures", async () => {
+    const playbook = "## What it does\nLists the unpaid invoices.\n\n## Steps\n1. Read the ledger.\n2. Draft a reminder for each.\n\n## Guardrails\nNever send anything.";
+    const page = ofExamples(await home(stored({ [EXAMPLES]: entry({ added: ["x-chase"] }) }, added("x-chase", playbook))));
+    expect(tabs(page)).toEqual(["video", "prospects", "paper", "x-chase"]);
+    const card = page.slice(page.indexOf('id="examples-x-chase"'));
+    expect(card).toContain('data-steps="3"');
+    expect(text(card)).toContain("3 steps");
+    expect(text(card)).toContain("Getting paid Chase unpaid invoices every Friday");
+    for (const words of ["Lists the unpaid invoices.", "Draft a reminder for each.", "Never send anything.", "Save this as a skill called Invoice chaser."]) expect(text(card)).toContain(words);
+    // Folded: no row of the card is open.
+    expect(card.slice(0, card.indexOf("</article>"))).not.toMatch(/<details[^>]*\bopen\b/);
+    expect(card).not.toContain('data-fold="scores"');
+    expect(text(card)).not.toMatch(/\d\s*(?:hours?|minutes?)\b/i);
+  });
+
+  it("degrades a playbook whose parts the card cannot find (a heading broken in Pages) to the whole text under one row, and the page still renders", async () => {
+    const broken = examples[1].play.playbookMd.replace("## 1. Play", "#1. Play").replace(/^## /gm, "##");
+    const page = ofExamples(await home(stored({}, { [`${EXAMPLES}.prospects.playbook`]: broken })));
+    const card = page.slice(page.indexOf('id="examples-prospects"'), page.indexOf('id="examples-paper"'));
+    expect(card).not.toContain("data-steps=");
+    expect(text(card)).toContain(v1Copy(amounts).copy.sample.playbook.whole);
+    expect(text(card)).toContain("Daily prospect outreach drafts. Each weekday morning");
+    // The other examples keep their steps.
+    expect(page.match(/data-steps="8"/g)).toHaveLength(2);
+  });
+
+  it("with every example removed, the homepage has no examples section, and How it works takes apart the first built-in one", async () => {
+    const content = stored({ [EXAMPLES]: entry({ removed: ["video", "prospects", "paper"] }) });
+    const page = await home(content);
+    expect(page).not.toContain('id="examples"');
+    expect(page).not.toContain("data-example-tab");
+    const anatomy = section(await how(content), "anatomy");
+    expect(anatomy).toContain('data-anatomy="paired"');
+    expect(text(anatomy)).toContain(firstExample.play.title);
+  });
+
+  it("has How it works take apart the first example as published: another one moved first, or the first one's edited text", async () => {
+    const moved = section(await how(stored({ [EXAMPLES]: entry({ order: ["prospects", "video", "paper"] }) })), "anatomy");
+    expect(text(moved)).toContain(examples[1].play.title);
+    expect(text(moved)).not.toContain(examples[0].play.title);
+    // The prospects play has the notes' eight parts, so each note is beside its part.
+    expect(moved).toContain('data-anatomy="paired"');
+    // The paper's seventh part is "Pitfalls to watch for", and the note is for "Pitfalls seen": moved first, it is shown
+    // whole with the notes beside it (the Pages editor says so under its playbook).
+    const paper = section(await how(stored({ [EXAMPLES]: entry({ order: ["paper", "video", "prospects"] }) })), "anatomy");
+    expect(text(paper)).toContain(examples[2].play.title);
+    expect(paper).toContain('data-anatomy="listed"');
+    const retitled = section(await how(stored({}, { [`${EXAMPLES}.video.title`]: "Camera roll to Reels" })), "anatomy");
+    expect(text(retitled)).toContain("Camera roll to Reels");
+    // A first example whose parts are not the notes' is shown whole, with the notes in a list beside it.
+    const listed = section(await how(stored({ [EXAMPLES]: entry({ added: ["x-chase"], order: ["x-chase", "video", "prospects", "paper"] }) }, added("x-chase", "## One\nA.\n\n## Two\nB."))), "anatomy");
+    expect(listed).toContain('data-anatomy="listed"');
+    expect(text(listed)).toContain("Chase unpaid invoices every Friday");
+  });
+
+  it("prints no time figure from an example, built-in or added", async () => {
+    const page = await home(stored({ [EXAMPLES]: entry({ added: ["x-chase"] }) }, added("x-chase", "## One\nA.\n\n## Two\nB.")));
+    expect(text(ofExamples(page))).not.toMatch(/\d\s*(?:hours?|hrs?|minutes?|mins?)\b|Time saved|Each time|Run by/i);
   });
 });

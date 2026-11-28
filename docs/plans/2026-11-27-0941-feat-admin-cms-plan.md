@@ -610,6 +610,16 @@ docs/site/content-release.md
   - No public page prints a time figure from an example, built-in or added.
 - **Verification:** In a browser, add a nav link to a section, remove an example and reorder the footer in drafts, publish, and see the header, the phone menu, the homepage and the footer follow.
 
+### Notes for U9 and U10 from the U8 build and review (November 27, 2026)
+
+- Header and footer links are lists (`nav`, `footer.links`) of `{id, label, href}`; header and footer labels are separate. Old stored `nav.<key>` edits are read into both by the lenient reader only; the strict reading of `released.json` refuses the old names, so U10's export must diff resolved models and write only `nav.<id>.label` / `footer.links.<id>.label`. An old header label of 25 to 80 characters still shows but will fail the strict check against the new 24-character limit at the first snapshot.
+- Destinations: same-site paths with one leading `/`, `https://` without credentials, `mailto:` with one `@`. External links open in the same tab.
+- The header measures its own words (`header-fit.ts`, decided on the server) and moves the links into the menu when they would not fit; the signed-in button is counted.
+- U9: build link warnings on `chromeLinks` / `linksToSections` in `check.ts` (the header and footer already come from the draft); `builtInLinks` holds only the control-block and watch links; typed links to item anchors and the no-main-heading warning are still to do. `linkTargets` and `destinationOptions` map an address to a page and section.
+- Wording-check zones follow where the page prints a field, not where its words come from (an example's short title prints outside the card).
+- `/how-it-works` pairs notes with the first example's parts strictly; the paper example's seventh part ("Pitfalls to watch for") does not pair, so with paper first the page lists the notes beside the whole playbook.
+- U11: with the browser's text size at 32px, the header's content runs past its pixel-wide column at 2048 and wider (no sideways scroll); older than this work.
+
 ### U9. Preview, and link warnings
 
 - **Goal:** An admin opens any covered page with all drafts applied, exactly as it will look, and the review warns about links that would go nowhere.

@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import releasedFile from "@/data/site/released.json";
 import { fixtureRegistry } from "@/test-helpers/content-fixture";
-import { LIST_MAX, OVERLAY_FORMAT, TEXT_MAX, emptyOverlay, isEmptyOverlay, newOverlay, overlaySchema, parseOverlay, parseOverlayStrict, type Overlay } from "./format";
+import { LIST_MAX, OVERLAY_FORMAT, TEXT_MAX, emptyOverlay, isEmptyOverlay, legacyText, newOverlay, overlaySchema, parseOverlay, parseOverlayStrict, type Overlay } from "./format";
 import { siteRegistry } from "./registry";
 
 const empty = { format: 1, text: {}, sections: {}, lists: {} };
@@ -206,6 +206,25 @@ describe("the lenient reading", () => {
     };
     expect(parseOverlayStrict(full)).toEqual({ ok: true, overlay: full });
     expect(parseOverlay(full)).toEqual(full);
+  });
+});
+
+describe("the header's labels saved before the links were lists (plan U8)", () => {
+  it("reads each old `nav.<key>` as the label of the header's link and of the footer's, which are named by the same key", () => {
+    expect(Object.keys(legacyText).sort()).toEqual(["nav.about", "nav.faq", "nav.howItWorks", "nav.library", "nav.pricing"]);
+    for (const ids of Object.values(legacyText)) for (const id of ids) expect(siteRegistry.fields.has(id), id).toBe(true);
+    const read = parseOverlay(JSON.parse('{"format":1,"text":{"nav.pricing":"Price","nav.faq":"Questions","home.hero.headline":"Hi."},"sections":{},"lists":{}}'));
+    expect(read.text).toEqual({ "home.hero.headline": "Hi.", "nav.pricing.label": "Price", "footer.links.pricing.label": "Price", "nav.faq.label": "Questions", "footer.links.faq.label": "Questions" });
+  });
+
+  it("lets an entry under the new name win over the old one, and drops an old entry the new field cannot print", () => {
+    const read = parseOverlay({ format: 1, text: { "nav.faq": "Old", "footer.links.faq.label": "New" }, sections: {}, lists: {} });
+    expect(read.text).toEqual({ "nav.faq.label": "Old", "footer.links.faq.label": "New" });
+    expect(parseOverlay({ format: 1, text: { "nav.faq": "  ", "nav.about": "{nope}", "nav.library": 7 }, sections: {}, lists: {} }).text).toEqual({});
+  });
+
+  it("is not accepted by the strict reading: the release file is written by this code, under the new names", () => {
+    expect(parseOverlayStrict({ format: 1, text: { "nav.faq": "Questions" }, sections: {}, lists: {} })).toEqual({ ok: false, problems: ["text.nav.faq: no such field"] });
   });
 });
 

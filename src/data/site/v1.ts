@@ -244,18 +244,30 @@ export const v1 = {
   zackWarning:
     "Check your report for client names or private details before pasting. It may be read by Roger’s team and by Cora, Roger’s ranking agent. If you sign up, its plays are shared with other users in anonymous form.",
   questions,
-  /** Header links. The footer shows the same five under the same labels. "Pricing" goes to the homepage's price section. */
-  nav: {
-    howItWorks: "How it works",
-    pricing: "Pricing",
-    library: "Use cases",
-    faq: "FAQ",
-    about: "About",
-  },
+  /**
+   * Header links. "Pricing" goes to the homepage's price section (PRICE_SECTION_HREF in src/lib/site/chrome.ts, which
+   * a test holds this to). The ids were the names of these labels before the links were a list, and the admin's
+   * edits saved under those names are read under these (src/lib/site/content/format.ts, legacyText).
+   */
+  nav: [
+    { id: "howItWorks", label: "How it works", href: "/how-it-works" },
+    { id: "pricing", label: "Pricing", href: "/#price" },
+    { id: "library", label: "Use cases", href: "/library" },
+    { id: "faq", label: "FAQ", href: "/faq" },
+    { id: "about", label: "About", href: "/about" },
+  ],
   footer: {
     place: "Roger, Toronto",
     privacy: "Privacy",
     terms: "Terms",
+    /** The same five as the header, in another order. */
+    links: [
+      { id: "pricing", label: "Pricing", href: "/#price" },
+      { id: "howItWorks", label: "How it works", href: "/how-it-works" },
+      { id: "faq", label: "FAQ", href: "/faq" },
+      { id: "about", label: "About", href: "/about" },
+      { id: "library", label: "Use cases", href: "/library" },
+    ],
   },
   notFound: {
     title: "That page isn’t here",

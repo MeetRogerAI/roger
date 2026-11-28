@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { siteConfig, v3Defaults } from "@/data/config";
 import { firstExample } from "@/data/site/examples";
 import { letter, letterShown } from "@/data/site/letter";
-import { emptyOverlay, type Overlay } from "@/lib/site/content/format";
+import { emptyOverlay, newOverlay, type Overlay } from "@/lib/site/content/format";
 import { v1Copy } from "@/lib/site/content/model";
 import { siteRegistry } from "@/lib/site/content/registry";
 import { amountsFrom, hasBareDollar } from "@/lib/site/amounts";
@@ -89,8 +89,8 @@ const timeFigure = /\d\s*(?:hours?|hrs?|minutes?|mins?)\b/i;
 const emoji = /\p{Extended_Pictographic}/u;
 
 const faq = async (over: { amounts?: typeof amounts; content?: Overlay } = {}) => shell(await pageMarkup(<V1FaqView version="v1" amounts={over.amounts ?? amounts} content={over.content} />));
-const how = async (over: { amounts?: typeof amounts; idea?: typeof idea; preface?: string; files?: typeof files } = {}) =>
-  shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={over.amounts ?? amounts} idea={over.idea ?? idea} preface={over.preface ?? preface} files={over.files ?? files} />));
+const how = async (over: { amounts?: typeof amounts; content?: Overlay; preface?: string; files?: typeof files } = {}) =>
+  shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={over.amounts ?? amounts} content={over.content} preface={over.preface ?? preface} files={over.files ?? files} />));
 const about = async (over: { photo?: string; signature?: string } = {}) =>
   shell(await pageMarkup(<V1AboutView version="v1" amounts={amounts} photo={over.photo ?? ""} signature={over.signature ?? ""} />));
 
@@ -330,7 +330,7 @@ describe("/how-it-works on v1", () => {
     const short = "## What it does\nDrafts a reply.\n\n## Steps\n1. Read the note.";
     expect(annotate(short, notes)).toBeNull();
 
-    const anatomy = sectionMarkup(await how({ idea: publicIdeaView({ ...samplePlay, playbookMd: short }, preface) }), "anatomy");
+    const anatomy = sectionMarkup(await how({ content: { ...newOverlay(), text: { "examples.video.playbook": short } } }), "anatomy");
     expect(anatomy).toContain('data-anatomy="listed"');
     const seen = text(anatomy);
     const marks = ["Added to the top of every playbook", preface, ...notes.map((n) => `${n.part} ${n.note}`), "What it does", "Drafts a reply.", "Paste to install The prompt you copy. The playbook goes with it.", idea.pasteToInstall];
@@ -341,7 +341,10 @@ describe("/how-it-works on v1", () => {
 
   it("anatomy: prints no time-saved figure, even from a play that carries figures", async () => {
     const withFigures = publicIdeaView({ ...samplePlay, figures: { current_hours_week: 3.5, minutes_saved_each: 12, runners: 4, math: "12 minutes, 18 times a week" } }, preface);
-    const seen = text(await how({ idea: withFigures }));
+    // The card's view drops a play's figures whatever it carries, and the page prints none.
+    expect(Object.values(withFigures.tiles).every((tile) => tile.headline === null)).toBe(true);
+    expect(withFigures.timeLine).toBeNull();
+    const seen = text(await how());
     expect(seen).not.toMatch(timeFigure);
     expect(seen).not.toMatch(/Time saved|Each time|Run by/);
   });
@@ -533,7 +536,7 @@ describe("the three reading pages together", () => {
 describe("the three reading pages with their sections switched off or moved (plan U6)", () => {
   const laid = (page: string, entry: { order?: string[]; off?: string[] }): Overlay => ({ ...emptyOverlay, sections: { [page]: { order: entry.order ?? [], off: entry.off ?? [] } } });
   const faqWith = (content: Overlay) => faq({ content });
-  const howWith = async (content?: Overlay) => shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={amounts} idea={idea} preface={preface} files={files} content={content} />));
+  const howWith = async (content?: Overlay) => shell(await pageMarkup(<V1HowItWorksView version="v1" amounts={amounts} preface={preface} files={files} content={content} />));
   const aboutWith = async (content?: Overlay, photo = "") => shell(await pageMarkup(<V1AboutView version="v1" amounts={amounts} photo={photo} signature="" content={content} />));
   /** The page's sections and what stands between them, in order: "—" for a hairline, "band" for the start band. */
   const flow = (markup: string) => [...markup.matchAll(/<section\b[^>]*aria-labelledby="([\w-]+)-title"|data-hairline|data-seam|data-start-band/g)].map((m) => m[1] ?? (m[0] === "data-hairline" ? "—" : m[0] === "data-start-band" ? "band" : "="));

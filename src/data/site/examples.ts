@@ -233,5 +233,40 @@ export const examples: readonly Example[] = [
   },
 ];
 
-/** The example the pages that show one play use: the annotated idea on /how-it-works. */
+/** The example the pages that show one play use when the list is empty: the annotated idea on /how-it-works. */
 export const firstExample: Example = examples[0];
+
+/**
+ * An example's words as Pages edits them (plan U8, R8): the short title on the row, the line above the title, the
+ * title, the summary, the install prompt ("What To Copy") and the playbook. Each is one key, so that an example
+ * added in the admin is stored like any other list item. What is not here is not editable: where the play came
+ * from, its scores (none) and its figures (none, and never printed).
+ */
+export type ExampleCopy = { id: string; label: string; category: string; title: string; summary: string; install: string; playbook: string };
+
+/** The examples in the shape Pages edits, in their order: the code model's list (src/lib/site/content/registry.ts). */
+export const exampleCopy: ExampleCopy[] = examples.map(({ id, label, play }) => ({
+  id,
+  label,
+  category: play.category,
+  title: play.title,
+  summary: play.description,
+  install: play.pasteToInstall,
+  playbook: play.playbookMd,
+}));
+
+/**
+ * The examples a page shows, from their words as published: each built-in example keeps what is not editable (its
+ * play's id, where it was written, its empty scores), and one added in the admin has no scores and no figures. The
+ * order is the list's.
+ */
+export function examplesFrom(items: readonly ExampleCopy[]): Example[] {
+  return items.map((item) => {
+    const play = examples.find((example) => example.id === item.id)?.play ?? { id: `example-${item.id}`, heavyUseFor: "", figures: {}, scores: noScores, score: null };
+    return {
+      id: item.id,
+      label: item.label,
+      play: { ...play, title: item.title, category: item.category, description: item.summary, pasteToInstall: item.install, playbookMd: item.playbook },
+    };
+  });
+}
