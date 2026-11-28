@@ -630,7 +630,7 @@ flowchart LR
 
 *As built (2026-11-27):* `logAdminReads` writes every kind for a page view in one statement (all or nothing), skips kinds with no member ids, and stores `detail = { page, user_ids (first 200), count }`; pages use `readsLogged` and show `READ_NOT_LOGGED` on failure. The user page logs `read_runs`, `read_picks` and `read_feedback`; `/admin/cora` logs only when a member is chosen; the user page's own Admin log list leaves read rows out.
 
-- [ ] **Unit 7: Review bot core (evidence, model, validation, storage)**
+- [x] **Unit 7: Review bot core (evidence, model, validation, storage)**
 
 **Goal:** R17 and R19, the generation half: from the week's evidence, produce validated, privacy-safe proposals.
 
@@ -708,6 +708,8 @@ flowchart LR
 - Happy path: the stored proposal and its `evidence` column contain no feedback text. The test searches the row's JSON for the note's words.
 
 **Verification:** On the fixture week, the safety tests pass and the stored rows hold no member text.
+
+*Unit 7 review fixes (2026-11-27):* added text holding a hidden or format character (soft hyphen, tag characters, bidi isolates, variation selectors, private-use) or a letter from a script the base file never uses is discarded as `harm` (a new discard reason), never stripped. Quote and name checks also run on each file's added text as a whole, so a quote split across hunks is caught. Run reasons go to the model with quoted play titles replaced by `"[a play title]"` and count as member text. Capitalised words and runs of them from member evidence that the base file never uses are blocked (everyday sentence-initial words excepted), as are spelled-out emails ("x at y dot com", "x [at] y") and lower-case first names. Secrets are replaced with `[removed]` in every stored field. The guardrail read also fires on identity and verbatim words, a removed line holding a guard word, and an added heading. `review_runs.error` keeps the error's class name and a fixed message. A running claim is taken over only after a 330-second lease; every write checks holder and the claim's token (`attempts`), and a holder is generated when none is given. Anything thrown after the claim marks the run failed and re-throws; NUL characters are stripped from the model's strings. Hunk matching is line-aligned, a range of blank lines is anchored to its nearest non-blank line, and only CRLF is folded (a lone CR stays in its line). A proposal with no hunks and no evidence counts as `evidence`; one past the run's limit of 5 counts under the first step it fails, or `size`.
 
 - [ ] **Unit 8: Review bot schedule and cron route**
 

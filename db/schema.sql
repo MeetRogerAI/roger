@@ -1115,7 +1115,10 @@ create index if not exists member_feedback_created on member_feedback (created_a
 
 -- review_runs: one row per review week (the Friday review bot). At most one
 -- done run a week, and a failed attempt is retried in the window. discarded
--- counts the proposals validation threw away, by reason.
+-- counts the proposals validation threw away, by reason. A running row is
+-- taken over only once its lease (330 seconds from started_at) has expired;
+-- every write after the claim checks holder and attempts (the claim's token).
+-- error holds the error's class name and a fixed message, never its text.
 create table if not exists review_runs (
   week_of date primary key,
   status text not null default 'running' check (status in ('running', 'done', 'failed', 'skipped')),
@@ -1192,6 +1195,10 @@ create table if not exists review_proposals (
 create index if not exists review_proposals_active on review_proposals (status) where status in ('pr_open', 'approving');
 create index if not exists review_proposals_week on review_proposals (review_week, created_at);
 create unique index if not exists review_proposals_pr on review_proposals (pr_number) where pr_number is not null;
+-- review_proposals.document_only (B3 Unit 7): the proposal edits cora.md,
+-- which no code reads, so /admin/review labels it as a document-only change
+-- that needs a matching code change, and leaves it out of before and after.
+alter table review_proposals add column if not exists document_only boolean not null default false;
 
 -- runs: the instruction version the run used, and where it came from (fetch:
 -- the member's latest fetch within 48 hours before receipt, deployed: the
