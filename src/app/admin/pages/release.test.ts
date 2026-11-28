@@ -5,7 +5,7 @@
  * Postgres.
  */
 import { createElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { nextHeaders, nextNavigation, resetNextFakes } from "@/test-helpers/next-fakes";
 import { pageMarkup } from "@/test-helpers/page-markup";
@@ -81,7 +81,10 @@ beforeEach(async () => {
   admin = OWNER;
   cache.tags = [];
   resetNextFakes({}, { "x-vercel-ip-country": "US" });
+  // The card is the release step's tool on production, and shows only there (Peter, November 28, 2026).
+  vi.stubEnv("VERCEL_ENV", "production");
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("differs from the release (plan AE10)", () => {
   it("shows the site's note over the released one, lists that one field with both wordings, and resets and undoes", async () => {
@@ -89,7 +92,7 @@ describe("differs from the release (plan AE10)", () => {
     expect(await home()).toContain(OWN_NOTE);
     expect(await home()).not.toContain("The released note under the price.");
 
-    let list = panel(await screen());
+    const list = panel(await screen());
     expect(words(list)).toContain("1 difference from the release on this site.");
     expect(list.match(/data-release-text="/g)).toHaveLength(1);
     expect(list).toContain(`data-release-text="${NOTE}"`);
@@ -101,9 +104,8 @@ describe("differs from the release (plan AE10)", () => {
     expect(cache.tags).toContain("site-content");
     expect(await home()).toContain("The released note under the price.");
     expect(await home()).not.toContain(OWN_NOTE);
-    list = panel(await screen());
-    expect(list).toContain("data-release-none");
-    expect(list).not.toContain("data-release-text");
+    // Nothing differs any more: the card is gone.
+    expect(await screen()).not.toContain("data-release-panel");
 
     expect(await undoPublishAction()).toMatchObject({ status: "ok" });
     expect(await home()).toContain(OWN_NOTE);
@@ -172,10 +174,19 @@ describe("differs from the release (plan AE10)", () => {
     expect(item(`data-release-text="${NOTE}"`)).not.toContain("data-release-hidden");
   });
 
-  it("is empty on a site with nothing of its own, and offers no reset", async () => {
-    const list = panel(await screen());
-    expect(list).toContain("data-release-none");
-    expect(list).not.toContain("data-reset-all");
+  it("is not on the screen of a site with nothing of its own, though the release took an item out", async () => {
+    const markup = await screen();
+    expect(markup).not.toContain("data-release-panel");
+    expect(markup).not.toContain("data-reset-all");
+  });
+
+  it("never shows on preview or locally, even when something differs", async () => {
+    await put({ draft: overlay({ text: { [NOTE]: OWN_NOTE } }), published: overlay({ text: { [NOTE]: OWN_NOTE } }), previous: null });
+    expect(await screen()).toContain("data-release-panel");
+    for (const env of ["preview", "development", ""]) {
+      vi.stubEnv("VERCEL_ENV", env);
+      expect(await screen(), env).not.toContain("data-release-panel");
+    }
   });
 });
 

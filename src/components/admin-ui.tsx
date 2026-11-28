@@ -87,18 +87,21 @@ export function adminScreenAt(path: string): AdminScreen | null {
 export const adminFoldedKey = "roger-admin-folded";
 
 /**
- * The folded headings a stored value names, in the sidebar's order. Anything that is not a list of
- * current heading names (nothing stored, broken JSON, another shape, a heading since renamed) folds nothing.
+ * The folded headings a stored value names, in the sidebar's order. Every group starts folded (Peter, November 28,
+ * 2026): nothing stored means the owner has never chosen, and so does anything that is not a list (broken JSON, another
+ * shape), so every heading is folded. A stored list is the owner's choice, `[]` included (they opened everything); names
+ * in it that are not current headings (one since renamed, another case, not a string) fold nothing.
  */
 export function parseFolded(stored: string | null | undefined): string[] {
-  if (!stored) return [];
+  const all = adminGroups.map((group) => group.heading);
+  if (!stored) return all;
   let value: unknown;
   try {
     value = JSON.parse(stored);
   } catch {
-    return [];
+    return all;
   }
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return all;
   return adminGroups.map((group) => group.heading).filter((heading) => value.includes(heading));
 }
 
@@ -166,8 +169,8 @@ export function saveFolded(folded: readonly string[]) {
 }
 
 /**
- * Runs as the server's markup is read, before the page's scripts load: folds what this browser has stored as folded,
- * so a reload does not show every group open and then close some. It only sets what React sets a moment later
+ * Runs as the server's markup is read, before the page's scripts load: folds what parseFolded would fold (every group when
+ * nothing usable is stored, a first visit included), so no visit shows every group open and then closes some. It only sets what React sets a moment later
  * (`hidden` on a list, `aria-expanded` on its heading). Every other look of a folded group follows from those two in CSS.
  *
  * Until React takes over, the headings have no handler of React's. If the page's scripts are slow or never load, a group this
@@ -177,7 +180,7 @@ export function saveFolded(folded: readonly string[]) {
  *
  * Nothing stored reaches the page as markup or code: stored names are only compared with the headings. The text is fixed.
  */
-const foldBeforeScripts = `(function(){try{var k=${JSON.stringify(adminFoldedKey)},s=document.currentScript,p=s.parentNode,get=function(){var f=JSON.parse(localStorage.getItem(k));return Array.isArray(f)?f:[]},set=function(b,o){var l=document.getElementById(b.getAttribute("aria-controls"));if(l){l.hidden=!o;b.setAttribute("aria-expanded",o?"true":"false")}},f=get(),b=p.querySelectorAll("button[data-admin-fold]");for(var i=0;i<b.length;i++)if(f.indexOf(b[i].getAttribute("data-admin-fold"))>=0)set(b[i],false);p.addEventListener("click",function(e){if(!s.isConnected)return;var h=e.target.closest("button[data-admin-fold]");if(!h||h.getAttribute("aria-expanded")!=="false")return;set(h,true);try{var n=h.getAttribute("data-admin-fold");localStorage.setItem(k,JSON.stringify(get().filter(function(x){return x!==n})))}catch(e){}})}catch(e){}})()`;
+const foldBeforeScripts = `(function(){try{var k=${JSON.stringify(adminFoldedKey)},s=document.currentScript,p=s.parentNode,b=p.querySelectorAll("button[data-admin-fold]"),a=[],get=function(){var v=localStorage.getItem(k),f;if(!v)return a.slice();try{f=JSON.parse(v)}catch(e){return a.slice()}return Array.isArray(f)?f:a.slice()},set=function(b,o){var l=document.getElementById(b.getAttribute("aria-controls"));if(l){l.hidden=!o;b.setAttribute("aria-expanded",o?"true":"false")}};for(var i=0;i<b.length;i++)a.push(b[i].getAttribute("data-admin-fold"));var f=get();for(var i=0;i<b.length;i++)if(f.indexOf(b[i].getAttribute("data-admin-fold"))>=0)set(b[i],false);p.addEventListener("click",function(e){if(!s.isConnected)return;var h=e.target.closest("button[data-admin-fold]");if(!h||h.getAttribute("aria-expanded")!=="false")return;set(h,true);try{var n=h.getAttribute("data-admin-fold");localStorage.setItem(k,JSON.stringify(get().filter(function(x){return x!==n})))}catch(e){}})}catch(e){}})()`;
 
 /**
  * The five headings and their screens. Each heading is a button that folds its list away.
@@ -250,7 +253,8 @@ export function AdminSidebar({ children }: { children?: React.ReactNode }) {
   const current = adminScreenAt(path);
   // Null on the server and while React first reads the server's markup: every group open, so with no script every link can be reached.
   const stored = useSyncExternalStore<string | null>(subscribeFolded, storedFolded, () => null);
-  const folded = useMemo(() => parseFolded(stored), [stored]);
+  // The server's snapshot (null) is every group open; anything read in the browser, nothing stored included, goes through parseFolded.
+  const folded = useMemo(() => (stored === null ? [] : parseFolded(stored)), [stored]);
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === path;

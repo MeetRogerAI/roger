@@ -44,7 +44,7 @@ describe("the not-found page's header and footer", () => {
     const unknown = ["/nothing-here", "/start/zzz", "/signin/nothing", "/auth/x", "/app/x", "/admin/zzz", "/for/x", "/rlpsignature/x"];
     const drawn = await Promise.all(unknown.map((path) => draw(path, NOT_FOUND_ROUTE)));
     for (const [i, markup] of drawn.entries()) expect(markup, unknown[i]).toBe(drawn[0]);
-    expect(hrefs(drawn[0])).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start"]);
+    expect(hrefs(drawn[0])).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start", "/app"]);
     expect(drawn[0]).not.toContain('aria-current="page"');
     expect(drawn[0]).toContain("full footer");
     // The segment's two spellings.

@@ -57,7 +57,6 @@ const { default: PagesScreen } = await import("./page");
 const { default: EditorScreen } = await import("./[page]/page");
 const { default: ReviewScreen } = await import("./review/page");
 const { default: QuestionsPage } = await import("../questions/page");
-const { LAUNCH_LIST_URL } = await import("./launch-list");
 const { POST: previewRoute, GET: previewGet } = await import("./preview/route");
 const { POST: exitRoute, GET: exitGet } = await import("./preview/exit/route");
 const { signOutAction } = await import("../actions");
@@ -389,14 +388,11 @@ describe("the editing screen", () => {
     expect(words(markup)).toContain("{trialCloseDays} shows how many days an unused trial stays open (21 today).");
   });
 
-  it("marks a saved draft as not published yet, and says how many are waiting", async () => {
+  it("marks a saved draft as not published yet beside its box", async () => {
     await savePageAction(typed("faq", { [REFUND_A]: "No. You can cancel any time." }));
     const markup = await editorScreen("faq");
     expect(words(box(markup, REFUND_A))).toContain("Draft, not published yet");
     expect(words(box(markup, COST_A))).not.toContain("Draft, not published yet");
-    expect(words(markup)).toContain("1 change is saved as a draft and not published yet.");
-    // Another page says where the waiting draft is not.
-    expect(words(await editorScreen("home"))).toContain("1 change is saved as a draft and not published yet, 0 of them on this page.");
   });
 
   it("has no screen for an address that names no page", async () => {
@@ -422,21 +418,54 @@ describe("the editing screen", () => {
   });
 });
 
-describe("the launch list (plan R25)", () => {
-  it("is a note at the top of the Pages screen and a line on each page's editing screen, with a link that opens in a new tab", async () => {
+describe("the Pages screens kept short (Peter, November 28, 2026)", () => {
+  beforeEach(() => {
     admin = OWNER;
-    expect(LAUNCH_LIST_URL).toBe("https://claude.ai/artifact/3A2CqfXuFDnr7PDYq776Wj");
-    const link = `<a href="${LAUNCH_LIST_URL}" target="_blank" rel="noopener noreferrer"`;
+  });
+  const INTRO = "Change the words on the website";
+  const LAUNCH = "launch list";
+
+  it("lists the pages under the heading alone, with no Publish card while nothing is waiting and no publish to undo", async () => {
     const list = await pagesScreen();
-    expect(list.split(link)).toHaveLength(2);
-    expect(words(/<p data-launch-note[\s\S]*?<\/p>/.exec(list)![0])).toContain("Before a release, read each page and tick its checks on the launch list. Open the launch list (opens in a new tab)");
-    // Above the list of pages and the publish panel.
-    expect(list.indexOf("data-launch-note")).toBeLessThan(list.indexOf("data-publish-panel"));
-    expect(list.indexOf("data-launch-note")).toBeLessThan(list.indexOf("data-page="));
+    expect(words(list)).not.toContain(INTRO);
+    expect(words(list)).not.toContain(LAUNCH);
+    expect(list).not.toContain("data-publish-panel");
+    expect(list).not.toContain("data-undo");
+    expect(list).not.toContain("Nothing is waiting");
+    // Not on production here: no release card either.
+    expect(list).not.toContain("data-release-panel");
+    expect(list).toContain('data-page="home"');
+  });
+
+  it("shows the Publish card with a draft, and after the publish only Undo last publish", async () => {
+    await savePageAction(typed("faq", { [REFUND_A]: "No. You can cancel any time." }));
+    let list = await pagesScreen();
+    expect(list).toContain("data-publish-panel");
+    expect(words(list)).toContain("1 change is saved as a draft");
+    expect(list).toContain('href="/admin/pages/review"');
+    expect(await publishNow()).toMatchObject({ status: "ok" });
+    list = await pagesScreen();
+    expect(list).not.toContain("data-publish-panel");
+    expect(list).toMatch(/<div data-undo-only[^>]*><div class="space-y-3"><button type="button" data-undo[^>]*>Undo last publish<\/button>/);
+    expect(list.match(/<button [^>]*data-undo[ =>]/g)).toHaveLength(1);
+  });
+
+  it("puts only the Preview button under each editing screen's heading", async () => {
     for (const page of ["home", "how-it-works", "use-cases", "faq", "about", "shared"]) {
+      await savePageAction(typed("faq", { [REFUND_A]: `Edited for ${page}.` }));
       const screen = await editorScreen(page);
-      expect(screen.split(link), page).toHaveLength(2);
-      expect(words(/<p data-launch-line[\s\S]*?<\/p>/.exec(screen)![0]), page).toContain("tick its checks on the launch list.");
+      const top = /<header[\s\S]*?<\/header>/.exec(screen)![0];
+      expect(words(top), page).not.toContain(INTRO.replace("on the website", ""));
+      expect(words(top), page).not.toContain(LAUNCH);
+      expect(words(top), page).not.toContain("See the page as it is now");
+      expect(words(top), page).not.toContain("saved as a draft");
+      // One link: back to All pages. The Preview button is a form that opens a new tab.
+      expect(top.match(/<a /g), page).toHaveLength(1);
+      // The back link, the heading, then the Preview button and nothing else.
+      const line = /<div data-preview-line[^>]*>([\s\S]*)<\/div>\s*<\/header>/.exec(top)![1];
+      expect(line.match(/<button /g), page).toHaveLength(1);
+      expect(line, page).not.toContain("<p");
+      expect(words(top).trim().split(" ").slice(0, 3).join(" "), page).toBe("← All pages");
     }
   });
 });
@@ -466,6 +495,10 @@ describe("review and publish", () => {
     expect(words(/<span data-label[\s\S]*?<\/span>/.exec(review)![0])).toMatch(/^ Price and billing: Question \d+ — “Can I get a refund\?” · Answer $/);
     expect(warning).toContain("The rule: It says “agent” without “AI” in front.");
     expect(warning).toContain(`The words: “agent”, in “${answer}”`);
+    // At the top of the screen, above what will change (Peter, November 28, 2026); its Dismiss button needs the page's scripts.
+    expect(review.indexOf("data-warnings")).toBeGreaterThan(-1);
+    expect(review.indexOf("data-warnings")).toBeLessThan(review.indexOf("data-changes"));
+    expect(review).not.toContain("data-dismiss=");
     // Publishing is for the whole site, and the screen says so where the button is.
     expect(seen).toContain("Publishing is for the whole site, not one page. It puts the 1 change above on the site at once (FAQ)");
     expect(seen).toContain("Publish anyway: this 1 change");
@@ -1110,7 +1143,8 @@ describe("a page's lists (plan U7, R8)", () => {
     expect(box(markup, `${STARTED}.${id}.a`)).not.toContain("data-reset");
     expect(box(markup, `${STARTED}.${id}.a`)).not.toContain("Changed from the original");
     expect(words(box(markup, `${STARTED}.${id}.q`))).toContain("Draft, not published yet");
-    expect(words(markup)).toContain("2 changes are saved as a draft and not published yet");
+    // The count is on the Pages list's Publish card, no longer on the editing screen.
+    expect(words(await pagesScreen())).toContain("2 changes are saved as a draft");
     // The removed question's boxes are not on screen.
     expect(markup).not.toContain(`id="field-${STARTED}.which-agents.q"`);
     // Home's lists are Home's.

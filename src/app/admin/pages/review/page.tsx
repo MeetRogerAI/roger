@@ -11,6 +11,7 @@ import { readStored } from "@/lib/site/content/store";
 import { Unreadable, count } from "../parts";
 import { PreviewButton } from "../preview-button";
 import { PublishButton, UndoPublish } from "../publish-controls";
+import { WordingWarnings, type WordingWarningItem } from "../wording-warnings";
 
 /**
  * Review and publish (plan U5, R15, R16, KTD11): everything a publish would
@@ -108,6 +109,41 @@ export default async function ReviewScreen() {
   // One Preview button for each page a change is on. Shared's words are on every page: its preview is the homepage,
   // which needs no second button when Home has one.
   const previewPages = pages.filter((page) => page.id !== "shared" || !pages.some((other) => other.id === "home"));
+  const review = reviewKey(stored, warnings);
+  // Each wording warning, drawn here and handed to the box that lets the owner dismiss it (../wording-warnings.tsx).
+  const wording: WordingWarningItem[] = warnings.map((warning) => {
+    const place = fieldPlace(warning.field);
+    const label = named(warning.field).full;
+    return {
+      id: `${warning.field.id}:${warning.rule}`,
+      rule: warning.rule,
+      label: `${place.page}, ${place.section}: ${label}`,
+      body: (
+        <>
+          <p className="font-[600]">
+            {place.page}, {place.section}: {label}
+          </p>
+          <p className="mt-1">
+            <span className="text-meta font-[600] text-ink-2">The rule: </span>
+            {sentence(warning.says)}.
+          </p>
+          <p className="mt-1">
+            <span className="text-meta font-[600] text-ink-2">The words: </span>
+            {warning.found.map((found, i) => (
+              <span key={i} data-found>
+                {i > 0 ? "; " : ""}“{found.words}”, in “{found.around}”
+              </span>
+            ))}
+          </p>
+          <p className="mt-1">
+            <Link href={where(warning.field.id, warning.field.page)} className="tlink">
+              Change this text<span className="sr-only">: {label}</span>
+            </Link>
+          </p>
+        </>
+      ),
+    };
+  });
 
   return (
     <section className="max-w-[56rem] space-y-8">
@@ -120,6 +156,9 @@ export default async function ReviewScreen() {
         <h1 className="text-h3">Review and publish</h1>
         <p className="text-small text-ink-2">Read what will change. Nothing here is on the site until you press the publish button at the foot of this screen.</p>
       </header>
+
+      {/* At the top (Peter, November 28, 2026): what to decide comes before what will change. */}
+      {wording.length > 0 && <WordingWarnings review={review} items={wording} />}
 
       {total === 0 ? (
         <p data-nothing className="text-small">
@@ -229,43 +268,6 @@ export default async function ReviewScreen() {
         </div>
       )}
 
-      {warnings.length > 0 && (
-        <div data-warnings className="rounded-[8px] border border-error bg-surface p-5">
-          <h2 className="text-title">Wording warnings: {warnings.length}</h2>
-          <p className="mt-2 text-small text-ink-2">These texts break one of the site’s wording rules. You decide: change the text, or publish anyway. Publishing anyway is noted in the admin log.</p>
-          <ul className="mt-4 space-y-4">
-            {warnings.map((warning) => {
-              const place = fieldPlace(warning.field);
-              const label = named(warning.field).full;
-              return (
-                <li key={`${warning.field.id}:${warning.rule}`} data-warning={warning.rule} className={`min-w-0 text-small ${wrap}`}>
-                  <p className="font-[600]">
-                    {place.page}, {place.section}: {label}
-                  </p>
-                  <p className="mt-1">
-                    <span className="text-meta font-[600] text-ink-2">The rule: </span>
-                    {sentence(warning.says)}.
-                  </p>
-                  <p className="mt-1">
-                    <span className="text-meta font-[600] text-ink-2">The words: </span>
-                    {warning.found.map((found, i) => (
-                      <span key={i} data-found>
-                        {i > 0 ? "; " : ""}“{found.words}”, in “{found.around}”
-                      </span>
-                    ))}
-                  </p>
-                  <p className="mt-1">
-                    <Link href={where(warning.field.id, warning.field.page)} className="tlink">
-                      Change this text<span className="sr-only">: {label}</span>
-                    </Link>
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
       {links.length > 0 && (
         <div data-link-warnings className="rounded-[8px] border border-error bg-surface p-5">
           <h2 className="text-title">Link warnings: {links.length}</h2>
@@ -336,7 +338,7 @@ export default async function ReviewScreen() {
           </div>
         )}
         {/* Always rendered, so its message stays on screen once the list above is empty. */}
-        <PublishButton review={reviewKey(stored, warnings)} count={total} warnings={warnings.length + links.length + headings.length} />
+        <PublishButton review={review} count={total} wording={wording.map((item) => item.id)} others={links.length + headings.length} />
       </div>
 
       <div className="space-y-3">
