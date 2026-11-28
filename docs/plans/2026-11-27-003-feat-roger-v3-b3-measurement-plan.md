@@ -1010,7 +1010,7 @@ Tests: `src/lib/cora/adoption.test.ts` (19), `src/lib/cora/idea-view.test.ts` (2
 
 Tests: `src/lib/cora/upgrade.test.ts` (15: templates, scrub, candidates, choice, the gateway call's tag and limits, and the job with the switch on: happy path, no playbook text in the line, two candidates give one upgrade, model failure or no flags gives the normal list, never an already-sent play), `src/lib/cora/job.test.ts` (3 new: the fixture's picks pinned to B1's with no upgrade model, with the model and the switch off (never called), and for a dry run), `src/lib/cora/pick.test.ts` (3 new), `src/lib/cora/idea-view.test.ts` (3 new), `src/lib/app/week.test.ts` (1 new), `src/lib/mail/templates/monday.snapshot.test.ts` (5: three snapshots written from B1's template before the change, and the upgrade lines), `src/components/app/idea-card.test.tsx` (2). The card and sheet markup without an upgrade was also checked byte-for-byte against B1's components in a one-off test.
 
-- [ ] **Unit 13: Scenario tests against the Stripe sandbox**
+- [x] **Unit 13: Scenario tests against the Stripe sandbox**
 
 **Goal:** The B.16 row "Scenario tests against the sandbox": `SCENARIO_TARGET=sandbox` runs the scenario files against the Stripe sandbox on test clocks and the marked scenario-test database.
 
@@ -1041,7 +1041,20 @@ Tests: `src/lib/cora/upgrade.test.ts` (15: templates, scrub, candidates, choice,
 
 **Verification:** Fakes mode is unchanged, and the default suite runs the refusal tests and skips the sandbox runs. Sandbox mode refuses unsafe targets and runs one scenario end to end when run by hand.
 
-- [ ] **Unit 14: Docs write-back, launch list and wording sign-off**
+*Unit 13 as built (2026-11-28):* `tests/scenarios/sandbox.ts` (`sandboxEnvPresent`, `openSandbox`, `SandboxRefused`, `resetScenarioDb`, `TestClocks`, `monthSteps`, `clockGroup`, `stripeTestClocks`), `tests/scenarios/sandbox-world.ts` (`newSandboxWorld`), `tests/scenarios/helpers.test.ts` (28 tests, default suite, no network), the three sandbox scenarios `sandbox-billing.test.ts`, `sandbox-referral-credit.test.ts` and `sandbox-sponsor-invoice.test.ts`, and `tests/scenarios/README.md` (how to run it). `helpers.ts` re-exports these. Where the build differs from the text above:
+- **Refusal order:** the key, then `SCENARIO_DATABASE_URL` (missing, or equal to `DATABASE_URL`), then the marker. The URL check needs no connection, so it comes before the marker query, and a production URL is never queried at all. The marker must be exactly `test`: a `preview` or `local` mark is refused, because the reset empties every table.
+- **The sandbox scenarios are separate `sandbox-*` files, not a second `describe` in `full-cycle.test.ts` and the other fakes files.** Those files' top-level `beforeEach` builds the fakes world and uses fake-only controls (`completeSession`, `script`, `callsTo`). The by-hand two-clock month is `sandbox-billing.test.ts`. `newWorld` no longer throws under `SCENARIO_TARGET=sandbox`: it is always the fakes world, so the fakes files run unchanged under either target.
+- **Customers are made by the harness on a test clock** (`customers.create({ test_clock, payment_method: "pm_card_visa" })`), because a customer can't join a clock later. The Payment page's customer and Checkout step are not driven in the sandbox. First charges go through the real `stripeBilling().createSubscription`.
+- **Events:** after each clock step and in `until`, the world lists Stripe's events since the scenario began (`HANDLED_EVENT_TYPES`), keeps those whose `customer` is one of its own, and hands them oldest first to `handleStripeEvent`; then `reconcileUsers` runs. It doesn't use `reconcileEvents`, whose one-hour age filter and 7-day window are measured on the app clock, which runs ahead of real time.
+- **Reset:** the baseline is the empty schema, the same as the fakes' fresh PGlite. So the reset truncates every public base table except `settings`, then deletes every settings row except the marker. Nothing re-applies `schema.sql`.
+- **`vitest.scenarios.config.ts` changed after all:** it gained the `server-only` alias `vitest.config.ts` already has. Without it, `npm run test:scenarios` failed on every file once Unit 9's `src/lib/review/github.ts` (imported through `runHourly`) arrived.
+- **Not yet run against the sandbox** (no keys where it was built). To be confirmed on the first run, recorded in the launch list:
+  - Stripe accepts a clock created at a future `frozen_time` (the second clock is made at the app clock).
+  - A test clock's events carry `created` at or after the real start time.
+  - A renewal is finalized and charged within the 33-day advance.
+  - The sandbox prices are US$200 and CA$280, and Stripe Tax is on.
+
+- [x] **Unit 14: Docs write-back, launch list and wording sign-off**
 
 **Goal:** Keep the spec, the launch list and the wording record true to what was built.
 
@@ -1081,6 +1094,12 @@ Tests: `src/lib/cora/upgrade.test.ts` (15: templates, scrub, candidates, choice,
 **Test expectation:** none, because these are documentation only.
 
 **Verification:** Every B.16 row points to a 1.7 note where the build differs, and the launch list's B3 block lists every item above.
+
+*Unit 14 as built (2026-11-28):* documentation only; no code or tests changed. Where the build differs from the text above:
+- **Design spec:** version 1.7 (November 28, 2026) with a "What changed in 1.7" note after 1.6, written from every unit's as-built and review-fix notes (the close route `/api/cron/review-close`, 3 model attempts, PR sync on every tick and hourly, the gateway's own write guard, line-coverage supersede, random idea codes). *(1.7)* marks on 0.9 (three switch rows), B.2 (route descriptions and a cron row), B.6 (the copied text), B.7 picking rule 1 (upgrades), B.8 (adoption), every B.16 row (the "normal commit" struck for R18) and a B3 tables line, and new B.18 checks 59 to 64 under "Measurement and the review bot". B.14's schema listing and B.17's sizes are unchanged.
+- **Launch list:** its own `data-blocks="B3"` block after B2's, in three groups, with ten items: `b3-schema`, `b3-github-token` (Production only; fork-preview protection stays on; optional `GITHUB_READ_TOKEN`; system env vars exposed for `VERCEL_GIT_COMMIT_SHA`), `b3-branch-protection` (with "Automatically delete head branches"), `b3-crons` (both review crons; optional `REVIEW_BOT_MODEL`), `b3-preview-walkthrough` (Run now to a dry-run record, then 375px on the three admin pages, and a first-live-PR check), `b3-sandbox-run`, `b3-privacy-page`, `b3-wording`, `b3-confirmations` (ten choices, each with where it is recorded) and `b3-switch-on`. The plan's `b3-env`, `b3-cron` and `b3-delete-head-branches` are folded into those items; `b3-github-check` (a scratch repository) is dropped, because the repository is a code constant, and replaced by the first-live-PR check.
+- **Wording sign-off:** section 14 retitled "B3 wording (notes, idea ID, upgrades, privacy page)" and split into 14.1 to 14.5: the note box, the idea ID line, upgrades, newly drafted privacy page sentences, and admin-only strings for reference. Every member string is pending; the flags are kept, with the privacy sentences added.
+- **Stacked PR:** the B3 PR targets `feat/v3-b2-growth` (B2, PR #66) until B2 merges, then is rebased onto `main` and retargeted to it (origin R1). Merging waits for Peter, and the B3 schema must be applied before B3 deploys (launch list `b3-schema`).
 
 ## Built as recommended — for Peter to confirm
 

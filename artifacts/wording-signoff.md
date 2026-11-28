@@ -2,7 +2,7 @@
 
 *Generated on November 26, 2026 from the code on PR #58 (the real templates and screens, with sample names and ideas). Each section names the file the words live in. Mark changes in a comment on the launch list or tell Claude Code; nothing here is live until sign-up opens.*
 
-Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails) · [9. Referral credit wording (Unit 5)](#9-referral-credit-wording-unit-5--pending-peters-sign-off) · [10. Leaderboard wording (Unit 7)](#10-leaderboard-wording-unit-7--pending-peters-sign-off) · [12. Group session wording (Unit 9)](#12-group-session-wording-unit-9--pending-peters-sign-off)
+Contents: [1. Step 3, Product and Pricing](#1-step-3-product-and-pricing) · [2. Welcome email](#2-welcome-email) · [3. Your first list (in the app)](#3-your-first-list-in-the-app) · [4. First list ready email](#4-first-list-ready-email) · [5. Reminder emails, day 2 and day 7](#5-reminder-emails-day-2-and-day-7) · [6. Payment page](#6-payment-page) · [7. Discount lines](#7-discount-lines) · [8. Closing emails](#8-closing-emails) · [9. Referral credit wording (Unit 5)](#9-referral-credit-wording-unit-5--pending-peters-sign-off) · [10. Leaderboard wording (Unit 7)](#10-leaderboard-wording-unit-7--pending-peters-sign-off) · [12. Group session wording (Unit 9)](#12-group-session-wording-unit-9--pending-peters-sign-off) · [14. B3 wording](#14-b3-wording-notes-idea-id-upgrades-privacy-page--pending-peters-sign-off)
 
 ## 1. Step 3, Product and Pricing
 
@@ -630,11 +630,13 @@ Harbour Realty pays for your Roger membership, so you won’t be asked for a car
 - **A week belongs to the month its Monday is in** for the sponsor invoice (B1's monthly members use the month containing the Sunday cutoff). Only weeks from the member's third list on, while they held the seat, count toward the contributor rule.
 - **The sponsor's name is shown to its members** on Step 3 and in the welcome email. Acceptable?
 
-## 14. Feedback and admin read log wording (B3 Units 5 and 6) — pending Peter's sign-off
+## 14. B3 wording (notes, idea ID, upgrades, privacy page) — pending Peter's sign-off
 
-Everything here is dark until `v3.feedbackOn` is on (with sign-up open and the cycle live). Unit 14 finishes the docs write-back.
+*Written from the code on `feat/v3-b3-measurement` (B3 Units 5, 6, 11 and 12; completed in Unit 14, November 28, 2026).* Every member-facing string B3 adds is below, each **pending**. Nothing here is live: the note box waits for `v3.feedbackOn` (with sign-up open and the cycle live), upgrades wait for `v3.coraUpgradesOn`, and the idea ID line appears only on delivered lists, which start when the cycle goes live. The measures, the pipeline and the review bot are admin-only: they add no member-facing wording, and their admin strings are listed at the end for reference only. Review-bot pull requests carry only a fixed id line and the diff, so they hold no wording to sign off.
 
-**Member, the note box** (`src/components/app/week-note.tsx`), under a delivered list on `/app` and `/app/week/[date]`:
+### 14.1 The weekly note box — pending
+
+`src/components/app/week-note.tsx`, under a delivered list on `/app` and `/app/week/[date]`, only while `v3.feedbackOn` is on. With the switch off the box isn't shown at all.
 
 ```
 A note for us
@@ -642,41 +644,33 @@ How were this week’s ideas? Only you and the Roger team see this. We read ever
 ```
 
 - Buttons: `Save note` / `Saving…`; `Delete note` / `Deleting…` (only once a note is saved).
-- Results (`src/lib/feedback/feedback.ts`, `src/app/app/actions.ts`): `Note saved.`; `Note deleted.`; `Write your note first.`; `Keep your note to 2,000 characters or fewer.`; `You can leave a note only on a week you got ideas.`; `There’s no note to delete.`; `Notes are switched off just now.`; `Too many tries. Wait a few minutes.` (after 20 failed saves in an hour; a valid note is never refused).
+- Results (`src/lib/feedback/feedback.ts`, `src/app/app/actions.ts`): `Note saved.`; `Note deleted.`; `Write your note first.`; `Keep your note to 2,000 characters or fewer.`; `You can leave a note only on a week you got ideas.`; `There’s no note to delete.`; `Notes are switched off just now.` (a save while the switch is off; deleting still works); `Too many tries. Wait a few minutes.` (after 20 failed saves in an hour; a valid note is never refused).
 
-**Admin, `/admin/users/[id]`** (admins only):
+### 14.2 The Roger idea ID line (Cora change 15) — pending
 
-- Section `Feedback`: `Their notes on their lists, and replies they emailed us. Private: never copy them anywhere public.`; `No feedback yet.`; per row `Note on the week of 2026-12-14 · …` or `Reply, week of 2026-12-14, added by peter@… · …`, then the text as typed (plain text).
-- Form: `Date it came in`, `Their reply, as they wrote it`, button `Add a reply` / `Adding…`. Results: `Reply added.`; `Paste the reply first.`; `A reply can be at most 4,000 characters.`; `Enter the date the reply came in.`; `No such user.`
-- Admin log section: `Page reads (read_runs, read_picks, read_feedback) are logged too, but not listed here.`
-
-**Admin, read log refused** (`src/lib/admin/read-log.ts`), on `/admin/users/[id]`, `/admin/runs`, `/admin/flags` and `/admin/cora` (with a member chosen) when the read can't be logged:
-
-```
-This page couldn’t be logged, so it isn’t shown. Try again in a minute.
-```
-
-**Member, the Roger idea ID line (B3 Unit 11, Cora change 15)** (`src/lib/cora/idea-view.ts`, `ideaIdLine`): added to what "Copy prompt and playbook" copies for each delivered idea, as its own paragraph after the safety caution and before the install prompt. The code is random per idea sent (for example `R-ABCD2345`); it carries nothing about the member. The public sample has no line. Nothing else on the card or in the Monday email changes.
+`src/lib/cora/idea-view.ts`, `ideaIdLine`: added to what "Copy prompt and playbook" copies for each delivered idea, as its own paragraph after the safety caution and before the install prompt. The code is random per idea sent (for example `R-ABCD2345`) and carries nothing about the member or the play. The public sample has no line. Nothing else on the card or in the Monday email changes.
 
 ```
 Roger idea ID: R-ABCD2345. Keep this ID with the idea in your Roger Upgrade Notes.
 ```
 
-**Member, Cora upgrades (B3 Unit 12, Cora change 11)** — dark until `v3.coraUpgradesOn` is on. At most one idea a week is an upgrade to a play the member already runs. With the switch off nothing below appears anywhere.
+### 14.3 Cora upgrades (Cora change 11) — pending
 
-- Label (`src/lib/cora/idea-view.ts`, `UPGRADE_LABEL`), after the category on the card and in the sheet (`Email and calendar · Upgrade`), and after the title in the Monday email (`2. Inbox sorter (Upgrade)`):
+Dark until `v3.coraUpgradesOn` is on. At most one idea a week is an upgrade to a play the member already runs. With the switch off nothing below appears anywhere (an upgrade already delivered keeps its label).
+
+- **Label** (`src/lib/cora/idea-view.ts`, `UPGRADE_LABEL`), after the category on the card and in the sheet (`Email and calendar · Upgrade`), and after the title in the Monday email (`2. Inbox sorter (Upgrade)`):
 
 ```
 Upgrade
 ```
 
-- The reason line on an upgrade pick (`src/lib/cora/upgrade.ts`, `UPGRADE_REASON`), where other picks show "Fits the … work your week shows.":
+- **Reason line** on an upgrade pick (`src/lib/cora/upgrade.ts`, `UPGRADE_REASON`), where other picks show "Fits the … work your week shows.":
 
 ```
 A better version of a play you already run.
 ```
 
-- The What's better line (`whatsBetterLine` and `whatsBetterShown`), under the reason on the card, in the sheet and in the email. Built by code from fixed phrases only (never from either playbook), one of seven:
+- **What's better line** (`whatsBetterLine` and `whatsBetterShown`), under the reason on the card, in the sheet and in the Monday email. Built by code from fixed phrases only (never from either playbook), one of seven:
 
 ```
 What's better: Adds more steps your version doesn't have.
@@ -688,21 +682,41 @@ What's better: Adds guardrails and fixes for common pitfalls your version doesn'
 What's better: Adds more steps, guardrails and fixes for common pitfalls your version doesn't have.
 ```
 
-- In what "Copy prompt and playbook" copies, its own paragraph after the Roger idea ID line (`UPGRADE_COPY_LINE`), so the member's agent improves their play rather than installing a second one:
+- **Copy paragraph** in what "Copy prompt and playbook" copies, its own paragraph after the Roger idea ID line (`UPGRADE_COPY_LINE`), so the member's agent improves their play rather than installing a second one:
 
 ```
 This is an upgrade to a play you already run. Update your version with what this one adds, rather than installing a second copy.
 ```
 
-- Admin, `/admin/settings`: the switch `Cora upgrades`, hint `Cora may offer one upgrade to something a member already runs. Cora runs only while the cycle is live.` (B3 Unit 1).
+### 14.4 Privacy page sentences — pending (drafted, not yet on the page)
 
-**Admin, `/admin/measures`** (adoption table): two more columns, `Installed (next profile)` and `Used (next profile)`, each a count and a share of ideas sent; and the note under the table gains `Installed and used come from the member’s next Zack profile, matched by the idea’s Roger idea ID or its title.`
+The privacy page lives on `feat/site-v1` (PR #64), so these go there, or wherever the page lives when B3 merges (launch list `b3-privacy-page`). They replace "admin reads are not logged at launch" (the S22 decision).
 
-**Flags for Peter:**
+```
+When someone on the Roger team opens a member’s runs, lists or notes, we record who opened them and when.
 
-- **The idea ID line** is pending sign-off. Is "Keep this ID with the idea in your Roger Upgrade Notes." clear enough for the member's agent, which keeps that file? And should the north star stay "marked or confirmed", with installed and used beside it (as built), or move to "used"?
-- **"Only you and the Roger team see this."** The review bot (B3 Unit 7) will also read notes, through the AI Gateway, as evidence for wording changes, and never copies them into a pull request. Is "the Roger team" fair for that, or should the line say "Only you and the Roger team see this, and our review tools read it to improve Zack and Cora."?
+Your weekly notes, and replies you email us, are kept with your account and deleted with it. An AI model (Anthropic’s, through Vercel’s AI Gateway) reads them, with the week’s runs and lists, to suggest improvements to Zack’s and Cora’s instructions. Nothing you write is copied into those suggestions or into anything public.
+
+When your next Zack profile says you installed or used an idea we sent, we record that against the idea.
+```
+
+### 14.5 Admin-only strings, for reference (not for sign-off)
+
+- **`/admin/users/[id]`**: section `Feedback`: `Their notes on their lists, and replies they emailed us. Private: never copy them anywhere public.`; `No feedback yet.`; per row `Note on the week of 2026-12-14 · …` or `Reply, week of 2026-12-14, added by peter@… · …`, then the text as typed (plain text). Form: `Date it came in`, `Their reply, as they wrote it`, button `Add a reply` / `Adding…`. Results: `Reply added.`; `Paste the reply first.`; `A reply can be at most 4,000 characters.`; `Enter the date the reply came in.`; `No such user.` Admin log section: `Page reads (read_runs, read_picks, read_feedback) are logged too, but not listed here.`
+- **Read log refused** (`src/lib/admin/read-log.ts`), on `/admin/users/[id]`, `/admin/runs`, `/admin/flags`, `/admin/cora` (with a member chosen) and an opened proposal's evidence on `/admin/review`, when the read can't be logged:
+
+```
+This page couldn’t be logged, so it isn’t shown. Try again in a minute.
+```
+
+- **`/admin/settings`**: the switch `Cora upgrades`, hint `Cora may offer one upgrade to something a member already runs. Cora runs only while the cycle is live.`
+- **`/admin/measures`** (adoption table): two more columns, `Installed (next profile)` and `Used (next profile)`, each a count and a share of ideas sent; the note under the table gains `Installed and used come from the member’s next Zack profile, matched by the idea’s Roger idea ID or its title.`
+
+### Flags for Peter
+
+- **"Only you and the Roger team see this."** The review bot also reads notes, through the AI Gateway, as evidence for wording changes, and never copies them into a pull request. Is "the Roger team" fair for that, or should the line say "Only you and the Roger team see this, and our review tools read it to improve Zack and Cora."? (Also launch list `b3-confirmations` 5.)
+- **The idea ID line.** Is "Keep this ID with the idea in your Roger Upgrade Notes." clear enough for the member's agent, which keeps that file? And should the north star stay "marked or confirmed", with installed and used beside it (as built), or move to "used"? (`b3-confirmations` 4.)
 - **Delete works with the switch off.** A member can always delete their own note, even while notes are switched off (the save is refused). Right?
 - **A reply is filed under the week it came in** (the Monday of the date entered), as the list it's most likely about.
-- **Cora upgrades** (all of the above) are pending sign-off. "Upgrade" is also the word in "Roger Upgrade Notes"; is that confusing, or helpful? Is "A better version of a play you already run." right when the member's own version may be the one they prefer?
-- **The privacy page** should say that admin reads of runs, picks and feedback are logged, and that notes are kept with the account and erased with it. That page lives on `feat/site-v1` (launch list, Unit 14).
+- **Cora upgrades.** "Upgrade" is also the word in "Roger Upgrade Notes": confusing, or helpful? Is "A better version of a play you already run." right when the member may prefer their own version?
+- **The privacy page sentences** (14.4) are drafted here for the first time. The third one (adoption stamps) depends on `b3-confirmations` 3: if retention should clear the stamps, it should say so.
