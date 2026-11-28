@@ -142,7 +142,7 @@ describe("a site version before its pages are built", () => {
     const header = markup.match(/<header[\s\S]*?<\/header>/)![0];
     // The logo, the five links, Sign in, then the start button with no address of its own beyond /start.
     // "Pricing" is the price section of the homepage: there is no /pricing page (Peter, November 27, 2026).
-    expect(hrefs(header)).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start"]);
+    expect(hrefs(header)).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start", "/app"]);
     expect(hrefs(markup)).not.toContain("/pricing");
     expect(hrefs(markup)).not.toContain("/agents");
     expect(header).toContain('<a aria-current="page"');
@@ -150,11 +150,12 @@ describe("a site version before its pages are built", () => {
     // The same words as every other start button, at every width.
     expect(header).toMatch(/<a class="btn btn-m [^"]*" href="\/start">Get two free Cora Curations<\/a>/);
     expect(header).not.toContain("Start free");
-    // The signed-in state is swapped in by the browser, never prerendered.
-    expect(header).not.toContain("Open Roger");
-    expect(header).not.toContain('href="/app"');
-    expect(header).not.toContain("invisible");
-    expect(header).not.toContain("aria-hidden=\"true\"><a");
+    // The signed-in state is never prerendered: Open Roger is in the markup, invisible, for the head script's mark to show.
+    expect(header.match(/<a [^>]*>Open Roger<\/a>/g)).toEqual(['<a class="btn btn-m col-start-1 row-start-1 invisible" data-account="in" href="/app">Open Roger</a>']);
+    expect(header.match(/invisible/g)).toHaveLength(1);
+    expect(header).not.toContain('aria-hidden="true" data-account');
+    // The head script that marks a signed-in visitor is in every page.
+    expect(markup).toContain("document.documentElement.setAttribute('data-signed-in','')");
   });
 
   it("shows no header links or button on sign-up, sign-in and the app, and keeps the admin's header", async () => {

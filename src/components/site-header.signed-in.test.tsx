@@ -26,7 +26,7 @@ const header = async (as: "out" | "in") => {
 };
 
 const openApp = /<a [^>]*href="\/app"[^>]*>Open Roger<\/a>/g;
-const hiddenPair = ' invisible" aria-hidden="true">';
+const hiddenPair = ' invisible" aria-hidden="true" data-account="out">';
 
 afterEach(() => {
   signedIn = false;
@@ -44,7 +44,7 @@ describe("a site version's header for a signed-in visitor", () => {
     expect(hrefs(markup)).toEqual(["#main", "/", "/how-it-works", "/#price", "/library", "/faq", "/about", "/signin", "/start", "/app"]);
     // One wrapper carries both marks, and it is the wrapper of the signed-out pair.
     expect(markup.match(/invisible/g)).toHaveLength(1);
-    const wrapper = markup.match(/<span class="col-start-1 row-start-1 [^"]* invisible" aria-hidden="true">/)!;
+    const wrapper = markup.match(/<span class="col-start-1 row-start-1 [^"]* invisible" aria-hidden="true" data-account="out">/)!;
     expect(wrapper).not.toBeNull();
     // Open Roger directly follows the wrapper's end (the start link, the span around it, then the wrapper), so everything between the two is inside the wrapper.
     const from = wrapper.index! + wrapper[0].length;
@@ -67,12 +67,32 @@ describe("a site version's header for a signed-in visitor", () => {
   it("changes nothing else in the header", async () => {
     const out = await header("out");
     const signed = await header("in");
-    expect(out).not.toContain("invisible");
-    expect(out).not.toContain("Open Roger");
-    expect(out).not.toContain('aria-hidden="true"><a');
+    // Signed out, Open Roger is in the markup but invisible (so the stylesheet can show it from the first frame), and it is the one invisible thing.
+    expect(out.match(/invisible/g)).toHaveLength(1);
+    expect(out.match(openApp)).toEqual(['<a class="btn btn-m col-start-1 row-start-1 invisible" data-account="in" href="/app">Open Roger</a>']);
+    expect(out).not.toContain('aria-hidden="true" data-account');
     expect(signed).toContain(hiddenPair);
-    // Take the two additions away and the signed-in header is the signed-out one, character for character.
-    expect(signed.replace(openApp, "").replace(hiddenPair, ' ">')).toBe(out);
+    // Swap the two marks and the signed-in header is the signed-out one, character for character.
+    expect(signed.replace(hiddenPair, ' " data-account="out">').replace('row-start-1" data-account="in"', 'row-start-1 invisible" data-account="in"')).toBe(out);
+  });
+});
+
+describe("a signed-in visitor's header before React arrives", () => {
+  const css = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8").replace(/\r\n/g, "\n");
+
+  it("is swapped by the stylesheet under the head script's mark, outside any layer so it wins over `invisible`", async () => {
+    expect(css).toContain('\nhtml[data-signed-in] [data-account="out"] {\n  visibility: hidden;\n}\n');
+    expect(css).toContain('\nhtml[data-signed-in] [data-account="in"] {\n  visibility: visible;\n}\n');
+    // Not inside @layer: the rules start at the left margin, and the last layer before them is closed.
+    const at = css.indexOf("\nhtml[data-signed-in]");
+    const before = css.slice(0, at);
+    const opened = (before.match(/@layer [\w-]+ \{/g) ?? []).length;
+    expect(opened).toBeGreaterThan(0);
+    expect(before.lastIndexOf("@layer")).toBeLessThan(before.lastIndexOf("\n}\n"));
+    // Exactly the two marked elements of the header.
+    const markup = await header("out");
+    expect(markup.match(/data-account="out"/g)).toHaveLength(1);
+    expect(markup.match(/data-account="in"/g)).toHaveLength(1);
   });
 });
 
@@ -104,7 +124,7 @@ describe("a site version's header for a signed-out visitor (R23, R24)", () => {
 
   it("stretches the pair to one height, so Sign in matches a start button whose words take two lines", async () => {
     const markup = await header("out");
-    const pair = markup.match(/<span class="(col-start-1 row-start-1 [^"]*)"><a class="[^"]*" href="\/signin">/)!;
+    const pair = markup.match(/<span class="(col-start-1 row-start-1 [^"]*)" data-account="out"><a class="[^"]*" href="\/signin">/)!;
     expect(pair).not.toBeNull();
     expect(pair[1].split(" ")).toContain("items-stretch");
     expect(pair[1]).not.toContain("items-center");
@@ -181,7 +201,7 @@ describe("the header's links as an admin leaves them (plan U8)", () => {
     expect(markup).toContain('class="ml-auto flex items-center gap-2 xl:ml-0 "');
     expect(markup).toContain("text-ink xl:hidden");
     expect(markup).not.toMatch(/\blg:(?:block|hidden|ml-0)\b/);
-    expect(links(markup).at(-3)).toEqual(["/zack", "Run Zack"]);
+    expect(links(markup).at(-4)).toEqual(["/zack", "Run Zack"]);
   });
 
   it("draws no row at all when the links do not fit at 1280 either: they are in the menu at every width", async () => {

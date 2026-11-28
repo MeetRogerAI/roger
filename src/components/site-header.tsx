@@ -146,16 +146,19 @@ export function navFor(path: string, site: ServedSite, chrome?: SiteChrome | nul
 
 /**
  * The right of a site version's header. The page is prerendered signed out,
- * and the browser swaps in "Open Roger" once it has read the signed-in hint
- * cookie, so no page waits on a session check. The signed-out pair stays in
- * place, hidden, to hold its width: nothing beside it moves on the swap.
+ * with "Open Roger" in place but invisible, so no page waits on a session
+ * check. A signed-in visitor sees "Open Roger" from the first frame: the head
+ * script marks `<html>` from the hint cookie before paint and the stylesheet
+ * swaps the two under that mark; React then renders the same from the same
+ * cookie. The signed-out pair stays in place, hidden, to hold its width:
+ * nothing beside it moves on the swap.
  */
 function AccountLinks({ cta, account }: { cta: NonNullable<NavSet["cta"]>; account: NonNullable<NavSet["account"]> }) {
   const signedIn = useSignedInHint();
   return (
     <span className="grid items-center justify-items-end">
       {/* The pair stretches to one height: on a phone the start button's words take two lines, and "Sign in" grows to match. */}
-      <span className={`col-start-1 row-start-1 flex items-stretch gap-2 sm:gap-3 ${signedIn ? "invisible" : ""}`} aria-hidden={signedIn || undefined}>
+      <span className={`col-start-1 row-start-1 flex items-stretch gap-2 sm:gap-3 ${signedIn ? "invisible" : ""}`} aria-hidden={signedIn || undefined} data-account="out">
         {/*
           Under 375 pixels there is no room beside the button: the menu carries it there. At 360, a common
           phone width, the button's words took three lines beside it and the button filled the header's height.
@@ -171,11 +174,14 @@ function AccountLinks({ cta, account }: { cta: NonNullable<NavSet["cta"]>; accou
           <StartLink className="btn btn-m max-sm:max-w-[8.5rem] max-sm:px-3 max-sm:text-[0.8125rem] max-sm:leading-[1.15]">{cta.label}</StartLink>
         </span>
       </span>
-      {signedIn && (
-        <Link href={account.openApp.href} className="btn btn-m col-start-1 row-start-1">
-          {account.openApp.label}
-        </Link>
-      )}
+      {/*
+        Always in the markup, invisible while signed out, so the stylesheet can show it from the first frame
+        when the head script has marked a signed-in visitor (`html[data-signed-in]`, globals.css). Invisible,
+        it is out of the tab order and hidden from screen readers too.
+      */}
+      <Link href={account.openApp.href} className={`btn btn-m col-start-1 row-start-1${signedIn ? "" : " invisible"}`} data-account="in">
+        {account.openApp.label}
+      </Link>
     </span>
   );
 }

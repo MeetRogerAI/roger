@@ -3,6 +3,7 @@ import { Mona_Sans } from "next/font/google";
 import { siteConfig } from "@/data/config";
 import { offerNow } from "@/lib/offer";
 import { SiteHeader } from "@/components/site-header";
+import { SIGNED_IN_MARK_SCRIPT } from "@/lib/auth/hint-cookie";
 import { MinimalFooter, SiteFooter } from "@/components/site-footer";
 import { FooterSwitch } from "@/components/footer-switch";
 import { ClientBoot, CodeBanner } from "@/components/client-boot";
@@ -92,7 +93,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en-CA" className={mona.variable} suppressHydrationWarning>
       <head>
         {/* Entrances play only with JavaScript; without it the final, complete state renders. */}
-        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js');setTimeout(function(){document.documentElement.classList.add('settled')},3200)" }} />
+        {/* A signed-in visitor's header shows "Open Roger" from the first frame (src/lib/auth/hint-cookie.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: `document.documentElement.classList.add('js');setTimeout(function(){document.documentElement.classList.add('settled')},3200);${SIGNED_IN_MARK_SCRIPT}` }} />
       </head>
       <body className="flex min-h-svh flex-col">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd() }} />
