@@ -119,7 +119,7 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   return quote;
 }
 
-const same = (a: Quote | null, b: Quote) =>
+const sameAmount = (a: Quote | null, b: Quote) =>
   Boolean(
     a &&
       a.totalCents === b.totalCents &&
@@ -130,6 +130,9 @@ const same = (a: Quote | null, b: Quote) =>
       // A quote told before Unit 8 has no coupon field: not compared (Unit 8 review F4).
       (a.coupon === undefined || (a.coupon ?? null) === (b.coupon ?? null)),
   );
+
+/** The same told quote, the tax in it included: one told before the tax was kept (no `taxCents`) is not the same. */
+const same = (a: Quote | null, b: Quote) => sameAmount(a, b) && a!.taxCents !== undefined;
 
 /** The discount line for an email stating the first charge: the locked-in promo's label, amount off, period and the amount after. */
 const discountOf = (u: U, quote: Quote): DiscountLine =>
@@ -152,6 +155,12 @@ export async function noticeQuoteChange(q: Query, d: QuoteDeps, userId: string):
   if (!u || !quotable(u) || !u.quote || quoteFrozen(u.quote, d.now, d.settings)) return false;
   const fresh = await preview(q, d, u);
   if (!fresh || same(u.quote, fresh)) return false;
+  // Told before the tax was kept, and the same amount: stored silently with its tax (S18 point a review), keeping
+  // when it was told. Nothing changed for the member, so no email.
+  if (sameAmount(u.quote, fresh)) {
+    await q(`update users set quote = $2 where id = $1 and status = 'trial'`, [u.id, JSON.stringify({ ...fresh, at: u.quote.at })]);
+    return false;
+  }
   // Unique per refresh: switching back and forth still tells the user each time.
   const res = await tell(q, d, u, "quote_changed", `${fresh.week}:${fresh.at}`, fresh, quoteChangedEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, taxCents: fresh.taxCents }));
   return res === "sent";

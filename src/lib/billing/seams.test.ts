@@ -425,6 +425,31 @@ describe("C (scenario tests): the Monday crons and the webhook's clock", () => {
   });
 });
 
+// S18 point a review: the receipt's tax goes with the amount paid only when the whole total was paid.
+describe("the receipt from a replayed invoice.paid", () => {
+  const paid = async (inv: Record<string, unknown>) => {
+    const m = await member({ status: "trial" });
+    const [c] = await query<{ id: string }>("insert into charge_attempts (user_id, purpose, week_of, attempt, outcome) values ($1, 'first_charge', $2, 1, 'unknown') returning id", [m.id, WEEK]);
+    const event = {
+      id: `evt_${c.id}`,
+      type: "invoice.paid",
+      data: { object: { id: "in_1", billing_reason: "subscription_create", currency: "usd", lines: { data: [] }, parent: { subscription_details: { subscription: `sub_${c.id}`, metadata: { claim_id: c.id } } }, ...inv } },
+    } as unknown as Stripe.Event;
+    sent = [];
+    expect(await handleStripeEvent(query, fakeGateway(), event, { getSettings: async () => settings, query, transport, now: SIX_AM })).toBe("handled");
+    return sent.find((x) => x.subject === "You’re subscribed")!.text;
+  };
+
+  it("gives the price plus the tax when the whole total was paid", async () => {
+    expect(await paid({ amount_paid: 22600, total: 22600, total_taxes: [{ amount: 2600 }] })).toContain("We charged US$226 (US$200 plus US$26 tax).");
+  });
+
+  it("says the amount in total with a credit balance (paid below the total), or with no tax given", async () => {
+    expect(await paid({ amount_paid: 12600, total: 22600, total_taxes: [{ amount: 2600 }] })).toContain("We charged US$126 in total.");
+    expect(await paid({ amount_paid: 22600, total: 22600 })).toContain("We charged US$226 in total.");
+  });
+});
+
 describe("12 (P3): sponsored members", () => {
   it("are never charged a first month, reminded of one, or given contribution results", async () => {
     const trial = await member({ status: "trial", sponsor: true });

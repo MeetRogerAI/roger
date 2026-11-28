@@ -1,3 +1,4 @@
+import type { SharingOffPrice } from "@/lib/zack/sharing-effect";
 import { appUrl, renderEmail, type Rendered } from "../layout";
 import { longDate } from "@/lib/dates";
 
@@ -15,12 +16,12 @@ export function sharingChangedEmail(o: {
   sharing: keyof typeof SHARING_WORDS;
   priceLine: string | null;
   /** The member's higher monthly price ("US$400") when this change turns sharing off; null otherwise. */
-  higherPrice?: string | null;
+  higherPrice?: SharingOffPrice | null;
 }): Rendered {
   const zackPage = { label: "Zack page", url: appUrl("/app/zack") };
   const off = o.higherPrice
     ? [
-        `Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to ${o.higherPrice} a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.`,
+        `Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price ${o.higherPrice.doubles ? `doubles, to ${o.higherPrice.higher} a month` : `goes up to ${o.higherPrice.higher} a month`}. This applies only to months when you are not sharing, and the difference is added to your next invoice.`,
       ]
     : null;
   return renderEmail({

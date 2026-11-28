@@ -13,7 +13,7 @@ export const rogerMonthlyTerms: LegalDoc["sections"][number] = {
   id: "roger-monthly",
   heading: "Roger monthly: no refunds, cancel any time",
   body: [
-    "What it costs. Roger is US$200 or CA$280 a month, plus any sales tax where you live. The Payment page shows the exact amount, tax included, before you add your card.",
+    "What it costs. Roger is US$200 or CA$280 a month, plus any sales tax where you live. The Payment page shows the exact amount: the price plus the tax, before you add your card.",
     "Your free trial. Your first two weekly lists are free. We ask for your card when your first list is ready, and nothing is charged then: the Payment page says “Due today: $0”.",
     "When you are charged. Your first charge comes with your third list. After that you are charged once a month, on the same day of the month, until you cancel. Each receipt comes with that week’s list email.",
     "Cancel any time. Cancel from Billing in your account, in one click. No call, no email, no questions you have to answer.",

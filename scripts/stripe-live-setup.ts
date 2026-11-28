@@ -1,6 +1,7 @@
 /**
  * Creates (or finds) the Stripe objects production needs: the "Roger Monthly"
- * product, the four monthly prices and the live webhook endpoint (launch list
+ * product, the "Higher monthly rate" product (the first invoice's higher-rate
+ * line, S18 point c), the four monthly prices and the live webhook endpoint (launch list
  * g-live-prices, g-live-webhook; src/lib/billing/live-setup.ts).
  *
  * Run it from the checkout that is linked to the Vercel project (has
@@ -13,13 +14,13 @@
  * would do. --mode (default live) must match the key's own mode.
  * --write-vercel (with --apply) checks the Vercel link and which variables
  * already exist BEFORE touching Stripe, then writes the webhook signing secret
- * first and the four price ids after; --replace removes existing ones first.
+ * first, then the four price ids and STRIPE_PRODUCT_HIGHER_RATE; --replace removes existing ones first.
  * Nothing secret is printed.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import Stripe from "stripe";
-import { applySetup, describePlan, existingNames, keyMode, LIVE_WEBHOOK_URL, planSetup, type Mode, type SetupClient } from "@/lib/billing/live-setup";
+import { applySetup, describePlan, existingNames, HIGHER_RATE_ENV, keyMode, LIVE_WEBHOOK_URL, planSetup, type Mode, type SetupClient } from "@/lib/billing/live-setup";
 import { STRIPE_API_VERSION } from "@/lib/billing/stripe";
 
 const args = process.argv.slice(2).filter((a) => a !== "--");
@@ -72,14 +73,15 @@ async function main() {
 
   const out = await applySetup(client, plan);
   console.log(`Done in Stripe. Product ${out.productId}, webhook ${out.webhookId}.`);
-  for (const [env, id] of Object.entries(out.priceIds)) console.log(`  ${env} = ${id}`);
+  const ids: [string, string][] = [...Object.entries(out.priceIds), [HIGHER_RATE_ENV, out.higherRateProductId]];
+  for (const [env, id] of ids) console.log(`  ${env} = ${id}`);
   if (!out.webhookSecret) console.log("The webhook already existed: its signing secret is unchanged (Stripe does not show it again).");
 
   if (!writeVercel) {
     if (out.webhookSecret) console.log(`The new webhook's signing secret was not saved (no --write-vercel). ${RECOVER_SECRET}`);
     return;
   }
-  const writes: [string, string][] = [...(out.webhookSecret ? ([["STRIPE_WEBHOOK_SECRET", out.webhookSecret]] as [string, string][]) : []), ...Object.entries(out.priceIds)];
+  const writes: [string, string][] = [...(out.webhookSecret ? ([["STRIPE_WEBHOOK_SECRET", out.webhookSecret]] as [string, string][]) : []), ...ids];
   const failed: string[] = [];
   for (const [name, value] of writes) {
     if (has("replace")) vercel(["env", "rm", name, "production", "--yes"]);
@@ -94,7 +96,7 @@ async function main() {
   const after = existingNames(vercel(["env", "ls", "--environment=production"]).out, writes.map(([n]) => n));
   const missing = writes.map(([n]) => n).filter((n) => !after.includes(n));
   if (failed.length || missing.length) {
-    console.error(`NOT COMPLETE. Missing in Vercel Production: ${[...new Set([...failed, ...missing])].join(", ")}. The price ids are printed above.`);
+    console.error(`NOT COMPLETE. Missing in Vercel Production: ${[...new Set([...failed, ...missing])].join(", ")}. The ids are printed above.`);
     process.exitCode = 1;
   } else console.log(`All ${writes.length} variables are in Vercel Production. Redeploy production to pick them up.`);
 }

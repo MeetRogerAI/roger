@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays } from "@/lib/clock";
 import { applyPromo, delivered, dollars, firstList, monday, newWorld, passHours, seedPool, saveCard, sendRun, signUp, toronto, userRow, vercelCron, type World } from "./helpers";
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -149,6 +149,54 @@ describe("trial to the third-list charge", () => {
     expect(w.stripe.callsTo("subscriptions.create")).toHaveLength(2);
     expect(await delivered(w, ca.id, "2026-12-28")).toHaveLength(3);
     expect(w.subjects(ca.email).filter((s) => s.startsWith("Your three ideas"))).toHaveLength(4);
+  });
+});
+
+// S18 point c (Peter, 2026-11-27): a member whose Zack shares for matching only at the cutoff of the first paid
+// Monday pays the higher rate's difference on the first invoice. With STRIPE_PRODUCT_HIGHER_RATE set, that line is
+// made on the "Higher monthly rate" product and named after it; unset, it stays on the plan's product, as before.
+describe("the first charge with Zack not sharing", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function notSharing(email: string) {
+    await w.at("2026-12-02T16:00:00Z");
+    const m = await signUp(w, { email, currency: "CAD", country: "CA", sharing: "match_only" });
+    await firstList(w, [m], WEEKS[0]);
+    await w.at(toronto(addDays(WEEKS[1], -1), "15:00"));
+    await sendRun(w, m);
+    await monday(w, WEEKS[1]);
+    // CA$280 + CA$280 + 13% HST, told as the price plus the tax (S18 point a).
+    const paidNext = w.mail(m.email).find((x) => x.subject === "Your next list is your first paid one")!;
+    expect(paidNext.text).toContain("we’ll charge CA$632.80 (CA$560 plus CA$72.80 HST) for your first month.");
+    await w.at(toronto(addDays(WEEKS[2], -1), "15:00"));
+    await sendRun(w, m);
+    expect((await monday(w, WEEKS[2])).charge.first).toMatchObject({ charged: 1, held_amount: 0 });
+    const creates = w.stripe.callsTo("subscriptions.create");
+    expect(creates).toHaveLength(1);
+    expect(creates[0].args).toMatchObject({ price: "price_monthly_cad", extra: { amountCents: 28000, currency: "CAD" } });
+    expect(w.stripe.invoicesFor(m.customer)).toHaveLength(1);
+    const [inv] = w.stripe.invoicesFor(m.customer);
+    expect(inv).toMatchObject({ status: "paid", totalCents: 63280 });
+    expect(w.mail(m.email).find((x) => x.subject === "You’re subscribed")!.text).toContain("We charged CA$632.80 (CA$560 plus CA$72.80 HST).");
+    return inv.lines.map((l) => [l.kind, l.description, l.amountCents]);
+  }
+
+  it("names the higher-rate line after the Higher monthly rate product when it is configured", async () => {
+    vi.stubEnv("STRIPE_PRODUCT_HIGHER_RATE", "prod_higher_rate");
+    expect(await notSharing("nia@example.ca")).toEqual([
+      ["plan", "1 × Roger monthly", 28000],
+      ["extra", "Higher monthly rate", 28000],
+      ["tax", "HST (13%)", 7280],
+    ]);
+  });
+
+  it("keeps the plan's product for the line when it is not configured (the old behaviour)", async () => {
+    vi.stubEnv("STRIPE_PRODUCT_HIGHER_RATE", "");
+    expect(await notSharing("noa@example.ca")).toEqual([
+      ["plan", "1 × Roger monthly", 28000],
+      ["extra", "Roger monthly", 28000],
+      ["tax", "HST (13%)", 7280],
+    ]);
   });
 });
 

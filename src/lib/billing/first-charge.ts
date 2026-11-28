@@ -83,7 +83,7 @@ async function dropCoupon(q: Query, userId: string, coupon: string): Promise<str
   return r?.label ?? null;
 }
 
-export type FirstPreview = { totalCents: number; currency: string; discountCents?: number; taxCents?: number };
+export type FirstPreview = { totalCents: number; currency: string; discountCents?: number; taxCents?: number | null };
 
 /**
  * Stripe's preview of the first invoice with the member's locked-in coupon,

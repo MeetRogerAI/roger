@@ -50,6 +50,7 @@ import type {
   PlanGateway,
   SubscriptionInfo,
 } from "@/lib/billing/subscriptions";
+import { higherRateProduct } from "@/lib/billing/subscriptions";
 import { handleStripeEvent, type EventOutcome } from "@/lib/billing/webhook";
 import { runCoraJob, type CoraDeps, type JobResult } from "@/lib/cora/job";
 import { importSeedRun } from "@/lib/cora/seed-import";
@@ -187,8 +188,11 @@ export function fakeStripe(now: () => Date): FakeStripe {
     coupon ? payment.couponOff(coupon, lines.reduce((s, l) => s + l.amountCents, 0), price(p).currency) : 0;
   const planLines = (p: string, extra?: FirstExtra): Line[] => [
     { kind: "plan", description: `1 × ${price(p).product}`, amountCents: price(p).cents, invoiceItem: null, price: p },
-    // add_invoice_items takes no description: Stripe names the line after the plan's product (plan Unit 14 deviation).
-    ...(extra?.amountCents ? [{ kind: "extra" as const, description: price(p).product, amountCents: extra.amountCents, invoiceItem: null, price: null }] : []),
+    // add_invoice_items takes no description: Stripe names the line after its product. That is the "Higher monthly
+    // rate" product when STRIPE_PRODUCT_HIGHER_RATE is set (S18 point c), else the plan's own (plan Unit 14 deviation).
+    ...(extra?.amountCents
+      ? [{ kind: "extra" as const, description: higherRateProduct() ? "Higher monthly rate" : price(p).product, amountCents: extra.amountCents, invoiceItem: null, price: null }]
+      : []),
   ];
   const nextPayment = (customer: string): ChargeResult | null => {
     const s = scripts.get(customer)?.shift();

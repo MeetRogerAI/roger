@@ -1,7 +1,7 @@
 import Stripe from "stripe";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { isCouponGone } from "./gateway";
-import { classify, stripeBilling } from "./subscriptions";
+import { classify, receiptTaxOf, stripeBilling, taxOf } from "./subscriptions";
 
 /**
  * The first charge's Stripe calls with the promo locked in at card save
@@ -10,9 +10,10 @@ import { classify, stripeBilling } from "./subscriptions";
  * recorded them (deleted → `resource_missing` on `discounts[0][coupon]`;
  * expired → `coupon_expired` on `discounts`).
  */
-function stubStripe(o: { createError?: unknown; previewError?: unknown } = {}) {
+function stubStripe(o: { createError?: unknown; previewError?: unknown; invoice?: Record<string, unknown> } = {}) {
   const calls: { method: string; params: Record<string, unknown>; opts?: unknown }[] = [];
   const s = {
+    prices: { retrieve: async (id: string) => ({ id, product: "prod_roger_monthly", tax_behavior: "exclusive" }) },
     invoices: {
       createPreview: async (params: Record<string, unknown>) => {
         calls.push({ method: "invoices.createPreview", params });
@@ -29,7 +30,7 @@ function stubStripe(o: { createError?: unknown; previewError?: unknown } = {}) {
       create: async (params: Record<string, unknown>, opts: unknown) => {
         calls.push({ method: "subscriptions.create", params, opts });
         if (o.createError) throw o.createError;
-        return { id: "sub_1", billing_cycle_anchor: 1_800_000_000, latest_invoice: { amount_paid: 25312, currency: "cad" } };
+        return { id: "sub_1", billing_cycle_anchor: 1_800_000_000, latest_invoice: { amount_paid: 25312, total: 25312, total_taxes: [{ amount: 2912 }], currency: "cad", ...o.invoice } };
       },
     },
   };
@@ -84,5 +85,52 @@ describe("stripeBilling with a locked-in coupon", () => {
     expect(classify(Object.assign(new Error("x"), { code: "customer_tax_location_invalid" }))).toMatchObject({ kind: "tax_address" });
     // A card decline is still a decline.
     expect(classify(new Stripe.errors.StripeCardError({ type: "card_error", code: "card_declined", decline_code: "insufficient_funds", message: "declined" }))).toMatchObject({ kind: "declined", hard: false });
+  });
+});
+
+// S18 point c: Stripe names an add_invoice_items line after its product (add_invoice_items takes no description).
+describe("stripeBilling: the first invoice's higher-rate line", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const extra = { amountCents: 28000, currency: "CAD" };
+  const line = (product: string) => ({ currency: "cad", product, unit_amount: 28000, tax_behavior: "exclusive" });
+
+  it("is made on the Higher monthly rate product when STRIPE_PRODUCT_HIGHER_RATE is set, with the plan's tax behaviour, in the preview and the create alike", async () => {
+    vi.stubEnv("STRIPE_PRODUCT_HIGHER_RATE", "prod_higher_rate");
+    const { s, calls } = stubStripe();
+    const gw = stripeBilling(s)!;
+    await gw.preview({ customer: "cus_1", price: "price_monthly_cad", extra });
+    await gw.createSubscription({ ...create, extra });
+    expect(calls[0].params.invoice_items).toEqual([{ price_data: line("prod_higher_rate") }]);
+    expect(calls[1].params.add_invoice_items).toEqual([{ price_data: line("prod_higher_rate"), metadata: { kind: "first_month_higher_rate" } }]);
+    // One create, keyed as before.
+    expect(calls.map((c) => c.method)).toEqual(["invoices.createPreview", "subscriptions.create"]);
+    expect(calls[1].opts).toEqual({ idempotencyKey: "first_charge:claim_1:1" });
+  });
+
+  it("stays on the plan's own product when the variable is unset (today's behaviour)", async () => {
+    vi.stubEnv("STRIPE_PRODUCT_HIGHER_RATE", "");
+    const { s, calls } = stubStripe();
+    const gw = stripeBilling(s)!;
+    await gw.preview({ customer: "cus_1", price: "price_monthly_cad", extra });
+    await gw.createSubscription({ ...create, extra });
+    expect(calls[0].params.invoice_items).toEqual([{ price_data: line("prod_roger_monthly") }]);
+    expect(calls[1].params.add_invoice_items).toEqual([{ price_data: line("prod_roger_monthly"), metadata: { kind: "first_month_higher_rate" } }]);
+  });
+});
+
+describe("the tax read off an invoice (S18 point a review)", () => {
+  it("is null when Stripe gives no total_taxes, so the words fall back to \"in total\"", () => {
+    expect(taxOf({ total_taxes: undefined } as never)).toBeNull();
+    expect(taxOf({ total_taxes: [] } as never)).toBe(0);
+    expect(taxOf({ total_taxes: [{ amount: 3640 }, { amount: 10 }] } as never)).toBe(3650);
+  });
+
+  it("goes with a receipt only when the whole total was paid: a credit balance gives none", async () => {
+    expect(receiptTaxOf({ amount_paid: 31640, total: 31640, total_taxes: [{ amount: 3640 }] } as never)).toBe(3640);
+    expect(receiptTaxOf({ amount_paid: 21640, total: 31640, total_taxes: [{ amount: 3640 }] } as never)).toBeNull();
+    const credit = stubStripe({ invoice: { amount_paid: 21640, total: 31640, total_taxes: [{ amount: 3640 }] } });
+    expect(await stripeBilling(credit.s)!.createSubscription(create)).toMatchObject({ kind: "succeeded", amountCents: 21640, taxCents: null });
+    const missing = stubStripe({ invoice: { total_taxes: undefined } });
+    expect(await stripeBilling(missing.s)!.createSubscription(create)).toMatchObject({ kind: "succeeded", taxCents: null });
   });
 });

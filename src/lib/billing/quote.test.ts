@@ -97,6 +97,23 @@ describe("the told amount (spec check 21)", () => {
     expect(sent.filter((m) => m.subject === "Your first charge amount changed")).toHaveLength(3);
   });
 
+  // S18 point a review: a quote told before the tax was kept is refreshed with its tax, silently when the amount is the same.
+  it("refreshes a quote told without its tax silently, keeping when it was told, and still tells a changed amount", async () => {
+    const taxed: BillingGateway = { ...gw, preview: async (o) => ({ ...(await gw.preview(o)), taxCents: 2600 }) };
+    const old = { totalCents: 22600, currency: "USD", price: "price_monthly_usd", extraCents: 0, at: "2026-12-07T15:00:00.000Z", week: WEEK };
+    await query("update users set quote = $1", [JSON.stringify(old)]);
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T15:00:00Z")), gw: taxed }, uid)).toBe(false);
+    expect(sent).toEqual([]);
+    const [{ quote }] = await query<{ quote: Record<string, unknown> }>("select quote from users");
+    expect(quote).toMatchObject({ totalCents: 22600, taxCents: 2600, at: old.at, week: WEEK });
+    // Now kept with its tax: the same amount again changes nothing.
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T16:00:00Z")), gw: taxed }, uid)).toBe(false);
+    // A different amount is still told.
+    await switchSharing("off", "2026-12-09T17:00:00Z");
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T17:00:00Z")), gw: taxed }, uid)).toBe(true);
+    expect(sent.map((m) => m.subject)).toEqual(["Your first charge amount changed"]);
+  });
+
   it("does not store an amount whose email failed; the charge then holds and tells instead of charging it", async () => {
     await sendFirstPaidNext(query, deps(MONDAY_BEFORE), uid);
     await switchSharing("off", "2026-12-09T15:00:00Z");
