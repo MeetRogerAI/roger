@@ -1132,6 +1132,11 @@ create table if not exists review_runs (
   started_at timestamptz not null default now(),
   finished_at timestamptz
 );
+-- model_attempts counts the claims that reached the model call (B3 Unit 8):
+-- a scheduled tick claims a failed week only while it is under 3; a skipped
+-- week (no evidence) is claimed again without counting. "Run now" ignores
+-- the limit. attempts stays the claim's token and counts every claim.
+alter table review_runs add column if not exists model_attempts int not null default 0;
 
 -- measure_snapshots: a measure frozen once (the December 14 checkpoint, key
 -- checkpoint-2026-12-14). Written with on conflict do nothing and never

@@ -282,7 +282,7 @@ describe("schema.sql on Postgres", () => {
       for (const c of [
         "runs.instructions_version", "runs.instructions_version_source", "cora_user_weeks.method_version", "cora_user_weeks.code_commit",
         "leads.first_seen_at", "picks.installed_at", "picks.used_at", "picks.adoption_seen_at", "picks.kind", "picks.whats_better",
-        "review_runs.discarded", "review_proposals.result_versions", "review_proposals.edited_before_merge", "review_proposals.close_pending",
+        "review_runs.discarded", "review_runs.model_attempts", "review_proposals.result_versions", "review_proposals.edited_before_merge", "review_proposals.close_pending",
       ]) expect(cols).toContain(c);
     });
 

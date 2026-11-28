@@ -26,6 +26,7 @@ import {
   undoExcuseAction,
   type V3State,
 } from "@/app/admin/v3-actions";
+import { runReviewNowAction } from "@/app/admin/review/actions";
 import { REPLY_MAX } from "@/lib/feedback/limits";
 
 /*
@@ -72,8 +73,17 @@ function Hidden({ values }: { values: Record<string, string> }) {
 }
 
 /** A one-button action with its message beside it. */
-export function ActionButton({ action, values, label: text, pendingLabel, className = quiet }: { action: "extra" | "closeOrders" | "rebuildPoints" | "clearDisplayName"; values?: Record<string, string>; label: string; pendingLabel?: string; className?: string }) {
-  const fn: Action = action === "extra" ? extraFreeListAction : action === "clearDisplayName" ? clearDisplayNameAction : action === "rebuildPoints" ? () => rebuildPointsAction() : () => closeFailedOrdersAction();
+export function ActionButton({ action, values, label: text, pendingLabel, className = quiet }: { action: "extra" | "closeOrders" | "rebuildPoints" | "clearDisplayName" | "runReview"; values?: Record<string, string>; label: string; pendingLabel?: string; className?: string }) {
+  const fn: Action =
+    action === "extra"
+      ? extraFreeListAction
+      : action === "clearDisplayName"
+        ? clearDisplayNameAction
+        : action === "rebuildPoints"
+          ? () => rebuildPointsAction()
+          : action === "runReview"
+            ? () => runReviewNowAction()
+            : () => closeFailedOrdersAction();
   const [s, act, pending] = useActionState(fn, idle);
   return (
     <form action={act} className="flex flex-wrap items-center gap-3">

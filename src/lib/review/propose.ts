@@ -283,6 +283,8 @@ export type ReviewOptions = {
   holder?: string | null;
   admins?: string[];
   files?: Partial<Record<InstructionFile, string>>;
+  /** Claim a failed or abandoned week only while fewer model calls than this were made for it (Unit 8's schedule). Absent: no limit ("Run now"). */
+  maxModelAttempts?: number | null;
 };
 
 /** A running claim older than this is abandoned (the route's 300 seconds, plus slack) and can be taken over. */
@@ -290,21 +292,23 @@ export const REVIEW_LEASE_SECONDS = 330;
 
 /**
  * Marks the week's run as running for this holder, unless it is done, or
- * running under a lease that has not expired. One statement. Returns the
+ * running under a lease that has not expired, or (with `maxModelAttempts`)
+ * has already reached the model that many times. One statement. Returns the
  * claim's token (the attempt number), which every later write checks with
  * the holder, or null when the run was not claimed.
  */
-export async function claimReviewRun(q: Query, week: string, holder: string, model: string, at: string): Promise<number | null> {
+export async function claimReviewRun(q: Query, week: string, holder: string, model: string, at: string, maxModelAttempts: number | null = null): Promise<number | null> {
   if (!holder) throw new Error("claimReviewRun needs a holder");
   const rows = await q<{ attempts: number }>(
     `insert into review_runs (week_of, status, holder, attempts, model, started_at)
      values ($1::date, 'running', $2, 1, $3, $4::timestamptz)
      on conflict (week_of) do update set status = 'running', holder = excluded.holder, attempts = review_runs.attempts + 1,
        model = excluded.model, started_at = excluded.started_at, error = null, finished_at = null, discarded = '{}'::jsonb
-     where review_runs.status in ('failed', 'skipped')
-        or (review_runs.status = 'running' and review_runs.started_at <= excluded.started_at - interval '${REVIEW_LEASE_SECONDS} seconds')
+     where (review_runs.status in ('failed', 'skipped')
+            or (review_runs.status = 'running' and review_runs.started_at <= excluded.started_at - interval '${REVIEW_LEASE_SECONDS} seconds'))
+       and ($5::int is null or review_runs.model_attempts < $5::int)
      returning attempts`,
-    [week, holder, model, at],
+    [week, holder, model, at, maxModelAttempts],
   );
   return rows[0]?.attempts ?? null;
 }
@@ -333,7 +337,7 @@ export async function runReview(q: Query, o: ReviewOptions): Promise<ReviewResul
   const at = now.toISOString();
   const week = reviewWeek(now);
   const holder = o.holder || `review-${crypto.randomUUID()}`;
-  const token = await claimReviewRun(q, week, holder, o.model.name, at);
+  const token = await claimReviewRun(q, week, holder, o.model.name, at, o.maxModelAttempts ?? null);
   if (token === null) return { status: "not_claimed", week };
   const gate = [week, holder, token] as const;
   try {
@@ -358,6 +362,9 @@ async function runClaimed(q: Query, o: ReviewOptions, r: { now: Date; at: string
 
   const files = o.files ?? readInstructionFiles();
   const names = nameTerms(await loadNameSources(q));
+  // Counted before the call, so a call the platform cuts off still counts (Unit 8's attempt limit). A skipped week never gets here.
+  const counted = await q(`update review_runs set model_attempts = model_attempts + 1 where ${OURS} returning week_of`, [...gate]);
+  if (!counted.length) return { status: "not_claimed", week };
   let raw: ModelProposal[];
   try {
     raw = stripNul(

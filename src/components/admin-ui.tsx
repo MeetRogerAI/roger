@@ -57,6 +57,7 @@ const tabs = [
   { href: "/admin/interest", label: "Interest" },
   { href: "/admin/measures", label: "Measures" },
   { href: "/admin/pipeline", label: "Pipeline" },
+  { href: "/admin/review", label: "Review bot" },
   { href: "/admin/sessions", label: "Sessions" },
   { href: "/admin/sponsors", label: "Sponsors" },
 ];

@@ -711,7 +711,7 @@ flowchart LR
 
 *Unit 7 review fixes (2026-11-27):* added text holding a hidden or format character (soft hyphen, tag characters, bidi isolates, variation selectors, private-use) or a letter from a script the base file never uses is discarded as `harm` (a new discard reason), never stripped. Quote and name checks also run on each file's added text as a whole, so a quote split across hunks is caught. Run reasons go to the model with quoted play titles replaced by `"[a play title]"` and count as member text. Capitalised words and runs of them from member evidence that the base file never uses are blocked (everyday sentence-initial words excepted), as are spelled-out emails ("x at y dot com", "x [at] y") and lower-case first names. Secrets are replaced with `[removed]` in every stored field. The guardrail read also fires on identity and verbatim words, a removed line holding a guard word, and an added heading. `review_runs.error` keeps the error's class name and a fixed message. A running claim is taken over only after a 330-second lease; every write checks holder and the claim's token (`attempts`), and a holder is generated when none is given. Anything thrown after the claim marks the run failed and re-throws; NUL characters are stripped from the model's strings. Hunk matching is line-aligned, a range of blank lines is anchored to its nearest non-blank line, and only CRLF is folded (a lone CR stays in its line). A proposal with no hunks and no evidence counts as `evidence`; one past the run's limit of 5 counts under the first step it fails, or `size`.
 
-- [ ] **Unit 8: Review bot schedule and cron route**
+- [x] **Unit 8: Review bot schedule and cron route**
 
 **Goal:** R17 "on a schedule", leased, once per week, retried within the window, with admins told.
 
@@ -744,6 +744,20 @@ flowchart LR
 - Error path: an unauthorised request gets 401.
 
 **Verification:** The schedule shows in `vercel.json`, and a manual "Run now" on preview stores proposals.
+
+*Unit 8 as built (2026-11-27):* `src/lib/review/job.ts` (`runReviewJob`), `src/app/api/cron/review/route.ts`, `src/app/admin/review/actions.ts` (`runReviewNowAction`) and a first `src/app/admin/review/page.tsx` (`maxDuration` 300, recent runs and the Run now button, with a "Review bot" admin tab; Unit 10 adds the proposals). Decisions Unit 7 left open, and where the build differs from the text above:
+- **Attempt limit: 3 model attempts a week** (`MAX_MODEL_ATTEMPTS`), not 4. They're counted in a new column, `review_runs.model_attempts`, incremented under the claim just before the model call (so a call the platform cuts off still counts); `attempts` stays the claim's token. A scheduled tick claims a failed or abandoned week only while `model_attempts < 3` (an optional bound on `claimReviewRun`, in the claim's one statement). The attempt that uses up the third alerts `review_failed`, and the schedule stops until next Friday's week. Run now has no limit.
+- **A skipped week (no evidence) is claimed again on the next tick**, and those re-checks never reach the model, so they don't count. A week with no evidence at the last tick isn't alerted.
+- **Run now respects the switch** (it does nothing with `v3.reviewBotOn` off and says so), the lease and the claim (a done week isn't run again). It ignores the window and the attempt limit, uses the real clock, is rate-limited like the other job buttons, and is logged with `audited` (`run_review`). This differs from "works whatever the switch says" above; the caller's brief asked for it.
+- **Lease:** `review-bot` for 330 seconds (`REVIEW_LEASE_SECONDS`, the claim's lease), released after the run. A busy tick returns `busy`.
+- **Window:** the schedule claims only on Fridays, 14:00 to 16:59 UTC by the job clock (so a late tick still counts). Ticks are `FIRST_TICK_UTC` 14:15 to `LAST_TICK_UTC` 16:45, plus a **close tick** at `CLOSE_TICK_UTC` 17:15 (`15 17 * * 5`), a second `vercel.json` entry on the same path. The job picks the mode from the clock, not a query string (the reason `/api/cron/stats-check` is its own path): any scheduled Friday tick at or after 16:45 closes the window, and one from 17:00 (the close tick, or a delayed 16:45 tick) only closes it, with no lease, claim or model call (result `closed`). The route test ties both entries to the constants and checks no other cron shares Friday or a Friday minute.
+- **Job clock:** `min(now, the real clock)` at the top of `runReviewJob`, as in `runReview`, for the week, the window, the abandoned check and the alert refs, so a future `?asOf` gets the same week as the run row. Tests move the real clock with fake timers; there is no other override.
+- **Alerts, once per week each:** `review_ready` when proposals were stored (either trigger); `review_failed` when the attempts are used up, or when closing finds the week failed, never claimed, or cut off (running past its lease, as when the platform kills a tick mid-call). Closing a done week with proposals calls `review_ready` again: the per-week dedupe makes it a no-op unless the first send failed, so the close tick is the retry. Neither alert holds member or model text: the failure emails carry counts only, not even the error label (which stays on /admin/review).
+- **Results:** `skipped` (switch off, or outside the window), `closed` (a Friday tick from 17:00), `busy`, `dry_run`, `done`, `no_evidence` (runReview's `skipped`), `failed`, `not_claimed` (with why: done, attempts used, or held).
+- **The checkpoint snapshot** runs first, even with the switch off, and never stops the run. **Dry run** (`?dryRun=1`, preview with a test database only): reads the run row and the evidence count, and writes nothing (no snapshot, lease, claim, model call or alert).
+- PR status sync (Unit 9) has its place marked in the job, under the lease.
+
+Tests: `src/lib/review/job.test.ts` (22), `src/app/api/cron/review/route.test.ts` (6), `src/app/admin/review/actions.test.ts` (5).
 
 - [ ] **Unit 9: Approval and the GitHub pull request**
 
@@ -1020,7 +1034,7 @@ flowchart LR
 ## Built as recommended — for Peter to confirm
 
 1. **The review bot's model** is `anthropic/claude-opus-5.5` (AI Gateway), with no tools. It runs once a week.
-2. **The schedule** is Fridays, 14:15 to 16:45 UTC (`15,45 14-16 * * 5`), once per review week, with "Run now" for admins.
+2. **The schedule** is Fridays, 14:15 to 16:45 UTC (`15,45 14-16 * * 5`), once per review week, with "Run now" for admins At most 3 model attempts a week on the schedule, then an alert; Run now has no attempt limit but respects the switch (Unit 8).
 3. **What "onboarded" means for k:** the member finished sign-up that week. The alternative is "got their first list".
 4. **What "active at the start of the week" means:** signed up before the week and access not ended. Held and no-card trial members count.
 5. **Generation:** an account nobody referred is generation 0 (a "champion"). A referral whose referrer was deleted counts as generation 1.
