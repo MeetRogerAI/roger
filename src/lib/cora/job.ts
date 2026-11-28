@@ -251,7 +251,10 @@ async function storedScores(q: Query): Promise<Scored[]> {
   });
 }
 
-/** v1.1 Step 1.3: each pool play's text from its best shareable evidence. The public sample, which an admin read, is never rewritten. */
+/**
+ * v1.1 Step 1.3: each pool play's text from its best shareable evidence. A play still flagged `is_public_sample` is
+ * rewritten like any other: no public page reads the flag since November 27, 2026, and no screen can clear it.
+ */
 async function rebuildContent(q: Query, week: string) {
   const pool = await loadPool(q, week);
   const updates = pool.rows.flatMap((r) => {
@@ -263,7 +266,7 @@ async function rebuildContent(q: Query, week: string) {
     `update pool_plays pp set title = s.title, description = s.description, playbook_md = s.playbook_md, paste_to_install = s.paste_to_install,
        heavy_use_for = s.heavy_use_for, job = case when s.job <> '' then s.job else pp.job end
      from jsonb_to_recordset($1::jsonb) as s(id uuid, title text, description text, playbook_md text, paste_to_install text, heavy_use_for text, job text)
-     where pp.id = s.id and not pp.is_public_sample
+     where pp.id = s.id
        and (pp.title, pp.description, pp.playbook_md, pp.paste_to_install, pp.heavy_use_for) is distinct from (s.title, s.description, s.playbook_md, s.paste_to_install, s.heavy_use_for)`,
     [JSON.stringify(updates)],
   );

@@ -55,6 +55,7 @@ vi.mock("@/lib/admin-auth", () => ({
 }));
 
 const { listAction, publishAction, savePageAction, sectionsAction, undoPublishAction } = await import("./actions");
+const { NOT_LOGGED } = await import("@/lib/admin/log");
 const { default: PagesScreen } = await import("./page");
 const { default: EditorScreen } = await import("./[page]/page");
 const { default: ReviewScreen } = await import("./review/page");
@@ -594,19 +595,55 @@ describe("review and publish", () => {
     expect(await home()).toContain("The first headline");
   });
 
-  it("expires the cached copy when the publish landed and its log row could not be written", async () => {
-    await savePageAction(typed("home", { [HEADLINE]: "Your AI agents, better every Monday" }));
-    const key = await keyNow();
+  /** The query, with its admin log inserts failing the first `times` times. */
+  const logFails = (times: number) => {
     const working = current;
+    let left = times;
     current = (async (statement: string, params?: unknown[]) => {
-      if (statement.includes("insert into admin_actions")) throw new Error("fetch failed");
+      if (statement.includes("insert into admin_actions") && left-- > 0) throw new Error("fetch failed");
       return working(statement, params);
     }) as Query;
-    await expect(publishAction(form({ review: key }))).rejects.toThrow("fetch failed");
-    current = working;
-    // It is live in the database, so the pages' cached copy must not outlive it.
-    expect((await readStored(current)).published.text).toEqual({ [HEADLINE]: "Your AI agents, better every Monday" });
+    return () => void (current = working);
+  };
+
+  it("says so when the publish landed and its log rows could not be written, and still expires the cached copy", async () => {
+    await savePageAction(typed("faq", { [REFUND_A]: "No refunds, but ask your agent to cancel for you." }));
+    const key = await keyNow();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restore = logFails(Infinity);
+    const state = await publishAction(form({ review: key }));
+    restore();
+    // Live, and the screen says the log is missing it, instead of an error page saying nothing happened.
+    expect(state).toMatchObject({ status: "ok", message: `Published. Visitors see the changes from their next page view.${NOT_LOGGED}` });
+    expect((await readStored(current)).published.text).toEqual({ [REFUND_A]: "No refunds, but ask your agent to cancel for you." });
     expect(cache.tags).toEqual([CONTENT_TAG]);
+    // Neither the publish's row nor its override's is half there; the server's log has both.
+    expect(await logged()).toEqual([]);
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(String(errors.mock.calls[0].at(-1))).toMatch(/site_content_published[\s\S]*site_content_wording_override/);
+    errors.mockRestore();
+  });
+
+  it("tries the log once more, and then has the publish's row and its override rows together", async () => {
+    await savePageAction(typed("faq", { [REFUND_A]: "No refunds, but ask your agent to cancel for you." }));
+    const key = await keyNow();
+    const restore = logFails(1);
+    const state = await publishAction(form({ review: key }));
+    restore();
+    expect(state).toMatchObject({ status: "ok", message: "Published. Visitors see the changes from their next page view." });
+    expect((await logged()).map((entry) => entry.action)).toEqual(["site_content_published", "site_content_wording_override"]);
+  });
+
+  it("says so when an undo landed and its log row could not be written", async () => {
+    await savePageAction(typed("home", { [HEADLINE]: "Your AI agents, better every Monday" }));
+    await publishNow();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restore = logFails(Infinity);
+    const state = await undoPublishAction();
+    restore();
+    errors.mockRestore();
+    expect(state.message).toMatch(new RegExp(`^Undone\\. .*${NOT_LOGGED.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+    expect((await readStored(current)).published).toEqual(newOverlay());
   });
 
   it("gives way with a plain message when another write keeps getting in first", async () => {
@@ -910,6 +947,20 @@ describe("the questions the old Edit Questions screen edited (plan R10)", () => 
     expect(await home()).not.toContain("A new headline");
     expect(await stored(LEGACY_QUESTIONS_KEY)).toEqual(legacy);
     expect(words(await reviewScreen())).toContain("What will change: 1 text");
+  });
+
+  it("says on the Pages screen when the old screen saved an answer after Pages took over, with its words, and not otherwise", async () => {
+    admin = OWNER;
+    await current("insert into settings (key, value) values ($1, $2::jsonb)", [LEGACY_QUESTIONS_KEY, JSON.stringify(legacy)]);
+    await savePageAction(typed("home", { [HEADLINE]: "A new headline" }));
+    expect(await pagesScreen()).not.toContain("data-old-questions");
+    // The previous release, still serving during the deploy, saves an answer where nothing reads it now.
+    await current("update settings set value = $2::jsonb, updated_at = now() + interval '1 minute' where key = $1", [LEGACY_QUESTIONS_KEY, JSON.stringify({ ...legacy, cost: { a: "It is {monthlyUsd} a month." } })]);
+    const note = words(/<div data-old-questions[\s\S]*?<\/div>/.exec(await pagesScreen())![0]);
+    expect(note).toContain("Saved on the old questions screen, and not on the site");
+    expect(note).toContain("type it again in FAQ and publish");
+    expect(note).toMatch(/Price and billing: Question \d+: Answer : “It is US\$200 a month\.”/);
+    expect(await faq()).not.toContain("It is US$200 a month.");
   });
 });
 

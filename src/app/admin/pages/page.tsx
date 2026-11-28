@@ -5,12 +5,12 @@ import { when } from "@/lib/admin/format";
 import { recentActions } from "@/lib/admin/log";
 import { query } from "@/lib/db-query";
 import { draftCount, pageStatus } from "@/lib/site/content/check";
-import { REVIEW_ADDRESS, editorAddress, pageCovers } from "@/lib/site/content/labels";
-import { siteRegistry } from "@/lib/site/content/registry";
+import { REVIEW_ADDRESS, editorAddress, fieldLabel, fieldPlace, pageCovers } from "@/lib/site/content/labels";
+import { resolveField, siteRegistry } from "@/lib/site/content/registry";
 import { getAmounts } from "@/lib/site/amounts";
 import { asRead } from "@/lib/site/content/check";
 import { releaseDifferences } from "@/lib/site/content/differs";
-import { readStoredAsWritten } from "@/lib/site/content/store";
+import { questionsSavedByTheOldScreen, readStoredAsWritten } from "@/lib/site/content/store";
 import { LaunchListNote } from "./launch-list";
 import { Unreadable, count } from "./parts";
 import { UndoPublish } from "./publish-controls";
@@ -32,8 +32,10 @@ export default async function PagesScreen() {
   if (!(await isAdmin())) return null;
   let stored: Awaited<ReturnType<typeof readStoredAsWritten>>;
   let last: Awaited<ReturnType<typeof recentActions>>[number] | undefined;
+  let oldScreen: Awaited<ReturnType<typeof questionsSavedByTheOldScreen>>;
   try {
     stored = await readStoredAsWritten(query);
+    oldScreen = await questionsSavedByTheOldScreen(query);
     [last] = await recentActions(query, { actions: ["site_content_published", "site_content_publish_undone", "site_content_reset_to_release"], limit: 1 });
   } catch (error) {
     console.error("[pages] The stored site content could not be read.", error instanceof Error ? error.message : error);
@@ -52,6 +54,8 @@ export default async function PagesScreen() {
       </header>
 
       <LaunchListNote />
+
+      {oldScreen.length > 0 && <OldScreenNote saved={oldScreen} read={(text) => asRead(text, amounts)} />}
 
       <div data-publish-panel className="space-y-4 rounded-[8px] border border-rule bg-surface p-5">
         <h2 className="text-title">Publish</h2>
@@ -131,3 +135,37 @@ export default async function PagesScreen() {
     </section>
   );
 }
+
+/**
+ * Answers the old Edit Questions screen saved after Pages took over (questionsSavedByTheOldScreen): the previous
+ * release, still serving during a deploy, wrote them where nothing reads them now. They are on no page.
+ */
+function OldScreenNote({ saved, read }: { saved: { id: string; text: string }[]; read: (text: string) => string }) {
+  return (
+    <div data-old-questions className="space-y-3 rounded-[8px] border border-accent bg-surface p-5">
+      <h2 className="text-title">Saved on the old questions screen, and not on the site</h2>
+      <p className="text-small">
+        While the site was being updated, the old Edit Questions screen saved {saved.length === 1 ? "this wording" : "these wordings"} after Pages had taken over. No page shows {saved.length === 1 ? "it" : "them"}. If {saved.length === 1 ? "it" : "they"} should be on the site, type {saved.length === 1 ? "it" : "them"} again in FAQ and publish.
+      </p>
+      <ul className="space-y-2 text-small">
+        {saved.map(({ id, text }) => {
+          const field = resolveField(id);
+          const place = field ? fieldPlace(field) : null;
+          return (
+            <li key={id}>
+              <span className="font-[620]">{field && place ? `${place.section}: ${fieldLabel(field).full}` : id}</span>: “{read(text)}”
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-small">
+        <Link href={editorAddress("faq")} className="underline underline-offset-4">
+          Open FAQ
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+/** Behind a login and read per request (await connection()): a navigation into it waits for the server, as the layout says. */
+export const instant = false;

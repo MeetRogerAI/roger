@@ -68,3 +68,6 @@ export default async function TestimonialsPage() {
     </section>
   );
 }
+
+/** Behind a login and read per request (await connection()): a navigation into it waits for the server, as the layout says. */
+export const instant = false;

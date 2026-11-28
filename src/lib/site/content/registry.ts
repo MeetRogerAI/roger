@@ -351,7 +351,6 @@ export function siteSpec(copy: { questions: readonly { id: string; title: string
             anchor: "price",
             fields: {
               "priceBlock.title": line("Heading"),
-              "priceBlock.sub": lead("Line under the heading"),
               "priceBlock.monthly.name": short("Plan name"),
               "priceBlock.monthly.note": lead("Note under the price"),
             },

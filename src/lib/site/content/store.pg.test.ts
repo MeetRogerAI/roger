@@ -11,7 +11,7 @@ import { testDb } from "@/test-helpers/pglite-db";
 import { emptyOverlay, newOverlay, type Overlay } from "./format";
 import { applyOverlay, baseline, codeModel } from "./model";
 import { siteRegistry } from "./registry";
-import { CONTENT_KEY, LEGACY_QUESTIONS_KEY, changedBetween, legacyQuestionOverlay, parseStored, publish, readPublished, readPublishedForRelease, readStored, resetToRelease, sameOverlay, saveDraft, saveSections, undoPublish } from "./store";
+import { CONTENT_KEY, LEGACY_QUESTIONS_KEY, changedBetween, legacyQuestionOverlay, parseStored, publish, questionsSavedByTheOldScreen, readPublished, readPublishedForRelease, readStored, resetToRelease, sameOverlay, saveDraft, saveSections, undoPublish } from "./store";
 
 const ADMIN = "admin@example.com";
 const HEADLINE = "home.hero.headline";
@@ -309,6 +309,33 @@ describe("the questions saved before the row existed (plan R10)", () => {
     expect(await readPublished(query)).toEqual(before);
     // The old row is left as it was, for a release that still reads it.
     expect(await value(LEGACY_QUESTIONS_KEY)).toEqual(legacy);
+  });
+
+  describe("saved by the old screen after the row existed (a deploy's last minutes)", () => {
+    const stamp = (key: string, at: string) => query("update settings set updated_at = $2 where key = $1", [key, at]);
+
+    it("are named, with the wording the old screen saved, only where the draft holds other wording", async () => {
+      await put(LEGACY_QUESTIONS_KEY, legacy);
+      await saveDraft(query, [{ field: HEADLINE, text: "Smarter every Monday." }]);
+      await stamp(CONTENT_KEY, "2026-11-27T10:00:00Z");
+      expect(await questionsSavedByTheOldScreen(query)).toEqual([]);
+      // The previous release's screen saves a new answer to the refund question, and the same cost answer again.
+      await put(LEGACY_QUESTIONS_KEY, { ...legacy, refund: { q: "Do you give refunds?", a: "Within 7 days, yes." } });
+      await stamp(LEGACY_QUESTIONS_KEY, "2026-11-27T10:02:00Z");
+      expect(await questionsSavedByTheOldScreen(query)).toEqual([{ id: REFUND_A, text: "Within 7 days, yes." }]);
+      // Typed again in Pages, it is in the draft, and nothing is named.
+      await saveDraft(query, [{ field: REFUND_A, text: "Within 7 days, yes." }]);
+      expect(await questionsSavedByTheOldScreen(query)).toEqual([]);
+    });
+
+    it("are nothing when the row was written after the old one, or there is no row", async () => {
+      await put(LEGACY_QUESTIONS_KEY, legacy);
+      expect(await questionsSavedByTheOldScreen(query)).toEqual([]);
+      await saveDraft(query, [{ field: REFUND_A, text: "No. Cancel any time." }]);
+      await stamp(LEGACY_QUESTIONS_KEY, "2026-11-27T10:00:00Z");
+      await stamp(CONTENT_KEY, "2026-11-27T10:05:00Z");
+      expect(await questionsSavedByTheOldScreen(query)).toEqual([]);
+    });
   });
 
   it("are carried over once: after the row exists the old row is not read for anything, so nothing comes back", async () => {
