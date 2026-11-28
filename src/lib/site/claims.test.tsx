@@ -177,6 +177,56 @@ describe("rule (c): time saved and productivity", () => {
 
   it("fails save, saves, saved, saving and savings used as a claim", () => {
     for (const word of ["save", "saves", "saved", "saving", "savings", "Save"]) expect(broken("time-saved", line(`Roger ${word} you time.`)), word).toEqual([word]);
+    const claims: [string, string[]][] = [
+      ["It saves 3 hours.", ["3 hours", "saves"]],
+      ["Save time on email.", ["Save"]],
+      ["It saves you the trouble.", ["saves"]],
+      ["Roger can save up to 5 hours.", ["5 hours", "save"]],
+      ["Saving the team hours.", ["Saving"]],
+      ["Save a ton of time.", ["Save"]],
+      ["A time-saving setup.", ["saving"]],
+      ["Time savings every week.", ["savings"]],
+      ["It saves money.", ["saves"]],
+      ["Save effort.", ["Save"]],
+      // A part of the day or the week, a vague amount, the words between, and the passive (U11 review): each passed
+      // the first narrowing of the rule, and was a violation before it.
+      ["Roger saves your mornings.", ["saves"]],
+      ["It saves agents an afternoon.", ["saves"]],
+      ["Saves, on average, an afternoon.", ["Saves"]],
+      ["It saves your weekend.", ["saves"]],
+      ["Saves your Monday.", ["Saves"]],
+      ["Saved a morning.", ["Saved"]],
+      ["It saves a ton.", ["saves"]],
+      ["Save the back-and-forth.", ["Save"]],
+      ["Hours are saved.", ["saved"]],
+      ["Time is saved.", ["saved"]],
+      ["Your week, saved.", ["saved"]],
+      ["A huge time saver.", ["time saver"]],
+      ["A time-saver.", ["time-saver"]],
+      ["A timesaving setup.", ["timesaving"]],
+      // Ambiguous, so it stays a violation: it reads as "saves each morning".
+      ["Save each morning for research.", ["Save"]],
+    ];
+    for (const [text, found] of claims) expect(broken("time-saved", line(text)), text).toEqual(found);
+  });
+
+  it("passes “save” meaning store, on any page and in any zone, with no allowance", () => {
+    const store = [
+      "Saved in another tab.",
+      "Save this as a skill.",
+      "Save your work first.",
+      "Save a draft of each reply.",
+      "It saves each draft for you to read.",
+      "Check a saved note first.",
+      "Save my report",
+      "Saving…",
+      "Your report is saved.",
+    ];
+    for (const text of store) {
+      expect(check(line(text)), text).toEqual([]);
+      expect(check(inZone(text, "sample")), text).toEqual([]);
+    }
+    expect(allowed.filter((entry) => entry.words({ segment: { text: "", zones: ["sample"], via: "text" }, path: "/zack", context })?.test("Save")).map((entry) => entry.why)).toEqual([]);
   });
 
   it("fails productivity words and multipliers", () => {
@@ -209,14 +259,12 @@ describe("rule (c): time saved and productivity", () => {
     expect(broken("time-saved", inZone("Roger gives you one hour back.", "legal", "/privacy"))).toEqual(["one hour"]);
   });
 
-  it("allows the example plays’ own “save” (store) only inside an example, and only in the four phrases they use", () => {
+  it("passes the example plays’ own “save” (store) anywhere, and still catches a claim inside an example", () => {
     const play = "Save this as a skill called Daily prospect outreach drafts. Save each email as an unsent draft. If the mailbox can’t be reached, save nothing and report the error. Say how many drafts were saved.";
     expect(check(inZone(play, "sample"))).toEqual([]);
-    expect(broken("time-saved", line(play))).toEqual(["Save", "Save", "save", "saved"]);
+    expect(check(line(play))).toEqual([]);
     expect(broken("time-saved", inZone("This play saves 25 minutes a run.", "sample"))).toEqual(["25 minutes", "saves"]);
-    // The retired play's phrases have no allowance left, and no other use of the word has one.
-    expect(broken("time-saved", inZone("Save a skill called Client email in two tones. Check a saved note first.", "sample"))).toEqual(["Save", "saved"]);
-    expect(broken("time-saved", inZone("Save each morning for research.", "sample"))).toEqual(["Save"]);
+    expect(broken("time-saved", inZone("This play saves you a morning.", "sample"))).toEqual(["saves"]);
   });
 
   it("allows “a 20-minute call”, the length of a meeting an example’s email asks for, only inside an example and only in those words", () => {
@@ -227,9 +275,13 @@ describe("rule (c): time saved and productivity", () => {
     expect(broken("time-saved", inZone("Ask for a 30-minute call.", "sample"))).toEqual(["30-minute"]);
   });
 
-  it("allows the free run’s storing and waiting messages only on /zack", () => {
-    const messages = ["Save my report", "Saving…", "We could not save this report, because this run link is no longer active.", "Your report is saved.", "It is saved all the same.", "Saving is not switched on here yet.", "Too many tries. Try again in an hour.", "Try again in a minute."];
-    for (const message of messages) {
+  it("passes the free run’s storing messages anywhere, and allows its waiting messages only on /zack", () => {
+    const storing = ["Save my report", "Saving…", "We could not save this report, because this run link is no longer active.", "Your report is saved.", "It is saved all the same.", "Saving is not switched on here yet."];
+    for (const message of storing) {
+      expect(check(line(message, "/zack/claude")), message).toEqual([]);
+      expect(check(line(message, "/")), message).toEqual([]);
+    }
+    for (const message of ["Too many tries. Try again in an hour.", "Try again in a minute."]) {
       expect(check(line(message, "/zack/claude")), message).toEqual([]);
       expect(rulesBroken(line(message, "/")), message).toEqual(["time-saved"]);
     }

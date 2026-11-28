@@ -8,8 +8,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+// The bar is drawn outside an app router here: its refresh part needs one, and does nothing at render.
+vi.mock("next/navigation", async (orig) => ({ ...(await orig<typeof import("next/navigation")>()), useRouter: () => ({ refresh: () => {} }) }));
+
 import { PREVIEW_EXIT_ADDRESS, PreviewBar } from "./preview-bar";
+import { onReturn } from "./preview-refresh";
 
 const markup = renderToStaticMarkup(<PreviewBar />);
 const words = markup.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -48,6 +52,33 @@ describe("the preview bar", () => {
     expect(rule).not.toBeNull();
     expect(Number(rule![1])).toBeGreaterThanOrEqual(122);
     expect(markup).toMatch(/^<aside[^>]*class="[^"]*\bsticky bottom-0\b/);
+  });
+
+  it("draws the page again when the admin comes back to the tab, so a preview ended in another tab does not stay on screen", () => {
+    expect(readFileSync(path.join(process.cwd(), "src/components/site/preview-bar.tsx"), "utf8")).toContain("<PreviewRefresh />");
+    // It adds nothing to the bar's markup.
+    expect(markup).toMatch(/^<aside[^>]*><div class="wrap/);
+    const win = new EventTarget();
+    const doc = Object.assign(new EventTarget(), { visibilityState: "hidden" as DocumentVisibilityState });
+    let clock = 0;
+    const refreshed: number[] = [];
+    const stop = onReturn(win as never, doc as never, () => refreshed.push(clock), () => clock);
+    doc.dispatchEvent(new Event("visibilitychange"));
+    expect(refreshed).toEqual([]);
+    clock = 5000;
+    doc.visibilityState = "visible";
+    doc.dispatchEvent(new Event("visibilitychange"));
+    // A switch of tabs fires both: one refresh.
+    win.dispatchEvent(new Event("focus"));
+    expect(refreshed).toEqual([5000]);
+    clock = 9000;
+    win.dispatchEvent(new Event("focus"));
+    expect(refreshed).toEqual([5000, 9000]);
+    stop();
+    clock = 20000;
+    win.dispatchEvent(new Event("focus"));
+    doc.dispatchEvent(new Event("visibilitychange"));
+    expect(refreshed).toEqual([5000, 9000]);
   });
 
   it("styles only its own wrapper", () => {

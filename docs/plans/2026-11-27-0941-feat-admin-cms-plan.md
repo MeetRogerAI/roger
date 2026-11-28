@@ -316,7 +316,7 @@ docs/site/content-release.md
 
 #### Deferred to Follow-Up Work
 
-- Move the catch in `clearedTestimonials` (`src/lib/site/testimonials.ts`) outside its cached function, as the solutions doc asks.
+- Move the catch in `clearedTestimonials` (`src/lib/site/testimonials.ts`) outside its cached function, as the solutions doc asks. (Done in the U11 review. The same shape is still in `getUseCases` and `getVerifiedUseCaseCount`, `src/lib/library-source.ts`, and `getV3SettingsForDisplay`, `src/lib/v3-settings-display.ts`.)
 - Delete the `site.questions` row once both sites have run this release for a while. It is left in place so a rollback still shows the old edits.
 
 ---
@@ -728,6 +728,15 @@ getSiteContent():
 - **Verification:** Every command in the Verification Contract passes, and a search finds no reference to `/admin/sample`, `getQuestionOverrides` or `QUESTIONS_TAG`.
 
 - **Carried from the U2 review (November 27, 2026), to settle in this unit:** (1) the not-found page's header hydrates with the browser's path against one shared shell, so a mistyped address can change every 404 page's header for five minutes (`docs/solutions/runtime-errors/not-found-shell-hydrates-with-the-browsers-path-2026-11-27.md` has the suggested fix); (2) a play still flagged `is_public_sample` is skipped by the Cora job and no screen can clear the flag any more: clear the flag or drop the guard; (3) `docs/site/v1-acceptance.md` still describes the Edit Questions tab and `/admin/sample`.
+
+### Notes for U12 from the U11 build (November 27, 2026)
+
+- `priceBlock.sub` is no longer a field (it printed nowhere). If preview has a published entry for it, the snapshot answers 409 for it; publish any change in Pages on preview to drop it, as `docs/site/content-release.md` says.
+- The not-found page now always carries the ordinary header (`useShownPath` in `src/components/site-header.tsx`). After launch, open an unknown address under `/start` and one under none on meetroger.ai and read the console: no React #418.
+- A publish, undo or reset whose admin log rows cannot be written now stays live and says so on screen; the rows are in the server log (Vercel) as "[admin] A change is live and its admin log rows could not be written".
+- Pages shows "Saved on the old questions screen, and not on the site" if a deploy's previous code (the Edit Questions screen) saved after Pages took over. `main` never had that screen, so production cannot show it; preview, which ran it, can. Glance at Pages on preview before the snapshot, and before saving anything there: the next save in Pages ends the note whether or not the wording was typed again.
+- Owner's guide to Pages: `docs/site/pages.md`. README has the release command and the hand-run gates.
+- From the U11 review: the wording check's narrowed "save" rule let "saves your mornings", "saves agents an afternoon", "Saves, on average, an afternoon" and "hours are saved" through; it now names parts of a day or week, vague amounts, words between and the passive, and catches "time saver" / "timesaving" (`src/lib/site/claims.ts`). Older than this work and not changed: an address under a route that calls `notFound()` itself (`/zack/nope`, `/for/nope`, `/start/zack/nope`, `/packs/nope`) answers 200 with no header in the served HTML (the browser draws it), on HEAD as on the branch; a failed first try of an admin log insert whose response was lost after it committed is written twice by the retry.
 
 ### U12. Launch: version 1 of the marketing site, the admin and the Pages editor go live
 

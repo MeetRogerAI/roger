@@ -17,12 +17,18 @@
  * own wrapper.
  */
 import Link from "next/link";
+import { PreviewRefresh } from "./preview-refresh";
 
 export const PREVIEW_EXIT_ADDRESS = "/admin/pages/preview/exit";
 
+/*
+ * PreviewRefresh draws the page again when the admin comes back to the tab, so a tab left in preview does not keep
+ * the bar after the preview ended elsewhere (sign-out in another tab). It renders nothing.
+ */
 export function PreviewBar() {
   return (
     <aside data-preview-bar aria-label="Preview" className="sticky bottom-0 z-50 border-t-2 border-accent-hover bg-accent text-accent-ink">
+      <PreviewRefresh />
       <div className="wrap flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3">
         <p role="status" className="min-w-0 text-small">
           <strong className="font-[650]">Preview:</strong> you are seeing unpublished drafts. Visitors see the published site.

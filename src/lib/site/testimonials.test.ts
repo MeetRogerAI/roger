@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Testimonial } from "./testimonials";
 
@@ -44,11 +46,25 @@ describe("public testimonials", () => {
     expect(asked).toBe(0);
   });
 
-  it("are an empty list when the database fails", async () => {
+  it("are an empty list when the database fails, and the stored rows on the next call that succeeds", async () => {
     vi.stubEnv("DATABASE_URL", "postgres://test");
     rows = new Error("database is down");
     expect(await getTestimonials("agents")).toEqual([]);
     expect(asked).toBe(1);
+    rows = [row("Ben", "agents")];
+    expect((await getTestimonials("agents")).map((t) => t.person)).toEqual(["Ben"]);
+  });
+
+  // In vitest "use cache" does nothing, so the test above passes either way: the shape is what keeps a failed read
+  // out of the cache for an hour (docs/solutions/runtime-errors/catch-inside-use-cache-stores-the-fallback-2026-11-27.md).
+  it("catch the failure outside the cached function", () => {
+    const code = readFileSync(path.join(process.cwd(), "src/lib/site/testimonials.ts"), "utf8").replace(/\r\n/g, "\n");
+    const cached = code.slice(code.indexOf("async function clearedTestimonials"), code.indexOf("/** A row marked for both audiences"));
+    expect(cached).toContain('"use cache"');
+    expect(cached).not.toMatch(/\bcatch\b|\btry\b/);
+    const around = code.slice(code.indexOf("export async function getTestimonials"));
+    expect(around).not.toContain('"use cache"');
+    expect(around).toMatch(/try \{\s*rows = await clearedTestimonials\(\);\s*\} catch \{/);
   });
 
   it("are the cleared rows for the page's audience, with rows for both", async () => {

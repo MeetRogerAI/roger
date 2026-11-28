@@ -53,7 +53,7 @@
  * A write that changes what is live writes its admin log row after it
  * succeeds (src/lib/admin/log.ts).
  */
-import { logAdminAction } from "@/lib/admin/log";
+import { logLanded } from "@/lib/admin/log";
 import type { Query } from "@/lib/db-query";
 import { OVERLAY_FORMAT, isEmptyOverlay, lenientLosses, newOverlay, parseOverlay, type Overlay } from "./format";
 import { applyOverlay, baseline, codeModel, diffListEdit, diffSectionEdit, layoutOn, listItems, normaliseOverlay, sectionLayout, shownOverlay, textAt, type Layout } from "./model";
@@ -177,6 +177,27 @@ async function readRow(q: Query, base: unknown): Promise<Row> {
 export async function readStored(q: Query, base: unknown = baseline): Promise<StoredContent & { stored: boolean }> {
   const row = await readRow(q, base);
   return { ...row.content, stored: row.raw !== null };
+}
+
+/**
+ * Questions the old Edit Questions screen saved after this row was last written: the previous release's code, still
+ * serving while a deploy finished, wrote to "site.questions", which nothing reads once this row exists. Each is a
+ * field id and the wording it saved, where the draft holds other wording. Empty with no row, or when this row was
+ * written after the old one (by the clock of the database, which stamps both). For the Pages screen, to say so.
+ * The next write of this row (any save in Pages) ends the note, whether or not the wording was typed again: the row
+ * keeps no time of its own creation to compare with instead.
+ */
+export async function questionsSavedByTheOldScreen(q: Query, base: unknown = baseline): Promise<{ id: string; text: string }[]> {
+  const [row] = await q<{ content: string; legacy: string; later: boolean }>(
+    `select c.value::text as content, l.value::text as legacy, l.updated_at > c.updated_at as later
+     from settings c join settings l on l.key = $2 where c.key = $1`,
+    [CONTENT_KEY, LEGACY_QUESTIONS_KEY],
+  );
+  if (!row?.later) return [];
+  const draft = parseStored(JSON.parse(row.content), base).draft;
+  return Object.entries(normaliseOverlay(base, legacyQuestionOverlay(JSON.parse(row.legacy))).text)
+    .filter(([id, text]) => (Object.hasOwn(draft.text, id) ? draft.text[id] : textAt(base, id)) !== text)
+    .map(([id, text]) => ({ id, text }));
 }
 
 /** readStored, and the draft and what is published as they are written (Row.written), from the same read. For the Pages screen. */
@@ -454,8 +475,9 @@ function changedLayout(before: Layout, change: SectionChange, original: Layout):
   return { order, off: before.off };
 }
 
+/** `logged`: false when the change landed and its admin log rows could not be written (logLanded). */
 export type PublishResult =
-  | { ok: true; changed: boolean; content: StoredContent }
+  | { ok: true; changed: boolean; content: StoredContent; logged: boolean }
   /** "draft-changed": the stored draft is not the one that was checked, so nothing was published. */
   | { ok: false; reason: "draft-changed" | "busy" };
 
@@ -475,8 +497,16 @@ export type PublishResult =
  * `over` is what was on the site when the admin read the list of changes. When it is given and something else is
  * published now (an undo, or a publish, from another tab), nothing changes either, and the answer is the same
  * "draft-changed": the list the admin read is no longer what this publish would change.
+ *
+ * `log` holds more rows (the wording overrides, plan R16), written with the publish's own row in one statement, so
+ * either the whole record of a publish is in the log or none of it is and the answer says `logged: false`.
  */
-export async function publish(q: Query, by: string, checked: Overlay, o: { base?: unknown; note?: Record<string, unknown>; over?: Overlay } = {}): Promise<PublishResult> {
+export async function publish(
+  q: Query,
+  by: string,
+  checked: Overlay,
+  o: { base?: unknown; note?: Record<string, unknown>; over?: Overlay; log?: { action: string; detail: Record<string, unknown> }[] } = {},
+): Promise<PublishResult> {
   const base = o.base ?? baseline;
   const want = normaliseOverlay(base, checked);
   const over = o.over ? normaliseOverlay(base, o.over) : null;
@@ -493,8 +523,10 @@ export async function publish(q: Query, by: string, checked: Overlay, o: { base?
   });
   if (done === "busy") return { ok: false, reason: "busy" };
   if (moved) return { ok: false, reason: "draft-changed" };
-  if (done.written) await logAdminAction(q, { by, action: "site_content_published", detail: { ...o.note, ...logged(changedBetween(done.before.published, done.after.published)) } });
-  return { ok: true, changed: done.written, content: done.after };
+  const wrote = done.written
+    ? await logLanded(q, [{ by, action: "site_content_published", detail: { ...o.note, ...logged(changedBetween(done.before.published, done.after.published)) } }, ...(o.log ?? []).map((row) => ({ by, ...row }))])
+    : true;
+  return { ok: true, changed: done.written, content: done.after, logged: wrote };
 }
 
 /**
@@ -505,14 +537,14 @@ export async function publish(q: Query, by: string, checked: Overlay, o: { base?
  * nothing has been saved since: otherwise the drafts would be the reset itself, waiting to be published again
  * by the next publish of anything.
  */
-export async function undoPublish(q: Query, by: string, base: unknown = baseline): Promise<{ ok: true; changed: boolean; content: StoredContent } | { ok: false; reason: "busy" }> {
+export async function undoPublish(q: Query, by: string, base: unknown = baseline): Promise<{ ok: true; changed: boolean; content: StoredContent; logged: boolean } | { ok: false; reason: "busy" }> {
   const done = await transition(q, base, (now) => (now.previous ? { draft: now.previousDraft && isEmptyOverlay(now.draft) ? now.previousDraft : now.draft, published: now.previous, previous: null } : null));
   if (done === "busy") return { ok: false, reason: "busy" };
-  if (done.written) await logAdminAction(q, { by, action: "site_content_publish_undone", detail: logged(changedBetween(done.before.published, done.after.published)) });
-  return { ok: true, changed: done.written, content: done.after };
+  const wrote = done.written ? await logLanded(q, [{ by, action: "site_content_publish_undone", detail: logged(changedBetween(done.before.published, done.after.published)) }]) : true;
+  return { ok: true, changed: done.written, content: done.after, logged: wrote };
 }
 
-export type ResetResult = { ok: true; changed: boolean; content: StoredContent } | { ok: false; reason: "changed" | "busy" };
+export type ResetResult = { ok: true; changed: boolean; content: StoredContent; logged: boolean } | { ok: false; reason: "changed" | "busy" };
 
 /**
  * "Reset all to the release" (plan R21, AE10): the site shows the release as it is, with none of its own edits. In
@@ -534,6 +566,6 @@ export async function resetToRelease(q: Query, by: string, seen: { draft: Overla
   });
   if (done === "busy") return { ok: false, reason: "busy" };
   if (moved) return { ok: false, reason: "changed" };
-  if (done.written) await logAdminAction(q, { by, action: "site_content_reset_to_release", detail: logged(changedBetween(done.before.published, done.after.published)) });
-  return { ok: true, changed: done.written, content: done.after };
+  const wrote = done.written ? await logLanded(q, [{ by, action: "site_content_reset_to_release", detail: logged(changedBetween(done.before.published, done.after.published)) }]) : true;
+  return { ok: true, changed: done.written, content: done.after, logged: wrote };
 }

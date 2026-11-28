@@ -75,11 +75,16 @@ built-in text for that one render.
 - In a `"use cache"` function, return only what is true. Anything that stands in for a failure (an empty list,
   a default) is returned from outside the cached scope.
 - "No database configured" is a true answer and may stay inside. "The database did not answer" is not.
-- A test can hold the shape: the cached function's body has no `catch`
-  (`src/app/admin/questions/actions.test.ts`).
+- A test can hold the shape: the cached function's body has no `catch` (`src/lib/site/content/read.test.ts` for
+  the site's words, `src/lib/settings.test.ts` for the admin's settings). The questions reader above, and its
+  test, went with the Edit Questions screen.
 
-## Still to do
+## Done since, and still to do
 
-`clearedTestimonials` in `src/lib/site/testimonials.ts` has the same shape (catch inside the cached function,
-one hour). A failed read there removes the testimonials section for up to an hour. It was left as it is because
-it was not part of the change under review.
+- November 27, 2026 (admin-cms plan, U11): `getSettings` in `src/lib/settings.ts` had the same shape, read by the
+  root layout of every page. Its cached part now throws and `getSettings` catches around it. It also reads only its
+  own keys: `r.key in defaults` matched `toString` and the other names every object inherits, so a row by such a
+  name would have been copied into the settings.
+- November 27, 2026 (U11 review): `clearedTestimonials` in `src/lib/site/testimonials.ts` had the same shape (one
+  hour), so a failed read removed the homepage's testimonials section for up to an hour. Its cached part now throws
+  and `getTestimonials` catches around it; `src/lib/site/testimonials.test.ts` holds the shape.

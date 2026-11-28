@@ -165,6 +165,41 @@ describe("a newer request", () => {
     expect(await consumeToken(q, firstConfirm)).toBeNull();
     expect(await emailOf(ana.id)).toBe("ana@example.com");
   });
+
+  // Two requests in the same millisecond were ordered by their random hashes, so the earlier one survived about
+  // half the time (the two tests above failed about one run in three). The later request must always win.
+  it("is newer than an earlier request made in the same millisecond, every time", async () => {
+    const now = new Date("2026-11-27T12:00:00.000Z");
+    const at = deps({ now });
+    for (let i = 0; i < 12; i++) {
+      await requestEmailChange(q, ana, `first${i}@example.com`, at);
+      const approval = await consumeToken(q, lastLinkTo("ana@example.com"), now);
+      expect(await approveEmailChange(q, approval!, at)).toBe("sent");
+      const firstConfirm = lastLinkTo(`first${i}@example.com`);
+      await requestEmailChange(q, ana, `second${i}@example.com`, at);
+      const secondApproval = lastLinkTo("ana@example.com");
+      await q(`update login_tokens set revoked_at = null`);
+      expect(await consumeToken(q, firstConfirm, now), `round ${i}`).toBeNull();
+      expect((await consumeToken(q, secondApproval, now))?.data, `round ${i}`).toMatchObject({ to: `second${i}@example.com` });
+    }
+  });
+
+  it("moves only the time of an email-change link made in the same instant as another, never a sign-in link's", async () => {
+    const now = new Date("2026-11-27T12:00:00.000Z");
+    const earlier = new Date("2026-11-27T11:00:00.000Z");
+    await requestEmailChange(q, ana, "first@example.com", deps({ now }));
+    await requestEmailChange(q, ana, "second@example.com", deps({ now }));
+    // A sign-in link for the same account, made at an earlier time than both, keeps the time it was given.
+    await issueToken(q, { email: "ana@example.com", purpose: "signin", userId: ana.id }, earlier);
+    await issueToken(q, { email: "ana@example.com", purpose: "signin", userId: ana.id }, earlier);
+    const rows = await q<{ purpose: string; at: string }>(`select purpose, to_char(created_at at time zone 'UTC', 'HH24:MI:SS.US') as at from login_tokens order by created_at, purpose`);
+    expect(rows).toEqual([
+      { purpose: "signin", at: "11:00:00.000000" },
+      { purpose: "signin", at: "11:00:00.000000" },
+      { purpose: "email_approve", at: "12:00:00.000000" },
+      { purpose: "email_approve", at: "12:00:00.000001" },
+    ]);
+  });
 });
 
 describe("userForToken", () => {

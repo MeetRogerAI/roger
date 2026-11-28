@@ -125,10 +125,9 @@ const exported = (own: Overlay, released: Overlay) => {
 /**
  * Texts that are not in a page's first markup and still show: what a control says once pressed (a loop's "Play"),
  * the card's row for a playbook with no numbered parts, and an example's short title, which travels with the first
- * example when only How it works shows it (shownElsewhere in ./export.ts). `priceBlock.sub` is printed by no page
- * today (an editable field the price block does not show).
+ * example when only How it works shows it (shownElsewhere in ./export.ts).
  */
-const later = [/^examples\.[^.]+\.label$/, /^home\.(compounds\.loop|hero\.graphic)\.play$/, /^sample\.playbook\.(whole|steps)$/, /^priceBlock\.sub$/];
+const later = [/^examples\.[^.]+\.label$/, /^home\.(compounds\.loop|hero\.graphic)\.play$/, /^sample\.playbook\.(whole|steps)$/];
 
 /**
  * The release of `own` on `released`: (1) a fresh site on it prints what this site prints, page for page; (2) it

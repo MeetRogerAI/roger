@@ -37,16 +37,28 @@ export const defaultSettings: Settings = {
   companyTermsConfirmed: flags.companyTermsConfirmed,
 };
 
-export async function getSettings(): Promise<Settings> {
+const settingKeys = Object.keys(defaultSettings);
+
+/**
+ * Throws when the database does not answer: a call that throws stores nothing, so the next render asks again. The
+ * fallback is given by `getSettings`, outside the cached scope
+ * (docs/solutions/runtime-errors/catch-inside-use-cache-stores-the-fallback-2026-11-27.md).
+ */
+async function cachedSettings(): Promise<Settings> {
   "use cache";
   cacheLife({ stale: 60, revalidate: 300, expire: 86400 });
   cacheTag("settings");
   if (!hasDb()) return defaultSettings;
+  // Only this reader's own keys: the table also holds the site's content row and the v3 settings.
+  const rows = (await sql`select key, value from settings where key = any(${settingKeys})`) as { key: keyof Settings; value: unknown }[];
+  const out = { ...defaultSettings } as Record<string, unknown>;
+  for (const r of rows) if (r.key in defaultSettings) out[r.key] = r.value;
+  return out as Settings;
+}
+
+export async function getSettings(): Promise<Settings> {
   try {
-    const rows = (await sql`select key, value from settings`) as { key: keyof Settings; value: unknown }[];
-    const out = { ...defaultSettings } as Record<string, unknown>;
-    for (const r of rows) if (r.key in defaultSettings) out[r.key] = r.value;
-    return out as Settings;
+    return await cachedSettings();
   } catch {
     return defaultSettings;
   }

@@ -218,12 +218,18 @@ describe("review follow-ups (11c)", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("never rewrites the public sample play an admin read", async () => {
+  // The Sample idea screen is gone (plan U2) and nothing can clear the flag, so it no longer holds a play's text still.
+  it("rewrites a play still flagged as the old public sample like any other", async () => {
     await runCoraJob(query, deps(), { now: ONE_AM, settings: live });
     await query("update pool_plays set is_public_sample = true, title = 'Checked by an admin' where title = 'Calendar prep'");
+    await query("update pool_plays set title = 'Edited by hand' where title = 'Follow-up drafts'");
+    // A play with no shareable evidence (the setup script's fixture sample) has nothing to be rewritten from: left as it is.
+    await query("insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('Fixture play', 'Sales', 'd', 'p', 'i', '2026-11-30', '2026-11-30')");
     await query("delete from cora_weeks");
     await runCoraJob(query, deps(), { now: ONE_AM, settings: live });
-    expect(await query("select title from pool_plays where is_public_sample")).toEqual([{ title: "Checked by an admin" }]);
+    expect(await query("select title from pool_plays where is_public_sample")).toEqual([{ title: "Calendar prep" }]);
+    expect(await query("select 1 from pool_plays where title = 'Follow-up drafts'")).toHaveLength(1);
+    expect(await query("select description, playbook_md from pool_plays where title = 'Fixture play'")).toEqual([{ description: "d", playbook_md: "p" }]);
   });
 
   it("records 'by choice' for a monthly member who doesn't share", async () => {
