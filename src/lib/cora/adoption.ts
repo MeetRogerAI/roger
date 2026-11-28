@@ -10,7 +10,9 @@ import type { Query } from "@/lib/db-query";
  * db/schema.sql). The member's agent notes it in its "Roger Upgrade Notes",
  * and Zack's profile reports it back in `past_ideas[].idea_id`. Each entry is
  * matched to the member's own delivered picks from the last 8 weeks: by that
- * ID first, then by the exact normalised title.
+ * ID first, then by the exact normalised title. An upgrade (`picks.kind =
+ * 'upgrade'`) shares its title with something the member already runs, so it
+ * is matched only by its exact ID, never by title.
  */
 
 /** "R-" and 8 characters of the RFC 4648 base32 alphabet (db/schema.sql roger_idea_code()). */
@@ -75,9 +77,13 @@ export function readPastIdeas(parsed: unknown): Entry[] {
   return out;
 }
 
-type Candidate = { week_of: string; position: number; idea_code: string; title: string };
+type Candidate = { week_of: string; position: number; idea_code: string; title: string; kind?: string };
 
-/** Which of the member's picks each entry names, and the highest level it reached. An ID that names none of them falls back to the title. */
+/**
+ * Which of the member's picks each entry names, and the highest level it
+ * reached. An ID that names none of them falls back to the title, which never
+ * matches an upgrade.
+ */
 export function matchPicks(entries: Entry[], picks: Candidate[]): Map<string, { week_of: string; position: number; level: Level }> {
   const out = new Map<string, { week_of: string; position: number; level: Level }>();
   const put = (p: Candidate, level: Level) => {
@@ -89,7 +95,7 @@ export function matchPicks(entries: Entry[], picks: Candidate[]): Map<string, { 
   const newest = [...picks].sort((a, b) => (a.week_of < b.week_of ? 1 : a.week_of > b.week_of ? -1 : a.position - b.position));
   for (const e of entries) {
     const byCode = e.code ? newest.find((p) => p.idea_code === e.code) : undefined;
-    const hit = byCode ?? (e.title ? newest.find((p) => normaliseTitle(p.title) === e.title) : undefined);
+    const hit = byCode ?? (e.title ? newest.find((p) => p.kind !== "upgrade" && normaliseTitle(p.title) === e.title) : undefined);
     if (hit) put(hit, e.level);
   }
   return out;
@@ -114,7 +120,7 @@ export async function recordAdoption(q: Query, profileId: string, now: Date = ne
   const entries = readPastIdeas(p.parsed);
   if (!entries.length) return 0;
   const picks = await q<Candidate>(
-    `select to_char(k.week_of, 'YYYY-MM-DD') as week_of, k.position, k.idea_code, pp.title
+    `select to_char(k.week_of, 'YYYY-MM-DD') as week_of, k.position, k.idea_code, pp.title, k.kind
      from picks k join pool_plays pp on pp.id = k.pool_play_id
      where k.user_id = $1 and not k.dry_run and k.delivered_at is not null and k.delivered_at <= $3::timestamptz
        and k.week_of <= $2::date and k.week_of >= $2::date - ${ADOPTION_WEEKS * 7}`,

@@ -752,9 +752,10 @@ export type SyncResult = { status: "synced" | "skipped"; note?: string; checked:
  * edited_before_merge, pending supersede closes retried, and the head
  * branches of merged and closed PRs deleted (a 404 or 422 counts as
  * deleted; a failure is retried next time). Live only: a dry run has no
- * PRs to sync.
+ * PRs to sync. With a `deadline` (epoch ms), it stops between PRs once it
+ * has passed; the rest wait for the next sync.
  */
-export async function syncPullRequests(q: Query, gh: ReviewGitHub, o: { clock?: () => Date; closePendingOnly?: boolean } = {}): Promise<SyncResult> {
+export async function syncPullRequests(q: Query, gh: ReviewGitHub, o: { clock?: () => Date; closePendingOnly?: boolean; deadline?: number } = {}): Promise<SyncResult> {
   const out: SyncResult = { status: "synced", checked: 0, merged: 0, closed: 0, superseded: 0, errors: 0 };
   if (!gh.live) return { ...out, status: "skipped", note: `Dry run (${gh.why}): there are no pull requests to sync.` };
   const clock = o.clock ?? (() => new Date());
@@ -765,6 +766,10 @@ export async function syncPullRequests(q: Query, gh: ReviewGitHub, o: { clock?: 
      order by created_at`,
   );
   for (const a of rows) {
+    if (o.deadline !== undefined && Date.now() >= o.deadline) {
+      out.note = "Out of time: the rest wait for the next sync.";
+      break;
+    }
     out.checked++;
     try {
       const s = await syncOne(q, gh.gw, a, clock);
@@ -790,7 +795,7 @@ export const PR_SYNC_LEASE_SECONDS = 120;
  * long model call never holds it up). Live only: otherwise skipped with no
  * lease taken. Busy: skipped, the next tick tries again.
  */
-export async function syncPullRequestsLeased(q: Query, gh: ReviewGitHub, o: { clock?: () => Date; holder?: string } = {}): Promise<SyncResult> {
+export async function syncPullRequestsLeased(q: Query, gh: ReviewGitHub, o: { clock?: () => Date; holder?: string; deadline?: number } = {}): Promise<SyncResult> {
   if (!gh.live) return syncPullRequests(q, gh, o);
   const holder = o.holder ?? `pr-sync-${randomUUID()}`;
   if (!(await takeLease(q, PR_SYNC_LEASE, holder, PR_SYNC_LEASE_SECONDS))) {

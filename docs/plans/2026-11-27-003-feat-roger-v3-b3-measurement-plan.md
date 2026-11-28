@@ -255,7 +255,7 @@ All weeks are Toronto weeks (Monday 00:00 to the next Monday 00:00, `America/Tor
 | **Cycle time**, by week of first list | for each referred member with `fl(u)` in W: `days = extract(epoch from fl(u) - referral.created_at) / 86400`, to 1 decimal. Per W, and per W and `gen(u)`: n, median (`percentile_cont(0.5)`) and mean. Also "waiting": referred members with no first list, and the age of the oldest. |
 | **Paid referral rate**, at end(W) | numerator: non-void referrals with `paying_at < end(W)` whose referred member isn't sponsored. Denominator: members with `first_charge_at < end(W)` and `(ae(u) is null or ae(u) > end(W))`. |
 | **December 14 checkpoint** | k pooled over the three Toronto weeks starting 2026-11-23, 2026-11-30 and 2026-12-07: Σ numerators ÷ Σ denominators. Shown against the floor 0.25 as "below the floor" or "at or above the floor", with "in progress, n of 3 weeks" before December 14, and "no data" when every denominator is 0. The dates and floor are one constant in `src/data/config.ts`. From December 14 the value is read from its one-time snapshot (`measure_snapshots`, key `checkpoint-2026-12-14`), shown with "frozen on {date}". |
-| **Adoption**, per list week W | sent: picks with `week_of = W`, `delivered_at` not null, `not dry_run`, to members. Marked: `setup_marked_at` not null. Confirmed: `setup_confirmed_at` not null. Adopted: marked or confirmed. Overall rate: adopted ÷ sent. Per-member: the share of members with at least 1 sent whose adopted ÷ sent ≥ 2/3. Both shown against the 2-of-3 target. From Unit 11: installed and used (from the next profile) as two more columns. |
+| **Adoption**, per list week W | sent: picks with `week_of = W`, `kind = 'new'` (upgrades left out; whole-branch review fixes), `delivered_at` not null, `not dry_run`, to members. Marked: `setup_marked_at` not null. Confirmed: `setup_confirmed_at` not null. Adopted: marked or confirmed. Overall rate: adopted ÷ sent. Per-member: the share of members with at least 1 sent whose adopted ÷ sent ≥ 2/3. Both shown against the 2-of-3 target. From Unit 11: installed and used (from the next profile) as two more columns. |
 
 ## Open Questions
 
@@ -1101,10 +1101,19 @@ Tests: `src/lib/cora/upgrade.test.ts` (15: templates, scrub, candidates, choice,
 - **Wording sign-off:** section 14 retitled "B3 wording (notes, idea ID, upgrades, privacy page)" and split into 14.1 to 14.5: the note box, the idea ID line, upgrades, newly drafted privacy page sentences, and admin-only strings for reference. Every member string is pending; the flags are kept, with the privacy sentences added.
 - **Stacked PR:** the B3 PR targets `feat/v3-b2-growth` (B2, PR #66) until B2 merges, then is rebased onto `main` and retargeted to it (origin R1). Merging waits for Peter, and the B3 schema must be applied before B3 deploys (launch list `b3-schema`).
 
+### Whole-branch review fixes (2026-11-28)
+
+- **Schema:** the `picks_user` index is gone (the primary key `(user_id, week_of, position)` already serves it); `drop index if exists picks_user` cleans previews that got it. `review_runs.manual_attempts` is added.
+- **Adoption and upgrades:** `ADOPTION_SQL` counts only `kind = 'new'` picks (sent, marked, confirmed, installed and used), so upgrades are left out of the measure. `recordAdoption` stamps an upgrade only by an exact idea ID, never by the title fallback, since an upgrade shares its title with a play the member already runs.
+- **`review_pr_sync`:** has its own slice of the hourly pass (`REVIEW_SYNC_BUDGET_MS`, 30 seconds, or the pass's deadline if sooner), passed to `syncPullRequests` as `deadline`, which stops between PRs. A slow GitHub can't use up the pass, and the Stripe reconcile after it still runs.
+- **Intake privacy:** `replaceIdeaIds` (`/\bR-[A-Z2-7]{8}\b/`, placeholder `[a Roger idea ID]`) runs on every string of a play except its own `roger_idea_id` field, before storage and the pool. A profile's `past_ideas[].idea_id` is never scrubbed.
+- **Admin actions:** `saveB3SwitchesAction` returns a fixed "Not saved. Try again." and logs only the error's name. `rejectProposalAction` and `addFeedbackReplyAction` share the `admin-job:{admin}` rate limit. Run now counts its own model attempts (`manual_attempts`, also counted in `model_attempts`) and is capped at `MAX_MANUAL_ATTEMPTS` (5) a review week, besides the schedule's 3. Its message says how many it has used, and once the cap is reached it says "Run now has used its 5 model attempts for this review week. The next review week opens on Monday." This changes "Built as recommended" 2.
+- **Docs:** README and `.env.example` list `ADMIN_EMAILS`, `GITHUB_REVIEW_TOKEN`, `GITHUB_READ_TOKEN`, `REVIEW_BOT_MODEL`, `CORA_UPGRADE_MODEL` and point to `tests/scenarios/README.md`. Wording sign-off 14.5 quotes the user page's Admin log line and the "Who read this member’s data" section. On the launch list, `b3-schema` gains the lock and preview-rebuild notes, and `b3-confirmations` gains 11 to 14 (upgrades and adoption, notes read after `v3.feedbackOn` is off, the Run now cap, `/admin/pipeline` not in the read log). Three learnings were added in `docs/solutions/`: the fail-closed read log, model edits for a public repo, and the freeze-once snapshot.
+
 ## Built as recommended — for Peter to confirm
 
 1. **The review bot's model** is `anthropic/claude-opus-5.5` (AI Gateway), with no tools. It runs once a week.
-2. **The schedule** is Fridays, 14:15 to 16:45 UTC (`15,45 14-16 * * 5`), once per review week, with "Run now" for admins At most 3 model attempts a week on the schedule, then an alert; Run now has no attempt limit but respects the switch (Unit 8).
+2. **The schedule** is Fridays, 14:15 to 16:45 UTC (`15,45 14-16 * * 5`), once per review week, with "Run now" for admins At most 3 model attempts a week on the schedule, then an alert; Run now respects the switch and has its own limit of 5 model attempts a week (Unit 8; whole-branch review fixes).
 3. **What "onboarded" means for k:** the member finished sign-up that week. The alternative is "got their first list".
 4. **What "active at the start of the week" means:** signed up before the week and access not ended. Held and no-card trial members count.
 5. **Generation:** an account nobody referred is generation 0 (a "champion"). A referral whose referrer was deleted counts as generation 1.
@@ -1124,7 +1133,7 @@ Tests: `src/lib/cora/upgrade.test.ts` (15: templates, scrub, candidates, choice,
 19. **One proposal may span the four Zack ports**, as one PR with one commit.
 20. **Instruction version** is the git blob SHA of the LF-normalised file. A run takes the version of the fetch within 48 hours, otherwise the deployed version (marked).
 21. **Admin read logging** has no deduplication and is fail-closed.
-22. **Change 15** adds a "Roger idea ID" line to each idea's copied text, and matches by ID, then by title, over 8 weeks.
+22. **Change 15** adds a "Roger idea ID" line to each idea's copied text, and matches by ID, then by title, over 8 weeks. An upgrade matches by ID only, and upgrades are left out of the adoption measure (whole-branch review fixes).
 23. **Change 11** is built behind `v3.coraUpgradesOn` (off): at most one upgrade per list, and the What's better line comes from fixed templates.
 24. **`leads.first_seen_at`** is added. Existing leads' first touch is their last re-save date, which can't be recovered.
 25. **Superseding** closes an older PR only when the newer proposal covers all of its files. Partial overlaps are shown and both PRs stay open.

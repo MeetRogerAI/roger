@@ -1137,6 +1137,11 @@ create table if not exists review_runs (
 -- week (no evidence) is claimed again without counting. "Run now" ignores
 -- the limit. attempts stays the claim's token and counts every claim.
 alter table review_runs add column if not exists model_attempts int not null default 0;
+-- manual_attempts counts the "Run now" claims that reached the model call
+-- (each also counted in model_attempts). Run now claims only while it is
+-- under 5 (whole-branch review), so a shared-password admin can't loop
+-- model calls.
+alter table review_runs add column if not exists manual_attempts int not null default 0;
 
 -- measure_snapshots: a measure frozen once (the December 14 checkpoint, key
 -- checkpoint-2026-12-14). Written with on conflict do nothing and never
@@ -1242,5 +1247,5 @@ alter table picks add column if not exists idea_code text not null default roger
 -- already runs, and its What's better line. Unused while v3.coraUpgradesOn is off.
 alter table picks add column if not exists kind text not null default 'new' check (kind in ('new', 'upgrade'));
 alter table picks add column if not exists whats_better text;
--- picks by member (B3 Unit 4 review): the pipeline and measures look up each member's first list.
-create index if not exists picks_user on picks (user_id);
+-- An earlier B3 draft added picks_user; the primary key (user_id, week_of, position) already serves it.
+drop index if exists picks_user;

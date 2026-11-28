@@ -44,7 +44,10 @@ import { type Discarded, REVIEW_LEASE_SECONDS, runReview } from "./propose";
  * - Attempts: a scheduled tick claims a failed (or abandoned) week only while
  *   it has reached the model fewer than MAX_MODEL_ATTEMPTS times; the attempt
  *   that uses up the last one alerts the admins, and the schedule stops until
- *   next Friday's week or a "Run now", which has no limit. A skipped week (no
+ *   next Friday's week or a "Run now". Run now's own model attempts are
+ *   counted too (manual_attempts, also in model_attempts) and capped at
+ *   MAX_MANUAL_ATTEMPTS a review week (whole-branch review), so a
+ *   shared-password admin can't loop model calls. A skipped week (no
  *   evidence) is claimed again on the next tick, and those re-checks are not
  *   model attempts.
  * - Alerts, each once per week: `review_ready` when proposals were stored
@@ -68,6 +71,8 @@ import { type Discarded, REVIEW_LEASE_SECONDS, runReview } from "./propose";
  */
 export const REVIEW_LEASE = "review-bot";
 export const MAX_MODEL_ATTEMPTS = 3;
+/** Run now's own cap on model attempts per review week, besides the schedule's MAX_MODEL_ATTEMPTS. */
+export const MAX_MANUAL_ATTEMPTS = 5;
 /** The Friday window's first and last scheduled ticks (`15,45 14-16 * * 5`), in UTC minutes after midnight. */
 export const FIRST_TICK_UTC = 14 * 60 + 15;
 export const LAST_TICK_UTC = 16 * 60 + 45;
@@ -100,15 +105,17 @@ export type ReviewJobResult = {
   stored?: number;
   discarded?: Discarded;
   modelAttempts?: number;
+  /** Run now's model attempts this review week (of MAX_MANUAL_ATTEMPTS). */
+  manualAttempts?: number;
   alerted?: string[];
   /** The PR status sync's outcome, when `github` was given. */
   prSync?: SyncResult;
 };
 
-type RunRow = { status: string; model_attempts: number; started_at: string | Date };
+type RunRow = { status: string; model_attempts: number; manual_attempts: number; started_at: string | Date };
 
 async function runRow(q: Query, week: string): Promise<RunRow | null> {
-  const [r] = await q<RunRow>(`select status, model_attempts, started_at from review_runs where week_of = $1::date`, [week]);
+  const [r] = await q<RunRow>(`select status, model_attempts, manual_attempts, started_at from review_runs where week_of = $1::date`, [week]);
   return r ?? null;
 }
 
@@ -122,8 +129,11 @@ const mailOf = (d: ReviewJobDeps): MailDeps => ({ query: d.query, transport: d.t
 const abandoned = (r: RunRow, now: Date) => r.status === "running" && now.getTime() - new Date(r.started_at).getTime() >= REVIEW_LEASE_SECONDS * 1000;
 
 /** Why a week was not claimed, from its row. */
-function notClaimedNote(r: RunRow | null): string {
+function notClaimedNote(r: RunRow | null, trigger: ReviewTrigger): string {
   if (r?.status === "done") return "This week's review is done.";
+  if (trigger === "manual" && r && r.manual_attempts >= MAX_MANUAL_ATTEMPTS && r.status !== "running") {
+    return `Run now has used its ${MAX_MANUAL_ATTEMPTS} model attempts for this review week. The next review week opens on Monday.`;
+  }
   if (r && r.model_attempts >= MAX_MODEL_ATTEMPTS && r.status !== "running") {
     return `This week's review used its ${MAX_MODEL_ATTEMPTS} model attempts. Press Run now on /admin/review to try again.`;
   }
@@ -258,21 +268,29 @@ async function runReviewJobInner(q: Query, d: ReviewJobDeps): Promise<ReviewJobR
 
   let result: ReviewJobResult;
   try {
-    const r = await runReview(q, { now, model: d.model, holder, admins, maxModelAttempts: trigger === "schedule" ? MAX_MODEL_ATTEMPTS : null });
+    const r = await runReview(q, {
+      now,
+      model: d.model,
+      holder,
+      admins,
+      maxModelAttempts: trigger === "schedule" ? MAX_MODEL_ATTEMPTS : null,
+      maxManualAttempts: trigger === "manual" ? MAX_MANUAL_ATTEMPTS : null,
+    });
     const row = await runRow(q, week);
     const modelAttempts = row?.model_attempts ?? 0;
+    const counts = trigger === "manual" ? { modelAttempts, manualAttempts: row?.manual_attempts ?? 0 } : { modelAttempts };
     if (r.status === "done") {
-      result = { week, status: "done", evidence: r.evidence, stored: r.stored, discarded: r.discarded, modelAttempts };
+      result = { week, status: "done", evidence: r.evidence, stored: r.stored, discarded: r.discarded, ...counts };
       if (r.stored > 0 && (await alertReady(d, week, r.proposals))) alerted.push("review_ready");
     } else if (r.status === "skipped") {
-      result = { week, status: "no_evidence", note: "No runs, picks or feedback this week: nothing to review. The next tick looks again.", modelAttempts };
+      result = { week, status: "no_evidence", note: "No runs, picks or feedback this week: nothing to review. The next tick looks again.", ...counts };
     } else if (r.status === "failed") {
-      result = { week, status: "failed", note: r.error, modelAttempts };
+      result = { week, status: "failed", note: r.error, ...counts };
       if (trigger === "schedule" && modelAttempts >= MAX_MODEL_ATTEMPTS) {
         if (await alertFailed(d, week, `the model call failed ${modelAttempts} times. The schedule stops until next Friday.`)) alerted.push("review_failed");
       }
     } else {
-      result = { week, status: "not_claimed", note: notClaimedNote(row), modelAttempts };
+      result = { week, status: "not_claimed", note: notClaimedNote(row, trigger), ...counts };
     }
   } catch (e) {
     // runReview has marked the run failed. Count it toward the limit, then report.

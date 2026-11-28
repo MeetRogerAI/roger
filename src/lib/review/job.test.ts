@@ -7,7 +7,7 @@ import { fakeReviewModel } from "@/test-helpers/fake-review-model";
 import { testDb } from "@/test-helpers/pglite-db";
 import { member, note, run, WEEK } from "@/test-helpers/review-fixtures";
 import { reviewWeek } from "./evidence";
-import { MAX_MODEL_ATTEMPTS, REVIEW_LEASE, runReviewJob, type ReviewJobDeps } from "./job";
+import { MAX_MANUAL_ATTEMPTS, MAX_MODEL_ATTEMPTS, REVIEW_LEASE, runReviewJob, type ReviewJobDeps } from "./job";
 import type { ModelProposal } from "./model";
 import { readInstructionFiles, runReview } from "./propose";
 
@@ -318,6 +318,19 @@ describe("runReviewJob: Run now", () => {
   it("runs outside the Friday window", async () => {
     await seedWeek();
     expect(await job(tick("10:00", "2026-11-30"), fakeReviewModel([clean()]), { trigger: "manual" })).toMatchObject({ status: "done", week: "2026-11-30" });
+  });
+
+  it(`is capped at ${MAX_MANUAL_ATTEMPTS} model attempts a review week, counted apart from the schedule's ${MAX_MODEL_ATTEMPTS} (whole-branch review)`, async () => {
+    await seedWeek();
+    const failing = fakeReviewModel(new Error("timed out"));
+    for (let i = 1; i <= MAX_MANUAL_ATTEMPTS; i++) {
+      expect(await job(tick("18:00"), failing, { trigger: "manual" })).toMatchObject({ status: "failed", manualAttempts: i });
+    }
+    const sixth = await job(tick("18:00"), failing, { trigger: "manual" });
+    expect(sixth).toMatchObject({ status: "not_claimed", manualAttempts: MAX_MANUAL_ATTEMPTS });
+    expect(sixth.note).toBe(`Run now has used its ${MAX_MANUAL_ATTEMPTS} model attempts for this review week. The next review week opens on Monday.`);
+    expect(failing.calls).toHaveLength(MAX_MANUAL_ATTEMPTS);
+    expect(await q(`select model_attempts, manual_attempts from review_runs where week_of = $1::date`, [WEEK])).toEqual([{ model_attempts: 5, manual_attempts: 5 }]);
   });
 
   it("does nothing with the switch off", async () => {

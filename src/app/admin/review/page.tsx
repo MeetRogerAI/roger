@@ -10,7 +10,7 @@ import { beforeAfter, type BeforeAfter, type FileBeforeAfter, TOO_FEW, WEEKS_EAC
 import { reviewWeek } from "@/lib/review/evidence";
 import { EVIDENCE_GONE, resolveEvidence, type EvidenceShown, type StoredEvidence } from "@/lib/review/evidence-view";
 import { reviewGitHub, reviewSyncGitHub } from "@/lib/review/github";
-import { MAX_MODEL_ATTEMPTS } from "@/lib/review/job";
+import { MAX_MANUAL_ATTEMPTS, MAX_MODEL_ATTEMPTS } from "@/lib/review/job";
 import { readInstructionFiles } from "@/lib/review/propose";
 import { readV3Settings } from "@/lib/v3-settings";
 import { isRepoPullUrl } from "@/lib/review/pr-url";
@@ -184,7 +184,7 @@ export default async function ReviewPage({ searchParams }: PageProps<"/admin/rev
           </p>
           <p className={meta}>
             Review week of {week}. The bot is {settings.reviewBotOn ? "on" : "off (v3.reviewBotOn): neither the Friday run nor Run now does anything"}. It runs on Fridays, 14:15 to 16:45 UTC, once a week;
-            the schedule stops after {MAX_MODEL_ATTEMPTS} failed model attempts. Run now runs this week at once, with no attempt limit, unless it is already done. Refresh from GitHub records merged and closed
+            the schedule stops after {MAX_MODEL_ATTEMPTS} failed model attempts. Run now runs this week at once, up to {MAX_MANUAL_ATTEMPTS} model attempts a week of its own, unless it is already done. Refresh from GitHub records merged and closed
             pull requests{sync.live ? "" : `, and does nothing here (${sync.why})`}.
           </p>
           <div className="flex flex-wrap items-center gap-3">

@@ -341,4 +341,35 @@ describe("review_pr_sync (B3 Unit 9 review fixes)", () => {
     expect(gh.calls).toEqual([]);
     expect((await query<{ status: string }>(`select status from review_proposals`))[0].status).toBe("pr_open");
   });
+
+  it("has its own time slice: a slow GitHub stops between PRs, and the Stripe reconcile after it still runs (whole-branch review)", async () => {
+    for (let n = 101; n <= 106; n++)
+      await query(
+        `insert into review_proposals (public_id, review_week, paths, status, pr_number, branch, result_versions) values ($1, '2026-11-23', array['README.md'], 'pr_open', $2, $3, '{}'::jsonb)`,
+        [`abcdefgh${n - 100}x`.slice(0, 10), n, `review-bot/pr${n}`],
+      );
+    // Each PR read takes 20 seconds of (simulated) time.
+    const real = Date.now.bind(Date);
+    let offset = 0;
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => real() + offset);
+    const reads: number[] = [];
+    const gw = {
+      getPull: async (n: number) => {
+        reads.push(n);
+        offset += 20_000;
+        return { number: n, state: "open", merged_at: null, closed_at: null };
+      },
+    };
+    try {
+      const reconcile: HourlyTask = { name: "reconcile_stripe", run: async () => "ran" };
+      const d = { gw: {} as BillingGateway, settings, now: NOW, query, transport, reviewGitHub: { live: true as const, gw: gw as never } };
+      const out = await runHourly(query, d, [task(), reconcile], { deadline: Date.now() + 90_000 });
+      // 30 seconds: two reads (0 s and 20 s start under it), then it stops; six would have taken 120 s, past the pass.
+      expect(reads).toEqual([101, 102]);
+      expect(out.review_pr_sync).toMatchObject({ status: "synced", checked: 2 });
+      expect(out.reconcile_stripe).toBe("ran");
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

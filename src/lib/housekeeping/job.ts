@@ -83,6 +83,9 @@ export const hourlyCredits = (d: HourlyDeps): CreditGateway | null => (d.credits
  * of failing rows then costs at most this much, and the tasks after them (cancellations, renewals, reconcile) still run.
  */
 export const CREDIT_BUDGET_MS = 60_000;
+
+/** The review bot's PR sync (review_pr_sync) gets at most this much of a pass. */
+export const REVIEW_SYNC_BUDGET_MS = 30_000;
 const creditBudgets = new WeakMap<PassContext, number>();
 export function creditDeadline(c: PassContext): number {
   let at = creditBudgets.get(c);
@@ -235,10 +238,12 @@ export const HOURLY_TASKS: HourlyTask[] = [
   // so it never overlaps a cron tick's sync or "Refresh from GitHub". Before the long Stripe reconcile.
   {
     name: "review_pr_sync",
-    run: async (q, d) => {
+    run: async (q, d, c) => {
       const gh = d.reviewGitHub ?? reviewSyncGitHub();
       if (!gh.live) return `skipped: ${gh.why}`;
-      return syncPullRequestsLeased(q, gh, { clock: () => new Date(Math.min(d.now.getTime(), Date.now())) });
+      // Its own slice of the pass (whole-branch review): a slow GitHub stops it between PRs, so the reconcile after it still runs.
+      const deadline = Math.min(c.deadline, Date.now() + REVIEW_SYNC_BUDGET_MS);
+      return syncPullRequestsLeased(q, gh, { clock: () => new Date(Math.min(d.now.getTime(), Date.now())), deadline });
     },
   },
   // Unit 18. A daily pass, started once the last finished over 24 hours ago and carried on hourly until done: Stripe

@@ -72,6 +72,7 @@ export async function addFeedbackReplyAction(_p: V3State, fd: FormData): Promise
   const by = await requireAdmin();
   const userId = idOf(fd, "userId");
   if (!userId) return bad("No such user.");
+  if (await limited(by)) return bad("Too many actions in a minute. Wait a moment.");
   const body = typeof fd.get("body") === "string" ? String(fd.get("body")).slice(0, 20_000) : "";
   const r = await addReply(query, by, userId, { receivedOn: field(fd, "receivedOn", 10), body });
   if (r.ok) refresh();
@@ -424,7 +425,9 @@ export async function saveB3SwitchesAction(_p: V3State, fd: FormData): Promise<V
   try {
     await saveV3Settings(patch);
   } catch (e) {
-    return bad(`Not saved: ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`);
+    // The error's text can hold settings or database detail: only its name is logged, and the message is fixed.
+    console.error("[admin] B3 switches not saved", e instanceof Error ? e.name : "Error");
+    return bad("Not saved. Try again.");
   }
   await logAdminAction(query, { by, action: "v3_switches_saved", detail: patch });
   updateTag("settings");

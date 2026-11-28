@@ -106,6 +106,17 @@ describe("Run now (runReviewNowAction)", () => {
     expect(await runReviewNowAction()).toMatchObject({ status: "error" });
     expect(calls).toEqual([]);
   });
+
+  it("says how many of Run now's 5 model attempts this week are used (whole-branch review)", async () => {
+    admin = "peter@example.com";
+    answer = { week: "2026-11-23", status: "failed", note: "ModelCutOff: the review model call failed", modelAttempts: 4, manualAttempts: 2 };
+    expect(await runReviewNowAction()).toMatchObject({
+      status: "error",
+      message: "Week of 2026-11-23: the run failed (ModelCutOff: the review model call failed). Run now has used 2 of its 5 model attempts this week.",
+    });
+    answer = { week: "2026-11-23", status: "done", stored: 1, evidence: 3, modelAttempts: 1, manualAttempts: 1 };
+    expect((await runReviewNowAction()).message).toBe("Week of 2026-11-23: 1 proposal stored from 3 evidence items. Run now has used 1 of its 5 model attempts this week.");
+  });
 });
 
 describe("approve, reject and refresh", () => {
@@ -159,6 +170,15 @@ describe("approve, reject and refresh", () => {
     allowed = false;
     expect(await approveProposalAction(idle, form({ proposal: ID }))).toMatchObject({ status: "error" });
     expect(approvals).toEqual([]);
+  });
+
+  it("reject is rate-limited, changing and logging nothing (whole-branch review)", async () => {
+    await insert();
+    admin = "ck@example.com";
+    allowed = false;
+    expect(await rejectProposalAction(idle, form({ proposal: ID, note: "x" }))).toMatchObject({ status: "error", message: "Too many actions in a minute. Wait a moment." });
+    expect((await current<{ status: string }>(`select status from review_proposals`))[0].status).toBe("pending");
+    expect(await logged()).toEqual([]);
   });
 
   it("rejects with who and when, logging the note's length, not its text", async () => {

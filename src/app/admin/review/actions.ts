@@ -9,15 +9,17 @@ import { hit } from "@/lib/rate-limit";
 import { approveProposal, type ApproveResult, rejectProposal, syncPullRequestsLeased } from "@/lib/review/approve";
 import { reviewWeek } from "@/lib/review/evidence";
 import { reviewGitHub, reviewSyncGitHub } from "@/lib/review/github";
-import { runReviewJob, type ReviewJobResult } from "@/lib/review/job";
+import { MAX_MANUAL_ATTEMPTS, runReviewJob, type ReviewJobResult } from "@/lib/review/job";
 import { gatewayReviewModel } from "@/lib/review/model";
 import { readV3Settings } from "@/lib/v3-settings";
 
 /**
  * "Run now" on /admin/review (B3 plan Unit 8): the scheduled job for the
  * current review week, now, outside the Friday window and without the
- * schedule's attempt limit. The switch, the lease and the claim still apply,
- * so a done week is not run again. Server actions are public endpoints:
+ * schedule's attempt limit, but with its own: at most MAX_MANUAL_ATTEMPTS
+ * model attempts a review week (whole-branch review), said in its message.
+ * The switch, the lease and the claim still apply, so a done week is not run
+ * again. Server actions are public endpoints:
  * requireAdmin first, and the run is logged (started, then its outcome)
  * with who pressed it. The page sets maxDuration 300 for it.
  */
@@ -26,9 +28,10 @@ const JOB_LIMIT = { limit: 10, windowSeconds: 60 };
 const bad = (message: string): V3State => ({ status: "error", message, at: Date.now() });
 
 function describe(r: ReviewJobResult): string {
-  if (r.status === "done") return `Week of ${r.week}: ${r.stored} proposal${r.stored === 1 ? "" : "s"} stored from ${r.evidence} evidence items.`;
+  const used = r.manualAttempts === undefined ? "" : ` Run now has used ${r.manualAttempts} of its ${MAX_MANUAL_ATTEMPTS} model attempts this week.`;
+  if (r.status === "done") return `Week of ${r.week}: ${r.stored} proposal${r.stored === 1 ? "" : "s"} stored from ${r.evidence} evidence items.${used}`;
   if (r.status === "no_evidence") return `Week of ${r.week}: no runs, picks or feedback yet, so nothing to review.`;
-  if (r.status === "failed") return `Week of ${r.week}: the run failed (${r.note}). Model attempts this week: ${r.modelAttempts ?? 0}.`;
+  if (r.status === "failed") return `Week of ${r.week}: the run failed (${r.note}).${used || ` Model attempts this week: ${r.modelAttempts ?? 0}.`}`;
   return `Week of ${r.week}: ${r.note ?? r.status}`;
 }
 
@@ -94,6 +97,7 @@ export async function rejectProposalAction(_p: V3State, fd: FormData): Promise<V
   const by = await requireAdmin();
   const id = idFrom(fd);
   if (!id) return bad("No such proposal.");
+  if (!(await hit(`admin-job:${by}`, JOB_LIMIT))) return bad("Too many actions in a minute. Wait a moment.");
   const note = String(fd.get("note") ?? "").slice(0, 2000);
   const r = await rejectProposal(query, id, { by, email: by !== PASSWORD_ADMIN }, note);
   const done = r.message.startsWith("Rejected");

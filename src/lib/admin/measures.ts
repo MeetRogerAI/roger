@@ -145,8 +145,10 @@ export const PAID_SQL = `with recursive ${GENERATION_SQL}, ${BASE_SQL}
   order by w.wk desc`;
 
 /**
- * Adoption per list week W (row 6). sent: members' picks with week_of = W,
- * delivered, not dry runs. Marked and confirmed as stamped; adopted is marked
+ * Adoption per list week W (row 6). sent: members' new-idea picks
+ * (`kind = 'new'`) with week_of = W, delivered, not dry runs; upgrades are
+ * left out of every count here, since they improve something the member
+ * already runs. Marked and confirmed as stamped; adopted is marked
  * or confirmed. members: members with at least one sent; membersAtTarget:
  * those whose adopted / sent is at least 2/3. installed and used (Cora change
  * 15, B3 Unit 11): picks a later profile showed installed (or used), and
@@ -163,7 +165,7 @@ export const ADOPTION_SQL = `
            count(*) filter (where p.installed_at is not null)::int as installed,
            count(*) filter (where p.used_at is not null)::int as used
     from picks p join users u on u.id = p.user_id
-    where p.week_of = any($1::date[]) and p.delivered_at is not null and not p.dry_run and lower(u.email) <> all($2::text[])
+    where p.week_of = any($1::date[]) and p.kind = 'new' and p.delivered_at is not null and not p.dry_run and lower(u.email) <> all($2::text[])
     group by p.week_of, p.user_id
   )
   select to_char(w.wk, 'YYYY-MM-DD') as week,

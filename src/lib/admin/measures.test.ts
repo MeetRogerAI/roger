@@ -219,11 +219,11 @@ describe("adoption against 2 of 3", () => {
     userId: string,
     playId: string,
     position: number,
-    o: { marked?: boolean; confirmed?: boolean; dryRun?: boolean; delivered?: boolean; installed?: boolean; used?: boolean } = {},
+    o: { marked?: boolean; confirmed?: boolean; dryRun?: boolean; delivered?: boolean; installed?: boolean; used?: boolean; upgrade?: boolean } = {},
   ) {
     await query(
-      `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, delivered_at, setup_marked_at, setup_confirmed_at, installed_at, used_at)
-       values ($1, '2026-12-07', $2, $3, 1, 1, 'r', $4, $5, $6, $7, $8, $9)`,
+      `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, delivered_at, setup_marked_at, setup_confirmed_at, installed_at, used_at, kind)
+       values ($1, '2026-12-07', $2, $3, 1, 1, 'r', $4, $5, $6, $7, $8, $9, $10)`,
       [
         userId,
         position,
@@ -234,6 +234,7 @@ describe("adoption against 2 of 3", () => {
         o.confirmed ? "2026-12-09T12:00:00Z" : null,
         o.installed || o.used ? "2026-12-12T20:00:00Z" : null,
         o.used ? "2026-12-12T20:00:00Z" : null,
+        o.upgrade ? "upgrade" : "new",
       ],
     );
   }
@@ -265,6 +266,20 @@ describe("adoption against 2 of 3", () => {
     // Installed: m1 1 and 2, m3 1 (used implies installed) = 3. Used: m1 1, m3 1 = 2.
     expect(week(m, "2026-12-07").adoption).toEqual({ sent: 9, marked: 4, confirmed: 2, adopted: 5, installed: 3, used: 2, members: 3, membersAtTarget: 2 });
     expect(week(m, "2026-11-30").adoption).toEqual({ sent: 0, marked: 0, confirmed: 0, adopted: 0, installed: 0, used: 0, members: 0, membersAtTarget: 0 });
+  });
+
+  it("leaves upgrades out: an upgrade pick, marked, confirmed, installed and used, is in no count, and a member with only an upgrade isn't a member here", async () => {
+    const p = await play();
+    const m1 = await user("m1@example.com", { signup_finished_at: "2026-11-01T15:00:00Z" });
+    await pick(m1, p, 1, { marked: true });
+    await pick(m1, p, 2);
+    await pick(m1, p, 3, { marked: true, confirmed: true, used: true, upgrade: true });
+    const m2 = await user("m2@example.com", { signup_finished_at: "2026-11-01T15:00:00Z" });
+    await pick(m2, p, 1, { marked: true, used: true, upgrade: true });
+
+    const m = await loadMeasures(query, { now: NOW });
+    // m1's two new ideas: 1 adopted of 2 sent, below 2 of 3. m2 sent no new idea.
+    expect(week(m, "2026-12-07").adoption).toEqual({ sent: 2, marked: 1, confirmed: 0, adopted: 1, installed: 0, used: 0, members: 1, membersAtTarget: 0 });
   });
 });
 

@@ -27,11 +27,16 @@ async function play(title: string): Promise<string> {
 
 type PickRow = { idea_code: string; installed_at: string | null; used_at: string | null; adoption_seen_at: string | null };
 
-async function pick(userId: string, playId: string, week: string, o: { position?: number; dryRun?: boolean; delivered?: string | null } = {}): Promise<PickRow & { week: string; position: number }> {
+async function pick(
+  userId: string,
+  playId: string,
+  week: string,
+  o: { position?: number; dryRun?: boolean; delivered?: string | null; upgrade?: boolean } = {},
+): Promise<PickRow & { week: string; position: number }> {
   const position = o.position ?? 1;
   await query(
-    `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, delivered_at) values ($1, $2, $3, $4, 70, 3, 'r', $5, $6)`,
-    [userId, week, position, playId, Boolean(o.dryRun), o.delivered === undefined ? `${week}T12:00:00Z` : o.delivered],
+    `insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason, dry_run, delivered_at, kind) values ($1, $2, $3, $4, 70, 3, 'r', $5, $6, $7)`,
+    [userId, week, position, playId, Boolean(o.dryRun), o.delivered === undefined ? `${week}T12:00:00Z` : o.delivered, o.upgrade ? "upgrade" : "new"],
   );
   return { ...(await stamps(userId, week, position)), week, position };
 }
@@ -228,6 +233,32 @@ describe("recordAdoption", () => {
     await recordAdoption(query, await profile(m, [{ idea_id: a.idea_code, status: "used this week" }]), NOW);
     await query(`delete from users where id = $1`, [m]);
     expect(await query(`select 1 from picks where installed_at is not null or used_at is not null or adoption_seen_at is not null`)).toEqual([]);
+  });
+});
+
+describe("upgrades (kind = 'upgrade')", () => {
+  it("are never stamped by the title fallback: a same-titled play in past_ideas leaves the upgrade alone and stamps the new pick", async () => {
+    const m = await user("m@example.com");
+    const p = await play("Showing brief");
+    await pick(m, p, "2026-12-07", { position: 1, upgrade: true });
+    await pick(m, p, "2026-11-30", { position: 1 });
+    expect(await recordAdoption(query, await profile(m, [{ title: "Showing brief", status: "used this week (2 times)" }]), NOW)).toBe(1);
+    expect((await stamps(m, "2026-12-07")).used_at).toBeNull();
+    expect((await stamps(m, "2026-11-30")).used_at).not.toBeNull();
+  });
+
+  it("an unknown ID with the upgrade's title stamps nothing when the upgrade is the only match", async () => {
+    const m = await user("m@example.com");
+    await pick(m, await play("Showing brief"), "2026-12-07", { upgrade: true });
+    expect(await recordAdoption(query, await profile(m, [{ idea_id: "R-AAAAAAAA", title: "Showing brief", status: "used this week (1 time)" }]), NOW)).toBe(0);
+    expect((await stamps(m, "2026-12-07")).installed_at).toBeNull();
+  });
+
+  it("are stamped when quoted by their exact ID", async () => {
+    const m = await user("m@example.com");
+    const u = await pick(m, await play("Showing brief"), "2026-12-07", { upgrade: true });
+    expect(await recordAdoption(query, await profile(m, [{ idea_id: u.idea_code, status: "used this week (1 time)" }]), NOW)).toBe(1);
+    expect(at((await stamps(m, "2026-12-07")).used_at)).toBe(NOW.toISOString());
   });
 });
 

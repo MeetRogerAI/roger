@@ -30,7 +30,8 @@ vi.mock("@/lib/v3-settings", async (orig) => ({
     savedV3.push(patch);
   },
 }));
-vi.mock("@/lib/rate-limit", async (orig) => ({ ...(await orig<typeof import("@/lib/rate-limit")>()), hit: async () => true }));
+let allowed = true;
+vi.mock("@/lib/rate-limit", async (orig) => ({ ...(await orig<typeof import("@/lib/rate-limit")>()), hit: async () => allowed }));
 vi.mock("@/lib/mail/send", async (orig) => ({ ...(await orig<typeof import("@/lib/mail/send")>()), sendToUser: async () => "sent" }));
 
 const actions = await import("./v3-actions");
@@ -48,6 +49,7 @@ beforeEach(async () => {
   admin = null;
   savedV3 = [];
   saveV3Fails = false;
+  allowed = true;
   [{ id: uid }] = await current<{ id: string }>("insert into users (email, name, status, free_lists_used, trial_started_at) values ('ana@example.com', 'Ana', 'trial', 2, now()) returning id");
   [{ id: playId }] = await current<{ id: string }>(
     "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ('One', 'Sales', 'd', 'p', 'i', '2026-12-07', '2026-12-07') returning id",
@@ -113,6 +115,31 @@ describe("for an admin", () => {
     saveV3Fails = true;
     expect(await actions.saveB3SwitchesAction({ status: "idle" }, form({ reviewBotOn: "on" }))).toMatchObject({ status: "error" });
     expect(await current("select 1 from admin_actions")).toHaveLength(1);
+  });
+
+  it("a failed switch save shows a fixed message and logs only the error's name (whole-branch review)", async () => {
+    admin = "admin@example.com";
+    saveV3Fails = true;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await actions.saveB3SwitchesAction({ status: "idle" }, form({ reviewBotOn: "on" }))).toMatchObject({ status: "error", message: "Not saved. Try again." });
+      expect(err).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(err.mock.calls)).not.toContain("Could not read settings");
+      expect(err.mock.calls[0]).toEqual(["[admin] B3 switches not saved", "Error"]);
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  it("adding a feedback reply is rate-limited, storing and logging nothing (whole-branch review)", async () => {
+    admin = "admin@example.com";
+    allowed = false;
+    expect(await actions.addFeedbackReplyAction({ status: "idle" }, form({ userId: uid, receivedOn: "2026-12-01", body: "Thanks!" }))).toMatchObject({
+      status: "error",
+      message: "Too many actions in a minute. Wait a moment.",
+    });
+    expect(await current("select 1 from admin_actions")).toEqual([]);
+    expect(await current("select 1 from member_feedback")).toEqual([]);
   });
 
   it("clears a display name, which takes the member off the leaderboard, and logs it (B2 Unit 7)", async () => {

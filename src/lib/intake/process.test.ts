@@ -159,6 +159,24 @@ describe("privacy", () => {
     expect(JSON.stringify(p)).not.toContain("jo@acme.co");
   });
 
+  it("replaces a Roger idea ID in the play's text, keeping it only in roger_idea_id (whole-branch review)", async () => {
+    const run = report([
+      play({ roger_idea_id: "R-ABCD2345", playbook_md: "1. Read new mail (from Roger idea R-ABCD2345). Then draft replies.", description: "Roger idea ID: R-QRST7654.", basis_note: "since R-ABCD2345" }),
+    ]);
+    const id = await addRun(run);
+    await processRun(query, id, deps());
+    const [p] = await playsOf(id);
+    expect(p.body.playbook_md).toBe("1. Read new mail (from Roger idea [a Roger idea ID]). Then draft replies.");
+    expect(p.body.description).toBe("Roger idea ID: [a Roger idea ID].");
+    expect(p.body.basis_note).toBe("since [a Roger idea ID]");
+    expect(p.body.roger_idea_id).toBe("R-ABCD2345");
+    // The ID appears once in what is stored: in roger_idea_id.
+    expect(JSON.stringify(p.body).match(/R-[A-Z2-7]{8}/g)).toEqual(["R-ABCD2345"]);
+    const stored = (await runRow(id)).parsed as { plays: Record<string, unknown>[] };
+    expect(stored.plays[0].roger_idea_id).toBe("R-ABCD2345");
+    expect(JSON.stringify(stored.plays).match(/R-[A-Z2-7]{8}/g)).toEqual(["R-ABCD2345"]);
+  });
+
   it("checks every string in the play, not only the main fields, and the runners-up", async () => {
     const run = report([play({ basis_note: "counted replies to jo@acme.co", requires: { connections: ["https://evil.example/hook"], features: [], site_logins: 0 } })]);
     const withAlso = run.replace('"plays"', '"also_runs":[{"title":"Rise8 sync","category":"Operations","job":"call 416-555-0199","runs_this_week":2}],"plays"');
@@ -388,6 +406,15 @@ describe("processProfile and adoption (B3 Unit 11)", () => {
       await query("delete from zack_profiles");
     }
     expect(await pickStamps()).toEqual({ installed: false, used: false });
+  });
+
+  it("a profile's past_ideas idea_id is not scrubbed, so it still stamps the pick", async () => {
+    const code = await deliveredPick();
+    const id = await addProfile(profileText([{ idea_id: code, title: "Something else", status: "used this week (1 time)" }]));
+    expect(await processProfile(query, id)).toBe("accepted");
+    const [r] = await query<{ parsed: { past_ideas: { idea_id: string }[] } }>("select parsed from zack_profiles where id = $1", [id]);
+    expect(r.parsed.past_ideas[0].idea_id).toBe(code);
+    expect(await pickStamps()).toEqual({ installed: true, used: true });
   });
 
   it("a failure while stamping is logged and never rejects the profile", async () => {

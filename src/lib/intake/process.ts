@@ -5,7 +5,7 @@ import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { runNeedsALookEmail } from "@/lib/mail/templates/run-needs-a-look";
 import { ModelCutOff, slicePlaybook, type IntakeModel, type ReviewFinding } from "./model";
 import { parseProfileBlock, parseRunBlock } from "./parse-block";
-import { harmFlags, phrasePattern, replaceNeverWords, replacePatterns } from "./privacy-patterns";
+import { harmFlags, normalise, phrasePattern, replaceIdeaIds, replaceNeverWords, replacePatterns } from "./privacy-patterns";
 import { validateRun, type ParsedRun, type Play } from "./validate";
 
 /**
@@ -165,10 +165,12 @@ function cleanStrings<T>(v: T, neverWords: string[]) {
       flags.add(h);
       flagFields.add(path);
     }
-    const a = replacePatterns(s);
+    // A Roger idea ID stays only in the play's own roger_idea_id field (whole-branch review).
+    const i = path === "roger_idea_id" ? { text: s, findings: [] } : replaceIdeaIds(normalise(s));
+    const a = replacePatterns(i.text);
     const b = replaceNeverWords(a.text, neverWords);
     // Recorded by kind only: the private text itself is not copied anywhere.
-    for (const x of [...a.findings, ...b.findings]) replaced.push({ kind: x.kind, placeholder: x.placeholder ?? "" });
+    for (const x of [...i.findings, ...a.findings, ...b.findings]) replaced.push({ kind: x.kind, placeholder: x.placeholder ?? "" });
     return b.text;
   });
   return { value, replaced, flags, flagFields };
