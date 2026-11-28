@@ -35,7 +35,7 @@ describe("indexing", () => {
 
   it("keeps the Circles disallow list in production", () => {
     vi.stubEnv("VERCEL_ENV", "production");
-    expect(robots().rules).toEqual({ userAgent: "*", allow: "/", disallow: ["/thanks/", "/for/", "/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds"] });
+    expect(robots().rules).toEqual({ userAgent: "*", allow: "/", disallow: ["/thanks/", "/for/", "/apply", "/setup", "/companies", "/packs/", "/workshops"] });
   });
 
   it("disallows the hidden legacy pages, the app, the admin, sign-up and the API under a version, and allows the legacy pages on the legacy site", () => {
@@ -44,7 +44,7 @@ describe("indexing", () => {
       expect(robots().rules, site).toEqual({
         userAgent: "*",
         allow: ["/", "/api/zack/instructions"],
-        disallow: ["/thanks/", "/for/", "/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds", "/app/", "/app$", "/admin", "/start", "/api"],
+        disallow: ["/thanks/", "/for/", "/apply", "/setup", "/companies", "/packs/", "/workshops", "/app/", "/app$", "/admin", "/start", "/api"],
       });
       expect(robots().sitemap, site).toMatch(/sitemap\.xml$/);
     }

@@ -112,10 +112,10 @@ describe("the page that is gone: /pricing (Peter, November 27, 2026)", () => {
     // free Cora Curations, the higher rate and the refund rule.
     const seen = text(await faq());
     for (const fact of [
-      "US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST.",
+      "US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus applicable tax.",
       "A second miss makes that month US$400 (CA$560 in Canada).",
       "the price becomes US$400 a month (CA$560 in Canada).",
-      "No. You get two free Cora Curations before any charge, and you can cancel any time.",
+      "No, unless we charge you by mistake: then tell us and we refund the mistaken charge in full to your card. You get two free Cora Curations before any charge, and you can cancel any time.",
     ])
       expect(seen).toContain(fact);
   });
@@ -149,7 +149,7 @@ describe("/faq on v1", () => {
       expect(text(part), group.id).toBe([group.title, ...group.items.map((item) => `${item.q} ${item.a}`)].join(" "));
     }
     // The answers name amounts, and each is filled.
-    expect(text(markup)).toContain("US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. Get two Cora Curations for free and pay only after you have tried the product for two full weeks.");
+    expect(text(markup)).toContain("US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus applicable tax. Get two Cora Curations for free and pay only after you have tried the product for two full weeks.");
     // No question is there only to explain buying one list.
     expect(text(markup)).not.toMatch(/one list|one at a time|Monday lists?\b/i);
     expect(text(markup)).toContain("A second miss makes that month US$400 (CA$560 in Canada).");
@@ -356,13 +356,13 @@ describe("/how-it-works on v1", () => {
     expect(text(first)).toContain("Your first two Cora Curations arrive, one each Monday. They are free. We ask for your card when the first one is ready, and it is not charged then.");
     expect(text(first)).toContain("After your second Cora Curation, we email you with what happens next.");
     expect(text(first)).toContain("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
-    expect(text(first)).toContain("If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge.");
+    expect(text(first)).toContain("If no first Cora Curation is delivered, the trial closes without a charge. With a card added, it closes 21 days after you added it. With no card, it closes 14 days after the email with your first Cora Curation’s titles, or 21 days after sign-up if no such email is sent. Each Monday with no Cora Curation because of Roger adds a week.");
     expect(text(first)).not.toMatch(/\blists?\b|one at a time|On monthly/i);
     // The count of free Cora Curations and the days are the settings', in the heading too.
     const other = text(sectionMarkup(await how({ amounts: amountsFrom({ ...v3Defaults, freeRuns: 3, trialCloseDays: 30 }) }), "first-weeks"));
     expect(other).toContain("Your first three weeks");
     expect(other).toContain("charged with your fourth Cora Curation");
-    expect(other).toContain("within 30 days of sign-up");
+    expect(other).toContain("it closes 30 days after you added it");
   });
 
   it("if you have no AI agent yet: two sentences and a link to /getstarted", async () => {

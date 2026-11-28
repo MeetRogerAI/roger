@@ -21,7 +21,7 @@ vi.mock("@/lib/db-query", () => ({ query: (t: string, p?: unknown[]) => db.query
 vi.mock("@/lib/billing/gateway", async (orig) => ({ ...(await orig<typeof import("@/lib/billing/gateway")>()), stripeGateway: () => db.gw }));
 vi.mock("@/lib/v3-settings-display", async () => {
   const m = await import("@/lib/v3-settings");
-  return { getV3SettingsForDisplay: async () => m.mergeV3([]) };
+  return { getV3SettingsForDisplay: async () => m.mergeV3([]), cachedV3SettingsForDisplay: async () => m.mergeV3([]) };
 });
 vi.mock("@/lib/v3-settings", async (orig) => {
   const m = await orig<typeof import("@/lib/v3-settings")>();

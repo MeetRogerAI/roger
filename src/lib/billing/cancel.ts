@@ -173,7 +173,7 @@ async function endNow(q: Query, d: PlanDeps, u: PlanUser, reason: string | null,
 }
 
 /** What a no-card trial is told when its card was saved in Stripe just before the cancel. */
-export const CARD_SAVED_NOT_CANCELLED = "Your card was saved just now, so your trial wasn’t cancelled and your first list is unlocked. To cancel anyway, cancel again.";
+export const CARD_SAVED_NOT_CANCELLED = "Your card was saved just now, so your trial wasn’t cancelled and your first Cora Curation is unlocked. To cancel anyway, cancel again.";
 
 /**
  * After a no-card trial's cancel (review fixes Unit 9, F5; the closing lesson

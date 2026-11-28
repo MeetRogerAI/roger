@@ -266,8 +266,13 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "number",
-    why: "The line under the price (Peter’s words, November 27, 2026): “Payment starts in week 3.” The week is the number of free Cora Curations in the settings plus one, and only that phrase with that number is allowed.",
-    words: ({ context: { amounts } }) => new RegExp(`Payment starts in week ${amounts.freeLists + 1}(?!\\d)`, "g"),
+    why: "The line under the price (Peter’s words, November 27, 2026, made a minimum on November 28, 2026): “Payment starts no earlier than week 3.” The week is the number of free Cora Curations in the settings plus one, and only that phrase with that number is allowed.",
+    words: ({ context: { amounts } }) => new RegExp(`Payment starts no earlier than week ${amounts.freeLists + 1}(?!\\d)`, "g"),
+  },
+  {
+    rule: "number",
+    why: "The trial-close rule (Peter, November 28, 2026: the site states main’s live rule): a trial with no card closes 14 days after the email with its first titles. The 14 is HELD_CLOSE_DAYS in src/lib/housekeeping/clocks.ts, a constant, not a setting. That phrase only.",
+    words: () => /\b14 days after the email with your first Cora Curation’s titles\b/g,
   },
   {
     rule: "number",

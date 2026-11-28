@@ -92,7 +92,7 @@ describe("a site version before its pages are built", () => {
 
   it("terms state the no-refund line and no amount that differs from the defaults (U9)", async () => {
     const markup = await pageMarkup(<Terms />);
-    expect(markup).toContain("There are no refunds.");
+    expect(markup).toContain("No refunds. Because you can try Roger free for two Cora Curations and cancel any time");
     // The monthly price and the higher rate. The terms describe monthly only, so the price of one at a time is not among them.
     const allowed = [v3Defaults.priceUsd, v3Defaults.priceHigherUsd].map((n) => `US$${n}`).concat([v3Defaults.priceCad, v3Defaults.priceHigherCad].map((n) => `CA$${n}`));
     const shown = markup.match(/(?:US|CA)\$[\d,]+/g) ?? [];
@@ -218,16 +218,14 @@ describe("a site version before its pages are built", () => {
   });
 
   it("keeps the hidden legacy pages out of search", async () => {
-    // All five still answer 200 under a site version, so the noindex in their metadata is what keeps them out.
+    // All four still answer 200 under a site version, so the noindex in their metadata is what keeps them out.
     const noindex = { index: false, follow: false };
     expect(companies.metadata.robots).toEqual(noindex);
     const setup = await import("@/app/setup/page");
     const workshops = await import("@/app/workshops/page");
-    const refunds = await import("@/app/refunds/page");
     const packs = await import("@/app/packs/[id]/page");
     expect(setup.metadata.robots).toEqual(noindex);
     expect(workshops.metadata.robots).toEqual(noindex);
-    expect(refunds.metadata.robots).toEqual(noindex);
     // A pack's page works its metadata out from the address: every pack it has a page for is hidden.
     const ids = packs.generateStaticParams();
     expect(ids).toContainEqual({ id: "solopreneur" });
@@ -275,7 +273,7 @@ describe("a site version before its pages are built", () => {
     // One link, the primary button, to /start with nothing added on the server.
     expect(hrefs(band)).toEqual(["/start"]);
     expect(band).toContain('<a class="btn btn-l" href="/start">Get two free Cora Curations</a>');
-    expect(band).toContain("Your first two Cora Curations are free. Payment starts in week 3.");
+    expect(band).toContain("Your first two Cora Curations are free. Payment starts no earlier than week 3.");
     expect(band).not.toContain("We ask for a card");
     // It is the page's only start link.
     expect(hrefs(markup).filter((h) => h.startsWith("/start"))).toEqual(["/start"]);

@@ -52,6 +52,9 @@ const nextConfig: NextConfig = {
       // homepage, and the homepage speaks to everyone who uses AI agents. Links already out there still land.
       { source: "/pricing", destination: "/#price", permanent: true },
       { source: "/agents", destination: "/", permanent: true },
+      // /refunds (the setups' guarantee page) was deleted (Peter's decision of November 28, 2026): the refund rule is
+      // the terms' "Refunds and cancelling" section, which main's Payment page link opens too.
+      { source: "/refunds", destination: "/terms#roger-monthly", permanent: true },
     ];
   },
 };

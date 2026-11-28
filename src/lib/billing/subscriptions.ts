@@ -347,7 +347,7 @@ export function stripeOrders(s: Stripe | null = stripe()): OrderGateway | null {
           automatic_tax: { enabled: true },
           collection_method: "charge_automatically",
           pending_invoice_items_behavior: "exclude",
-          description: `Roger list for the week of ${week}`,
+          description: `Roger Cora Curation for the week of ${week}`,
           metadata: { claim_id: claimId, user_id: userId, week },
         },
         { idempotencyKey: `${idempotencyKey}:invoice` },

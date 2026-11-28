@@ -83,7 +83,7 @@ function Problem({ message }: { message: string }) {
 export default function PaymentPage({ searchParams }: PageProps<"/start/payment">) {
   return (
     <>
-      <SignupSteps current={4} back={{ href: "/app", label: "Back to your first list" }} />
+      <SignupSteps current={4} back={{ href: "/app", label: "Back to your first Cora Curation" }} />
       <h1 className="text-h2">Payment</h1>
       <Suspense fallback={<p className="mt-8 text-ink-2">Loading…</p>}>
         <Payment searchParams={searchParams} />

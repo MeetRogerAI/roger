@@ -3,7 +3,7 @@ import { siteConfig } from "@/data/config";
 import { bySite, getServedSite } from "@/lib/site/version";
 
 // Hidden while Circles or a site version is served; /apply only redirects under a version.
-const hiddenLegacy = ["/apply", "/setup", "/companies", "/packs/", "/workshops", "/refunds"];
+const hiddenLegacy = ["/apply", "/setup", "/companies", "/packs/", "/workshops"];
 // A site version also keeps crawlers out of the app, the admin, sign-up and the API (spec A.2).
 // "/app" alone is a prefix rule and would also cover /apple-icon: "/app/" and "/app$" cover the app and nothing else.
 const builtHidden = [...hiddenLegacy, "/app/", "/app$", "/admin", "/start", "/api"];

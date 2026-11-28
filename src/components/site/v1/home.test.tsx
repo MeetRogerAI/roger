@@ -322,8 +322,8 @@ describe("the v1 homepage's sections", () => {
     expect(usd).toMatch(/aria-pressed="true"[^>]*>USD</);
     for (const line of ["US$200 / month USD", "CA$280 / month CAD"]) expect(text(usd)).toContain(line);
     // The note under the price, exactly (Peter, November 27, 2026).
-    expect(text(/<p data-trial-line[^>]*>(.*?)<\/p>/.exec(usd)![1])).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
-    expect(copy.trialLine).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
+    expect(text(/<p data-trial-line[^>]*>(.*?)<\/p>/.exec(usd)![1])).toBe("Your first two Cora Curations are free. Payment starts no earlier than week 3.");
+    expect(copy.trialLine).toBe("Your first two Cora Curations are free. Payment starts no earlier than week 3.");
     expect(text(usd)).not.toMatch(/We ask for a card|Cancel before then/);
     // The header's "Pricing" lands here: the section has the id, and room for the sticky header above its heading.
     expect(usd).toMatch(/^<section id="price" aria-labelledby="price-title" class="[^"]*-scroll-mt-3\b/);
@@ -566,7 +566,7 @@ describe("the v1 homepage's words", () => {
     const questions = sectionMarkup(await view(), "questions");
     const answer = (q: string) => text(new RegExp(`<summary[^>]*>${q.replace("?", "\\?")}.*?</summary>(.*?)</details>`).exec(questions)![1]);
     expect(answer("What does it cost?")).toBe(
-      "US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. Get two Cora Curations for free and pay only after you have tried the product for two full weeks.",
+      "US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus applicable tax. Get two Cora Curations for free and pay only after you have tried the product for two full weeks.",
     );
     expect(answer("When is my card charged?")).toBe(
       "The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",

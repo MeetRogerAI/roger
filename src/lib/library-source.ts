@@ -23,39 +23,46 @@ type Row = {
 /**
  * The library, from Postgres (the daily ingest keeps it growing). Cached for an
  * hour and tagged "library" so the ingest job can refresh it the moment new
- * use cases land. Falls back to the seed if the database isn't configured.
+ * use cases land. Falls back to the seed if the database isn't configured, and,
+ * outside the cache for one render, if it does not answer: caught inside, the
+ * seed would be the stored library for the hour
+ * (docs/solutions/runtime-errors/catch-inside-use-cache-stores-the-fallback-2026-11-27.md).
  */
 export async function getUseCases(): Promise<UseCase[]> {
+  try {
+    return await cachedUseCases();
+  } catch (err) {
+    console.error("[library] database unavailable, using seed:", err);
+    return sortUseCases(seedUseCases);
+  }
+}
+
+async function cachedUseCases(): Promise<UseCase[]> {
   "use cache";
   cacheLife({ stale: 300, revalidate: 3600, expire: 604800 });
   cacheTag("library");
 
   if (!hasDb()) return sortUseCases(seedUseCases);
-  try {
-    const rows = (await sql`select id, title, summary, category, persona, for_, tool, handle, author, url, source, outcome, featured, week_of, created_at from use_cases`) as Row[];
-    return sortUseCases(
-      rows.map((r) => ({
-        id: r.id,
-        title: r.title,
-        summary: r.summary,
-        category: r.category,
-        persona: r.persona,
-        for: r.for_,
-        tool: r.tool,
-        handle: r.handle,
-        author: r.author,
-        url: r.url,
-        source: r.source,
-        outcome: r.outcome ?? undefined,
-        featured: r.featured,
-        weekOf: typeof r.week_of === "string" ? r.week_of.slice(0, 10) : r.week_of.toISOString().slice(0, 10),
-        addedAt: new Date(r.created_at).toISOString(),
-      })),
-    );
-  } catch (err) {
-    console.error("[library] database unavailable, using seed:", err);
-    return sortUseCases(seedUseCases);
-  }
+  const rows = (await sql`select id, title, summary, category, persona, for_, tool, handle, author, url, source, outcome, featured, week_of, created_at from use_cases`) as Row[];
+  return sortUseCases(
+    rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      summary: r.summary,
+      category: r.category,
+      persona: r.persona,
+      for: r.for_,
+      tool: r.tool,
+      handle: r.handle,
+      author: r.author,
+      url: r.url,
+      source: r.source,
+      outcome: r.outcome ?? undefined,
+      featured: r.featured,
+      weekOf: typeof r.week_of === "string" ? r.week_of.slice(0, 10) : r.week_of.toISOString().slice(0, 10),
+      addedAt: new Date(r.created_at).toISOString(),
+    })),
+  );
 }
 
 export function sortUseCases(list: UseCase[]) {
@@ -66,13 +73,19 @@ export function sortUseCases(list: UseCase[]) {
 
 /** Unlike the seed fallback, this is safe to label as the current library total. */
 export async function getVerifiedUseCaseCount(): Promise<number | null> {
+  try {
+    return await cachedUseCaseCount();
+  } catch {
+    return null;
+  }
+}
+
+async function cachedUseCaseCount(): Promise<number | null> {
   "use cache";
   cacheLife({ stale: 300, revalidate: 3600, expire: 604800 });
   cacheTag("library");
   if (!hasDb()) return null;
-  try {
-    const rows = await sql`select count(*)::int as total from use_cases`;
-    const total = Number(rows[0]?.total);
-    return Number.isInteger(total) && total >= 0 ? total : null;
-  } catch { return null; }
+  const rows = await sql`select count(*)::int as total from use_cases`;
+  const total = Number(rows[0]?.total);
+  return Number.isInteger(total) && total >= 0 ? total : null;
 }

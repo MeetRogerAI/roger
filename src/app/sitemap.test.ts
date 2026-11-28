@@ -30,6 +30,6 @@ describe("sitemap", () => {
 
   it("keeps the legacy site's list", () => {
     site = "legacy";
-    expect(paths()).toEqual(["/", "/business", "/families", "/library", "/workshops", "/refunds", "/terms", "/privacy"]);
+    expect(paths()).toEqual(["/", "/business", "/families", "/library", "/workshops", "/terms", "/privacy"]);
   });
 });

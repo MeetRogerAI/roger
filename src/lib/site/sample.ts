@@ -7,7 +7,8 @@
  */
 import { cacheLife, cacheTag } from "next/cache";
 import { buildIdeaView, type IdeaView, type PlaySource } from "@/lib/cora/idea-view";
-import { getV3SettingsForDisplay } from "@/lib/v3-settings-display";
+import { cachedV3SettingsForDisplay } from "@/lib/v3-settings-display";
+import { mergeV3 } from "@/lib/v3-settings";
 
 type SamplePlay = PlaySource;
 
@@ -18,11 +19,21 @@ export type { IdeaView, SamplePlay };
  * puts on the clipboard. Cached for five minutes on the client so a page can
  * await it outside Suspense and keep its app shell (see getAmounts).
  */
-export async function getPlaybookPreface(): Promise<string> {
+async function cachedPlaybookPreface(): Promise<string> {
   "use cache";
   cacheLife({ stale: 300, revalidate: 300, expire: 86400 });
   cacheTag("settings");
-  return (await getV3SettingsForDisplay()).playbookPreface;
+  return (await cachedV3SettingsForDisplay()).playbookPreface;
+}
+
+/** The default preface stands in, outside the cache and for one render, when the database does not answer (see getAmounts). */
+export async function getPlaybookPreface(): Promise<string> {
+  try {
+    return await cachedPlaybookPreface();
+  } catch (e) {
+    console.error("[site] playbook preface: the database did not answer, showing the default", e instanceof Error ? e.message : e);
+    return mergeV3([]).playbookPreface;
+  }
 }
 
 /**

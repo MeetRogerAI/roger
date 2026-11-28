@@ -1,6 +1,7 @@
 import { addDays, torontoDate } from "@/lib/clock";
 import { amount, chargeWords, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { ContributionStatus } from "@/lib/billing/contribution";
+import { PLAN_QUESTIONS } from "@/lib/billing/offered";
 import { holdDate } from "@/lib/billing/period";
 import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
 import { carriedMissText, notSharingText, secondMissText } from "@/lib/mail/templates/second-miss";
@@ -46,8 +47,8 @@ export type StatusFacts = {
   now: Date;
 };
 
-/** The close of a leftover per-run account's status line: monthly is the only plan, and nothing can be ordered. */
-export const PLAN_QUESTIONS = "Monthly is now the only plan. Write to us if you have questions about yours.";
+/** The close of a leftover per-run account's status line: monthly is the only plan, and nothing can be ordered. Defined with the plan switch (billing/offered.ts), whose emails say it too. */
+export { PLAN_QUESTIONS };
 
 /** Where a trial with no card saves it (Step 4, Payment). */
 export const PAYMENT_PATH = "/start/payment";
