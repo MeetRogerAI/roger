@@ -13,6 +13,13 @@ export async function OnboardingChecklist({ userId }: { userId: string }) {
   return <ChecklistView list={list} />;
 }
 
+/**
+ * Under "Wait for Monday": with Zack off a list comes every Monday without a report (Peter, 2026-11-27, S18 point d),
+ * as the status line says; otherwise the first list waits for Zack's first report.
+ */
+export const mondayNote = (list: Pick<Checklist, "zackOff">) =>
+  list.zackOff ? "Your first list arrives on Monday morning." : "Your first list arrives on a Monday morning, once Zack has sent a report.";
+
 export function ChecklistView({ list }: { list: Checklist }) {
   const done = list.steps.filter((s) => s.done).length;
   const next = list.steps.find((s) => !s.done);
@@ -44,7 +51,7 @@ export function ChecklistView({ list }: { list: Checklist }) {
                 s.label
               )}
               <span className="sr-only">{s.done ? ", done" : ", not done yet"}</span>
-              {s.key === "monday" && !s.done && <span className="block text-ink-2">Your first list arrives on a Monday morning, once Zack has sent a report.</span>}
+              {s.key === "monday" && !s.done && <span className="block text-ink-2">{mondayNote(list)}</span>}
             </span>
           </li>
         ))}

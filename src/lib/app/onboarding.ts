@@ -19,7 +19,13 @@ export type OnboardingFact = "getstarted_at" | "setup_version" | "goal_at" | "co
 
 export type StepKey = "install" | "starter_team" | "goal" | "connect" | "test_run" | "controls" | "monday";
 export type Step = { key: StepKey; label: string; href: string | null; done: boolean };
-export type Checklist = { path: "new" | "running"; steps: Step[]; complete: boolean };
+export type Checklist = {
+  path: "new" | "running";
+  steps: Step[];
+  complete: boolean;
+  /** Zack is off (sharing 'off'): a list comes every Monday without a report, so "Wait for Monday" waits for none. */
+  zackOff?: boolean;
+};
 
 export type Facts = {
   getstartedViewed: boolean;
@@ -60,12 +66,13 @@ type Row = {
   key_made: boolean;
   run_received: boolean;
   list_delivered: boolean;
+  sharing: string;
 };
 
 /** The checklist for a user who can receive lists, or null (no such user, or an account that is closed or still signing up). */
 export async function loadChecklist(q: Query, userId: string): Promise<Checklist | null> {
   const [u] = await q<Row>(
-    `select u.path, u.status, u.onboarding,
+    `select u.path, u.status, u.onboarding, u.sharing,
             u.zack_key_created_at is not null as key_made,
             exists (select 1 from runs r where r.user_id = u.id and r.route in ('connector', 'upload')) as run_received,
             exists (select 1 from picks p where p.user_id = u.id and p.delivered_at is not null and not p.dry_run) as list_delivered
@@ -74,7 +81,7 @@ export async function loadChecklist(q: Query, userId: string): Promise<Checklist
   );
   if (!u || !["trial", "active", "held"].includes(u.status)) return null;
   const o = u.onboarding ?? {};
-  return buildChecklist(u.path, {
+  const list = buildChecklist(u.path, {
     getstartedViewed: Boolean(o.getstarted_at),
     setupSeen: Boolean(o.setup_version),
     goalAgreed: Boolean(o.goal_at),
@@ -83,6 +90,7 @@ export async function loadChecklist(q: Query, userId: string): Promise<Checklist
     controlsOpened: Boolean(o.controls_at),
     listDelivered: u.list_delivered,
   });
+  return { ...list, zackOff: u.sharing === "off" };
 }
 
 /** A signed-in view of /getstarted: the page was seen, and so was the published setup file, if there is one. */
