@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { AdminTabs, LoginForm } from "@/components/admin-ui";
+import { AdminTabs } from "@/components/admin-ui";
 import { isAdmin } from "@/lib/admin-auth";
 import { stripeMode } from "@/lib/billing/stripe";
 import { hasDb } from "@/lib/db";
@@ -15,27 +15,22 @@ export const instant = false;
 
 async function Gate({ children }: { children: React.ReactNode }) {
   await connection(); // always per request: the session is checked live
-  if (!hasDb() || (!process.env.ADMIN_PASSWORD && !process.env.ADMIN_EMAILS))
+  if (!hasDb() || !process.env.ADMIN_EMAILS)
     return (
       <section className="wrap max-w-[40rem] py-24">
         <h1 className="text-h3">Admin isn’t switched on yet</h1>
-        <p className="mt-3 text-small text-ink-2">Add DATABASE_URL, ADMIN_EMAILS (or ADMIN_PASSWORD), ADMIN_SECRET and CRON_SECRET in the Vercel project’s environment variables, then redeploy. The README lists what each one does.</p>
+        <p className="mt-3 text-small text-ink-2">Add DATABASE_URL, ADMIN_EMAILS, ADMIN_SECRET and CRON_SECRET in the Vercel project’s environment variables, then redeploy. The README lists what each one does.</p>
       </section>
     );
   if (!(await isAdmin()))
     return (
-      <>
-        {process.env.ADMIN_PASSWORD && <LoginForm />}
-        {process.env.ADMIN_EMAILS && (
-          <p className="wrap max-w-[40rem] pb-24 text-small text-ink-2">
-            Admins listed in ADMIN_EMAILS:{" "}
-            <Link href="/signin?next=/admin" className="tlink">
-              sign in with an email link
-            </Link>
-            .
-          </p>
-        )}
-      </>
+      <p className="wrap max-w-[40rem] py-24 text-small text-ink-2">
+        Admins listed in ADMIN_EMAILS:{" "}
+        <Link href="/signin?next=/admin" className="tlink">
+          sign in with an email link
+        </Link>
+        .
+      </p>
     );
   return (
     <div className="wrap pb-24 pt-6">
