@@ -11,8 +11,10 @@
  *   sectionChanges         the same for a page's sections (U6): each one
  *                          switched off or on, or moved, as a plain sentence.
  *   pageStatus             both, counted per page, for the Pages screen.
- *   linkWarnings           the site's own links that would point at a section
- *                          the draft has switched off (R17).
+ *   linkWarnings           the links the draft would draw that would land
+ *                          nowhere: on a section it switches off, or an item
+ *                          it removes (R17).
+ *   headingWarnings        a page the draft leaves without its main heading.
  *   wordingWarnings        the wording rules those changes break. A warning
  *                          never blocks: the owner may publish anyway, and
  *                          each one published is written to the admin log.
@@ -28,14 +30,15 @@
  * Pure but for the fingerprint's hash. Nothing here reads the database.
  */
 import { createHash } from "node:crypto";
+import { siteConfig } from "@/data/config";
 import { compoundingFinal, compoundingNumbers } from "@/data/site/compounding";
 import { fillAmounts, type Amounts } from "../amounts";
 import { checkClaims, textPage, type RuleId } from "../claims";
 import { captionNames } from "../compounding";
 import { shortened } from "./caption";
 import type { Overlay } from "./format";
-import { applyOverlay, baseline, layoutOn, listItems, readField, sameLayout, sectionLayout, textAt } from "./model";
-import { TOGGLE_OFF, TOGGLE_ON, fieldsOfItem, isAddedId, linkTargets, resolveField, siteRegistry, type Field, type List, type Page, type Registry, type Section } from "./registry";
+import { applyOverlay, baseline, layoutOn, listItems, readField, sameLayout, sectionLayout, textAt, type Layout } from "./model";
+import { TOGGLE_OFF, TOGGLE_ON, fieldsOfItem, isAddedId, resolveField, siteRegistry, type Field, type List, type Page, type Registry, type Section } from "./registry";
 import { canonical } from "./store";
 import { asPlaceholder, placeholdersIn, plainBlock, plainLine, unknownPlaceholder, usableDestination } from "./text";
 
@@ -321,99 +324,302 @@ export function draftCount(content: { draft: Overlay; published: Overlay }, base
 }
 
 // ---------------------------------------------------------------------------
-// Links that would point at a section that is switched off (plan R17)
+// Links that would go nowhere (plan R17, U9), and a page left without its main heading
 // ---------------------------------------------------------------------------
 
 /**
- * The links of the page bodies that the code draws to a section of a covered page. Each is named by the field that
- * holds its words, so the warning can quote the link as the owner has worded it.
+ * The links of the page bodies, as the code draws them. Each is named by the field that holds its words, and its
+ * address is the copy's (`at`, a path in the model) or the page's code's. `from` is the section it is drawn in: a
+ * link in a section that is not on the page is not on the site.
  *
- * The header's and the footer's links are not here: they are lists an admin edits (plan U8), and chromeLinks reads
- * them from the draft, wherever each one now points. Links an admin types elsewhere, links to an item of a list,
- * and a page left without its main heading are U9's, which replaces this table with the links the draft would
- * render.
+ * Together with the header's and the footer's links (chromeLinks), which an admin edits and types, this is every
+ * link the covered pages draw to a covered page. The start buttons go to sign-up, and Privacy and Terms to pages
+ * Pages does not cover. A test holds this list to the copy: a link in the copy with an address that is not here
+ * fails it.
  */
-const builtInLinks: readonly { label: string; where: string; from: { page: string; section: string } | null; to: { page: string; section: string } }[] = [
-  // v1.ts, control.link.href.
-  { label: "control.link.label", where: "on the homepage, under “You decide what Zack shares”", from: { page: "home", section: "control" }, to: { page: "howItWorks", section: "zack" } },
+const bodyLinks: readonly { label: string; href: string | { at: string }; where: string; from: { page: string; section: string } | null }[] = [
+  // v1.ts, control.link.
+  { label: "control.link.label", href: { at: "control.link.href" }, where: "on the homepage, under “You decide what Zack shares”", from: { page: "home", section: "control" } },
+  // v1.ts, questionsBlock.more.
+  { label: "questionsBlock.more.label", href: { at: "questionsBlock.more.href" }, where: "on the homepage, under the questions", from: { page: "home", section: "questions" } },
+  // v1.ts, howItWorks.noAgent.link.
+  { label: "howItWorks.noAgent.link.label", href: { at: "howItWorks.noAgent.link.href" }, where: "on the How it works page, under “If you have no AI agent yet”", from: { page: "howItWorks", section: "noAgent" } },
   // src/app/library/page.tsx, "#watch".
-  { label: "library.watchLink", where: "at the top of the Use cases page", from: { page: "library", section: "intro" }, to: { page: "library", section: "watch" } },
+  { label: "library.watchLink", href: "#watch", where: "at the top of the Use cases page", from: { page: "library", section: "intro" } },
+  // src/app/not-found.tsx, "/".
+  { label: "notFound.home", href: "/", where: "on the page a visitor sees for an address that does not exist", from: null },
 ];
 
-/** The two lists of links on every page, and where each is. */
+/** The copy's own addresses that bodyLinks reads, for the test that holds the list to the copy. */
+export const BODY_LINK_ADDRESSES: readonly string[] = bodyLinks.flatMap((link) => (typeof link.href === "string" ? [] : [link.href.at]));
+
+/**
+ * The places inside a list's items that a link can land on: the homepage's examples, each one's tab, panel and card
+ * (src/components/site/v1/blocks/sections.tsx, ExamplesSection, and example-tabs.tsx). An address such as
+ * "/#examples-paper" opens the homepage on that example.
+ */
+const itemAnchors: readonly { list: string; page: string; section: string; item: (anchor: string) => string | null }[] = [
+  {
+    list: "examples",
+    page: "home",
+    section: "examples",
+    item: (anchor) => /^examples-(.+)-card$/.exec(anchor)?.[1] ?? /^examples-tab-(.+)$/.exec(anchor)?.[1] ?? /^examples-(.+)$/.exec(anchor)?.[1] ?? null,
+  },
+];
+
+/** The sections that hold their page's main heading, its one "h1": without them the page has none. Every other covered page's title is fixed. */
+export const MAIN_HEADINGS: readonly { page: string; section: string }[] = [
+  // src/components/site/v1/home.tsx, "hero-title".
+  { page: "home", section: "hero" },
+  // src/app/library/page.tsx, "library-title".
+  { page: "library", section: "intro" },
+];
+
+/** The header's and the footer's two lists of links, and where each is. */
 const CHROME_LISTS = [
   { list: "nav", where: "in the header" },
   { list: "footer.links", where: "in the footer" },
 ] as const;
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** A value of the model by its path: "control.link.href". */
+const pathIn = (model: unknown, path: string): unknown => path.split(".").reduce<unknown>((value, key) => (isRecord(value) && Object.hasOwn(value, key) ? value[key] : undefined), model);
+
+/** A link the draft would draw: its words, its address, where it is, the section it is in, and the field the owner changes it in. */
+type DrawnLink = { label: string; href: string; where: string; from: { page: string; section: string } | null; field: Field | undefined };
+
+/** This site's own addresses written out in full: production, its www name and preview, whose content is released to it. */
+const SITE_HOSTS: readonly string[] = (() => {
+  const host = new URL(siteConfig.domain).hostname;
+  return [host, `www.${host}`, `preview.${host}`];
+})();
+
 /**
- * The header's and the footer's links as the draft has them that land on a section of a covered page, with their
- * words and where they are. A link with the same words and address in both lists is one entry, "in the header and
- * in the footer of every page", as it is for "Pricing" as built.
+ * The page and the place on it that an address lands on, for an address with a "#": "/#price", "/faq#cost",
+ * "https://meetroger.ai/#price", "#watch" (on the page the link is on). Null for an address with no "#", for
+ * another site's, and for a page Pages does not cover: those land where they say, whatever the drafts do.
  */
-function chromeLinks(content: { draft: Overlay }, base: unknown, registry: Registry): { label: string; where: string; from: null; to: { page: string; section: string } }[] {
-  const model = applyOverlay(base, content.draft, registry);
-  const targets = new Map(linkTargets(registry).flatMap((target) => (target.section ? [[target.href, { page: target.page.id, section: target.section.id }] as const] : [])));
-  const found: { label: string; href: string; lists: string[] }[] = [];
-  for (const { list, where } of CHROME_LISTS) {
-    const spec = registry.lists.get(list);
-    if (!spec) continue;
-    for (const item of listItems(model, list, registry)) {
-      const [label, href] = ["label", "href"].map((key) => resolveField(`${list}.${item}.${key}`, registry)).map((field) => (field ? (readField(model, field) ?? "") : ""));
-      if (!targets.has(href)) continue;
-      const same = found.find((entry) => entry.label === label && entry.href === href);
-      if (same) {
-        if (!same.lists.includes(where)) same.lists.push(where);
-      } else found.push({ label, href, lists: [where] });
+function landsOn(href: string, fromPage: Page | undefined, registry: Registry): { page: Page; anchor: string } | null {
+  let pathname: string;
+  let hash: string;
+  if (href.startsWith("#")) {
+    if (!fromPage) return null;
+    [pathname, hash] = [fromPage.path, href.slice(1)];
+  } else if ((href.startsWith("/") && !href.startsWith("//")) || href.startsWith("https://")) {
+    let url: URL;
+    try {
+      url = new URL(href, "https://site.invalid");
+    } catch {
+      return null;
     }
+    // The site's own pages written out in full ("https://meetroger.ai/#price") land where the short address does.
+    if (href.startsWith("https://") && !SITE_HOSTS.includes(url.hostname)) return null;
+    pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
+    hash = url.hash.slice(1);
+  } else return null;
+  try {
+    hash = decodeURIComponent(hash);
+  } catch {
+    // Left as typed.
   }
-  return found.map((entry) => ({ label: entry.label, where: `${entry.lists.join(" and ")} of every page`, from: null, to: targets.get(entry.href)! }));
+  if (hash === "") return null;
+  const page = registry.pages.find((entry) => entry.id !== "shared" && entry.path === pathname);
+  return page ? { page, anchor: hash } : null;
 }
 
-/** Every link that lands on a section, with its words as the draft has them. */
-function linksToSections(content: { draft: Overlay }, base: unknown, registry: Registry) {
-  return [...chromeLinks(content, base, registry), ...builtInLinks.map((link) => ({ ...link, label: wordingOf(content.draft, link.label, base, registry) }))];
+/** What the draft does to a page's sections and lists, as the pages would draw them. */
+function drawing(content: { draft: Overlay }, base: unknown, registry: Registry) {
+  const model = applyOverlay(base, content.draft, registry);
+  const layouts = new Map<string, Layout>();
+  const layout = (pageId: string) => {
+    if (!layouts.has(pageId)) layouts.set(pageId, layoutOn(content.draft, pageId, base, registry));
+    return layouts.get(pageId)!;
+  };
+  const isOff = (pageId: string, sectionId: string) => layout(pageId).off.includes(sectionId);
+  /**
+   * True when a section that is on draws nothing at all, as its page's code has it: the examples with every example
+   * removed, the homepage's questions with none ticked for it (or every group of them off on /faq), and a group of
+   * /faq with no question left. Testimonials depend on quotes cleared elsewhere, and are taken to be there.
+   */
+  const isEmpty = (pageId: string, sectionId: string) => {
+    if (pageId === "home" && sectionId === "examples") return listItems(model, "examples", registry).length === 0;
+    const groups = (pathIn(model, "questions") as { id: string; items: { on: readonly string[] }[] }[] | undefined) ?? [];
+    if (pageId === "home" && sectionId === "questions") {
+      const faq = layout("faq");
+      return !groups.some((group) => faq.order.includes(group.id) && !faq.off.includes(group.id) && group.items.some((item) => item.on.includes("home")));
+    }
+    if (pageId === "faq") {
+      const group = groups.find((entry) => entry.id === sectionId);
+      if (group) return group.items.length === 0;
+    }
+    return false;
+  };
+  const isShown = (at: { page: string; section: string } | null) => at === null || (!isOff(at.page, at.section) && !isEmpty(at.page, at.section));
+  return { model, isOff, isEmpty, isShown };
+}
+
+/**
+ * Every link the draft would draw that lands on a covered page: the header's and the footer's as the draft has
+ * them, typed or picked, and the page bodies' own. A link with the same words and address in both of the chrome's
+ * lists is one entry, "in the header and in the footer of every page", as it is for "Pricing" as built. A link in a
+ * section the draft does not show is not drawn, and is not here.
+ */
+function drawnLinks(content: { draft: Overlay }, base: unknown, registry: Registry): DrawnLink[] {
+  const { model, isShown } = drawing(content, base, registry);
+  const chrome: { label: string; href: string; lists: string[]; field: Field | undefined }[] = [];
+  for (const { list, where } of CHROME_LISTS) {
+    if (!registry.lists.has(list)) continue;
+    for (const item of listItems(model, list, registry)) {
+      const [label, href] = ["label", "href"].map((key) => resolveField(`${list}.${item}.${key}`, registry));
+      const words = label ? (readField(model, label) ?? "") : "";
+      const address = href ? (readField(model, href) ?? "") : "";
+      const same = chrome.find((entry) => entry.label === words && entry.href === address);
+      if (same) {
+        if (!same.lists.includes(where)) same.lists.push(where);
+      } else chrome.push({ label: words, href: address, lists: [where], field: href });
+    }
+  }
+  const out: DrawnLink[] = chrome.map((entry) => ({ label: entry.label, href: entry.href, where: `${entry.lists.join(" and ")} of every page`, from: null, field: entry.field }));
+  for (const link of bodyLinks) {
+    if (!isShown(link.from)) continue;
+    const href = typeof link.href === "string" ? link.href : pathIn(model, link.href.at);
+    if (typeof href !== "string") continue;
+    out.push({ label: wordingOf(content.draft, link.label, base, registry), href, where: link.where, from: link.from, field: resolveField(link.label, registry) });
+  }
+  return out;
+}
+
+/** Each drawn link that lands on a place of a covered page: the section it lands in, and the item for an item's place. */
+function linksToPlaces(content: { draft: Overlay }, base: unknown, registry: Registry) {
+  const out: { link: DrawnLink; page: Page; section: Section; item: { list: List; id: string } | null }[] = [];
+  for (const link of drawnLinks(content, base, registry)) {
+    const lands = landsOn(link.href, registry.pages.find((page) => page.id === link.from?.page), registry);
+    if (!lands) continue;
+    const { page, anchor } = lands;
+    const section = page.sections.find((entry) => entry.anchor === anchor);
+    if (section) {
+      out.push({ link, page, section, item: null });
+      continue;
+    }
+    for (const spot of itemAnchors) {
+      const list = registry.lists.get(spot.list);
+      const id = spot.page === page.id ? spot.item(anchor) : null;
+      const inSection = page.sections.find((entry) => entry.id === spot.section);
+      // An id the list has never had (no built-in item, no item added here) is not an item's place: "examples-title" is the heading's.
+      if (!list || !id || !inSection || (!listItems(base, list.id, registry).includes(id) && !isAddedId(id))) continue;
+      out.push({ link, page, section: inSection, item: { list, id } });
+      break;
+    }
+  }
+  return out;
 }
 
 /** The site's own links that land on a section, each as words to follow "The": "“Pricing” link in the header and in the footer of every page". For the note beside the section's switch. */
 export function linksInto(content: { draft: Overlay }, pageId: string, sectionId: string, base: unknown = baseline, registry: Registry = siteRegistry): string[] {
-  return linksToSections(content, base, registry)
-    .filter((link) => link.to.page === pageId && link.to.section === sectionId)
-    .map((link) => `“${link.label}” link ${link.where}`);
+  return linksToPlaces(content, base, registry)
+    .filter((place) => place.item === null && place.page.id === pageId && place.section.id === sectionId)
+    .map((place) => `“${place.link.label}” link ${place.link.where}`);
 }
 
 export type LinkWarning = {
-  /** The page and the section that is switched off. */
+  /** The page the link lands on, and the section of it. */
   page: Page;
   section: Section;
-  /** The address the link has: "/#price". */
+  /**
+   * Why it would go nowhere. "off": the section is switched off. "empty": the section is on but has nothing left to
+   * show, so the page does not draw it. "removed": the item it lands on is not in its list.
+   */
+  kind: "off" | "empty" | "removed";
+  /** For "removed", and for a link to an item's place: the list and the item. */
+  item: { list: List; id: string } | null;
+  /** Where the link lands, as the page's address and the place: "/#price", "/#examples-paper". */
   href: string;
   /** The link's words, as the draft has them. */
   link: string;
+  /** The field the owner changes the link in: its address for a header or footer link, its words for one the code places. */
+  field: Field | undefined;
   /** The whole of it, as a sentence the owner reads. */
   says: string;
 };
 
 /**
- * The links that would point at a section the draft has switched off (plan R17, AE3). A warning, like the wording
- * ones: it never blocks a publish. It is not an override of a wording rule, and is not written to the admin log.
- * A link whose own section is switched off too is not on the site, and is not listed.
+ * The links the draft would draw that would land nowhere (plan R17, AE3): on a section the draft switches off or
+ * leaves with nothing to show, or on an item of a list that the draft removes. Every link the pages draw to a
+ * covered page counts, built-in or added, picked from the list or typed ("/#price", "/library#watch",
+ * "/#examples-paper"). A link to a page and not to a place on it, to another site, or to a page Pages does not
+ * cover, never warns. A link whose own section is not on the page is not on the site, and is not listed either.
+ *
+ * A warning, like the wording ones: it never blocks a publish. It is not an override of a wording rule, and is not
+ * written to the admin log.
  */
 export function linkWarnings(content: { draft: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): LinkWarning[] {
+  const { model, isOff, isEmpty } = drawing(content, base, registry);
   const out: LinkWarning[] = [];
-  const isOff = (at: { page: string; section: string }) => layoutOn(content.draft, at.page, base, registry).off.includes(at.section);
-  for (const link of linksToSections(content, base, registry)) {
-    const page = registry.pages.find((entry) => entry.id === link.to.page);
-    const section = page?.sections.find((entry) => entry.id === link.to.section);
-    if (!page || !section || section.anchor === null || !isOff(link.to) || (link.from && isOff(link.from))) continue;
-    const words = link.label;
+  for (const { link, page, section, item } of linksToPlaces(content, base, registry)) {
+    const removed = item !== null && !listItems(model, item.list.id, registry).includes(item.id);
+    const kind = isOff(page.id, section.id) ? "off" : isEmpty(page.id, section.id) ? "empty" : removed ? "removed" : null;
+    if (!kind) continue;
     const lands = page.id === "home" ? "the top of the homepage" : `the top of the ${page.label} page`;
+    const anchor = item ? itemAnchorOf(link.href) : section.anchor;
+    const noun = item?.list.item?.toLowerCase() ?? "item";
+    const named = item ? shortened(wordingOf(content.draft, fieldsOfItem(item.list, item.id, registry)[0]?.id ?? "", base, registry)) : "";
+    const what = item ? (named ? `the ${noun} “${named}”` : `an ${noun} that is no longer in the list`) : `the “${section.label}” section`;
+    const why =
+      kind === "off"
+        ? item
+          ? `which is in the “${section.label}” section, and that section is switched off`
+          : "which is switched off"
+        : kind === "empty"
+          ? `${item ? `which is in the “${section.label}” section, and that section` : "which"} has nothing left to show, so the page leaves it out`
+          : `which is removed from the list`;
     out.push({
       page,
       section,
-      href: `${page.path === "/" ? "/" : page.path}#${section.anchor}`,
-      link: words,
-      says: `The “${words}” link ${link.where} points at the “${section.label}” section of ${page.label}, which is switched off. A visitor who presses it lands at ${lands} instead.`,
+      kind,
+      item,
+      href: `${page.path === "/" ? "/" : page.path}#${anchor}`,
+      link: link.label,
+      field: link.field,
+      says: `The “${link.label}” link ${link.where} points at ${what} ${item ? "on" : "of"} ${page.label}, ${why}. A visitor who presses it lands at ${lands} instead.`,
+    });
+  }
+  return out;
+}
+
+/** The place a link names after its "#". */
+const itemAnchorOf = (href: string): string => {
+  const at = href.indexOf("#");
+  try {
+    return decodeURIComponent(href.slice(at + 1));
+  } catch {
+    return href.slice(at + 1);
+  }
+};
+
+export type HeadingWarning = {
+  page: Page;
+  /** The section that holds the page's main heading, which the draft switches off. */
+  section: Section;
+  says: string;
+};
+
+/**
+ * The pages the draft leaves without a main heading (plan U9): the homepage with its Hero switched off, the Use
+ * cases page with its Introduction switched off. The page still works, but nothing on it says what it is in the one
+ * heading that search engines and screen readers go by. A warning: it never blocks a publish and is not logged.
+ */
+export function headingWarnings(content: { draft: Overlay }, base: unknown = baseline, registry: Registry = siteRegistry): HeadingWarning[] {
+  const out: HeadingWarning[] = [];
+  for (const spot of MAIN_HEADINGS) {
+    const page = registry.pages.find((entry) => entry.id === spot.page);
+    const section = page?.sections.find((entry) => entry.id === spot.section);
+    if (!page || !section || !layoutOn(content.draft, page.id, base, registry).off.includes(section.id)) continue;
+    const name = page.id === "home" ? "The homepage" : `The ${page.label} page`;
+    out.push({
+      page,
+      section,
+      says: `${name} would have no main heading: its “${section.label}” section, which holds the page’s headline, is switched off. Visitors still see the rest of the page, but search engines and screen readers use that headline to tell what the page is about.`,
     });
   }
   return out;

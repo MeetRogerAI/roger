@@ -13,6 +13,7 @@ import { amountPlaceholderNames, asPlaceholder } from "@/lib/site/content/text";
 import { PageEditor, type EditorBlock, type EditorField, type EditorList, type EditorSection, type NameHint } from "../field-editor";
 import { LaunchListLine } from "../launch-list";
 import { Unreadable, count } from "../parts";
+import { PreviewButton } from "../preview-button";
 import { SectionControls, type SectionRow } from "../section-controls";
 
 /**
@@ -251,6 +252,12 @@ export default async function PageEditorScreen({ params }: PageProps<"/admin/pag
             </>
           )}
         </p>
+        <div data-preview-line className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <PreviewButton page={page.id} note={page.id === "shared" ? "the homepage, with every draft" : `the ${page.label} page, with every draft`} />
+          <p className="min-w-0 text-small text-ink-2">
+            Opens {page.id === "shared" ? "the homepage" : "this page"} in a new tab with all saved drafts on it, exactly as it will look. Only you see it; visitors see the published site.
+          </p>
+        </div>
         {waitingAll > 0 && (
           <p data-waiting className="text-small">
             {count(waitingAll, "change is", "changes are")} saved as a draft and not published yet{waitingOnPage === waitingAll ? "" : `, ${waitingOnPage} of them on this page`}.{" "}

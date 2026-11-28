@@ -17,7 +17,7 @@ import { PRICE_SECTION_HREF } from "../chrome";
 import { amountsFrom } from "../amounts";
 import { ruleIds } from "../claims";
 import { captionNames } from "../compounding";
-import { DESTINATION_REFUSAL, TYPED_MAX, draftChanges, linkWarnings, linksInto, pageStatus, reviewKey, sectionChanges, ruleWords, saveRefusal, tidyFor, wordingOf, wordingWarnings, type Change } from "./check";
+import { BODY_LINK_ADDRESSES, DESTINATION_REFUSAL, MAIN_HEADINGS, TYPED_MAX, draftChanges, headingWarnings, linkWarnings, linksInto, pageStatus, reviewKey, sectionChanges, ruleWords, saveRefusal, tidyFor, wordingOf, wordingWarnings, type Change } from "./check";
 import { newOverlay, type Overlay } from "./format";
 import { editorAddress, fieldAnchor, fieldLabel, fieldLabels, fieldPlace, pageBySlug, pageCovers, pageSlug, placeholderWords, wordsFor } from "./labels";
 import { baseline, textAt } from "./model";
@@ -300,6 +300,140 @@ describe("links that would point at a section that is switched off (plan R17, AE
     expect(`/how-it-works#${anchor("howItWorks", "zack")}`).toBe(v1.control.link.href);
     expect(anchor("howItWorks", "zack")).toBe(v1.howItWorks.zack.id);
     expect(readFileSync(path.join(process.cwd(), "src/app/library/page.tsx"), "utf8")).toContain(`href="#${anchor("library", "watch")}"`);
+  });
+});
+
+describe("every link the draft would draw, typed or built in, and the places it lands on (plan U9, R17)", () => {
+  type Draft = { draft: Overlay };
+  const draftOf = (o: { off?: Record<string, string[]>; text?: Record<string, string>; lists?: Overlay["lists"] }): Draft => ({
+    draft: { ...edits(o.text ?? {}), sections: Object.fromEntries(Object.entries(o.off ?? {}).map(([page, ids]) => [page, { order: [], off: ids }])), lists: o.lists ?? {} },
+  });
+  /** The footer's FAQ link pointed at `href`, and whatever else the draft does. */
+  const footerTo = (href: string, more: Parameters<typeof draftOf>[0] = {}) => draftOf({ ...more, text: { "footer.links.faq.href": href, ...more.text } });
+  const removed = (list: string, ...items: string[]) => ({ [list]: { order: [], removed: items, added: [] } });
+  const said = (content: Draft) => linkWarnings(content).map((warning) => ({ kind: warning.kind, href: warning.href, link: warning.link, item: warning.item?.id ?? null }));
+
+  it("covers AE3 for a typed address: a link typed as /#price, in a link added to the header, is named when Price is off", () => {
+    const content = draftOf({ off: { home: ["price"] }, text: { "nav.x-price.label": "Our price", "nav.x-price.href": "/#price" }, lists: { nav: { order: [], removed: [], added: ["x-price"] } } });
+    expect(said(content)).toEqual([
+      { kind: "off", href: "/#price", link: "Pricing", item: null },
+      { kind: "off", href: "/#price", link: "Our price", item: null },
+    ]);
+    expect(linkWarnings(content)[1].says).toBe("The “Our price” link in the header of every page points at the “Price” section of Home, which is switched off. A visitor who presses it lands at the top of the homepage instead.");
+    // Each warning knows the field the owner changes the link in: here, the address of the added link.
+    expect(linkWarnings(content)[1].field?.id).toBe("nav.x-price.href");
+    // Written the other ways a browser reads the same place.
+    for (const href of ["/?x=1#price", "/#pr%69ce"]) expect(said(footerTo(href, { off: { home: ["price"] } })).map((entry) => entry.link), href).toContain("FAQ");
+  });
+
+  it("names a link to an example's place when the example is removed, its tab's and its card's too, by the example's words", () => {
+    const paper = siteRegistry.fields.get("examples.paper.label")!;
+    for (const href of ["/#examples-paper", "/#examples-tab-paper", "/#examples-paper-card"]) {
+      expect(said(footerTo(href)), href).toEqual([]);
+      const [warning, ...rest] = linkWarnings(footerTo(href, { lists: removed("examples", "paper") }));
+      expect(rest, href).toEqual([]);
+      expect(warning).toMatchObject({ kind: "removed", href, link: "FAQ", item: { id: "paper" } });
+      expect(warning.says).toBe(`The “FAQ” link in the footer of every page points at the example “${original(paper.id)}” on Home, which is removed from the list. A visitor who presses it lands at the top of the homepage instead.`);
+    }
+    // An example added in the admin and removed again has no words left: it is named for what it was.
+    const gone = linkWarnings(footerTo("/#examples-x-gone"))[0];
+    expect(gone).toMatchObject({ kind: "removed", item: { id: "x-gone" } });
+    expect(gone.says).toContain("points at an example that is no longer in the list on Home");
+  });
+
+  it("names a link into a section the drafts leave with nothing to show, or switch off, with the example it was for", () => {
+    const all = removed("examples", "video", "prospects", "paper");
+    expect(said(footerTo("/#examples", { lists: all }))).toEqual([{ kind: "empty", href: "/#examples", link: "FAQ", item: null }]);
+    expect(said(footerTo("/#examples", { off: { home: ["examples"] } }))).toEqual([{ kind: "off", href: "/#examples", link: "FAQ", item: null }]);
+    expect(linkWarnings(footerTo("/#examples-paper", { off: { home: ["examples"] } }))[0]).toMatchObject({ kind: "off", item: { id: "paper" } });
+    expect(linkWarnings(footerTo("/#examples-paper", { off: { home: ["examples"] } }))[0].says).toContain("which is in the “Cora Curation examples” section, and that section is switched off");
+    // The homepage's questions with every group of /faq switched off: /faq's groups are the homepage's too.
+    const groups = v1.questions.map((group) => group.id);
+    expect(said(footerTo("/#questions", { off: { faq: groups } }))).toEqual([{ kind: "empty", href: "/#questions", link: "FAQ", item: null }]);
+    // And a group of /faq that is switched off, or has no question left.
+    expect(said(footerTo(`/faq#${groups[0]}`, { off: { faq: [groups[0]] } }))).toEqual([{ kind: "off", href: `/faq#${groups[0]}`, link: "FAQ", item: null }]);
+    const emptied = removed(`questions.${groups[0]}.items`, ...v1.questions[0].items.map((item) => item.id));
+    expect(said(footerTo(`/faq#${groups[0]}`, { lists: emptied }))).toEqual([{ kind: "empty", href: `/faq#${groups[0]}`, link: "FAQ", item: null }]);
+  });
+
+  it("says nothing of a link to a page, to another site, to a place no section or item has, or to a page Pages does not cover", () => {
+    const all = { off: { home: ["price", "examples", "questions"], howItWorks: ["zack"], library: ["watch"] }, lists: removed("examples", "paper") };
+    for (const href of ["/faq", "/", "/library", "https://example.test/#price", "mailto:a@b.test", "/#examples-title", "/#hero-title", "/#nothing", "/zack#price", "/privacy"]) {
+      expect(
+        said(footerTo(href, all)).filter((entry) => entry.link === "FAQ"),
+        href,
+      ).toEqual([]);
+    }
+  });
+
+  it("says nothing when the place is only moved: sections reordered, examples reordered, the questions moved", () => {
+    const home = siteRegistry.pages.find((entry) => entry.id === "home")!.sections.map((section) => section.id);
+    const moved = { draft: { ...newOverlay(), sections: { home: { order: [...home].reverse(), off: [] } }, lists: { examples: { order: ["paper", "prospects", "video"], removed: [], added: [] } } } };
+    expect(said(moved)).toEqual([]);
+    for (const href of ["/#price", "/#examples-paper", "/#examples-tab-paper", "/#questions"]) {
+      expect(said({ draft: { ...moved.draft, text: { "footer.links.faq.href": href } } }), href).toEqual([]);
+    }
+  });
+
+  it("reads the same place however the address is written: trailing slash, query, the site's own full address", () => {
+    const off = { off: { home: ["price"] } };
+    for (const href of ["/?ref=nav#price", "/#price", "https://meetroger.ai/#price", "https://www.meetroger.ai/?x=1#price", "https://preview.meetroger.ai/#price"]) {
+      expect(said(footerTo(href, off)).filter((entry) => entry.link === "FAQ"), href).toEqual([{ kind: "off", href: "/#price", link: "FAQ", item: null }]);
+    }
+    const group = v1.questions[0].id;
+    for (const href of [`/faq/#${group}`, `/faq?x=1#${group}`, `https://meetroger.ai/faq/#${group}`]) {
+      expect(said(footerTo(href, { off: { faq: [group] } })).filter((entry) => entry.link === "FAQ"), href).toEqual([{ kind: "off", href: `/faq#${group}`, link: "FAQ", item: null }]);
+    }
+    // Another site with the same path, a look-alike name, and a place written in other letters (a browser matches a
+    // place's name exactly, so "#Price" never lands on the price, whatever the drafts do) are not this warning's.
+    for (const href of ["https://meetroger.ai.example.test/#price", "https://notmeetroger.ai/#price", "/#Price", "/FAQ#" + group]) {
+      expect(said(footerTo(href, { off: { home: ["price"], faq: [group] } })).filter((entry) => entry.link === "FAQ"), href).toEqual([]);
+    }
+  });
+
+  it("does not warn about the homepage's own links to /faq, or a link drawn in a section that is off", () => {
+    expect(said(draftOf({ off: { faq: v1.questions.map((group) => group.id) } }))).toEqual([]);
+    expect(said(draftOf({ off: { home: ["control"], howItWorks: ["zack"] } }))).toEqual([]);
+  });
+
+  it("reads every built-in link the page bodies draw from the copy: a new address in the copy must be added to the list", () => {
+    const found: string[] = [];
+    const walk = (value: unknown, at: string[]) => {
+      if (Array.isArray(value)) return;
+      if (value && typeof value === "object") for (const [key, inner] of Object.entries(value)) walk(inner, [...at, key]);
+      else if (at.at(-1) === "href" && typeof value === "string") found.push(at.join("."));
+    };
+    walk(baseline, []);
+    // The header's and the footer's are lists, read item by item.
+    expect(found.sort()).toEqual([...BODY_LINK_ADDRESSES].sort());
+  });
+});
+
+describe("a page left without its main heading (plan U9)", () => {
+  const off = (entries: Record<string, string[]>): { draft: Overlay } => ({ draft: { ...newOverlay(), sections: Object.fromEntries(Object.entries(entries).map(([page, ids]) => [page, { order: [], off: ids }])) } });
+
+  it("warns for the homepage with its Hero off and the Use cases page with its introduction off, and for nothing else", () => {
+    expect(headingWarnings(off({}))).toEqual([]);
+    expect(headingWarnings(off({ home: ["price", "problem"], library: ["watch", "band"], faq: ["getting-started"] }))).toEqual([]);
+    const [home, library, ...rest] = headingWarnings(off({ home: ["hero"], library: ["intro"] }));
+    expect(rest).toEqual([]);
+    expect(home).toMatchObject({ page: { id: "home" }, section: { id: "hero" } });
+    expect(home.says).toBe("The homepage would have no main heading: its “Hero” section, which holds the page’s headline, is switched off. Visitors still see the rest of the page, but search engines and screen readers use that headline to tell what the page is about.");
+    expect(library.says).toContain("The Use cases page would have no main heading: its “Introduction” section");
+  });
+
+  it("knows the sections that hold a page's only h1, and every other covered page's title is fixed", () => {
+    const source = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
+    expect(source("src/components/site/v1/home.tsx")).toMatch(/hero: \([\s\S]*?<h1 id="hero-title"/);
+    expect(source("src/app/library/page.tsx")).toContain('<h1 id="library-title"');
+    expect(MAIN_HEADINGS).toEqual([
+      { page: "home", section: "hero" },
+      { page: "library", section: "intro" },
+    ]);
+    for (const page of siteRegistry.pages) {
+      if (page.id === "shared" || MAIN_HEADINGS.some((spot) => spot.page === page.id)) continue;
+      expect(page.sections.some((section) => section.fixed && section.id === "title"), page.id).toBe(true);
+    }
   });
 });
 

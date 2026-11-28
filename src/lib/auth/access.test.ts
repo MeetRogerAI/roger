@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
-import { jar, nextHeaders, nextNavigation, outcome, resetNextFakes } from "@/test-helpers/next-fakes";
+import { DRAFT_COOKIE, jar, nextHeaders, nextNavigation, outcome, resetNextFakes } from "@/test-helpers/next-fakes";
 
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/navigation", () => nextNavigation);
@@ -86,9 +86,9 @@ describe("actions and admin", () => {
 });
 
 describe("sign-out route", () => {
-  it("ends the session and clears both cookies for a POST from this site", async () => {
+  it("ends the session and clears both cookies for a POST from this site, and an admin's preview of the drafts with them", async () => {
     const { token } = await createSession(current, userId, "email");
-    resetNextFakes({ [SESSION_COOKIE]: token, "roger-in": "1" });
+    resetNextFakes({ [SESSION_COOKIE]: token, "roger-in": "1", [DRAFT_COOKIE]: "bypass" });
     const res = await signoutRoute(new Request("https://meetroger.ai/auth/signout", { method: "POST", headers: { origin: "https://meetroger.ai", host: "meetroger.ai" } }));
     expect(res.status).toBe(303);
     expect(jar.size).toBe(0);
