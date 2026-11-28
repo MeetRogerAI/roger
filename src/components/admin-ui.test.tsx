@@ -176,14 +176,22 @@ describe("folding the sidebar's groups (unit U2b)", () => {
     expect(groups[1].links).toContain('href="/admin/users"');
   });
 
-  it("reads the stored choice, and folds nothing for anything it does not understand", () => {
+  it("folds every group until the owner has chosen: nothing stored, or anything that is not a list (Peter, November 28, 2026)", () => {
+    for (const never of [null, undefined, "", "People", "[", '{"People":true}', '"People"', "true", "null", "7"]) expect(parseFolded(never), String(never)).toEqual(headings);
+    // A stored list is a choice, the empty one included: every group open.
+    expect(parseFolded("[]")).toEqual([]);
+    // A first press with nothing stored opens that one group and keeps the other four folded.
+    expect(toggleFolded(parseFolded(""), "Cora")).toEqual(["Today", "People", "Website", "Setup"]);
+  });
+
+  it("reads the stored choice, and folds nothing for a name it does not know", () => {
     expect(parseFolded('["People","Setup"]')).toEqual(["People", "Setup"]);
     // The sidebar's order, each heading once.
     expect(parseFolded('["Setup","Today","Setup"]')).toEqual(["Today", "Setup"]);
     expect(parseFolded(JSON.stringify(headings))).toEqual(headings);
     // Unknown names (a heading since renamed, another case, not a string) are dropped; the known ones beside them are kept.
     expect(parseFolded('["Sample idea","People","people",5,null,["Cora"],{"heading":"Setup"}]')).toEqual(["People"]);
-    for (const bad of [null, undefined, "", "People", "[", '{"People":true}', '"People"', "true", "null", "7", "[]", '["__proto__","constructor","toString"]']) expect(parseFolded(bad), String(bad)).toEqual([]);
+    for (const unknown of ["[]", '["__proto__","constructor","toString"]', '["Sample idea"]']) expect(parseFolded(unknown), unknown).toEqual([]);
   });
 
   it("folds an open heading and opens a folded one, and what it stores reads back the same", () => {
@@ -272,8 +280,23 @@ describe("folding the sidebar's groups (unit U2b)", () => {
     expect(script.split(JSON.stringify(adminFoldedKey))).toHaveLength(2);
     // Only the stored, known headings fold.
     expect(page('["People","Setup"]').folded()).toEqual(["People", "Setup"]);
-    for (const stored of [null, "", "[", '{"People":true}', '["Sample idea"]', new Error("storage is off")]) expect(page(stored).folded(), String(stored)).toEqual([]);
-    for (const stored of ['["People","Sample idea",5]', '["Setup","Today"]']) expect(page(stored).folded(), stored).toEqual(parseFolded(stored));
+    // It folds exactly what React will: every group on a first visit or for a value that is not a list, none for [].
+    for (const stored of [null, "", "[", '{"People":true}', "null", '["Sample idea"]', "[]", '["People","Sample idea",5]', '["Setup","Today"]']) {
+      expect(page(stored).folded(), String(stored)).toEqual(parseFolded(stored));
+    }
+    expect(page(null).folded()).toEqual(headings);
+    expect(page("[]").folded()).toEqual([]);
+    // Storage that cannot be read folds nothing here: the press handler below would have nowhere to keep an opened group.
+    expect(page(new Error("storage is off")).folded()).toEqual([]);
+  });
+
+  it("opens a group on a first visit's press before the page's scripts arrive, and stores the other four as folded", () => {
+    const first = page(null);
+    first.press("Website");
+    expect(first.folded()).toEqual(["Today", "People", "Cora", "Setup"]);
+    expect(first.stored()).toBe('["Today","People","Cora","Setup"]');
+    // React reads the same when it arrives.
+    expect(parseFolded(first.stored())).toEqual(first.folded());
   });
 
   it("opens a folded group on a press while the page's scripts have not arrived, so a heading is never dead", () => {

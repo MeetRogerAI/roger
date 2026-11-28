@@ -412,7 +412,7 @@ docs/site/content-release.md
 ### U2b. Sidebar groups fold (added November 27, 2026)
 
 - **Goal:** Peter asked that the sidebar's main sections can be folded "to create less clutter".
-- **Behaviour:** each of the five headings is a button that folds or unfolds its screens, with a small arrow for the state and `aria-expanded`. Everything is unfolded on first visit. The choice is remembered in that browser. A folded group that holds the current screen keeps its heading marked. The same applies inside the phone menu. With no script every group is open.
+- **Behaviour:** each of the five headings is a button that folds or unfolds its screens, with a small arrow for the state and `aria-expanded`. Everything is folded on first visit (Peter, November 28, 2026; it was unfolded until then); a stored `[]`, the owner having opened every group, keeps them all open. The choice is remembered in that browser. A folded group that holds the current screen keeps its heading marked. The same applies inside the phone menu. With no script every group is open.
 - **Files:** `src/components/admin-ui.tsx`, its test, `src/app/globals.css` if needed.
 - **Test scenarios:** all open by default in server markup; folded state hides the links from the tab order; the current group's heading is marked when folded; stored state with unknown group names is ignored; no hydration mismatch (stored state is applied after mount).
 - **Verification:** browser check signed in at 1440 and 375 with the U2 helpers.
