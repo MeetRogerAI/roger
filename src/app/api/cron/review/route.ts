@@ -2,6 +2,7 @@ import { asOfAllowed, AsOfRefused } from "@/lib/clock";
 import { cronAuthorized, cronNow } from "@/lib/cron";
 import { databaseMarkedNonProduction } from "@/lib/db-environment";
 import { query } from "@/lib/db-query";
+import { reviewSyncGitHub } from "@/lib/review/github";
 import { runReviewJob } from "@/lib/review/job";
 import { gatewayReviewModel } from "@/lib/review/model";
 import { readV3Settings } from "@/lib/v3-settings";
@@ -27,7 +28,8 @@ export async function GET(request: Request) {
     if (dryRun && !asOfAllowed({ deployment: process.env.VERCEL_ENV ?? "development", stripeKey: process.env.STRIPE_SECRET_KEY, databaseMarkedNonProduction: await databaseMarkedNonProduction() })) {
       throw new AsOfRefused("A dry run is not accepted here.");
     }
-    return Response.json(await runReviewJob(query, { settings: await readV3Settings(), now, model: gatewayReviewModel, trigger: "schedule", dryRun }));
+    // Every tick syncs the bot's PRs first (live on production with the token, whatever the switch says), then the gates.
+    return Response.json(await runReviewJob(query, { settings: await readV3Settings(), now, model: gatewayReviewModel, trigger: "schedule", dryRun, github: reviewSyncGitHub() }));
   } catch (e) {
     if (e instanceof AsOfRefused) return Response.json({ status: "refused", note: e.message }, { status: 400 });
     console.error("[review] cron", e instanceof Error ? e.name : "Error");

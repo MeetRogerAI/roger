@@ -8,6 +8,7 @@ let current: Query;
 let admin: string | null = null;
 vi.mock("@/lib/db-query", () => ({ query: (t: string, p?: unknown[]) => current(t, p) }));
 vi.mock("@/lib/admin-auth", () => ({
+  PASSWORD_ADMIN: "admin (password)",
   requireAdmin: async () => {
     if (!admin) throw new Error("Not signed in");
     return admin;
@@ -30,7 +31,23 @@ vi.mock("@/lib/review/job", async (orig) => ({
   },
 }));
 
-const { runReviewNowAction } = await import("./actions");
+// Approval itself is tested in src/lib/review/approve.test.ts against a fake GitHub; here only the action around it.
+const approvals: { id: string; admin: { by: string; email: boolean }; live: boolean }[] = [];
+vi.mock("@/lib/review/approve", async (orig) => ({
+  ...(await orig<typeof import("@/lib/review/approve")>()),
+  approveProposal: async (_q: unknown, id: string, admin: { by: string; email: boolean }, d: { gh: { live: boolean } }) => {
+    approvals.push({ id, admin, live: d.gh.live });
+    return { status: "dry_run", message: "Dry run: recorded." };
+  },
+}));
+
+const { approveProposalAction, refreshFromGitHubAction, rejectProposalAction, runReviewNowAction } = await import("./actions");
+const form = (o: Record<string, string>) => {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(o)) fd.set(k, v);
+  return fd;
+};
+const idle = { status: "idle" as const };
 const logged = () => current<{ admin_email: string; action: string; detail: Record<string, unknown> }>(`select admin_email, action, detail from admin_actions order by id`);
 
 beforeEach(async () => {
@@ -39,6 +56,7 @@ beforeEach(async () => {
   allowed = true;
   calls = [];
   answer = { week: "2026-11-23", status: "done", stored: 2, evidence: 9 };
+  approvals.length = 0;
 });
 
 describe("Run now (runReviewNowAction)", () => {
@@ -87,5 +105,78 @@ describe("Run now (runReviewNowAction)", () => {
     allowed = false;
     expect(await runReviewNowAction()).toMatchObject({ status: "error" });
     expect(calls).toEqual([]);
+  });
+});
+
+describe("approve, reject and refresh", () => {
+  const ID = "abcdefghij";
+  // Never the network: a preview environment with no tokens, and fetch refused outright.
+  beforeEach(() => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("GITHUB_REVIEW_TOKEN", "");
+    vi.stubEnv("GITHUB_READ_TOKEN", "");
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("no network in tests");
+    });
+    return () => {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    };
+  });
+  const insert = (status = "pending") =>
+    current(
+      `insert into review_proposals (public_id, review_week, paths, status, rationale) values ($1, '2026-11-23', array['content/zack/claude.md'], $2, 'private rationale')`,
+      [ID, status],
+    );
+
+  it("refuses anyone but an admin, for each action, before doing anything", async () => {
+    await insert();
+    await expect(approveProposalAction(idle, form({ proposal: ID }))).rejects.toThrow("Not signed in");
+    await expect(rejectProposalAction(idle, form({ proposal: ID }))).rejects.toThrow("Not signed in");
+    await expect(refreshFromGitHubAction()).rejects.toThrow("Not signed in");
+    expect(approvals).toEqual([]);
+    expect(await logged()).toEqual([]);
+    expect((await current<{ status: string }>(`select status from review_proposals`))[0].status).toBe("pending");
+  });
+
+  it("approves as the email admin, in dry run off production, and logs only the proposal id and outcome", async () => {
+    admin = "peter@example.com";
+    expect(await approveProposalAction(idle, form({ proposal: ID }))).toMatchObject({ status: "ok", message: "Dry run: recorded." });
+    expect(approvals).toEqual([{ id: ID, admin: { by: "peter@example.com", email: true }, live: false }]);
+    const [row] = await logged();
+    expect(row).toMatchObject({ admin_email: "peter@example.com", action: "approve_proposal", detail: { proposal: ID, outcome: "done" } });
+  });
+
+  it("the shared-password admin approves as not email-signed-in", async () => {
+    admin = "admin (password)";
+    await approveProposalAction(idle, form({ proposal: ID }));
+    expect(approvals[0].admin).toEqual({ by: "admin (password)", email: false });
+  });
+
+  it("refuses a malformed proposal id, and is rate-limited", async () => {
+    admin = "peter@example.com";
+    expect(await approveProposalAction(idle, form({ proposal: "../../x" }))).toMatchObject({ status: "error" });
+    allowed = false;
+    expect(await approveProposalAction(idle, form({ proposal: ID }))).toMatchObject({ status: "error" });
+    expect(approvals).toEqual([]);
+  });
+
+  it("rejects with who and when, logging the note's length, not its text", async () => {
+    await insert();
+    admin = "ck@example.com";
+    expect(await rejectProposalAction(idle, form({ proposal: ID, note: "Too vague for members" }))).toMatchObject({ status: "ok" });
+    const [p] = await current<Record<string, unknown>>(`select status, rejected_by, reject_note from review_proposals`);
+    expect(p).toEqual({ status: "rejected", rejected_by: "ck@example.com", reject_note: "Too vague for members" });
+    const [row] = await logged();
+    expect(row).toMatchObject({ action: "reject_proposal", detail: { proposal: ID, note_chars: 21 } });
+    expect(JSON.stringify(row)).not.toContain("vague");
+  });
+
+  it("refresh in dry run says there is nothing to sync, and reaches no GitHub", async () => {
+    admin = "peter@example.com";
+    const r = await refreshFromGitHubAction();
+    expect(r).toMatchObject({ status: "ok" });
+    expect(r.message).toContain("Dry run");
+    expect((await logged())[0]).toMatchObject({ action: "refresh_github" });
   });
 });

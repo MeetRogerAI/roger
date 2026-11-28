@@ -5,7 +5,9 @@ import type { Query } from "@/lib/db-query";
 import { releaseLease, takeLease } from "@/lib/leases";
 import { adminAlert, alertAdmins, type MailDeps } from "@/lib/mail/send";
 import type { V3Settings } from "@/lib/v3-settings";
+import { type SyncResult, syncPullRequestsLeased } from "./approve";
 import { loadEvidence, reviewWeek } from "./evidence";
+import type { ReviewGitHub } from "./github";
 import type { ReviewModel } from "./model";
 import { type Discarded, REVIEW_LEASE_SECONDS, runReview } from "./propose";
 
@@ -52,7 +54,17 @@ import { type Discarded, REVIEW_LEASE_SECONDS, runReview } from "./propose";
  * - A dry run (preview) only reports what a tick would do: no snapshot, no
  *   lease, no claim, no model call, no alert.
  *
- * PR status sync (Unit 9) runs here, under the lease, once it exists.
+ * - PR status sync (Unit 9, `syncPullRequestsLeased`) runs first on every
+ *   tick and every Run now, when the caller passes `github`: before the
+ *   switch and window gates, so a merge, a close or a pending supersede close
+ *   is recorded within a tick even on a tick that does nothing else (the
+ *   close tick included). It takes its own short lease (PR_SYNC_LEASE, not
+ *   the run's, so a long model call never holds it up), does nothing unless
+ *   `github` is live, nothing in a dry run, and a failure never stops the
+ *   run. The cron route passes `reviewSyncGitHub()` (live on production with
+ *   the write token, whatever the switch says). The crons tick only on
+ *   Fridays, so the hourly pass also runs it (`review_pr_sync`,
+ *   src/lib/housekeeping/job.ts). The result carries it as `prSync`.
  */
 export const REVIEW_LEASE = "review-bot";
 export const MAX_MODEL_ATTEMPTS = 3;
@@ -75,6 +87,8 @@ export type ReviewJobDeps = {
   dryRun?: boolean;
   holder?: string;
   admins?: string[];
+  /** GitHub for the PR status sync (src/lib/review/github.ts reviewSyncGitHub). Absent: no sync. */
+  github?: ReviewGitHub;
 } & MailDeps;
 
 export type ReviewJobResult = {
@@ -87,6 +101,8 @@ export type ReviewJobResult = {
   discarded?: Discarded;
   modelAttempts?: number;
   alerted?: string[];
+  /** The PR status sync's outcome, when `github` was given. */
+  prSync?: SyncResult;
 };
 
 type RunRow = { status: string; model_attempts: number; started_at: string | Date };
@@ -147,6 +163,23 @@ async function weekProposals(q: Query, week: string): Promise<{ status: string; 
 }
 
 export async function runReviewJob(q: Query, d: ReviewJobDeps): Promise<ReviewJobResult> {
+  // First, before every gate (the switch, the window, the lease): a dry run only reports.
+  if (d.dryRun || !d.github) return runReviewJobInner(q, d);
+  const synced = await prSync(q, d.github);
+  return { ...(await runReviewJobInner(q, d)), prSync: synced };
+}
+
+/** The PR status sync, under its own lease; never throws. */
+async function prSync(q: Query, github: ReviewGitHub): Promise<SyncResult> {
+  try {
+    return await syncPullRequestsLeased(q, github);
+  } catch (e) {
+    console.error("[review] PR sync", e instanceof Error ? e.name : "Error");
+    return { status: "skipped", note: "The pull request sync failed; the next tick tries again.", checked: 0, merged: 0, closed: 0, superseded: 0, errors: 1 };
+  }
+}
+
+async function runReviewJobInner(q: Query, d: ReviewJobDeps): Promise<ReviewJobResult> {
   const trigger = d.trigger ?? "schedule";
   // The job clock never runs ahead of the real one (as in runReview), so a future ?asOf gets the same week as the run row.
   const now = new Date(Math.min(d.now.getTime(), Date.now()));
@@ -225,7 +258,6 @@ export async function runReviewJob(q: Query, d: ReviewJobDeps): Promise<ReviewJo
 
   let result: ReviewJobResult;
   try {
-    // Unit 9: syncPullRequests(q, …) goes here, before the run.
     const r = await runReview(q, { now, model: d.model, holder, admins, maxModelAttempts: trigger === "schedule" ? MAX_MODEL_ATTEMPTS : null });
     const row = await runRow(q, week);
     const modelAttempts = row?.model_attempts ?? 0;

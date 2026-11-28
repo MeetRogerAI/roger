@@ -81,7 +81,7 @@ export function publicId(): string {
  * "[removed]", and contact details and links the scrub's placeholders. It is
  * admin-only, but it must hold no member text either (R21).
  */
-function cleanModelText(text: string, ctx: Ctx, max: number): string {
+function cleanModelText(text: string, ctx: CheckContext, max: number): string {
   let out = removeSecrets(stripHidden(text));
   out = replaceSpans(out, quoteSpans(out, ctx.memberCorpus, ctx.allFilesCorpus), "[quote removed]");
   out = replaceSpans(out, nameSpans(out, ctx.names, ctx.allFilesText), "[a name]");
@@ -89,7 +89,7 @@ function cleanModelText(text: string, ctx: Ctx, max: number): string {
   return clip(replacePatterns(replaceObfuscatedEmails(out)).text.trim(), max);
 }
 
-type Ctx = ValidationContext & {
+export type CheckContext = ValidationContext & {
   ids: Map<string, EvidenceItem>;
   memberCorpus: string;
   evidenceNames: EvidenceNames;
@@ -97,6 +97,21 @@ type Ctx = ValidationContext & {
   allFilesCorpus: string;
   fileCorpus: Map<string, string>;
 };
+
+/** What the checks need, built once from the evidence, the files and the names. Also used at approval, on `main`'s files (Unit 9). */
+export function checkContext(v: ValidationContext): CheckContext {
+  const fileTexts = Object.values(v.files).filter((t): t is string => typeof t === "string");
+  const memberTexts = v.evidence.filter((e) => e.member).map((e) => e.text);
+  return {
+    ...v,
+    ids: new Map(v.evidence.map((e) => [e.id, e])),
+    memberCorpus: wordCorpus(memberTexts),
+    evidenceNames: evidenceNames(memberTexts),
+    allFilesText: fileTexts.join(String.fromCharCode(10)),
+    allFilesCorpus: wordCorpus(fileTexts),
+    fileCorpus: new Map(Object.entries(v.files).map(([p, t]) => [p, wordCorpus([t ?? ""])])),
+  };
+}
 
 /**
  * Validates the model's proposals in the plan's order. Steps 1 to 5 discard
@@ -111,17 +126,7 @@ export function validateProposals(raw: ModelProposal[], v: ValidationContext): {
   const discard = (r: DiscardReason) => {
     discarded[r] = (discarded[r] ?? 0) + 1;
   };
-  const fileTexts = Object.values(v.files).filter((t): t is string => typeof t === "string");
-  const memberTexts = v.evidence.filter((e) => e.member).map((e) => e.text);
-  const ctx: Ctx = {
-    ...v,
-    ids: new Map(v.evidence.map((e) => [e.id, e])),
-    memberCorpus: wordCorpus(memberTexts),
-    evidenceNames: evidenceNames(memberTexts),
-    allFilesText: fileTexts.join(String.fromCharCode(10)),
-    allFilesCorpus: wordCorpus(fileTexts),
-    fileCorpus: new Map(Object.entries(v.files).map(([p, t]) => [p, wordCorpus([t ?? ""])])),
-  };
+  const ctx = checkContext(v);
   const proposals: StoredProposal[] = [];
   for (const [i, p] of raw.entries()) {
     const r = validateOne(p, ctx);
@@ -135,7 +140,7 @@ export function validateProposals(raw: ModelProposal[], v: ValidationContext): {
 const isObject = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null;
 
 /** What a hunk's added text holds that came from members: their names, names from their text, and their words. */
-function memberFindings(added: string, ctx: Ctx, base: string, baseCorpus: string | undefined): string[] {
+export function memberFindings(added: string, ctx: CheckContext, base: string, baseCorpus: string | undefined): string[] {
   const found: string[] = [];
   if (nameSpans(added, ctx.names, base).length) found.push("contains a member's name or email");
   if (thirdPartySpans(added, ctx.evidenceNames, base).length) found.push("contains a name from a member's text");
@@ -143,7 +148,7 @@ function memberFindings(added: string, ctx: Ctx, base: string, baseCorpus: strin
   return found;
 }
 
-function validateOne(p: ModelProposal, ctx: Ctx): StoredProposal | DiscardReason {
+function validateOne(p: ModelProposal, ctx: CheckContext): StoredProposal | DiscardReason {
   if (!isObject(p)) return "allowlist";
   const hunksIn = (Array.isArray(p.hunks) ? p.hunks : []) as ModelHunk[];
   const declared = Array.isArray(p.paths) ? p.paths : [];
@@ -166,33 +171,10 @@ function validateOne(p: ModelProposal, ctx: Ctx): StoredProposal | DiscardReason
   }
   hunks = hunks.filter((h) => h.new_text !== h.old_text);
   if (!hunks.length) return "range";
-  const touched = paths.filter((f) => hunks.some((h) => h.path === f));
   const base = (f: string) => ctx.files[f as InstructionFile] as string;
-  const after = new Map(touched.map((f) => [f, spliceHunks(base(f), hunks.filter((h) => h.path === f))]));
-  // Each file's added text, all its hunks together: a quote split across two hunks is still a quote.
-  const fileAdded = new Map(touched.map((f) => [f, changeSize(base(f), after.get(f) as string).addedText]));
-
-  // 4. Size.
-  if (overSize(hunks)) return "size";
-
-  // 5. Load-bearing headings.
-  for (const f of touched) if (brokenHeading(base(f), after.get(f) as string)) return "heading";
-
-  // 6, first: hidden characters and look-alike letters are discarded, not stripped.
-  for (const h of hunks) if (hiddenOrForeign(changeSize(h.old_text, h.new_text).addedText, base(h.path))) return "harm";
-  for (const f of touched) if (hiddenOrForeign(fileAdded.get(f) as string, base(f))) return "harm";
-
-  // 6 to 9, per hunk against its own file, and 7 and 8 again on each file's added text as a whole.
-  const blocked = new Set<string>();
-  const guard = new Set<string>();
-  for (const h of hunks) {
-    const harm = harmCheck(h, base(h.path));
-    for (const b of harm.blocked) blocked.add(b);
-    for (const k of harm.kept) guard.add(`${h.path}: keeps wording the harm check flags (${k})`);
-    for (const m of memberFindings(changeSize(h.old_text, h.new_text).addedText, ctx, base(h.path), ctx.fileCorpus.get(h.path))) blocked.add(m);
-    for (const g of guardrailReasons(h.path as InstructionFile, base(h.path), h)) guard.add(g);
-  }
-  for (const f of touched) for (const m of memberFindings(fileAdded.get(f) as string, ctx, base(f), ctx.fileCorpus.get(f))) blocked.add(m);
+  const checked = checkHunks(hunks, ctx);
+  if (typeof checked === "string") return checked;
+  const { touched, blocked, guard } = checked;
 
   // A blocked proposal can never be approved; its stored text keeps no names, quotes, secrets or contact details.
   const isBlocked = blocked.size > 0;
@@ -233,7 +215,44 @@ function validateOne(p: ModelProposal, ctx: Ctx): StoredProposal | DiscardReason
   };
 }
 
-function redact(text: string, ctx: Ctx, base: string): string {
+/**
+ * Steps 4 to 9 on resolved hunks against `ctx.files` (the deployed files at
+ * generation, `main`'s at approval): size, headings and hidden text discard
+ * (the reason is returned); harm and scrub, names and quotes block;
+ * guardrail sections and words mark a second read.
+ */
+export function checkHunks(hunks: Hunk[], ctx: CheckContext): DiscardReason | { touched: InstructionFile[]; blocked: Set<string>; guard: Set<string> } {
+  const touched = (INSTRUCTION_FILES as readonly InstructionFile[]).filter((f) => hunks.some((h) => h.path === f));
+  const base = (f: string) => ctx.files[f as InstructionFile] as string;
+  const after = new Map(touched.map((f) => [f, spliceHunks(base(f), hunks.filter((h) => h.path === f))]));
+  // Each file's added text, all its hunks together: a quote split across two hunks is still a quote.
+  const fileAdded = new Map(touched.map((f) => [f, changeSize(base(f), after.get(f) as string).addedText]));
+
+  // 4. Size.
+  if (overSize(hunks)) return "size";
+
+  // 5. Load-bearing headings.
+  for (const f of touched) if (brokenHeading(base(f), after.get(f) as string)) return "heading";
+
+  // 6, first: hidden characters and look-alike letters are discarded, not stripped.
+  for (const h of hunks) if (hiddenOrForeign(changeSize(h.old_text, h.new_text).addedText, base(h.path))) return "harm";
+  for (const f of touched) if (hiddenOrForeign(fileAdded.get(f) as string, base(f))) return "harm";
+
+  // 6 to 9, per hunk against its own file, and 7 and 8 again on each file's added text as a whole.
+  const blocked = new Set<string>();
+  const guard = new Set<string>();
+  for (const h of hunks) {
+    const harm = harmCheck(h, base(h.path));
+    for (const b of harm.blocked) blocked.add(b);
+    for (const k of harm.kept) guard.add(`${h.path}: keeps wording the harm check flags (${k})`);
+    for (const m of memberFindings(changeSize(h.old_text, h.new_text).addedText, ctx, base(h.path), ctx.fileCorpus.get(h.path))) blocked.add(m);
+    for (const g of guardrailReasons(h.path as InstructionFile, base(h.path), h)) guard.add(g);
+  }
+  for (const f of touched) for (const m of memberFindings(fileAdded.get(f) as string, ctx, base(f), ctx.fileCorpus.get(f))) blocked.add(m);
+  return { touched, blocked, guard };
+}
+
+function redact(text: string, ctx: CheckContext, base: string): string {
   const spans = [...quoteSpans(text, ctx.memberCorpus, wordCorpus([base])), ...nameSpans(text, ctx.names, base), ...thirdPartySpans(text, ctx.evidenceNames, base)].sort((a, b) => a[0] - b[0]);
   const merged: [number, number][] = [];
   for (const s of spans) {

@@ -291,3 +291,24 @@ export function brokenHeading(before: string, after: string): string | null {
   }
   return null;
 }
+
+/**
+ * The stored hunks re-anchored to another text of the file (`main`'s, at
+ * approval): each `old_text` found exactly once (exact, then normalised), its
+ * line range and `old_text` taken from that text, so the safety checks and
+ * the guardrail sections read `main`'s lines. Splicing the result gives the
+ * same text as applyHunks.
+ */
+export function rebaseHunks(text: string, hunks: Hunk[]): { ok: true; hunks: Hunk[]; text: string } | { ok: false; reason: "missing" | "not_unique" | "overlap" } {
+  const applied = applyHunks(text, hunks);
+  if (!applied.ok) return applied;
+  const lf = toLf(text);
+  const lineAt = (offset: number) => lf.slice(0, offset).split(LF).length;
+  const out = hunks.map((h) => {
+    const f = findOnce(lf, h.old_text) as Extract<Found, { kind: "found" }>;
+    const old = lf.slice(f.start, f.end);
+    const start = lineAt(f.start);
+    return { ...h, start_line: start, end_line: start + old.split(LF).length - 1, old_text: old };
+  });
+  return { ok: true, hunks: out.sort((a, b) => a.start_line - b.start_line), text: applied.text };
+}

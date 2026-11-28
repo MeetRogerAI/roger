@@ -8,6 +8,7 @@ import {
   findOnce,
   linesOf,
   numberLines,
+  rebaseHunks,
   resolveHunks,
   sectionsTouched,
   spliceHunks,
@@ -196,5 +197,32 @@ describe("sections and load-bearing headings", () => {
   it("linesOf returns null outside the file", () => {
     expect(linesOf("a\nb", 2, 3)).toBeNull();
     expect(linesOf("a\nb", 1, 2)).toBe("a\nb");
+  });
+});
+
+describe("rebaseHunks (Unit 9: the stored hunks on main's text)", () => {
+  const base = "# T\n\nAlpha line.\nBeta line.\n\nGamma line.\n";
+  const hunk = { path: "f", start_line: 3, end_line: 4, old_text: "Alpha line.\nBeta line.", new_text: "Alpha line.\nBeta line, changed." };
+
+  it("re-anchors line numbers and old_text to main, and splices to the same text as applyHunks", () => {
+    const main = "# T\n\nA new first line.\nAnother.\n\nAlpha line.\nBeta line.\n\nGamma line.\n";
+    const r = rebaseHunks(main, [hunk]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.hunks).toEqual([{ ...hunk, start_line: 6, end_line: 7 }]);
+    expect(spliceHunks(main, r.hunks)).toBe(r.text);
+    expect(r.text).toBe((applyHunks(main, [hunk]) as { text: string }).text);
+  });
+
+  it("takes main's own text for a normalised match", () => {
+    const apos = String.fromCharCode(0x2019);
+    const main = base.replace("Beta line.", `Beta${apos}s line.`);
+    const r = rebaseHunks(main, [{ ...hunk, old_text: "Alpha line.\nBeta's line." }]);
+    expect(r.ok && r.hunks[0].old_text).toBe(`Alpha line.\nBeta${apos}s line.`);
+  });
+
+  it("fails like applyHunks when the text is gone or repeated", () => {
+    expect(rebaseHunks(base.replace("Alpha", "Omega"), [hunk])).toEqual({ ok: false, reason: "missing" });
+    expect(rebaseHunks(`${base}\nAlpha line.\nBeta line.\n`, [hunk])).toEqual({ ok: false, reason: "not_unique" });
   });
 });

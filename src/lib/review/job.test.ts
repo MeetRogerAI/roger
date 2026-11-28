@@ -364,3 +364,87 @@ describe("runReviewJob: the checkpoint and the dry run", () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe("PR status sync in the job (Unit 9)", () => {
+  const TOKEN = "ghp_test_write_token_0123456789abcdefgh";
+  /** A proposal with an open PR that a person has merged on GitHub; returns the fake and a live gateway. */
+  async function mergedOnGitHub() {
+    const { fakeGitHub } = await import("@/test-helpers/fake-github");
+    const gh = fakeGitHub({ "README.md": "# Roger\n" });
+    const w = gh.gateway({ token: TOKEN, canWrite: true });
+    await w.createRef("review-bot/abcdefghij", gh.refs.get("main") as string);
+    await w.createPull({ title: "t", body: "b", head: "review-bot/abcdefghij", base: "main" });
+    gh.merge(101);
+    await q(
+      `insert into review_proposals (public_id, review_week, paths, status, pr_number, branch, result_versions) values ('abcdefghij', $1::date, array['README.md'], 'pr_open', 101, 'review-bot/abcdefghij', '{}'::jsonb)`,
+      [WEEK],
+    );
+    return { gh, w };
+  }
+  const status = async () => (await q<{ status: string }>(`select status from review_proposals where public_id = 'abcdefghij'`))[0].status;
+
+  it("syncs on every scheduled tick before the switch and window gates: switch off, outside the window, and the close tick", async () => {
+    for (const [when, settings, expected] of [
+      [tick("14:15"), off, "skipped"],
+      [tick("09:00", "2026-11-24"), on, "skipped"],
+      [tick("17:15"), on, "closed"],
+    ] as const) {
+      ({ query: q } = await testDb());
+      const { w } = await mergedOnGitHub();
+      const model = fakeReviewModel([clean()]);
+      expect(await job(when, model, { settings, github: { live: true, gw: w } })).toMatchObject({ status: expected, prSync: { status: "synced", merged: 1 } });
+      expect(await status()).toBe("merged");
+      expect(model.calls).toHaveLength(0);
+    }
+  });
+
+  it("syncs under its own short lease, not the run's: a held review lease doesn't stop it", async () => {
+    await seedWeek();
+    const { w } = await mergedOnGitHub();
+    const { PR_SYNC_LEASE } = await import("./approve");
+    await takeLease(q, REVIEW_LEASE, "another-run", 300);
+    let syncLeaseHeld = false;
+    const gw = {
+      ...w,
+      getPull: async (n: number) => {
+        syncLeaseHeld = !(await takeLease(q, PR_SYNC_LEASE, "someone-else", 60));
+        return w.getPull(n);
+      },
+    };
+    expect(await job(tick("14:15"), fakeReviewModel([clean()]), { github: { live: true, gw } })).toMatchObject({ status: "busy", prSync: { merged: 1 } });
+    expect(syncLeaseHeld).toBe(true);
+    expect(await status()).toBe("merged");
+    // Released after: another sync can take it.
+    expect(await takeLease(q, PR_SYNC_LEASE, "next", 60)).toBe(true);
+  });
+
+  it("a held sync lease skips the sync; a sync failure never stops the run", async () => {
+    await seedWeek();
+    const { w } = await mergedOnGitHub();
+    const { PR_SYNC_LEASE } = await import("./approve");
+    await takeLease(q, PR_SYNC_LEASE, "another-sync", 60);
+    expect(await job(tick("14:15"), fakeReviewModel([clean()]), { github: { live: true, gw: w } })).toMatchObject({ status: "done", prSync: { status: "skipped" } });
+    expect(await status()).toBe("pr_open");
+
+    await q(`delete from leases`);
+    await q(`update review_runs set status = 'failed'`);
+    const broken = { ...w, getPull: async () => Promise.reject(new Error("boom")) };
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await job(tick("14:45"), fakeReviewModel([clean()]), { github: { live: true, gw: broken } })).toMatchObject({ status: "done", prSync: { errors: 1 } });
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  it("does nothing in a dry run, or without live GitHub", async () => {
+    const { gh, w } = await mergedOnGitHub();
+    gh.calls.length = 0;
+    await job(tick("14:15"), fakeReviewModel([clean()]), { dryRun: true, github: { live: true, gw: w } });
+    expect(gh.calls).toEqual([]);
+    const r = await job(tick("09:00", "2026-11-24"), fakeReviewModel([clean()]), { github: { live: false, why: "this is not the production deployment", gw: gh.gateway({ canWrite: false }) } });
+    expect(r.prSync).toMatchObject({ status: "skipped" });
+    expect(gh.calls).toEqual([]);
+    expect(await status()).toBe("pr_open");
+  });
+});

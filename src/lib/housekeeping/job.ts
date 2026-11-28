@@ -38,6 +38,8 @@ import { deliverLate, sendUnsentTeasers } from "@/lib/cora/send-job";
 import { sendPendingUnlocks } from "@/lib/cora/unlock";
 import { runPointsTask } from "@/lib/growth/points";
 import { closeUnpaidTrials, dueRetries, repairPaidUsers, type ChargeDeps } from "@/lib/billing/first-charge";
+import { syncPullRequestsLeased } from "@/lib/review/approve";
+import { reviewSyncGitHub, type ReviewGitHub } from "@/lib/review/github";
 
 /**
  * The hourly pass (plan Unit 12): a list of due tasks that later units add
@@ -60,7 +62,12 @@ export type PassContext = {
  * the task asks `stripeGateway()` (null without a key); `null`: Stripe is
  * not set up. The route passes it; scenarios pass their fake Stripe.
  */
-export type HourlyDeps = ChargeDeps & { card?: CardGateway | null; credits?: CreditGateway | null };
+export type HourlyDeps = ChargeDeps & {
+  card?: CardGateway | null;
+  credits?: CreditGateway | null;
+  /** GitHub for the review bot's PR sync (review_pr_sync). Absent: `reviewSyncGitHub()` (live only on production with GITHUB_REVIEW_TOKEN). */
+  reviewGitHub?: ReviewGitHub;
+};
 // The plan tasks (switches, cancellations) are handed no card gateway, as before this seam: only the no-card close reads it.
 export type HourlyTask = { name: string; run: (q: Query, d: HourlyDeps, ctx: PassContext) => Promise<unknown> };
 
@@ -219,6 +226,19 @@ export const HOURLY_TASKS: HourlyTask[] = [
       const s = stripe();
       if (!s) return Promise.resolve({ skipped: "Stripe is not set up." });
       return syncStripeEmails(q, async (customer, email) => void (await s.customers.update(customer, { email })), { query: d.query, transport: d.transport, sleep: d.sleep });
+    },
+  },
+  // B3 Unit 9 (review fixes). The review bot's PR status sync: merges and closes recorded, pending supersede closes
+  // retried, merged or closed review-bot branches deleted. The review crons sync on every tick, but tick only on
+  // Fridays; this keeps a merge recorded within the hour on other days. Live only (production with GITHUB_REVIEW_TOKEN,
+  // whatever v3.reviewBotOn says); otherwise skipped, reaching no GitHub. Under its own short lease (PR_SYNC_LEASE),
+  // so it never overlaps a cron tick's sync or "Refresh from GitHub". Before the long Stripe reconcile.
+  {
+    name: "review_pr_sync",
+    run: async (q, d) => {
+      const gh = d.reviewGitHub ?? reviewSyncGitHub();
+      if (!gh.live) return `skipped: ${gh.why}`;
+      return syncPullRequestsLeased(q, gh, { clock: () => new Date(Math.min(d.now.getTime(), Date.now())) });
     },
   },
   // Unit 18. A daily pass, started once the last finished over 24 hours ago and carried on hourly until done: Stripe

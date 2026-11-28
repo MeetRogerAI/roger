@@ -48,6 +48,16 @@ describe("/api/cron/review", () => {
     expect(maxDuration).toBe(300);
   });
 
+  it("hands the job the PR sync's GitHub: live only on production with the write token, whatever the switch says (it is off here)", async () => {
+    await get();
+    expect(calls[0].github).toMatchObject({ live: false, why: "this is not the production deployment" });
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("GITHUB_REVIEW_TOKEN", "ghp_test_write_token_0123456789abcdefgh");
+    await get();
+    expect(calls[1].github?.live).toBe(true);
+    expect(calls[1].settings.reviewBotOn).toBe(false);
+  });
+
   it("refuses an as-of time or a dry run on production (400), and accepts them on a preview with a test database", async () => {
     vi.stubEnv("VERCEL_ENV", "production");
     expect((await get("?asOf=2026-11-27T15:15:00Z")).status).toBe(400);
