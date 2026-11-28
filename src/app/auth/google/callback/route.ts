@@ -17,7 +17,6 @@ const NOTE: Record<RefusedReason, string> = {
   noaccount: "noaccount",
   other_google: "google_other",
   email_first: "google_email_first",
-  admin: "google_admin",
   signup_closed: "google_closed",
   limited: "limited",
 };

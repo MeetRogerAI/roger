@@ -18,7 +18,6 @@ const notes: Record<string, string> = {
   google_unverified: "Google hasn’t verified that email address, so we can’t use it to sign you in. Ask for an email link below.",
   google_other: "This Roger account is linked to a different Google account. Sign in with that one, or ask for an email link below.",
   google_email_first: "Sign in with an email link first, then you can use Google.",
-  google_admin: "Admin accounts sign in with an email link only. Ask for one below.",
   google_closed: "Sign-up isn’t open right now, so no account was made.",
   google_check_email: "Google can’t confirm that address for us, so we’ve emailed it a link to finish signing up. Open it on this device.",
   limited: "Too many sign-in attempts from here. Try again in a few minutes.",

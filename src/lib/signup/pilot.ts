@@ -1,5 +1,4 @@
 import { logAdminAction } from "@/lib/admin/log";
-import { adminEmails } from "@/lib/auth/admin-emails";
 import { issueToken } from "@/lib/auth/login-link";
 import { normaliseEmail } from "@/lib/auth/tokens";
 import type { Query } from "@/lib/db-query";
@@ -13,11 +12,12 @@ import { appUrl } from "@/lib/mail/layout";
  * everyone else (plan 2026-11-26-001, Unit 2; origin R26).
  *
  * The link is single-use, lasts 7 days, opens the same confirm page as every
- * sign-in link, and is shown to the admin once (only its hash is stored). It
- * cannot be made for an admin address, and who made it is recorded on the
- * token and in the admin log.
+ * sign-in link, and is shown to the admin once (only its hash is stored). Who
+ * made it is recorded on the token and in the admin log. An admin address can
+ * be given one like any member (admins have every member action); the session
+ * it makes is a "pilot" session, which never carries admin rights.
  */
-export type PilotResult = { ok: true; link: string; userId: string } | { ok: false; reason: "invalid" | "admin_address" | "already_signed_up" };
+export type PilotResult = { ok: true; link: string; userId: string } | { ok: false; reason: "invalid" | "already_signed_up" };
 
 export async function createPilotLink(
   q: Query,
@@ -27,7 +27,6 @@ export async function createPilotLink(
   const email = normaliseEmail(o.email);
   const name = o.name.trim().slice(0, 80);
   if (!isEmail(email) || !name) return { ok: false, reason: "invalid" };
-  if (adminEmails().includes(email)) return { ok: false, reason: "admin_address" };
 
   const rows = await q<{ id: string; status: string }>(
     `insert into users (email, name, path, signup_step, created_by) values ($1, $2, 'running', 'plan', $3)

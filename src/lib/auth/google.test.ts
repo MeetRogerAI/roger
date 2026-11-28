@@ -8,6 +8,7 @@ import { GoogleSignInLink } from "@/components/app/google-button";
 import type { NewAccount } from "./login-link";
 import { changeUserEmail } from "@/lib/admin/users";
 import { beginGoogle, completeGoogle, googleConfig, googleVouches, unlinkGoogle, verifyIdToken, type CodeExchange, type GoogleConfig } from "./google";
+import { adminEmails } from "./admin-emails";
 import { findSession, sessionIsAdmin } from "./session";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
@@ -57,7 +58,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 /** A whole round trip: begin, then Google answers with a token made from `extra` claims. */
 async function roundTrip(
-  o: { extra?: Record<string, unknown>; newAccount?: NewAccount; next?: string; cookieState?: string; signedInAs?: string; open?: boolean; admins?: string[] } = {},
+  o: { extra?: Record<string, unknown>; newAccount?: NewAccount; next?: string; cookieState?: string; signedInAs?: string; open?: boolean } = {},
 ) {
   const { url, state } = await beginGoogle(query, cfg, { next: o.next ?? "/app", newAccount: o.newAccount, now: NOW });
   const nonce = new URL(url).searchParams.get("nonce")!;
@@ -71,7 +72,7 @@ async function roundTrip(
       query,
       cfg,
       { state, cookieState, code: "code-1", signedInAs: o.signedInAs },
-      { exchange, keys, now: NOW, query, transport, signupOpen: async () => o.open ?? true, adminEmails: o.admins ?? [] },
+      { exchange, keys, now: NOW, query, transport, signupOpen: async () => o.open ?? true },
     );
   return { url, state, calls, run };
 }
@@ -230,16 +231,34 @@ describe("the callback", () => {
     expect(u).toEqual({ email: "ana@gmail.com", name: "Ana Google", path: "running", agent: "hark", currency: "CAD", signup_step: "plan", google_sub: "g-111", google_email: "ana@gmail.com", verified: true });
   });
 
-  it("never links or signs in an admin address with Google, and a Google session is never admin", async () => {
-    await query("insert into users (email, signup_step) values ('ana@gmail.com', 'done')");
-    expect(await (await roundTrip({ admins: ["ana@gmail.com"] })).run()).toEqual({ kind: "refused", reason: "admin" });
-    expect(await query("select google_sub from users")).toEqual([{ google_sub: null }]);
-    // Linked before the address became an admin's: still refused.
-    await query("update users set google_sub = 'g-111'");
-    expect(await (await roundTrip({ admins: ["ana@gmail.com"] })).run()).toEqual({ kind: "refused", reason: "admin" });
-    const s = { idHash: "h", userId: "u", email: "ana@gmail.com", method: "google" as const, createdAt: NOW, expiresAt: NOW };
-    expect(sessionIsAdmin(s, ["ana@gmail.com"], NOW)).toBe(false);
-    expect(sessionIsAdmin({ ...s, method: "email" }, ["ana@gmail.com"], NOW)).toBe(true);
+  it("links and signs in an admin address with Google like a member's, and the Google session is never admin", async () => {
+    // Admins have every member action (Peter, 2026-11-27); only /admin needs an email-link session.
+    vi.stubEnv("ADMIN_EMAILS", "ana@gmail.com");
+    const [{ id }] = await query<{ id: string }>("insert into users (email, signup_step) values ('ana@gmail.com', 'done') returning id");
+    const first = await (await roundTrip()).run();
+    expect(first).toMatchObject({ kind: "signed_in", userId: id, linked: true });
+    expect(await query("select google_sub from users")).toEqual([{ google_sub: "g-111" }]);
+    expect(sent.map((m) => m.to[0])).toEqual(["ana@gmail.com"]);
+    // Matched by Google's id the next time.
+    const again = await (await roundTrip()).run();
+    expect(again).toMatchObject({ kind: "signed_in", userId: id, linked: false });
+    for (const out of [first, again]) {
+      if (out.kind !== "signed_in") throw new Error("not signed in");
+      const s = await findSession(query, out.token, NOW);
+      expect(s).toMatchObject({ userId: id, email: "ana@gmail.com", method: "google" });
+      expect(sessionIsAdmin(s!, adminEmails(), NOW)).toBe(false);
+      expect(sessionIsAdmin({ ...s!, method: "email" }, adminEmails(), NOW)).toBe(true);
+    }
+  });
+
+  it("signs up an admin address with Google like a member's, and that session is never admin", async () => {
+    vi.stubEnv("ADMIN_EMAILS", "ana@gmail.com");
+    const out = await (await roundTrip({ newAccount: signupDetails })).run();
+    expect(out).toMatchObject({ kind: "signed_in", next: "/start/plan", created: true });
+    if (out.kind !== "signed_in") throw new Error("not signed in");
+    const s = await findSession(query, out.token, NOW);
+    expect(s?.method).toBe("google");
+    expect(sessionIsAdmin(s!, adminEmails(), NOW)).toBe(false);
   });
 
   it("unlinks on request: Google stops reaching the account, and other Google sessions end", async () => {

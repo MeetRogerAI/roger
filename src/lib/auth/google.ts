@@ -5,7 +5,6 @@ import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { googleLinkedEmail } from "@/lib/mail/templates/sign-in";
 import { counterFor, hit, limits } from "@/lib/rate-limit";
 import { sendSignupLink, stepPaths } from "@/lib/signup/account";
-import { adminEmails } from "./admin-emails";
 import type { NewAccount } from "./login-link";
 import { createSession } from "./session";
 import { emailKey, hashSecret, newSecret, normaliseEmail, safeNext } from "./tokens";
@@ -32,8 +31,9 @@ import { emailKey, hashSecret, newSecret, normaliseEmail, safeNext } from "./tok
  *   address unlinks it, and the member can unlink it on /app/settings. The
  *   first use on an existing account emails a notice to its address. An
  *   account already linked to another Google account is refused.
- * - Admin addresses (ADMIN_EMAILS) are never linked or signed in with Google,
- *   and a Google session never grants admin rights (`sessionIsAdmin`).
+ * - An admin address (ADMIN_EMAILS) links and signs in with Google like any
+ *   member's, because admins have every member action. A Google session never
+ *   grants admin rights (`sessionIsAdmin`): /admin needs an email-link session.
  * - Tokens are never logged.
  */
 
@@ -201,7 +201,7 @@ export const exchangeCode: CodeExchange = async ({ code, verifier, cfg }) => {
 // ---------------------------------------------------------------------------
 // The callback
 
-export type RefusedReason = "state" | "token" | "unverified" | "noaccount" | "other_google" | "email_first" | "admin" | "signup_closed" | "limited";
+export type RefusedReason = "state" | "token" | "unverified" | "noaccount" | "other_google" | "email_first" | "signup_closed" | "limited";
 export type GoogleOutcome =
   | { kind: "signed_in"; userId: string; token: string; next: string; linked: boolean; created: boolean }
   | { kind: "refused"; reason: RefusedReason }
@@ -226,10 +226,9 @@ export async function completeGoogle(
     /** The account this browser is already signed in to by an email link (or pilot link), if any. */
     signedInAs?: string | null;
   },
-  deps: { exchange: CodeExchange; keys: KeySource; now?: Date; signupOpen: () => Promise<boolean>; adminEmails?: string[] } & MailDeps,
+  deps: { exchange: CodeExchange; keys: KeySource; now?: Date; signupOpen: () => Promise<boolean> } & MailDeps,
 ): Promise<GoogleOutcome> {
   const now = deps.now ?? new Date();
-  const admins = (deps.adminEmails ?? adminEmails()).map((e) => e.toLowerCase());
   const refused = (reason: RefusedReason): GoogleOutcome => ({ kind: "refused", reason });
   if (!input.state || !input.cookieState || input.state.length > 100 || !same(input.state, input.cookieState)) return refused("state");
   const [row] = await q<{ verifier: string; nonce: string; next_path: string; payload: NewAccount | null }>(
@@ -243,8 +242,6 @@ export async function completeGoogle(
   const claims = await verifyIdToken(idToken, { clientId: cfg.clientId, nonce: row.nonce, keys: deps.keys, now });
   if (!claims) return refused("token");
   if (!claims.emailVerified) return refused("unverified");
-  // Admin accounts sign in by email link only; Google is never linked to them.
-  if (admins.includes(claims.email)) return refused("admin");
   const vouched = googleVouches(claims);
 
   const signup = row.payload;
@@ -257,7 +254,7 @@ export async function completeGoogle(
 
   // 1. Matched by Google's id, whatever the account's email is now.
   const [bySub] = await q<Found>(`select id, email, signup_step from users where google_sub = $1`, [claims.sub]);
-  if (bySub) return admins.includes(bySub.email.toLowerCase()) ? refused("admin") : signIn(bySub, false, false);
+  if (bySub) return signIn(bySub, false, false);
 
   // 2. An account with this email: linked at first use, and its address told. Only when Google
   //    speaks for the address (Gmail, or the Workspace domain it names), or when this browser is
@@ -265,7 +262,6 @@ export async function completeGoogle(
   const linkExisting = async (): Promise<GoogleOutcome | null> => {
     const [u] = await q<Found & { google_sub: string | null }>(`select id, email, signup_step, google_sub from users where email = $1`, [claims.email]);
     if (!u) return null;
-    if (admins.includes(u.email.toLowerCase())) return refused("admin");
     if (u.google_sub && u.google_sub !== claims.sub) return refused("other_google");
     if (!vouched && input.signedInAs !== u.id) return refused("email_first");
     const [linked] = await q<Found>(

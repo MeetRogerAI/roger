@@ -142,7 +142,7 @@ export async function pilotLinkAction(_p: V3State, fd: FormData): Promise<V3Stat
   const by = await requireAdmin();
   const r = await createPilotLink(query, { email: field(fd, "email", 254), name: field(fd, "name", 80), createdBy: by });
   if (!r.ok) {
-    const message = { invalid: "Give a name and a real email address.", admin_address: "That is an admin address.", already_signed_up: "That person already has an account past sign-up." }[r.reason];
+    const message = { invalid: "Give a name and a real email address.", already_signed_up: "That person already has an account past sign-up." }[r.reason];
     return bad(message);
   }
   refresh();

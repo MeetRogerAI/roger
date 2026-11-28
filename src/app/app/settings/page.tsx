@@ -7,7 +7,6 @@ import { siteConfig } from "@/data/config";
 import { COMMON_ZONES } from "@/lib/app/settings";
 import { unlinkGoogleAction } from "./actions";
 import { requireUser } from "@/lib/auth/access";
-import { adminEmails } from "@/lib/auth/admin-emails";
 import { googleEnabled } from "@/lib/auth/google";
 import { query } from "@/lib/db-query";
 
@@ -67,7 +66,7 @@ async function SettingsPage({ searchParams }: { searchParams: PageProps<"/app/se
           <EmailForm current={u.email} supportEmail={siteConfig.contactEmail} />
         </div>
       </section>
-      {(u.google_sub || (googleEnabled() && !adminEmails().includes(u.email.toLowerCase()))) && (
+      {(u.google_sub || googleEnabled()) && (
         <section aria-labelledby="google-h">
           <h2 id="google-h" className="text-h3">
             Google sign-in

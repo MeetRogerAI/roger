@@ -19,6 +19,7 @@ vi.mock("@/lib/db-query", () => ({
 
 const { requireUser, requireUserForAction, isEmailAdmin, SessionCheckUnavailable } = await import("./access");
 const { createSession, SESSION_COOKIE } = await import("./session");
+const { requireAdmin } = await import("@/lib/admin-auth");
 const { GET: clearRoute } = await import("@/app/auth/clear/route");
 const { POST: signoutRoute, GET: signoutGet } = await import("@/app/auth/signout/route");
 
@@ -82,6 +83,24 @@ describe("actions and admin", () => {
     expect(await isEmailAdmin()).toBe(true);
     process.env.ADMIN_EMAILS = "ehab@example.com";
     expect(await isEmailAdmin()).toBe(false);
+  });
+
+  it("gives an admin address signed in by email link both the member app and admin", async () => {
+    const { token } = await createSession(current, userId, "email");
+    resetNextFakes({ [SESSION_COOKIE]: token });
+    expect((await requireUser()).userId).toBe(userId);
+    expect((await requireUserForAction()).userId).toBe(userId);
+    expect(await isEmailAdmin()).toBe(true);
+    expect(await requireAdmin()).toBe("peter@example.com");
+  });
+
+  it.each(["google", "pilot"] as const)("gives an admin address signed in by %s the member app, never admin", async (method) => {
+    const { token } = await createSession(current, userId, method);
+    resetNextFakes({ [SESSION_COOKIE]: token });
+    expect((await requireUser()).userId).toBe(userId);
+    expect((await requireUserForAction()).userId).toBe(userId);
+    expect(await isEmailAdmin()).toBe(false);
+    await expect(requireAdmin()).rejects.toThrow("Not signed in");
   });
 });
 

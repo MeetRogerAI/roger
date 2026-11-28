@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Query } from "@/lib/db-query";
 import { consumeToken, userForToken } from "@/lib/auth/login-link";
+import { adminEmails } from "@/lib/auth/admin-emails";
+import { createSession, findSession, sessionIsAdmin } from "@/lib/auth/session";
 import { testDb } from "@/test-helpers/pglite-db";
 import { createPilotLink, revokePilotLinks } from "./pilot";
 
@@ -44,8 +46,24 @@ describe("createPilotLink", () => {
     expect(await consumeToken(query, tokenOf(r.link))).toBeNull();
   });
 
-  it("is refused for an admin address and for someone already past sign-up", async () => {
-    expect(await createPilotLink(query, { email: "peter@example.com", name: "Peter", createdBy: "peter@example.com" })).toEqual({ ok: false, reason: "admin_address" });
+  it("is made for an admin address like any member's, and the session it opens is never admin", async () => {
+    // Admins have every member action (Peter, 2026-11-27); a pilot session never carries admin rights.
+    process.env.ADMIN_EMAILS = "peter@example.com, ehab@example.com";
+    const r = await createPilotLink(query, { email: "Ehab@Example.com", name: "Ehab", createdBy: "peter@example.com" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const used = await consumeToken(query, tokenOf(r.link));
+    expect(used).toMatchObject({ purpose: "pilot", nextPath: "/start/plan" });
+    const user = await userForToken(query, used!);
+    expect(user?.id).toBe(r.userId);
+    // As the confirm page does for a pilot link (src/app/auth/confirm/actions.ts).
+    const { token } = await createSession(query, user!.id, "pilot");
+    const s = await findSession(query, token);
+    expect(s).toMatchObject({ email: "ehab@example.com", method: "pilot" });
+    expect(sessionIsAdmin(s!, adminEmails())).toBe(false);
+  });
+
+  it("is refused for someone already past sign-up", async () => {
     await query("insert into users (email, name, status) values ('chris@example.com', 'Chris', 'trial')");
     expect(await createPilotLink(query, { email: "chris@example.com", name: "Chris", createdBy: "peter@example.com" })).toEqual({ ok: false, reason: "already_signed_up" });
   });
