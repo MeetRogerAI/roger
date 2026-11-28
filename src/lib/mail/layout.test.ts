@@ -44,6 +44,14 @@ describe("appUrl", () => {
     expect(appUrl("/auth/confirm")).toBe("https://roger-git-feat-x.vercel.app/auth/confirm");
   });
 
+  it("uses preview.meetroger.ai on the branch preview, not Vercel's branch address", () => {
+    process.env.VERCEL_ENV = "preview";
+    process.env.VERCEL_GIT_COMMIT_REF = "preview";
+    process.env.VERCEL_BRANCH_URL = "roger-git-preview-meetrogerai.vercel.app";
+    expect(appUrl("/auth/confirm?t=abc")).toBe("https://preview.meetroger.ai/auth/confirm?t=abc");
+    delete process.env.VERCEL_GIT_COMMIT_REF;
+  });
+
   it("uses the site address on production", () => {
     process.env.VERCEL_ENV = "production";
     process.env.SITE_URL = "https://meetroger.ai/";
