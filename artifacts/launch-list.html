@@ -169,12 +169,6 @@
     </div>
 
 
-    <div class="group">
-      <h2>Accounts</h2>
-      <ul class="list">
-        <li class="item" data-id="g-admin-accounts"><div class="what">Both admin addresses sign up on production</div><div class="detail"><p><code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code> need Roger accounts to open <code>/admin</code> (S13).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-      </ul>
-    </div>
 
 
 
@@ -235,16 +229,6 @@
             <td>Publish both pages marked as drafts. Do not open sign-up to the public until this is done.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
             <td class="notes">2026-11-22, Peter: people who are sent the <code>/start</code> link may sign up and be charged while both pages are still labelled drafts, as long as the pages are live and linked from sign-up. Start buttons on the public site still wait for this row.<br>2026-11-23, build: the privacy notes the build raised are listed in S22.</td>
-          </tr>
-          <tr data-id="S13" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S13</td>
-            <th scope="row">Keys and settings in Vercel</th>
-            <td>Environment variables: the Stripe secret key, publishable key (<code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>, added for the Payment page in spec 1.4) and webhook secret, <code>ADMIN_EMAILS</code> (the Roger team), and the sending address for "Roger support". In Stripe: a monthly price at the standard rate and at the higher rate, each in US and Canadian dollars. <s>A one-list price</s> (spec 1.4: preview only; not needed in live mode).</td>
-            <td>A test sign-up saves a card, the webhook is received, both admins can open <code>/admin</code>, and an automatic email arrives from the support address.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Build against Stripe test keys. Never commit a key to the repo.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">2026-11-22, Peter: real charges start the day B1 ships, so production needs the live Stripe keys and live prices. Test keys are for preview and local builds only.<br>2026-11-23, build: everything that reads these is built. The exact list: <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_WEBHOOK_SECRET</code> (test values on Preview, live on Production); the six price ids <code>STRIPE_PRICE_MONTHLY_USD</code>, <code>_MONTHLY_CAD</code>, <code>_MONTHLY_HIGHER_USD</code>, <code>_MONTHLY_HIGHER_CAD</code>, <code>_RUN_USD</code>, <code>_RUN_CAD</code> (US$200, CA$280, US$400, CA$560, US$200, CA$280, before tax, each in test and live mode; the run prices were US$100 and CA$140 until 2026-11-25); <code>ADMIN_EMAILS</code> (the Roger team's sign-in addresses); <code>EMAIL_FROM_SUPPORT</code> ("Roger support &lt;support@meetroger.ai&gt;", a verified Resend sender). The webhook endpoint, its events and the dashboard settings are S16.<br>2026-11-25, Peter: the admins are <code>peter@meetroger.ai</code> and <code>hello@meetroger.ai</code> (in place of individual names). By 2026-11-26 on <b>Preview</b>: the test <code>STRIPE_SECRET_KEY</code>, the six test price ids, <code>STRIPE_WEBHOOK_SECRET</code>, <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>. On <b>Production</b>: <code>RESEND_API_KEY</code>, <code>ADMIN_EMAILS</code>, <code>ADMIN_SECRET</code>, <code>CRON_SECRET</code>, <code>SITE_URL</code>, <code>DATABASE_URL</code>; no Stripe values yet. Resend: meetroger.ai verified; the sender defaults to "Roger support &lt;support@meetroger.ai&gt;". Still to do: a test sign-up that saves a card on preview, <code>/admin</code> opened by both admins, and the live Stripe values on Production.<br>2026-11-26, payment at the first list (spec 1.4): the preview <code>STRIPE_SECRET_KEY</code> was corrected to this account's sandbox key (it had been a live key from another Stripe account). New variable <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>, per environment: <code>pk_test_…</code> on Preview and local, <code>pk_live_…</code> on Production (in <code>.env.example</code>). The card is now saved on the Payment page when the first list is ready, not at sign-up, so "a test sign-up saves a card" means: sign up, get a held list, then save the card on Payment.<br>2026-11-26, review of spec 1.4: production needs only the four monthly price ids (<code>STRIPE_PRICE_MONTHLY_USD</code>, <code>_MONTHLY_CAD</code>, <code>_MONTHLY_HIGHER_USD</code>, <code>_MONTHLY_HIGHER_CAD</code>). <code>STRIPE_PRICE_RUN_USD</code> and <code>_RUN_CAD</code> are read only by the dormant one-list code (the order charge and the one-list billing line) for leftover per-run accounts on preview; nothing checks for them at startup, and a missing id makes that code skip its preview or alert and stop. Keep them on Preview; leave them off Production.<br>2026-11-27: on preview a member saved a card on the Payment page and was charged at the third list (CA$632.80 with HST). 2026-11-27, live: Peter added a restricted live key (full access except money-out operations) as <code>STRIPE_SECRET_KEY</code>; <code>scripts/stripe-live-setup.ts</code> created the Roger Monthly and Higher monthly rate products (tax code txcd_10103001), the four monthly prices and the webhook, and wrote the price ids, <code>STRIPE_PRODUCT_HIGHER_RATE</code> and <code>STRIPE_WEBHOOK_SECRET</code> to Production; production redeployed and the webhook answers 400 to an unsigned call (configured). Still to do: both admins opening <code>/admin</code> on production. Peter confirmed the automatic emails to peter+preview1@meetroger.ai arrived from the support address (2026-11-27).</td>
           </tr>
           <tr data-id="S14" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S14</td>
