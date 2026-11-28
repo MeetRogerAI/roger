@@ -161,12 +161,6 @@
 
   <section class="panel" id="golive" role="tabpanel" aria-labelledby="tab-golive" hidden>
 
-    <div class="group">
-      <h2>Content</h2>
-      <ul class="list">
-        <li class="item" data-id="g-privacy"><div class="what">Have privacy and terms read, then remove the "draft" label</div><div class="detail"><p>Done in PR #64 into <code>feat/site-v1</code>: Peter confirmed the read (2026-11-27), the v3 pages carry no draft label, the training position (Anthropic, through Vercel's AI Gateway) and the S22 decisions are stated, and the footer on <code>/start</code> links both. Removed when site v1 merges.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-      </ul>
-    </div>
 
 
 
@@ -175,10 +169,7 @@
     <div class="group">
       <h2>Public site and go-live</h2>
       <ul class="list">
-        <li class="item" data-id="g-public-site"><div class="what">Build the public v3 site</div><div class="detail"><p>meetroger.ai is still the Circles preview. The v3 pages, the "Start free" header and the switch that hides Circles (spec Part A) are the largest build left. Being built on <code>feat/site-v1</code> (marketing-site plan); ticked when it merges. Needs your letter (S6) and headshot and signature (S7). When it merges, walk <code>/start</code> at 390px and 1440px and the public pages (first-pass checks 1 and 40). The demo video and "one real week" figures come with A2.</p></div><div class="tags"><span class="tag who-claude">Claude Code builds</span><span class="tag who-you">You supply content</span></div></li>
-        <li class="item" data-id="g-pilot-runs"><div class="what">Import the 13 pilot runs on production</div><div class="detail"><p>Read by the model first, then imported, pilots linked, and a Cora dry run read by an admin (S14). Every play from these prose runs comes out flagged "playbook could not be found" (preview, 2026-11-27): edit a playbook in or reject each one; approving as is gives ideas with no install steps.</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
-        <li class="item" data-id="g-open"><div class="what">Turn on the weekly cycle, then sign-up</div><div class="detail"><p>On <code>/admin/cora</code>, "Go-live switches" (PR #67): the weekly cycle first, then sign-up. Then watch the first real Zack run reach <code>/app/zack</code> and <code>/admin/runs</code> within a minute (first-pass check 6), and, about a month later, the first renewal invoice.</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-        <li class="item" data-id="g-password"><div class="what">After launch: remove the shared admin password</div><div class="detail"><p>Once both admins have signed in by email on production, unset <code>ADMIN_PASSWORD</code> (S21).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
+        <li class="item" data-id="g-pilot-runs"><div class="what">Review the 18 imported pilot runs</div><div class="detail"><p>All 18 runs (the 13 in the repo and 5 more from Drive: Ken, Peter, Robyn, Sylvia, Christopher, Nov 23 to 24) were imported into production on 2026-11-27: 26 plays are in the pool and 38 are held in <code>/admin/flags</code> (mostly "playbook could not be found"). Edit a playbook in or reject each held one, then link each pilot to their account on their user page when they sign up (S14).</p></div><div class="tags"><span class="tag who-claude">Claude Code</span></div></li>
       </ul>
     </div>
   </section>
@@ -199,36 +190,6 @@
           <tr><th scope="col">No.</th><th scope="col">Item</th><th scope="col">Where it goes</th><th scope="col">Done when</th><th scope="col">Blocks</th><th scope="col">Until then</th><th scope="col">Status</th><th scope="col">Notes</th></tr>
         </thead>
         <tbody>
-          <tr data-id="S6" data-status="open" data-blocks="A1" data-done-on="">
-            <td class="id">S6</td>
-            <th scope="row">Peter's letter, edited for v3</th>
-            <td><code>src/data/v3-copy.ts</code></td>
-            <td>The letter no longer mentions Circles or applications, and Peter has approved the text.</td>
-            <td><span class="ver">A1</span></td>
-            <td>Show only the paragraphs that are still true: the first two and the one about his background (spec A.10).</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes"></td>
-          </tr>
-          <tr data-id="S7" data-status="open" data-blocks="" data-done-on="">
-            <td class="id">S7</td>
-            <th scope="row">Headshot and signature</th>
-            <td><code>public/media/peter.jpg</code> (square, at least 480px) and <code>public/media/peter-signature.svg</code></td>
-            <td>Both files exist and the letter block shows them.</td>
-            <td><span class="none">Nothing</span></td>
-            <td>Initials and a typed name.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes"></td>
-          </tr>
-          <tr data-id="S10" data-status="open" data-blocks="A1 B1" data-done-on="">
-            <td class="id">S10</td>
-            <th scope="row">A read of the privacy and terms text, and the model provider's position on training</th>
-            <td><code>src/data/legal.ts</code></td>
-            <td>Peter has had both pages read, the privacy page states the provider's position, and the "draft" label is removed.</td>
-            <td><span class="ver">A1</span><span class="ver">B1</span></td>
-            <td>Publish both pages marked as drafts. Do not open sign-up to the public until this is done.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">2026-11-22, Peter: people who are sent the <code>/start</code> link may sign up and be charged while both pages are still labelled drafts, as long as the pages are live and linked from sign-up. Start buttons on the public site still wait for this row.<br>2026-11-23, build: the privacy notes the build raised are listed in S22.</td>
-          </tr>
           <tr data-id="S14" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S14</td>
             <th scope="row">The existing pilot Zack runs, as seed data for the pool</th>
@@ -238,26 +199,6 @@
             <td>Build and test with made-up runs. The first real Cora run waits for these.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
             <td class="notes">Added 2026-11-22. Spec B.7, "Seed data". 2026-11-22: Peter added 13 run files (November 12 to 15, Zack 1.8 and 1.9, no <code>roger-run</code> block). A pattern scan found no email addresses, phone numbers or links. Peter confirmed the same day that the files are cleared for the public repo. Each contributor's runs go under one hidden contributor record (requirements R25). Still open: the import itself, which needs the seed tool.<br>2026-11-23, build: the seed tool is built (<code>/admin/cora</code> and <code>scripts/seed-import.ts</code>), with nine contributor records and linking to accounts on the user page; the scenario test <code>tests/scenarios/seed-import.test.ts</code> proves a linked pilot is never sent their own seed plays. To do on production, at go-live: run the 13 files through the real model first (<code>INTAKE_LIVE=1</code>; the AI Gateway read a run on preview, 2026-11-27), import them, link each pilot's record when their account exists, then a Cora dry run that an admin reads.</td>
-          </tr>
-          <tr data-id="S21" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S21</td>
-            <th scope="row">Removing the shared admin password</th>
-            <td>Vercel: unset <code>ADMIN_PASSWORD</code>; then a small change removes the code</td>
-            <td>Each Roger team admin has signed in to <code>/admin</code> on production with an email link, and <code>ADMIN_PASSWORD</code> is unset.</td>
-            <td><span class="ver">B1</span></td>
-            <td>The password login stays, limited to 5 tries per IP.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build (plan Unit 17). Unsetting the variable turns the login off at once and ends every password cookie.</td>
-          </tr>
-          <tr data-id="S22" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S22</td>
-            <th scope="row">Privacy-policy notes from the build</th>
-            <td><code>src/data/legal.ts</code> (marketing builder) and S10's read</td>
-            <td>Peter has decided each point and the privacy page says what happens.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Build the defaults in the plan's "Needs a Decision From Peter".</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build. A deleted member's email stays in the admin log row that records the deletion (and email-change rows); admins reading runs and picks is not logged; retention erases runs 90 days after access ends but not for long-idle one-at-a-time or held members; pooled plays stay after a run is deleted; whether a contributor can have pooled plays withdrawn; how long sign-up interest, notification and Stripe event records are kept.<br>2026-11-27, Peter decided each point (<code>docs/brainstorms/2026-11-27-v3-launch-close-out-requirements.md</code>, R7): the deletion record keeps the email, stated on the page; admin reads not logged at launch (logging in B3, spec B.16); runs of one-at-a-time or held members erased after 12 months idle; pooled plays stay, anonymised; withdrawal of pooled plays on request through support; sign-up interest and notifications kept 12 months, Stripe events 18 months. Built: the two retention rules (PR #63, merged). Written: all six on the privacy page (PR #64 into <code>feat/site-v1</code>); this row goes when site v1 merges.</td>
           </tr>
         </tbody>
       </table>
