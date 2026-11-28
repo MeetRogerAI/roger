@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:scenarios": "vitest run --config vitest.scenarios.config.ts --passWithNoTests"
+    "test:scenarios": "vitest run --config vitest.scenarios.config.ts --passWithNoTests",
+    "snapshot-content": "node scripts/snapshot-content.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

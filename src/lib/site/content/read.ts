@@ -41,8 +41,9 @@
  * at the first click on the homepage's link. Asked here, per request, the
  * answer is the request's own.
  *
- * publishedOverlay is the reader with no draft branch at all, for the
- * release snapshot (U10): Draft Mode cannot turn it to the draft.
+ * The release export does not read through here: it reads what is published
+ * straight from the database (store.ts, readPublishedForRelease), since this
+ * cache is per server instance and a publish expires it on one only.
  */
 import { draftMode } from "next/headers";
 import { cacheLife, cacheTag } from "next/cache";
@@ -70,16 +71,6 @@ async function cachedPublished(): Promise<Overlay> {
   cacheTag(CONTENT_TAG);
   if (!hasDb()) return emptyOverlay;
   return readPublished(query);
-}
-
-/**
- * The site's published edits, as an overlay on the baseline, read through the same cache as the pages. It has no
- * draft branch: Draft Mode, an admin's session, or both together cannot make it give a draft. It THROWS when the
- * published content cannot be read, so a caller that must not answer with a partial result (the release export,
- * plan KTD9) can say so. "No database" is an empty overlay, which is true.
- */
-export async function publishedOverlay(): Promise<Overlay> {
-  return cachedPublished();
 }
 
 /** What a page is handed: everything stored that it should show, and whether that is an admin's preview of the drafts. */

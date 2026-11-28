@@ -7,10 +7,14 @@ import { query } from "@/lib/db-query";
 import { draftCount, pageStatus } from "@/lib/site/content/check";
 import { REVIEW_ADDRESS, editorAddress, pageCovers } from "@/lib/site/content/labels";
 import { siteRegistry } from "@/lib/site/content/registry";
-import { readStored } from "@/lib/site/content/store";
+import { getAmounts } from "@/lib/site/amounts";
+import { asRead } from "@/lib/site/content/check";
+import { releaseDifferences } from "@/lib/site/content/differs";
+import { readStoredAsWritten } from "@/lib/site/content/store";
 import { LaunchListNote } from "./launch-list";
 import { Unreadable, count } from "./parts";
 import { UndoPublish } from "./publish-controls";
+import { ReleasePanel } from "./release-panel";
 
 /**
  * Pages (plan U5, R5, R13): the pages of the marketing site whose words the
@@ -26,17 +30,19 @@ const mark = "rounded-full border px-2.5 py-0.5 text-meta";
 export default async function PagesScreen() {
   await connection();
   if (!(await isAdmin())) return null;
-  let stored: Awaited<ReturnType<typeof readStored>>;
+  let stored: Awaited<ReturnType<typeof readStoredAsWritten>>;
   let last: Awaited<ReturnType<typeof recentActions>>[number] | undefined;
   try {
-    stored = await readStored(query);
-    [last] = await recentActions(query, { actions: ["site_content_published", "site_content_publish_undone"], limit: 1 });
+    stored = await readStoredAsWritten(query);
+    [last] = await recentActions(query, { actions: ["site_content_published", "site_content_publish_undone", "site_content_reset_to_release"], limit: 1 });
   } catch (error) {
     console.error("[pages] The stored site content could not be read.", error instanceof Error ? error.message : error);
     return <Unreadable />;
   }
   const status = pageStatus(stored);
   const waiting = draftCount(stored);
+  const amounts = await getAmounts();
+  const differences = releaseDifferences(stored.published, { written: stored.written, read: (text) => asRead(text, amounts) });
 
   return (
     <section className="max-w-[56rem] space-y-8">
@@ -63,11 +69,13 @@ export default async function PagesScreen() {
         )}
         {last && (
           <p data-last className="text-small text-ink-2">
-            {last.action === "site_content_published" ? "Last publish" : "Last publish undone"}: {when(last.createdAt)}, by {last.adminEmail}.
+            {last.action === "site_content_published" ? "Last publish" : last.action === "site_content_reset_to_release" ? "Last reset to the release" : "Last publish undone"}: {when(last.createdAt)}, by {last.adminEmail}.
           </p>
         )}
         <UndoPublish available={stored.previous !== null} />
       </div>
+
+      <ReleasePanel differences={differences} stored={stored} drafts={waiting} amounts={amounts} />
 
       <div>
         <h2 className="text-title">The pages</h2>

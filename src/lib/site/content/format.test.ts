@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import releasedFile from "@/data/site/released.json";
 import { fixtureRegistry } from "@/test-helpers/content-fixture";
-import { LIST_MAX, OVERLAY_FORMAT, TEXT_MAX, emptyOverlay, isEmptyOverlay, legacyText, newOverlay, overlaySchema, parseOverlay, parseOverlayStrict, type Overlay } from "./format";
+import { LIST_MAX, OVERLAY_FORMAT, TEXT_MAX, emptyOverlay, isEmptyOverlay, legacyText, lenientLosses, newOverlay, overlaySchema, parseOverlay, parseOverlayStrict, type Overlay } from "./format";
 import { siteRegistry } from "./registry";
 
 const empty = { format: 1, text: {}, sections: {}, lists: {} };
@@ -35,7 +35,7 @@ describe("the empty overlay", () => {
     expect(isEmptyOverlay({ ...empty, lists: { "control.points": { order: [], removed: ["off"], added: [] } } })).toBe(false);
   });
 
-  it("is what the release file holds on this branch, and the file passes the strict reading", () => {
+  it("is what every test reads as the release file (src/test-helpers/empty-release.ts), and passes the strict reading; the real file is held in src/data/site/released.test.ts", () => {
     expect(parseOverlayStrict(releasedFile)).toEqual({ ok: true, overlay: empty });
     expect(Object.keys(releasedFile).sort()).toEqual(["format", "lists", "sections", "text"]);
   });
@@ -344,5 +344,38 @@ describe("the strict reading", () => {
     expect(overlaySchema.safeParse(withText({ "home.hero.kicker": "x" })).success).toBe(true);
     expect(overlaySchema.safeParse(withText({ "buttons.start": "a".repeat(TEXT_MAX + 1) })).success).toBe(false);
     expect(overlaySchema.safeParse(withText(Object.fromEntries(ids(2001).map((id) => [id, "x"])))).success).toBe(false);
+  });
+});
+
+describe("what the lenient reading leaves out (lenientLosses), for the release export", () => {
+  it("is nothing for what the reading keeps: sound entries, old names whose new names are read, an id twice, an empty entry", () => {
+    const value = {
+      format: 1,
+      text: { "home.hero.headline": "Kept.", "nav.pricing": "Plans", "questions.price-and-billing.items.cost.a": "{monthlyUsd} a month" },
+      sections: { home: { order: [], off: ["compounds", "compounds"] }, faq: { order: [], off: [] } },
+      lists: { "control.points": { order: [], removed: [], added: [] }, "home.problem.statements": { order: [], removed: ["alone"], added: [] } },
+    };
+    expect(lenientLosses(value)).toEqual([]);
+  });
+
+  it("names each entry it drops, and a value that is no overlay of this format as one loss", () => {
+    expect(lenientLosses({ ...empty, format: 2 })).toEqual(["(the overlay): not stored content of format 1"]);
+    expect(lenientLosses("text")).toEqual(["(the overlay): not stored content of format 1"]);
+    const lost = lenientLosses({
+      format: 1,
+      text: { "home.hero.gone": "x", "home.hero.headline": 7, "nav.faq.href": "javascript:alert(1)", "nav.about": "" },
+      sections: { nowhere: { order: [], off: ["x"] }, home: { order: ["hero", "not-a-section"], off: [] } },
+      lists: { "no.such.list": { order: ["a"], removed: [], added: [] }, "home.problem.statements": { order: [], removed: [], added: ["not-added-prefix"] } },
+    });
+    expect(lost).toEqual([
+      "text.home.hero.gone: no field of this name in this site's code",
+      "text.home.hero.headline: not text",
+      "text.nav.faq.href: not something this field can print (empty, a name in braces it may not hold, or an address a link may not point at)",
+      "text.nav.about: not something this field can print (empty, a name in braces it may not hold, or an address a link may not point at)",
+      "sections.nowhere: no page of this name in this site's code, or nothing in it the code can use",
+      "sections.home: part of it names sections this site's code does not have, or cannot be",
+      "lists.no.such.list: no list of this name in this site's code, or nothing in it the code can use",
+      "lists.home.problem.statements: no list of this name in this site's code, or nothing in it the code can use",
+    ]);
   });
 });

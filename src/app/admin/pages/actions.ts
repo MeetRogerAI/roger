@@ -12,7 +12,7 @@ import { fieldLabel, fieldPlace, listWords, placesIn } from "@/lib/site/content/
 import { applyOverlay, baseline, listItems, shownOverlay, textAt } from "@/lib/site/content/model";
 import { CONTENT_TAG } from "@/lib/site/content/read";
 import { ADDED_PREFIX, TOGGLE_ON, fieldsOfItem, isId, resolveField, siteRegistry } from "@/lib/site/content/registry";
-import { publish, readStored, sameOverlay, saveDraft, saveList, saveSections, undoPublish, type DraftChange } from "@/lib/site/content/store";
+import { publish, readStored, resetToRelease, sameOverlay, saveDraft, saveList, saveSections, undoPublish, type DraftChange } from "@/lib/site/content/store";
 
 /**
  * The actions of the Pages screens (plan U5). Server actions are public
@@ -33,8 +33,11 @@ import { publish, readStored, sameOverlay, saveDraft, saveList, saveSections, un
  *                       owner read (KTD11), and logs each wording warning that
  *                       was published over.
  *   undoPublishAction   puts back what was live before the last publish.
+ *   resetToReleaseAction  "Reset all to the release": the site shows the
+ *                       release as it is, its own edits and drafts gone, until
+ *                       an undo (plan U10, R21).
  *
- * The two that change what is live expire the public pages' cached copy with
+ * The three that change what is live expire the public pages' cached copy with
  * updateTag(CONTENT_TAG): after every call that got as far as the write,
  * whatever it reports, and also when the call throws, because the statement
  * may have landed before what failed (its log row is written after it).
@@ -317,6 +320,42 @@ export async function publishAction(fd: FormData): Promise<PublishState> {
   updateTag(CONTENT_TAG);
   refresh();
   return { status: "ok", message: done.changed ? "Published. Visitors see the changes from their next page view." : NOTHING, at: Date.now() };
+}
+
+const RESET_MOVED = "The site’s words have changed since this list was made, so nothing was reset. The list on this screen is the new one: read it, then reset.";
+
+/**
+ * "Reset all to the release" (plan U10, R21, AE10): the site shows the release as it is. Every published edit of
+ * the site's own goes, and so does every draft not yet published. `seen` is the fingerprint of what the owner read
+ * the list from (reviewKey of the draft and what is published): anything saved, published or undone since, and
+ * nothing is reset. Undo last publish takes it back.
+ */
+export async function resetToReleaseAction(fd: FormData): Promise<PublishState> {
+  const by = await requireAdmin();
+  const seen = sent(fd, "seen");
+  const failed = (message: string): PublishState => ({ status: "error", message, at: Date.now() });
+  const stored = await readStored(query);
+  if (!seen || reviewKey(stored, []) !== seen) {
+    refresh();
+    return failed(RESET_MOVED);
+  }
+  let done: Awaited<ReturnType<typeof resetToRelease>>;
+  try {
+    done = await resetToRelease(query, by, stored);
+  } catch (failure) {
+    updateTag(CONTENT_TAG);
+    throw failure;
+  }
+  updateTag(CONTENT_TAG);
+  refresh();
+  if (!done.ok) return failed(done.reason === "busy" ? PUBLISH_BUSY.replace("nothing was published", "nothing was reset") : RESET_MOVED);
+  return {
+    status: "ok",
+    message: done.changed
+      ? "Reset. The site shows the release as it is, for every visitor from their next page view. Undo last publish brings back this site’s edits until the next publish, and the drafts that were thrown away as long as nothing is saved first."
+      : "Nothing to reset: this site already shows the release as it is.",
+    at: Date.now(),
+  };
 }
 
 /** Puts back what the site showed before the last publish. The drafts stay as they are. */
