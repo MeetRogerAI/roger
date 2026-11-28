@@ -8,7 +8,7 @@ import { adjustmentOnSwitchScheduled, ANCHOR, carryToFirstCharge, ISO } from "./
 import { BUSY, isCancelling, loadPlanUser, undoCancel, unixIso, UNREACHABLE, type PlanDeps, type PlanResult, type PlanUser } from "./cancel";
 import { chargeInFlight } from "./claims";
 import { periodAt } from "./period";
-import { amount, money, moneyCents, taxPhrase, type Currency } from "./prices";
+import { amount, chargeWords, money, moneyCents, taxPhrase, type Currency } from "./prices";
 import { tellFirstCharge } from "./quote";
 import type { SubscriptionInfo } from "./subscriptions";
 
@@ -266,7 +266,7 @@ export async function applySwitch(q: Query, d: PlanDeps, userId: string, to: Tar
     const told = await tellFirstCharge(q, { gw: d.gw, settings: d.settings, now: d.now, query: d.query, transport: d.transport, sleep: d.sleep }, u.id, "plan_changed", ref, (quote) =>
       planChangedEmail({
         to,
-        effect: `Monthly starts with your next list. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${moneyCents(quote.totalCents, quote.currency)}, tax included, for your first month${carried ? `, with the higher-rate difference of ${moneyCents(carried, quote.currency)} still owed for the month you switched away from` : ""}, then the monthly price every month.`,
+        effect: `Monthly starts with your next list. That Monday, no earlier than ${longDate(quote.week)}, we’ll charge ${chargeWords(quote.totalCents, quote.currency, quote.taxCents)} for your first month${carried ? `, with the higher-rate difference of ${moneyCents(carried, quote.currency)} still owed for the month you switched away from` : ""}, then the monthly price every month.`,
       }),
     ).catch((e) => {
       console.error("[billing] switch quote", u.id, e instanceof Error ? e.message : e);

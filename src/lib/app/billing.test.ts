@@ -42,7 +42,7 @@ describe("the billing page (spec B.10)", () => {
     const v = await loadBilling(query, id, { settings, now: SATURDAY, plans, adjust: adjust() });
     expect(v).toMatchObject({
       plan: "monthly",
-      nextCharge: "Next charge Sunday, January 3: US$226 with tax.",
+      nextCharge: "Next charge Sunday, January 3: US$226 (US$200 plus US$26 tax).",
       invoices: [{ id: "in_1", status: "paid", hostedUrl: "https://invoice.stripe.test/in_1" }],
       canUpdateCard: true,
       cardLink: null,
@@ -61,10 +61,10 @@ describe("the billing page (spec B.10)", () => {
   it("a trial: the told amount; a member cancelling inside the paid month: the undo", async () => {
     const t = await member(
       `insert into users (email, status, plan, currency, stripe_customer, free_lists_used, quote, trial_started_at) values ('t@example.com', 'trial', 'monthly', 'USD', 'cus_t', 2,
-        '{"totalCents": 22600, "currency": "USD", "week": "2026-12-14"}', '2026-11-23T15:00:00Z') returning id`,
+        '{"totalCents": 22600, "taxCents": 2600, "currency": "USD", "week": "2026-12-14"}', '2026-11-23T15:00:00Z') returning id`,
     );
     expect(await loadBilling(query, t, { settings, now: SATURDAY, plans })).toMatchObject({
-      nextCharge: "Your first charge, with your third list: no earlier than Monday, December 14, US$226 with tax.",
+      nextCharge: "Your first charge, with your third list: no earlier than Monday, December 14, US$226 (US$200 plus US$26 tax).",
       cancel: { label: "Cancel my trial" },
     });
     const c = await member(

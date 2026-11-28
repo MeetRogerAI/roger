@@ -97,6 +97,23 @@ describe("the told amount (spec check 21)", () => {
     expect(sent.filter((m) => m.subject === "Your first charge amount changed")).toHaveLength(3);
   });
 
+  // S18 point a review: a quote told before the tax was kept is refreshed with its tax, silently when the amount is the same.
+  it("refreshes a quote told without its tax silently, keeping when it was told, and still tells a changed amount", async () => {
+    const taxed: BillingGateway = { ...gw, preview: async (o) => ({ ...(await gw.preview(o)), taxCents: 2600 }) };
+    const old = { totalCents: 22600, currency: "USD", price: "price_monthly_usd", extraCents: 0, at: "2026-12-07T15:00:00.000Z", week: WEEK };
+    await query("update users set quote = $1", [JSON.stringify(old)]);
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T15:00:00Z")), gw: taxed }, uid)).toBe(false);
+    expect(sent).toEqual([]);
+    const [{ quote }] = await query<{ quote: Record<string, unknown> }>("select quote from users");
+    expect(quote).toMatchObject({ totalCents: 22600, taxCents: 2600, at: old.at, week: WEEK });
+    // Now kept with its tax: the same amount again changes nothing.
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T16:00:00Z")), gw: taxed }, uid)).toBe(false);
+    // A different amount is still told.
+    await switchSharing("off", "2026-12-09T17:00:00Z");
+    expect(await noticeQuoteChange(query, { ...deps(new Date("2026-12-09T17:00:00Z")), gw: taxed }, uid)).toBe(true);
+    expect(sent.map((m) => m.subject)).toEqual(["Your first charge amount changed"]);
+  });
+
   it("does not store an amount whose email failed; the charge then holds and tells instead of charging it", async () => {
     await sendFirstPaidNext(query, deps(MONDAY_BEFORE), uid);
     await switchSharing("off", "2026-12-09T15:00:00Z");
@@ -187,7 +204,7 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
       coupons.push(coupon ?? null);
       if (coupon && gone.has(coupon)) throw Object.assign(new Error(`No such coupon: '${coupon}'`), { code: "resource_missing", param: "discounts[0][coupon]" });
       const off = coupon ? 4000 : 0;
-      return { totalCents: Math.round((20000 - off) * 1.13), currency: "USD", discountCents: off };
+      return { totalCents: Math.round((20000 - off) * 1.13), currency: "USD", discountCents: off, taxCents: Math.round((20000 - off) * 0.13) };
     },
     subscriptions: async () => [],
     createSubscription: async ({ coupon }) => (created.push(coupon ?? null), { kind: "succeeded", object: "sub_1", amountCents: coupon ? 18080 : 22600, currency: "USD" }),
@@ -235,9 +252,9 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
 
   // Review F5: how long the discount lasts, in both emails, and the regular month after one that ends.
   it.each([
-    ["once", null, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$226 a month, tax included.", 22600],
-    ["repeating", 1, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$226 a month, tax included.", 22600],
-    ["repeating", 3, "That includes your promo code WELCOME20: US$40 off a month for your first 3 months. After that, it’s US$226 a month, tax included.", 22600],
+    ["once", null, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$200 a month plus tax.", 22600],
+    ["repeating", 1, "That includes your promo code WELCOME20: US$40 off your first month. After that, it’s US$200 a month plus tax.", 22600],
+    ["repeating", 3, "That includes your promo code WELCOME20: US$40 off a month for your first 3 months. After that, it’s US$200 a month plus tax.", 22600],
     ["forever", null, "That includes your promo code WELCOME20: US$40 off every month.", undefined],
   ])("a %s discount (%s months): both emails word it, and the quote notes the amount after", async (duration, months, line, recurring) => {
     await query("update users set promo_duration = $1, promo_duration_months = $2", [duration, months]);
@@ -245,7 +262,9 @@ describe("a promo locked in at card save (plan 2026-11-26-001, Unit 8)", () => {
     expect(await sendFirstChargeReminders(query, pdeps(SATURDAY))).toBe(1);
     expect(sent).toHaveLength(2);
     for (const m of sent) {
-      expect(m.text).toContain("US$180.80");
+      // The price plus the tax, never "tax included" (S18 point a).
+      expect(m.text).toContain("US$180.80 (US$160 plus US$20.80 tax)");
+      expect(m.text).not.toContain("tax included");
       expect(m.text).toContain(line);
     }
     const q = (await query<{ quote: Record<string, unknown> }>("select quote from users"))[0].quote;

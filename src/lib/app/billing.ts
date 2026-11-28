@@ -3,7 +3,7 @@ import type { Query } from "@/lib/db-query";
 import { ANCHOR, ISO } from "@/lib/billing/adjustment";
 import { HAS_CARD_SQL, NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import { periodAt } from "@/lib/billing/period";
-import { amount, money, moneyCents, priceId, taxPhrase, type Currency } from "@/lib/billing/prices";
+import { amount, chargeWords, money, priceId, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { AdjustmentGateway, InvoiceRow, OrderGateway, PlanGateway } from "@/lib/billing/subscriptions";
 import { longDate } from "@/lib/dates";
 import { heldTeaser } from "./held";
@@ -46,7 +46,7 @@ type U = {
   hold_reason: string | null;
   currency: Currency | null;
   free_lists_used: number;
-  quote: { totalCents: number; currency: Currency; week: string; at?: string } | null;
+  quote: { totalCents: number; currency: Currency; week: string; at?: string; taxCents?: number } | null;
   stripe_customer: string | null;
   stripe_subscription: string | null;
   cancel_requested_at: string | null;
@@ -99,7 +99,7 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
     const when = changedAmountChargeDate(u.quote);
     nextCharge =
       u.quote && when
-        ? `Your first charge changed to ${moneyCents(u.quote.totalCents, u.quote.currency)} with tax. It is charged on ${longDate(when)}, with your list. If you’d rather not, cancel before then.`
+        ? `Your first charge changed to ${chargeWords(u.quote.totalCents, u.quote.currency, u.quote.taxCents)}. It is charged on ${longDate(when)}, with your list. If you’d rather not, cancel before then.`
         : "Your first charge amount changed. It is charged a day after we told you the new amount, with your list.";
   } else if (u.status === "held") nextCharge = "Your first charge is waiting for a card that works. Update your card and it is tried straight away.";
   else if (u.status === "cancelled" || u.status === "closed") nextCharge = accessLeft && !u.at_once ? `Nothing more will be charged. Your lists continue until ${date(u.access_ends_at!)}.` : "Nothing more will be charged.";
@@ -107,7 +107,7 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
   else if (switching) nextCharge = `Nothing more is charged for monthly. It ends on ${date(u.access_ends_at!)}; after that, only the lists you order.`;
   else if (u.plan === "monthly" && u.stripe_subscription) nextCharge = await renewalLine(d, u, monthly, tax);
   else if (u.plan === "monthly" && u.status === "trial") {
-    if (u.quote) nextCharge = `Your first charge, with your third list: no earlier than ${longDate(u.quote.week)}, ${moneyCents(u.quote.totalCents, u.quote.currency)} with tax.`;
+    if (u.quote) nextCharge = `Your first charge, with your third list: no earlier than ${longDate(u.quote.week)}, ${chargeWords(u.quote.totalCents, u.quote.currency, u.quote.taxCents)}.`;
     else if (u.free_lists_used < s.freeRuns) nextCharge = `Nothing until your free lists are done. Then ${monthly} a month, ${tax}, starting with your third list.`;
     else nextCharge = `Your first charge comes with your next list: ${monthly}, ${tax}.`;
   } else nextCharge = await orderLine(d, u, run, tax);
@@ -144,14 +144,14 @@ export async function loadBilling(q: Query, userId: string, d: BillingDeps): Pro
   };
 }
 
-/** The coming renewal: its date from the subscription's anchor, its total with tax from Stripe's preview (any month's difference included). */
+/** The coming renewal: its date from the subscription's anchor, its total and the tax in it from Stripe's preview (any month's difference included). */
 async function renewalLine(d: BillingDeps, u: U, monthly: string, tax: string): Promise<string> {
   const end = periodAt(u.anchor, d.now)?.endDate;
   const when = end ? `${longDate(end)}: ` : "";
   if (d.adjust && u.stripe_customer && u.stripe_subscription) {
     try {
       const p = await d.adjust.previewRenewal({ customer: u.stripe_customer, subscription: u.stripe_subscription });
-      return `Next charge ${when}${moneyCents(p.totalCents, p.currency as Currency)} with tax.`;
+      return `Next charge ${when}${chargeWords(p.totalCents, p.currency as Currency, p.taxCents)}.`;
     } catch (e) {
       console.error("[billing] renewal preview", e instanceof Error ? e.message : e);
     }
@@ -159,13 +159,13 @@ async function renewalLine(d: BillingDeps, u: U, monthly: string, tax: string): 
   return `Next charge ${when}${monthly}, ${tax}.`;
 }
 
-/** One at a time: nothing unless ordered; a list's price with tax from Stripe's preview where it can be read. */
+/** One at a time: nothing unless ordered; a list's price and its tax from Stripe's preview where it can be read. */
 async function orderLine(d: BillingDeps, u: U, run: string, tax: string): Promise<string> {
   const price = priceId("per_run", u.currency ?? "USD");
   if (d.orders && u.stripe_customer && price) {
     try {
       const p = await d.orders.previewOrder({ customer: u.stripe_customer, price });
-      return `Nothing is charged unless you order. Each list is ${moneyCents(p.totalCents, p.currency as Currency)} with tax, charged the Monday it is sent.`;
+      return `Nothing is charged unless you order. Each list is ${chargeWords(p.totalCents, p.currency as Currency, p.taxCents)}, charged the Monday it is sent.`;
     } catch (e) {
       console.error("[billing] order preview", e instanceof Error ? e.message : e);
     }

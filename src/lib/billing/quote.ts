@@ -35,11 +35,15 @@ export type Quote = {
   coupon?: string | null;
   /** The discount on the first charge (`totalCents` is the first charge, after it). */
   discountCents?: number;
+  /** The tax in `totalCents`, from the same preview, so the email can say the price plus the tax (S18 point a). Absent on a quote told before. */
+  taxCents?: number;
   /**
    * For a discount that ends (once, or for some months): the monthly amount after it, tax included, as told in the
    * email. Words only: never compared with the charge.
    */
   recurringCents?: number;
+  /** The tax in `recurringCents`. */
+  recurringTaxCents?: number;
 };
 export type QuoteDeps = { gw: BillingGateway; settings: V3Settings; now: Date } & MailDeps;
 
@@ -101,11 +105,13 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   const extra = extraCents > 0 ? { amountCents: extraCents, currency } : null;
   const { preview: p, coupon } = await previewFirst(q, d.gw, { id: u.id, promo_coupon: u.promo_coupon, stripe_customer: u.stripe_customer! }, price, extra);
   const discountCents = coupon ? (p.discountCents ?? 0) : 0;
-  const quote: Quote = { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week, coupon, discountCents };
+  const quote: Quote = { totalCents: p.totalCents, currency: p.currency as Currency, price, extraCents, at: d.now.toISOString(), week, coupon, discountCents, ...(p.taxCents != null ? { taxCents: p.taxCents } : {}) };
   // A discount that ends: the regular month after it (the plan price with tax, no coupon, no first-month extra), for the email's words.
   if (coupon && discountCents > 0 && discountEnds(termsOf(u))) {
     try {
-      quote.recurringCents = (await d.gw.preview({ customer: u.stripe_customer!, price, extra: null, coupon: null })).totalCents;
+      const after = await d.gw.preview({ customer: u.stripe_customer!, price, extra: null, coupon: null });
+      quote.recurringCents = after.totalCents;
+      if (after.taxCents != null) quote.recurringTaxCents = after.taxCents;
     } catch (e) {
       console.warn("[quote] the amount after the discount could not be previewed", { userId: u.id, message: e instanceof Error ? e.message : String(e) });
     }
@@ -113,7 +119,7 @@ async function preview(q: Query, d: QuoteDeps, u: U): Promise<Quote | null> {
   return quote;
 }
 
-const same = (a: Quote | null, b: Quote) =>
+const sameAmount = (a: Quote | null, b: Quote) =>
   Boolean(
     a &&
       a.totalCents === b.totalCents &&
@@ -125,10 +131,13 @@ const same = (a: Quote | null, b: Quote) =>
       (a.coupon === undefined || (a.coupon ?? null) === (b.coupon ?? null)),
   );
 
+/** The same told quote, the tax in it included: one told before the tax was kept (no `taxCents`) is not the same. */
+const same = (a: Quote | null, b: Quote) => sameAmount(a, b) && a!.taxCents !== undefined;
+
 /** The discount line for an email stating the first charge: the locked-in promo's label, amount off, period and the amount after. */
 const discountOf = (u: U, quote: Quote): DiscountLine =>
   quote.coupon && (quote.discountCents ?? 0) > 0
-    ? { label: u.promo_label ?? "Promo code", amountCents: quote.discountCents!, ...termsOf(u), thenCents: quote.recurringCents ?? null }
+    ? { label: u.promo_label ?? "Promo code", amountCents: quote.discountCents!, ...termsOf(u), thenCents: quote.recurringCents ?? null, thenTaxCents: quote.recurringTaxCents ?? null }
     : null;
 
 /** Sends an email stating an amount, and stores that amount as told only if it was sent. */
@@ -146,8 +155,14 @@ export async function noticeQuoteChange(q: Query, d: QuoteDeps, userId: string):
   if (!u || !quotable(u) || !u.quote || quoteFrozen(u.quote, d.now, d.settings)) return false;
   const fresh = await preview(q, d, u);
   if (!fresh || same(u.quote, fresh)) return false;
+  // Told before the tax was kept, and the same amount: stored silently with its tax (S18 point a review), keeping
+  // when it was told. Nothing changed for the member, so no email.
+  if (sameAmount(u.quote, fresh)) {
+    await q(`update users set quote = $2 where id = $1 and status = 'trial'`, [u.id, JSON.stringify({ ...fresh, at: u.quote.at })]);
+    return false;
+  }
   // Unique per refresh: switching back and forth still tells the user each time.
-  const res = await tell(q, d, u, "quote_changed", `${fresh.week}:${fresh.at}`, fresh, quoteChangedEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency }));
+  const res = await tell(q, d, u, "quote_changed", `${fresh.week}:${fresh.at}`, fresh, quoteChangedEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, taxCents: fresh.taxCents }));
   return res === "sent";
 }
 
@@ -179,7 +194,7 @@ export async function sendFirstPaidNext(q: Query, d: QuoteDeps, userId: string):
   if (!u || !quotable(u)) return false;
   const fresh = await preview(q, d, u);
   if (!fresh) return false;
-  const res = await tell(q, d, u, "first_paid_next", fresh.week, fresh, firstPaidNextEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh) }));
+  const res = await tell(q, d, u, "first_paid_next", fresh.week, fresh, firstPaidNextEmail({ week: fresh.week, amountCents: fresh.totalCents, currency: fresh.currency, taxCents: fresh.taxCents, discount: discountOf(u, fresh) }));
   return res === "sent";
 }
 
@@ -206,7 +221,7 @@ export async function sendFirstChargeReminders(q: Query, d: QuoteDeps): Promise<
       const u = (await load(q, id))!;
       const fresh = await preview(q, d, u);
       if (!fresh) continue;
-      const res = await tell(q, d, u, "first_charge_reminder", week, fresh, firstChargeReminderEmail({ week, amountCents: fresh.totalCents, currency: fresh.currency, discount: discountOf(u, fresh) }));
+      const res = await tell(q, d, u, "first_charge_reminder", week, fresh, firstChargeReminderEmail({ week, amountCents: fresh.totalCents, currency: fresh.currency, taxCents: fresh.taxCents, discount: discountOf(u, fresh) }));
       if (res === "sent") n++;
     } catch (e) {
       console.error("[quote] reminder", id, e instanceof Error ? e.message : e);

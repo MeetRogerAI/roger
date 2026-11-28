@@ -6,12 +6,18 @@ import { siteConfig } from "@/data/config";
  * small footer. Built as both HTML and plain text from the same parts, with
  * all text escaped.
  */
+/**
+ * A paragraph: plain text, or text with one inline link on the words `link.label` (which must appear in `text`).
+ * In plain text the link reads "label (url)".
+ */
+export type Paragraph = string | { text: string; link: { label: string; url: string } };
+
 export type EmailParts = {
   subject: string;
   /** Hidden preview line shown by mail apps after the subject. */
   preview?: string;
   heading?: string;
-  paragraphs: string[];
+  paragraphs: Paragraph[];
   button?: { label: string; url: string };
   /** Lines after the button, e.g. the status line or the monthly line. */
   after?: string[];
@@ -25,7 +31,20 @@ export function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-const p = (s: string) => `<p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f">${esc(s)}</p>`;
+const P_STYLE = "margin:0 0 16px;font-size:16px;line-height:1.5;color:#1d1d1f";
+const p = (s: string) => `<p style="${P_STYLE}">${esc(s)}</p>`;
+
+/** One paragraph's HTML, with its inline link if it has one. */
+const para = (x: Paragraph) => {
+  if (typeof x === "string") return p(x);
+  const at = x.text.indexOf(x.link.label);
+  if (at < 0) return p(x.text);
+  const a = `<a href="${esc(x.link.url)}" style="color:#9a5226">${esc(x.link.label)}</a>`;
+  return `<p style="${P_STYLE}">${esc(x.text.slice(0, at))}${a}${esc(x.text.slice(at + x.link.label.length))}</p>`;
+};
+
+/** One paragraph's plain text: an inline link reads "label (url)". */
+const plain = (x: Paragraph) => (typeof x === "string" ? x : x.text.includes(x.link.label) ? x.text.replace(x.link.label, `${x.link.label} (${x.link.url})`) : x.text);
 
 export function renderEmail(e: EmailParts): Rendered {
   const html = [
@@ -33,7 +52,7 @@ export function renderEmail(e: EmailParts): Rendered {
     e.preview ? `<div style="display:none;max-height:0;overflow:hidden">${esc(e.preview)}</div>` : "",
     `<div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif">`,
     e.heading ? `<h1 style="margin:0 0 20px;font-size:22px;line-height:1.25;color:#1d1d1f">${esc(e.heading)}</h1>` : "",
-    ...e.paragraphs.map(p),
+    ...e.paragraphs.map(para),
     e.button
       ? `<p style="margin:24px 0"><a href="${esc(e.button.url)}" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:16px;font-weight:600">${esc(e.button.label)}</a></p>`
       : "",
@@ -44,7 +63,7 @@ export function renderEmail(e: EmailParts): Rendered {
 
   const text = [
     e.heading,
-    ...e.paragraphs,
+    ...e.paragraphs.map(plain),
     e.button ? `${e.button.label}: ${e.button.url}` : undefined,
     ...(e.after ?? []),
     "--",

@@ -51,7 +51,7 @@ function fakeBilling() {
     subs,
     declining: false,
     extras: [],
-    preview: async ({ extra }) => ({ totalCents: total(extra), currency: "USD" }),
+    preview: async ({ extra }) => ({ totalCents: total(extra), currency: "USD", taxCents: total(extra) - 20000 - (extra?.amountCents ?? 0) }),
     subscriptions: async () => subs,
     async createSubscription({ claimId, extra }) {
       g.extras.push(extra?.amountCents ?? 0);
@@ -206,7 +206,7 @@ describe("one list at a time to monthly", () => {
     expect(await switchPlan(query, deps(SATURDAY), { userId: id, to: "monthly" })).toMatchObject({ ok: true });
     expect(await user(id)).toMatchObject({ status: "trial", plan: "monthly", quote: { totalCents: 22600 } });
     expect(subjects()).toEqual(["Your plan is now monthly"]);
-    expect(sent[0].text).toContain("US$226, tax included");
+    expect(sent[0].text).toContain("we’ll charge US$226 (US$200 plus US$26 tax) for your first month");
     await ready(id);
     await runChargeJob(query, chargeDeps(SIX_AM), { week: WEEK });
     await runChargeJob(query, chargeDeps(new Date("2026-12-14T11:15:00Z")), { week: WEEK });

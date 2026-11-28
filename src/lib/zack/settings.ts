@@ -3,6 +3,7 @@ import { ZACK_CATEGORIES } from "@/lib/intake/validate";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { rulesChangedEmail, runDeletedEmail, sharingChangedEmail } from "@/lib/mail/templates/zack-page";
 import type { ZackSettings } from "./rules";
+import type { SharingOffPrice } from "./sharing-effect";
 
 /**
  * The /app/zack controls (spec B.5, "The controls page"). Every change is
@@ -119,7 +120,7 @@ export async function setSharing(
   q: Query,
   user: { id: string; email: string },
   sharing: Sharing,
-  note: { priceLine: string | null },
+  note: { priceLine: string | null; /** The member's higher price when the change turns sharing off (the email explains the rule). */ higherPrice?: SharingOffPrice | null },
   deps: MailDeps = {},
   /** The clock the change is recorded at; the cutoff reads it, so tests on a simulated week pass their own. */
   now: Date = new Date(),
@@ -137,7 +138,7 @@ export async function setSharing(
     [user.id, sharing, now.toISOString()],
   );
   if (!rows.length) return false;
-  await sendToUser({ id: user.id, email: user.email }, "sharing_changed", rows[0].changed_at, sharingChangedEmail({ sharing, priceLine: note.priceLine }), deps).catch((e) =>
+  await sendToUser({ id: user.id, email: user.email }, "sharing_changed", rows[0].changed_at, sharingChangedEmail({ sharing, priceLine: note.priceLine, higherPrice: note.higherPrice ?? null }), deps).catch((e) =>
     console.error("[zack] sharing email failed", e instanceof Error ? e.message : e),
   );
   return true;

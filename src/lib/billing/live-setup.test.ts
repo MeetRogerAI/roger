@@ -73,12 +73,32 @@ describe("live Stripe setup (launch list g-live-prices, g-live-webhook)", () => 
   it("plans a product, four tax-exclusive monthly prices and the webhook on an empty account, and writes nothing", async () => {
     const f = fakeStripe();
     const plan = await planSetup(f.c, "live");
-    expect(plan.steps.map((s) => `${s.kind}:${s.action}`)).toEqual(["product:create", "price:create", "price:create", "price:create", "price:create", "webhook:create"]);
+    expect(plan.steps.map((s) => `${s.kind}:${s.action}`)).toEqual(["product:create", "higher_product:create", "price:create", "price:create", "price:create", "price:create", "webhook:create"]);
     expect(f.writes).toEqual([]);
     const text = describePlan(plan).join("\n");
     expect(text).toContain("USD 200.00 monthly, tax exclusive (STRIPE_PRICE_MONTHLY_USD)");
     expect(text).toContain("CAD 560.00 monthly, tax exclusive (STRIPE_PRICE_MONTHLY_HIGHER_CAD)");
     expect(text).toContain(`Create webhook ${LIVE_WEBHOOK_URL} on ${STRIPE_API_VERSION} with 7 events`);
+    expect(text).toContain('Create product "Higher monthly rate" (STRIPE_PRODUCT_HIGHER_RATE) with tax code txcd_10103001');
+  });
+
+  // S18 point c: the first invoice's higher-rate line is named after this product, taxed like the plan.
+  it("finds or creates the Higher monthly rate product with its marker and the plan's tax code, and refuses one with another tax code", async () => {
+    const f = fakeStripe();
+    const out = await applySetup(f.c, await planSetup(f.c, "live"));
+    const h = f.products.find((p) => p.id === out.higherRateProductId)!;
+    expect(h).toMatchObject({ metadata: { roger_product: "higher_rate" }, tax_code: "txcd_10103001" });
+    expect(out.higherRateProductId).not.toBe(out.productId);
+    const again = await planSetup(f.c, "live");
+    expect(again.steps.find((s) => s.kind === "higher_product")).toEqual({ kind: "higher_product", action: "exists", id: out.higherRateProductId });
+    expect(describePlan(again).join("\n")).toContain(`Product "Higher monthly rate" (STRIPE_PRODUCT_HIGHER_RATE) exists (${out.higherRateProductId})`);
+    expect((await applySetup(f.c, again)).higherRateProductId).toBe(out.higherRateProductId);
+
+    const wrong = fakeStripe({ products: [{ id: "prod_h", active: true, metadata: { roger_product: "higher_rate" }, tax_code: "txcd_10000000" } as Product] });
+    expect(conflicts(describePlan(await planSetup(wrong.c, "live")))).toEqual([
+      'CONFLICT product "Higher monthly rate" (STRIPE_PRODUCT_HIGHER_RATE) prod_h has tax code txcd_10000000, expected txcd_10103001 (the plan\'s)',
+    ]);
+    expect(VERCEL_NAMES).toContain("STRIPE_PRODUCT_HIGHER_RATE");
   });
 
   it("shows which account the key opens and its tax settings before anything is applied", async () => {

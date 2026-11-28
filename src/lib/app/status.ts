@@ -1,5 +1,5 @@
 import { addDays, torontoDate } from "@/lib/clock";
-import { amount, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
+import { amount, chargeWords, money, moneyCents, taxPhrase, type Currency } from "@/lib/billing/prices";
 import type { ContributionStatus } from "@/lib/billing/contribution";
 import { holdDate } from "@/lib/billing/period";
 import { forgivenText } from "@/lib/mail/templates/missed-forgiven";
@@ -21,11 +21,11 @@ export type StatusFacts = {
   freeListsUsed: number;
   freeRuns: number;
   /** The told quote for the first charge (monthly trial; held for a changed amount: the new amount and when it was told). */
-  quote: { totalCents: number; currency: Currency; week: string; at?: string } | null;
+  quote: { totalCents: number; currency: Currency; week: string; at?: string; /** The tax in the total (absent on a quote told before it was kept). */ taxCents?: number } | null;
   /** A monthly renewal Stripe could not collect (first failure), not yet held. */
   renewalFailedAt?: string | null;
   firstChargeAt: string | null;
-  /** One at a time: what this week's list cost, with tax. */
+  /** One at a time: what this week's list cost, tax in it. */
   orderCents: number | null;
   /** Cancelled: when access ends. */
   accessEndsAt?: string | null;
@@ -96,7 +96,7 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
       : "Your plan is cancelled, and nothing more will be charged.";
   }
   if (f.status === "trial" && f.switchedFromPerRun) {
-    const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
+    const next = f.quote ? `${longDate(f.quote.week)} at the earliest, ${chargeWords(f.quote.totalCents, f.quote.currency, f.quote.taxCents)}` : `${money(amount(s, "monthly", cur), cur)} ${tax}`;
     return `Monthly starts with your next list: ${next}.`;
   }
   // Leftover per-run states (preview only). One at a time is retired (plan 2026-11-26-001, Unit 9) and nothing can be
@@ -116,12 +116,12 @@ export function statusLine(f: StatusFacts, s: V3Settings): string {
     if (n < f.freeRuns) return `Free list ${n} of ${f.freeRuns}.`;
     if (f.plan === "per_run") return `Free list ${n} of ${f.freeRuns}. ${PLAN_QUESTIONS}`;
     const next = f.quote
-      ? `${longDate(f.quote.week)}, ${moneyCents(f.quote.totalCents, f.quote.currency)} with tax`
+      ? `${longDate(f.quote.week)}, ${chargeWords(f.quote.totalCents, f.quote.currency, f.quote.taxCents)}`
       : `${money(amount(s, "monthly", cur, f.sharing === "share" ? "standard" : "higher"), cur)} ${tax}`;
     return `Free list ${n} of ${f.freeRuns}. Your next list is your first paid one: ${next}.`;
   }
   if (f.plan === "per_run") {
-    const paid = f.orderCents != null ? `${moneyCents(f.orderCents, cur)} with tax` : `${money(amount(s, "per_run", cur), cur)} ${tax}`;
+    const paid = f.orderCents != null ? chargeWords(f.orderCents, cur, null) : `${money(amount(s, "per_run", cur), cur)} ${tax}`;
     return `This list: ${paid}. ${PLAN_QUESTIONS}`;
   }
   // A renewal Stripe could not collect: lists continue for now, and pause on the hold date unless it is paid.
@@ -157,7 +157,7 @@ export function changedAmountChargeDate(quote: Pick<NonNullable<StatusFacts["quo
 function amountChangedLine(quote: StatusFacts["quote"]): string {
   const when = changedAmountChargeDate(quote);
   if (!quote || !when) return "Your first charge amount changed, so your list waits a day while we tell you the new amount.";
-  return `Your first charge is now ${moneyCents(quote.totalCents, quote.currency)} with tax, not the amount we told you before. We charge it on ${longDate(when)}, and your list comes straight after; if you’d rather not, cancel on the billing page before then.`;
+  return `Your first charge is now ${chargeWords(quote.totalCents, quote.currency, quote.taxCents)}, not the amount we told you before. We charge it on ${longDate(when)}, and your list comes straight after; if you’d rather not, cancel on the billing page before then.`;
 }
 
 /** What sharing off means under the contributor rule (the strip, and the sharing confirmation on /app/zack). */
