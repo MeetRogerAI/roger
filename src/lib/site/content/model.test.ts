@@ -67,7 +67,7 @@ describe("the layers", () => {
     expect(letter.greeting).toBe("Hey there,");
   });
 
-  it("has the code model as its baseline while the release file is empty", () => {
+  it("has the code model as its baseline in tests, where the release file is empty (plan KTD13)", () => {
     expect(isEmptyOverlay(releasedOverlay)).toBe(true);
     expect(baseline).toBe(codeModel);
   });

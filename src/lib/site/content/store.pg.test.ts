@@ -11,7 +11,7 @@ import { testDb } from "@/test-helpers/pglite-db";
 import { emptyOverlay, newOverlay, type Overlay } from "./format";
 import { applyOverlay, baseline, codeModel } from "./model";
 import { siteRegistry } from "./registry";
-import { CONTENT_KEY, LEGACY_QUESTIONS_KEY, changedBetween, legacyQuestionOverlay, parseStored, publish, readPublished, readStored, sameOverlay, saveDraft, saveSections, undoPublish } from "./store";
+import { CONTENT_KEY, LEGACY_QUESTIONS_KEY, changedBetween, legacyQuestionOverlay, parseStored, publish, readPublished, readPublishedForRelease, readStored, resetToRelease, sameOverlay, saveDraft, saveSections, undoPublish } from "./store";
 
 const ADMIN = "admin@example.com";
 const HEADLINE = "home.hero.headline";
@@ -661,5 +661,126 @@ describe("a page's sections in the draft", () => {
     expect(await readStored(query)).toMatchObject({ draft: none, published: none });
     await saveDraft(query, [{ field: SUB, text: "A new sub-line." }]);
     expect(await value()).toEqual({ draft: edits({ [SUB]: "A new sub-line." }), published: none, previous: null });
+  });
+});
+
+describe("reset all to the release (plan U10, R21)", () => {
+  it("empties what is published and the draft in one statement, keeps both for undo, and logs who", async () => {
+    const own = edits({ [HEADLINE]: "Production's headline." });
+    const drafted = edits({ [HEADLINE]: "Production's headline.", [SUB]: "A drafted sub-line." });
+    await put(CONTENT_KEY, { draft: drafted, published: own, previous: null });
+    ran = [];
+    const seen = await readStored(query);
+    ran = [];
+    expect(await resetToRelease(query, ADMIN, seen)).toMatchObject({ ok: true, changed: true });
+    expect(writes()).toHaveLength(1);
+    expect(await value()).toEqual({ draft: none, published: none, previous: own, previousDraft: drafted });
+    expect((await log()).map((row) => [row.admin_email, row.action])).toEqual([[ADMIN, "site_content_reset_to_release"]]);
+    // Undo puts the edits back on the site, and the drafts it threw away back in the draft.
+    await undoPublish(query, ADMIN);
+    expect(await value()).toEqual({ draft: drafted, published: own, previous: null });
+  });
+
+  it("keeps a draft saved after the reset when it is undone", async () => {
+    const own = edits({ [HEADLINE]: "Production's headline." });
+    await put(CONTENT_KEY, { draft: own, published: own, previous: null });
+    await resetToRelease(query, ADMIN, await readStored(query));
+    await saveDraft(query, [{ field: SUB, text: "Saved after the reset." }]);
+    await undoPublish(query, ADMIN);
+    expect(await value()).toEqual({ draft: edits({ [SUB]: "Saved after the reset." }), published: own, previous: null });
+  });
+
+  it("forgets the thrown-away drafts at the next publish", async () => {
+    const own = edits({ [HEADLINE]: "Production's headline." });
+    await put(CONTENT_KEY, { draft: own, published: own, previous: null });
+    await resetToRelease(query, ADMIN, await readStored(query));
+    await saveDraft(query, [{ field: SUB, text: "Published after the reset." }]);
+    await publish(query, ADMIN, (await readStored(query)).draft);
+    expect(Object.keys((await value()) as object).sort()).toEqual(["draft", "previous", "published"]);
+  });
+
+  it("changes nothing on a site with nothing of its own, and nothing when the content is not what was read", async () => {
+    expect(await resetToRelease(query, ADMIN, { draft: none, published: none })).toMatchObject({ ok: true, changed: false });
+    expect(await value()).toBeUndefined();
+    const own = edits({ [HEADLINE]: "Production's headline." });
+    await put(CONTENT_KEY, { draft: own, published: own, previous: null });
+    expect(await resetToRelease(query, ADMIN, { draft: none, published: own })).toEqual({ ok: false, reason: "changed" });
+    expect(await readPublished(query)).toEqual(own);
+    expect(await log()).toEqual([]);
+  });
+});
+
+describe("reset all, then other writes (plan U10)", () => {
+  const own = edits({ [HEADLINE]: "Production's headline." });
+  const drafted = edits({ [HEADLINE]: "Production's headline.", [SUB]: "A drafted sub-line." });
+
+  it("keeps the thrown-away drafts through saves, and an undo after the next ordinary publish never brings them back", async () => {
+    await put(CONTENT_KEY, { draft: drafted, published: own, previous: null });
+    await resetToRelease(query, ADMIN, await readStored(query));
+    // A save keeps them (an undo now would still want them, were the draft empty again)...
+    await saveDraft(query, [{ field: START, text: "Begin" }]);
+    expect(((await value()) as { previousDraft?: unknown }).previousDraft).toEqual(drafted);
+    // ...and the next publish forgets them: its undo goes back to the reset, with the draft as it stands.
+    await publish(query, ADMIN, (await readStored(query)).draft);
+    await saveDraft(query, [{ field: START, text: null }]);
+    expect(await undoPublish(query, ADMIN)).toMatchObject({ ok: true, changed: true });
+    expect(await value()).toEqual({ draft: none, published: none, previous: null });
+  });
+
+  it("undoes once: a second undo after a reset changes nothing", async () => {
+    await put(CONTENT_KEY, { draft: drafted, published: own, previous: edits({ [HEADLINE]: "An older headline." }) });
+    await resetToRelease(query, ADMIN, await readStored(query));
+    await undoPublish(query, ADMIN);
+    expect(await undoPublish(query, ADMIN)).toMatchObject({ ok: true, changed: false });
+    expect(await value()).toEqual({ draft: drafted, published: own, previous: null });
+  });
+
+  it("resets a site that has only drafts, and the undo brings the drafts back", async () => {
+    await put(CONTENT_KEY, { draft: drafted, published: none, previous: null });
+    expect(await resetToRelease(query, ADMIN, await readStored(query))).toMatchObject({ ok: true, changed: true });
+    expect(await value()).toEqual({ draft: none, published: none, previous: none, previousDraft: drafted });
+    await undoPublish(query, ADMIN);
+    expect(await value()).toEqual({ draft: drafted, published: none, previous: null });
+  });
+
+  it("logs what the reset changed by name, never the wording", async () => {
+    await put(CONTENT_KEY, { draft: drafted, published: own, previous: null });
+    await resetToRelease(query, ADMIN, await readStored(query));
+    const [row] = await log();
+    expect(row.detail).toEqual({ changed: [HEADLINE] });
+    expect(JSON.stringify(row.detail)).not.toContain("Production's headline.");
+  });
+});
+
+describe("the read for the release export (plan KTD9)", () => {
+  it("is what is published, in one statement, with nothing lost", async () => {
+    await put(CONTENT_KEY, { draft: edits({ [HEADLINE]: "Drafted." }), published: edits({ [HEADLINE]: "Published." }), previous: edits({ [HEADLINE]: "Older." }) });
+    ran = [];
+    expect(await readPublishedForRelease(query)).toEqual({ published: edits({ [HEADLINE]: "Published." }), lost: [] });
+    expect(ran).toEqual(["select key, value::text"]);
+  });
+
+  it("lists each stored entry the lenient reading drops, which a release would lose", async () => {
+    await put(CONTENT_KEY, { draft: none, published: { ...edits({ [HEADLINE]: "Kept.", "home.hero.gone": "A field the code no longer has.", [COST_A]: "{monthlyUsdd} a month" }), sections: { home: { order: [], off: ["nothing-here"] } } }, previous: null });
+    const read = await readPublishedForRelease(query);
+    expect(read.published.text).toEqual({ [HEADLINE]: "Kept." });
+    expect(read.lost).toEqual([
+      "text.home.hero.gone: no field of this name in this site's code",
+      `text.${COST_A}: not something this field can print (empty, a name in braces it may not hold, or an address a link may not point at)`,
+      "sections.home: no page of this name in this site's code, or nothing in it the code can use",
+    ]);
+  });
+
+  it("throws, rather than answer 'nothing published', on a row that is not stored content", async () => {
+    for (const stored of ["a string", [], { draft: none, published: { ...none, format: 2 }, previous: null }, { draft: none, previous: null }]) {
+      await put(CONTENT_KEY, stored);
+      await expect(readPublishedForRelease(query), JSON.stringify(stored)).rejects.toThrow("not content this code can read");
+    }
+  });
+
+  it("with no row, is the old questions row's edits, as the pages read them", async () => {
+    await put(LEGACY_QUESTIONS_KEY, { refund: { a: "No refunds after the trial." } });
+    expect(await readPublishedForRelease(query)).toEqual({ published: await readPublished(query), lost: [] });
+    expect((await readPublishedForRelease(query)).published.text).toEqual({ [REFUND_A]: "No refunds after the trial." });
   });
 });

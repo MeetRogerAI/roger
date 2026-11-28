@@ -40,7 +40,7 @@ vi.mock("@/lib/admin-auth", () => ({
   },
 }));
 
-const { getSiteContent, getSiteContentView, publishedOverlay, CONTENT_TAG } = await import("./read");
+const { getSiteContent, getSiteContentView, CONTENT_TAG } = await import("./read");
 const { baseline, codeModel, composeOverlays, releasedOverlay, sectionsShown, v1Copy } = await import("./model");
 const { CONTENT_KEY, LEGACY_QUESTIONS_KEY, publish, readPublished, readStored, saveDraft, saveList, saveSections } = await import("./store");
 const { emptyOverlay, newOverlay } = await import("./format");
@@ -218,16 +218,6 @@ describe("the preview of the drafts (plan U9, R14, KTD7)", () => {
     expect(await getSiteContentView()).toEqual({ content: edits({ ...released, [HEADLINE]: PUBLISHED }), preview: false });
     current = working;
   });
-
-  it("gives published content only from publishedOverlay, for an admin in Draft Mode with drafts waiting, and throws when it cannot read", async () => {
-    await drafted();
-    who.admin = true;
-    preview();
-    expect(await publishedOverlay()).toEqual(edits({ [HEADLINE]: PUBLISHED }));
-    expect(who.asked).toBe(0);
-    current = down;
-    await expect(publishedOverlay()).rejects.toThrow("fetch failed");
-  });
 });
 
 describe("the questions saved before the content row existed (plan R10)", () => {
@@ -298,9 +288,9 @@ describe("when the stored content cannot be read (plan R18, AE7)", () => {
     // Draft Mode is the request's own, asked outside the cached read, and the admin check only behind it.
     expect(around).toMatch(/if \(await previewAsked\(\)\) \{\s*const draft = await draftForAdmin\(\);/);
     expect(/\nasync function previewAsked\(\)[^{]*\{([\s\S]*?)\n\}/.exec(code)![1]).toContain("return (await draftMode()).isEnabled;");
-    // The module holds only the read (plan KTD8): the published-only read, the preview-aware read and its content
-    // alone, and the tag the writers expire.
-    expect([...code.matchAll(/\nexport (?:async function|function|const) (\w+)/g)].map((m) => m[1])).toEqual(["CONTENT_TAG", "publishedOverlay", "getSiteContentView", "getSiteContent"]);
+    // The module holds only the read (plan KTD8): the preview-aware read and its content alone, and the tag the
+    // writers expire. The release export reads the database itself (readPublishedForRelease).
+    expect([...code.matchAll(/\nexport (?:async function|function|const) (\w+)/g)].map((m) => m[1])).toEqual(["CONTENT_TAG", "getSiteContentView", "getSiteContent"]);
     expect(CONTENT_TAG).toBe("site-content");
   });
 

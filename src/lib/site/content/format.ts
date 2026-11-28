@@ -147,6 +147,49 @@ export function parseOverlay(value: unknown, registry: Registry = siteRegistry):
   return out;
 }
 
+/**
+ * What `parseOverlay` would leave out of a stored value, each as "<where>: <why>". Empty when the lenient reading
+ * keeps everything the value says. For the release export (./export.ts): a page shows the lenient reading without a
+ * word, which is right for a page (plan R18), but a release taken from it would lose those entries for good, so the
+ * export refuses and lists them instead.
+ *
+ * Not a loss: an id stored under an old name (legacyText) whose new names are read, and the same id written twice
+ * in one array. A value that is not an overlay of this format at all is one loss, "(the overlay)".
+ */
+export function lenientLosses(value: unknown, registry: Registry = siteRegistry): string[] {
+  if (!isRecord(value) || value.format !== OVERLAY_FORMAT) return [`(the overlay): not stored content of format ${OVERLAY_FORMAT}`];
+  const read = parseOverlay(value, registry);
+  const out: string[] = [];
+  for (const part of ["text", "sections", "lists"] as const) if (value[part] !== undefined && !isRecord(value[part])) out.push(`${part}: not a set of entries`);
+  if (isRecord(value.text)) {
+    for (const [fieldId, text] of Object.entries(value.text)) {
+      const kept = Object.hasOwn(legacyText, fieldId) ? legacyText[fieldId].every((now) => Object.hasOwn(read.text, now)) : Object.hasOwn(read.text, fieldId) && read.text[fieldId] === text;
+      if (kept) continue;
+      const field = resolveField(fieldId, registry) ?? (Object.hasOwn(legacyText, fieldId) ? resolveField(legacyText[fieldId][0], registry) : undefined);
+      out.push(`text.${fieldId}: ${!field ? "no field of this name in this site's code" : typeof text !== "string" ? "not text" : text.length > TEXT_MAX ? "longer than any text may be" : !usableValue(field, text) ? "not something this field can print (empty, a name in braces it may not hold, or an address a link may not point at)" : "more entries than an overlay may hold"}`);
+    }
+  }
+  /** The ids of a stored array, each once, for comparing with what was read. Anything that is not an array of ids stays as it is, and differs. */
+  const once = (array: unknown) => (Array.isArray(array) ? [...new Set(array)] : array);
+  const compare = (part: "sections" | "lists", keys: readonly string[], noun: string) => {
+    const stored = value[part];
+    if (!isRecord(stored)) return;
+    for (const [key, edit] of Object.entries(stored)) {
+      const got: Record<string, unknown> | undefined = Object.hasOwn(read[part], key) ? read[part][key] : undefined;
+      if (!isRecord(edit)) {
+        out.push(`${part}.${key}: not an entry`);
+        continue;
+      }
+      const wanted = Object.fromEntries(keys.map((name) => [name, once(edit[name] ?? [])]));
+      const kept = Object.fromEntries(keys.map((name) => [name, got ? got[name] : []]));
+      if (JSON.stringify(wanted) !== JSON.stringify(kept)) out.push(`${part}.${key}: ${got ? `part of it names ${noun} this site's code does not have, or cannot be` : `no ${noun === "sections" ? "page" : "list"} of this name in this site's code, or nothing in it the code can use`}`);
+    }
+  };
+  compare("sections", ["order", "off"], "sections");
+  compare("lists", ["order", "removed", "added"], "items");
+  return out;
+}
+
 const id = z.string().max(ID_MAX).regex(ID_PATTERN);
 const ids = z
   .array(id)

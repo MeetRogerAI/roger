@@ -8,6 +8,7 @@ import { defineConfig } from "vitest/config";
 // the scenario Neon branch (tests/scenarios/helpers.ts).
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  // Every test reads the release file as empty (src/test-helpers/empty-release.ts, plan KTD13).
   // Tests that start an in-process Postgres get more time to set up when every file runs at once.
-  test: { environment: "node", include: ["src/**/*.test.ts", "src/**/*.test.tsx", "db/**/*.test.ts", "tests/**/*.test.ts"], hookTimeout: 30_000, testTimeout: 20_000 },
+  test: { environment: "node", include: ["src/**/*.test.ts", "src/**/*.test.tsx", "db/**/*.test.ts", "tests/**/*.test.ts", "scripts/**/*.test.ts"], setupFiles: ["src/test-helpers/empty-release.ts"], hookTimeout: 30_000, testTimeout: 20_000 },
 });

@@ -705,6 +705,13 @@ getSiteContent():
   - The script refuses an `http://` address that is not localhost, an answer that is not 200, and an answer that is not an object with a numeric format, writing nothing in each case.
 - **Verification:** Against a local production build with a published edit, the script rewrites `released.json`; after restarting on the new file the edit is built-in wording, Pages shows it as not edited, and "Differs from the release" is empty.
 
+### Notes for U11 and U12 from the U10 build and review (November 27, 2026)
+
+- The release steps are in `docs/site/content-release.md`; U12 step 2 follows it. The export is `GET /api/site-content/published` (public, `no-store`), read straight from the database (`readPublishedForRelease`), never through the pages' cached reader; 503 on any read failure, 409 with a fix list for anything the strict reading refuses or the lenient reading would drop.
+- A field counts as hidden only when every place that prints it is switched off (`printedIn`, `shownElsewhere` in `export.ts`).
+- U11: `priceBlock.sub` is editable but no page prints it. Add `npm run snapshot-content` to the README. The repo has no CI workflow and Vercel runs only `next build`, so the gates are run by hand before every release.
+- U12: production's panel will list production's own edits after the launch; Peter decides whether to reset.
+
 ### U11. Notes, acceptance record, leftovers
 
 - **Goal:** The repo's notes say how the site's words now work, and nothing from abandoned attempts or the old editor is left behind.
