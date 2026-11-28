@@ -168,13 +168,6 @@
       </ul>
     </div>
 
-    <div class="group">
-      <h2>Stripe live mode</h2>
-      <ul class="list">
-        <li class="item" data-id="g-live-settings"><div class="what">Set the live dashboard settings</div><div class="detail"><p>Done 2026-11-27: failed renewals end unpaid; Stripe's own customer emails off; Link stays on in the dashboard (Peter's decision; the Payment page itself is still cards only, in code). Left: confirm Radar is on (S16).</p></div><div class="tags"><span class="tag who-you">You</span></div></li>
-
-      </ul>
-    </div>
 
     <div class="group">
       <h2>Accounts</h2>
@@ -262,16 +255,6 @@
             <td>Build and test with made-up runs. The first real Cora run waits for these.</td>
             <td class="statuscell"><span class="st open">Open</span></td>
             <td class="notes">Added 2026-11-22. Spec B.7, "Seed data". 2026-11-22: Peter added 13 run files (November 12 to 15, Zack 1.8 and 1.9, no <code>roger-run</code> block). A pattern scan found no email addresses, phone numbers or links. Peter confirmed the same day that the files are cleared for the public repo. Each contributor's runs go under one hidden contributor record (requirements R25). Still open: the import itself, which needs the seed tool.<br>2026-11-23, build: the seed tool is built (<code>/admin/cora</code> and <code>scripts/seed-import.ts</code>), with nine contributor records and linking to accounts on the user page; the scenario test <code>tests/scenarios/seed-import.test.ts</code> proves a linked pilot is never sent their own seed plays. To do on production, at go-live: run the 13 files through the real model first (<code>INTAKE_LIVE=1</code>; the AI Gateway read a run on preview, 2026-11-27), import them, link each pilot's record when their account exists, then a Cora dry run that an admin reads.</td>
-          </tr>
-          <tr data-id="S16" data-status="open" data-blocks="B1" data-done-on="">
-            <td class="id">S16</td>
-            <th scope="row">Stripe dashboard settings and the webhook endpoint</th>
-            <td>Stripe dashboard, test and live mode</td>
-            <td>The endpoint <code>https://meetroger.ai/api/stripe/webhook</code> (live) and a stable preview address (test) exist on API version <code>2026-11-18.endive</code> with these events: <code>checkout.session.completed</code>, <code>invoice.paid</code>, <code>invoice.finalized</code>, <code>invoice.payment_failed</code>, <code>customer.subscription.updated</code>, <code>customer.subscription.deleted</code>, <code>customer.updated</code>; their signing secrets are in S13. Stripe's own failed-payment and upcoming-renewal emails are off. Failed renewals leave the subscription unpaid, not cancelled, when retries run out. Radar is on for saved payment methods. A test invoice for a Canadian customer shows HST as its own row.</td>
-            <td><span class="ver">B1</span></td>
-            <td>Build and test against fakes and Stripe test mode.</td>
-            <td class="statuscell"><span class="st open">Open</span></td>
-            <td class="notes">Added 2026-11-23 from the B1 build (plan Units 12 to 15). The preview webhook needs an address that is not behind Vercel's deployment protection.<br>By 2026-11-26, test mode: the webhook to preview.meetroger.ai exists on <code>2026-11-18.endive</code> and was checked end to end (an event arrived and was recorded in <code>stripe_events</code>). On 2026-11-26 <code>checkout.session.completed</code> was added to it; it had been left out, which would have stopped the card step from finishing. Vercel's protection is now off, so the address needs no bypass. Still to do: the live endpoint and its secret; in live mode, failed renewals end unpaid, Stripe's customer emails off, Radar on; the HST line on a Canadian test invoice.<br>2026-11-27: test mode done: an Ontario member's first invoice on preview carried HST 13% as its own tax row (docs/v3-app-b1-first-pass.md); 13 leftover sandbox endpoints deleted. Live endpoint created 2026-11-27 (<code>we_1Ugb1K25N9cbf3wUFKnHG0wW</code>, 2026-11-18.endive, seven events, secret in Production). Live HST registration added by Peter 2026-11-27 (Canada GST/HST, Ontario). Still to do: the live dashboard settings (g-live-settings).<br>2026-11-26, spec 1.4: the embedded Payment page spike passed, so the event list above is unchanged: no <code>setup_intent.succeeded</code> is needed, and <code>checkout.session.completed</code> (already on the preview endpoint) finishes the card save; the live endpoint needs it too. Link in the dashboard: Peter decided on 2026-11-27 to leave it on (live and test); the Payment page turns it off in code, so members still see cards only there. Revisit Link and Apple/Google Pay after launch.</td>
           </tr>
           <tr data-id="S21" data-status="open" data-blocks="B1" data-done-on="">
             <td class="id">S21</td>
