@@ -718,6 +718,14 @@ Each run goes through these steps as it arrives, and again as a batch before Cor
    - Found and plainly replaceable: replaced with a placeholder ("[a client]", "[a phone number]"), recorded, and `accepted`.
    - Unclear: `flagged`. It waits on `/admin/flags`, where an admin approves, edits, or rejects each play.
 6. **A flagged run still counts as contributed** for pricing, and still informs that user's own matching. Its plays enter the pool only when cleared.
+
+   **Auto-admit (Peter, 2026-11-27; replaces the "flagged" result above and the admin decision in the fourth pass).** No play waits for a person. Every hold reason is acted on at once, by kind:
+   - *Quality* (the playbook could not be found in the report): a model drafts the steps from the play and the report (patterns and the never-include list removed first), the draft goes through every check above, and the play is admitted with `playbook_drafted` and the first line "Setup steps drafted by Roger from the member's report; check them before you run it." If drafting fails, it is admitted outline only.
+   - *Privacy*: unclear names are replaced with their placeholder everywhere in the play and admitted. A name that cannot be placed or replaced, or a play Zack marked sensitive, is admitted outline only (title, job and description kept; steps and install notes dropped). The pattern and never-include replacements are unchanged.
+   - *Harm* (the fourth pass, or the model review): the play is dropped. It never enters the pool, keeps its flag marked rejected and automatic, and nobody is asked. The run's other plays go on.
+   - The run is `accepted`. Only a run that cannot be read at all is still `flagged` as a whole for an admin.
+   - Every play from another member carries one safeguard preamble (from `src/lib/cora/safeguard.ts`, never stored): once at the top of each list (the Monday email, the week's ideas in the app) and at the top of each play's paste-to-install text. It replaces the short caution.
+   - Plays held before this change were admitted or dropped once by `scripts/auto-admit-held.ts`.
 7. **Sharing mode at the time of the run** is stored on the run. Plays from a "matching only" run are never shareable.
 
 ## B.7 Cora
@@ -956,7 +964,7 @@ Filters: "Needs attention" (no run by Sunday 8:00 PM, a flagged or rejected run,
 
 **Runs.** Every run with its status. Open any to read it.
 
-**Flags.** The queue from B.6. For each flagged play: the text, what was flagged, and approve, edit, or reject.
+**Flags.** The queue from B.6. For each flagged play: the text, what was flagged, and approve, edit, or reject. *(Peter, 2026-11-27)* A read-only log instead: what intake drafted, redacted or kept as an outline, and what it dropped for harm, each with its reasons. An admitted play can still be edited; Approve and Reject are gone.
 
 **Cora.** This week's status, counts (runs read, plays merged, pool size, users picked for), the times of the next charge and send, and "Run Cora now" and "Send now". The seed-import tool. A read-only view of any user's picks. *(1.2)* "Send now" is "Charge and send now" (the charge first, then the send). Also "Dry run" (B.7), and, on preview and local only, "run as of a date" for Cora, the charge, the send and the hourly pass. Every button is logged before it runs and again with its outcome.
 

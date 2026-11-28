@@ -24,7 +24,7 @@ Figures are taken from the "Facts for Cora" block or the `roger-run` block. Pros
 1. Two plays are the same play when their **Job lines** describe the same kind of trigger, work and result. Titles, wording, tools and schedules do not make them different.
 2. **When in doubt, keep them separate.** A wrong merge hides a play; a missed merge only costs a little reach. A play that cannot be compared (an error) stays separate.
 3. A play the same as a retired pool play revives it.
-4. Each pool play's text comes from its best evidence: the highest Confidence with an Actual basis, then the most complete playbook. Its title is the plainest one under eight words. "Heavy use for" is the role named most often.
+4. Each pool play's text comes from its best evidence: the highest Confidence with an Actual basis, then the most complete playbook. *(Peter, 2026-11-27)* A playbook a member's agent wrote always wins over one Roger drafted from a report; the pool play is marked "Roger-drafted" only when its playbook is a drafted one. Its title is the plainest one under eight words. "Heavy use for" is the role named most often.
 
 ## Step 2. Merged figures
 Evidence is weighted by age (`v3.recencyWeights`): the first four weeks count fully, weeks five to twelve half, older a quarter. A pool play with no evidence in 26 weeks is retired from picking and kept on record.
@@ -44,6 +44,8 @@ Score = (Hours × 30 + Reach × 25 + Ease × 10 + Proof × 15 + Surprise × 20) 
 | Ease to copy | 10 | Zack's Size: steps × 1 + connections × 5 + setup questions × 1. Lowest is best. |
 | Proof | 15 | For each person: Confidence (Low 1, Medium 2, High 3; one level higher when "Running for" is four weeks or more, to High at most), doubled for an Actual basis, weighted by age. A user running it because Roger sent it counts. Highest is best. |
 | Surprise | 20 | For each person running it: 2 from Set A, 1 otherwise. People who run it because Roger sent it are left out. Lowest is best. |
+
+*(Peter, 2026-11-27)* A Roger-drafted playbook loses 1 point of the score (`DRAFTED_PENALTY` in `src/lib/cora/score.ts`), so a proven setup wins a tie or a near tie. Outline-only plays are not penalised.
 
 **Tie-breaks**, in order: higher Surprise, higher Reach, more people with an Actual figure, higher hours figure, title in alphabetical order.
 
