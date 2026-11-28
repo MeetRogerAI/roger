@@ -7,15 +7,35 @@ const SHARING_WORDS = {
   off: "Zack off",
 } as const;
 
-export function sharingChangedEmail(o: { sharing: keyof typeof SHARING_WORDS; priceLine: string | null }): Rendered {
+/**
+ * Spec B.13 email 15. Turning sharing off (a monthly member, in the trial or paying) explains the rule in Peter's
+ * words (2026-11-27), with the member's own higher price; any other change keeps its price line, if any.
+ */
+export function sharingChangedEmail(o: {
+  sharing: keyof typeof SHARING_WORDS;
+  priceLine: string | null;
+  /** The member's higher monthly price ("US$400") when this change turns sharing off; null otherwise. */
+  higherPrice?: string | null;
+}): Rendered {
+  const zackPage = { label: "Zack page", url: appUrl("/app/zack") };
+  const off = o.higherPrice
+    ? [
+        `Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to ${o.higherPrice} a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.`,
+      ]
+    : null;
   return renderEmail({
     subject: "Your Zack sharing setting changed",
     preview: `Now: ${SHARING_WORDS[o.sharing]}.`,
     heading: "Your sharing setting changed.",
     paragraphs: [
       `Zack is now set to “${SHARING_WORDS[o.sharing]}”. This applies to sharing straight away.`,
-      ...(o.priceLine ? [o.priceLine] : []),
-      "If you didn’t make this change, open the Zack page and change it back, then write to us.",
+      ...(off ?? (o.priceLine ? [o.priceLine] : [])),
+      off
+        ? {
+            text: "If you didn’t make this change, open the Zack page and change it back. Your price depends on whether your Zack runs share what you learn about AI agents with the network.",
+            link: zackPage,
+          }
+        : "If you didn’t make this change, open the Zack page and change it back, then write to us.",
     ],
     button: { label: "Open the Zack page", url: appUrl("/app/zack") },
   });

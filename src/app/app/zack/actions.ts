@@ -19,7 +19,7 @@ import { connectorText, testPrompt } from "@/lib/zack/instructions";
 import { replaceZackKey } from "@/lib/zack/key";
 import { checkReport, MAX_REPORT_CHARS, storeReport } from "@/lib/zack/receive";
 import { deleteRun, saveZackSettings, setSharing, validateSettings, type SettingsErrors, type Sharing } from "@/lib/zack/settings";
-import { sharingEffect } from "@/lib/zack/sharing-effect";
+import { sharingEffect, sharingOffPrice } from "@/lib/zack/sharing-effect";
 import { noticeQuoteChange } from "@/lib/billing/quote";
 import { stripeBilling } from "@/lib/billing/subscriptions";
 
@@ -89,13 +89,14 @@ export async function changeSharing(_prev: SharingState, fd: FormData): Promise<
   const sharing = field(fd, "sharing") as Sharing;
   if (!["share", "match_only", "off"].includes(sharing)) return { status: "error", message: "Choose one." };
   if (sharing === u.sharing) return { status: "saved", sharing, message: "That’s already your setting." };
-  const effect = sharingEffect({ settings: await readV3Settings(), plan: u.plan, currency: u.currency, from: u.sharing, to: sharing, trialStartedAt: u.trial_started_at,
+  const args = { settings: await readV3Settings(), plan: u.plan, currency: u.currency, from: u.sharing, to: sharing, trialStartedAt: u.trial_started_at,
     status: u.status,
     switchedFromPerRun: u.switched,
     quoteWeek: u.quote_week,
-  });
+  };
+  const effect = sharingEffect(args);
   if (field(fd, "confirm") !== "yes") return { status: "confirm", sharing, effect };
-  await setSharing(query, u, sharing, { priceLine: effect });
+  await setSharing(query, u, sharing, { priceLine: effect, higherPrice: sharingOffPrice(args) });
   // The first charge's stored amount follows the change, and the user is told if it moved (spec check 21).
   // A monthly member's price is never changed here: what counts is sharing at each Sunday cutoff (the contributor rule).
   const gw = stripeBilling();

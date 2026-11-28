@@ -14,6 +14,19 @@ import type { Sharing } from "./settings";
  * cutoff before it. Moving between two choices on the same side changes
  * nothing.
  */
+type EffectArgs = Parameters<typeof sharingEffect>[0];
+
+/**
+ * The member's own higher monthly price ("US$400", "CA$560") when this change turns sharing off for a monthly
+ * member (from sharing to matching only or off), else null: the sharing-changed email then explains the rule in
+ * Peter's words (2026-11-27). The Zack page's confirmation keeps `sharingEffect`'s line.
+ */
+export function sharingOffPrice(o: EffectArgs): string | null {
+  if (o.plan !== "monthly" || o.from !== "share" || o.to === "share") return null;
+  const cur = o.currency ?? "USD";
+  return money(amount(o.settings, "monthly", cur, "higher"), cur);
+}
+
 export function sharingEffect(o: {
   settings: V3Settings;
   plan: Plan;

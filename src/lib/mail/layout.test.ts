@@ -21,6 +21,14 @@ describe("renderEmail", () => {
   });
 });
 
+describe("an inline link in a paragraph", () => {
+  it("links the words in the HTML, escaped, and names the address after them in plain text", () => {
+    const r = renderEmail({ subject: "s", paragraphs: [{ text: "Open the Zack page & look.", link: { label: "Zack page", url: "https://x.test/app/zack?a=1&b=2" } }] });
+    expect(r.html).toContain('Open the <a href="https://x.test/app/zack?a=1&amp;b=2" style="color:#9a5226">Zack page</a> &amp; look.');
+    expect(r.text).toContain("Open the Zack page (https://x.test/app/zack?a=1&b=2) & look.");
+  });
+});
+
 describe("appUrl", () => {
   it("never points local work at production", () => {
     delete process.env.VERCEL_ENV;
