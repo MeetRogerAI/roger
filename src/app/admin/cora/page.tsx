@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { ActionButton, CoraButtons, LaunchSwitches, SeedImportForm } from "@/components/app/admin-v3";
+import { ActionButton, ContributorEmailForm, CoraButtons, LaunchSwitches, SeedImportForm } from "@/components/app/admin-v3";
 import { isAdmin } from "@/lib/admin-auth";
+import { listContributors } from "@/lib/admin/contributors";
 import { notReadyReason, userPicks, weekState } from "@/lib/admin/cora";
 import { when } from "@/lib/admin/format";
 import { recentActions } from "@/lib/admin/log";
@@ -24,12 +25,13 @@ export default async function CoraPage({ searchParams }: PageProps<"/admin/cora"
   const now = new Date();
   const week = typeof sp.week === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.week) ? sp.week : currentMonday(now);
   const userId = typeof sp.user === "string" && UUID.test(sp.user) ? sp.user : null;
-  const [w, users, picks, log, nonProd] = await Promise.all([
+  const [w, users, picks, log, nonProd, contributors] = await Promise.all([
     weekState(query, week, settings),
     query<{ id: string; email: string }>(`select id, email from users where status in ('trial', 'active', 'held', 'cancelled') order by email`),
     userId ? userPicks(query, userId) : Promise.resolve([]),
     recentActions(query, { actions: ["run_cora", "run_dry", "run_charge", "run_send", "run_hourly", "charge_and_send", "seed_import", "close_failed_week_orders"], limit: 10 }),
     databaseMarkedNonProduction().catch(() => false),
+    listContributors(query),
   ]);
   const allowAsOf = asOfAllowed({ deployment: process.env.VERCEL_ENV ?? "development", stripeKey: process.env.STRIPE_SECRET_KEY, databaseMarkedNonProduction: nonProd });
   const reason = notReadyReason(w, settings);
@@ -113,6 +115,34 @@ export default async function CoraPage({ searchParams }: PageProps<"/admin/cora"
         <div className="mt-4">
           <SeedImportForm />
         </div>
+      </div>
+
+      <div>
+        <h2 className="text-title">Seed contributors</h2>
+        <p className="mt-1 text-small text-ink-2">
+          The hidden records the pilot runs are imported under. Give each the person’s email: the account with that address is linked now, or when it is made, and when an account’s address changes to it. One person with several records: give each the same email. Nothing is unlinked automatically; unlink on the user page.
+        </p>
+        {contributors.length === 0 ? (
+          <p className="mt-4 text-small text-ink-2">No seed contributors yet.</p>
+        ) : (
+          <ul className="mt-4 divide-y divide-rule">
+            {contributors.map((c) => (
+              <li key={c.id} className="space-y-2 py-3">
+                <p className="text-small">
+                  <span className="font-[600]">{c.label}</span> · {c.runs} run{c.runs === 1 ? "" : "s"} ·{" "}
+                  {c.userId ? (
+                    <Link href={`/admin/users/${c.userId}`} className="tlink">
+                      linked to {c.userEmail}
+                    </Link>
+                  ) : (
+                    "not linked"
+                  )}
+                </p>
+                <ContributorEmailForm contributorId={c.id} label={c.label} email={c.email} />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div>

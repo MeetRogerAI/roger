@@ -24,7 +24,8 @@ export type UserDetail = {
   picks: UserPick[];
   emails: { kind: string; ref: string; status: string; at: string }[];
   log: LoggedAction[];
-  contributor: { id: string; label: string } | null;
+  /** The seed contributors linked to this user (one person can have several records). */
+  linkedContributors: { id: string; label: string }[];
   contributors: { id: string; label: string; userId: string | null }[];
 };
 
@@ -110,7 +111,7 @@ export async function userDetail(q: Query, userId: string, s: V3Settings, now: D
     actionsForUser(q, userId),
     q<{ id: string; label: string; userId: string | null }>(`select id, label, user_id as "userId" from seed_contributors order by label`),
   ]);
-  const mine = contributors.find((c) => c.userId === userId);
+  const mine = contributors.filter((c) => c.userId === userId);
   return {
     row,
     week,
@@ -125,7 +126,7 @@ export async function userDetail(q: Query, userId: string, s: V3Settings, now: D
     picks,
     emails,
     log,
-    contributor: mine ? { id: mine.id, label: mine.label } : null,
+    linkedContributors: mine.map((c) => ({ id: c.id, label: c.label })),
     contributors,
   };
 }
