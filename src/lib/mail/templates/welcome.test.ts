@@ -16,9 +16,12 @@ describe("welcomeEmail (sent when sign-up ends at Step 3; plan 2026-11-26-001 Un
     for (const m of [ca, us]) expect(m.text).not.toContain("ask for your card");
   });
 
-  it("states the monthly price with the tax phrase for the currency", () => {
-    expect(ca.text).toContain("Roger is CA$280 a month, plus HST.");
-    expect(us.text).toContain("Roger is US$200 a month, plus tax where it applies.");
+  // Peter, 2026-11-27: both prices for every member, then the member's own tax words.
+  it("states both monthly prices, from the settings, with the tax phrase for the currency", () => {
+    expect(ca.text).toContain("After that, Roger is US$200 / CA$280 a month plus HST. Your first charge comes with your third list");
+    expect(us.text).toContain("After that, Roger is US$200 / CA$280 a month plus tax where it applies.");
+    const raised = welcomeEmail({ name: "Ana", currency: "CAD", path: "running", settings: { ...settings, priceUsd: 210, priceCad: 290 } });
+    expect(raised.text).toContain("Roger is US$210 / CA$290 a month plus HST.");
   });
 
   it("has no 'no earlier than' date, no higher rate and no one list at a time", () => {

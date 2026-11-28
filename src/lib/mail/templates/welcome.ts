@@ -9,9 +9,11 @@ import { appUrl, renderEmail, type Rendered } from "../layout";
  * rule lives in the terms and FAQ, not here (origin R6).
  */
 export function welcomeEmail(o: { name: string; currency: Currency; path: string; settings: V3Settings }): Rendered {
-  const price = money(amount(o.settings, "monthly", o.currency), o.currency);
+  // Both prices for every member, whatever their currency (Peter, 2026-11-27), each from the settings; then the
+  // member's own tax words, as the price plus the tax (S18 point a).
+  const price = (["USD", "CAD"] as const).map((c) => money(amount(o.settings, "monthly", c), c)).join(" / ");
   const terms = [
-    `After that, Roger is ${price} a month, ${taxPhrase(o.currency)}. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.`,
+    `After that, Roger is ${price} a month ${taxPhrase(o.currency)}. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.`,
   ];
   const next =
     o.path === "running"
