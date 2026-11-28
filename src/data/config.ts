@@ -28,6 +28,9 @@ export const siteConfig = {
     versionLabel: "November 13, 2026 version",
   },
   domain: "https://meetroger.ai",
+  /** The address of the git branch "preview" (Vercel's preview environment for that branch). */
+  previewDomain: "https://preview.meetroger.ai",
+  previewBranch: "preview",
   founder: {
     name: "Peter",
     /** Full name for the company pages, e.g. "Peter K…". Falls back to name. */
