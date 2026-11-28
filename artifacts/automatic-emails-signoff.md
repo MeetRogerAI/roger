@@ -1,8 +1,8 @@
 # Roger v3: every automatic email, for sign-off
 
-*Generated on November 27, 2026 from the code on main: the real templates in `src/lib/mail/templates/`, called with sample data. The sample member is Ana, in Ontario, paying in Canadian dollars. CA$280 a month plus 13% HST is CA$316.40, and the higher rate, CA$560 plus HST, is CA$632.80. A US variant is shown where its wording differs. Links point at https://meetroger.ai, and sign-in tokens are placeholders.*
+*Generated on November 27, 2026 from the code on main, with the S18 wording Peter decided that day (branch launch/s18-wording): the real templates in `src/lib/mail/templates/`, called with sample data. The sample member is Ana, in Ontario, paying in Canadian dollars. CA$280 a month plus 13% HST is CA$316.40, and the higher rate, CA$560 plus HST, is CA$632.80. A US variant is shown where its wording differs. Links point at https://meetroger.ai, and sign-in tokens are placeholders.*
 
-**What to do:** read each email and either say yes to it or mark the change you want, in a comment on the launch list or by telling Claude Code. Start with the four points to decide below. Nothing here changes until sign-off (launch list g-emails, S18).
+**What to do:** read each email and either say yes to it or mark the change you want, in a comment on the launch list or by telling Claude Code. Start with the points to decide below: they say what Peter decided on 2026-11-27 and what changed. Nothing here changes until sign-off (launch list g-emails, S18).
 
 Each section gives the file the words live in and the function that builds them. It says when the email is sent, with its number in spec B.13 (the list of automatic emails, 1 to 33). Then come the subject, the hidden preview line that mail apps show after the subject, and the plain-text body. The HTML version has the same words, with the link shown as a button.
 
@@ -112,26 +112,33 @@ Each section gives the file the words live in and the function that builds them.
 
 ## Points to decide
 
-These four points are still open under S18. Each one quotes the exact sentences where it shows up, from the emails below or from the app.
+Peter decided (a), (c) and (d) on 2026-11-27, and (b) was already worded on main. The emails below are rendered from the changed templates. Each point keeps the sentences it was about, then says what changed.
 
-**(a) Emails state amounts as "tax included" where spec B.8 says "plus {tax}".** Every email that states an exact charge says "tax included", and the status line says "with tax". The welcome email and the status lines for charges not yet quoted say "plus HST" or "plus tax where it applies" instead. Where it shows:
+**(a) Decided by Peter on 2026-11-27: every amount is the price plus the tax, never "tax included".** Before, every email that stated an exact charge said "tax included", and the status line said "with tax", while the welcome email said "plus HST".
 
-- Email 36, *Your next list is your first paid one*: "that morning we’ll charge CA$316.40, tax included, for your first month."
-- Email 37, the same email with a promo code: "That includes your promo code WELCOME20: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included."
-- Email 39, *Your first charge could be on Monday*: "we’ll charge CA$316.40, tax included, for your first month."
-- Email 41, *Your first charge amount changed* (after a change you made): "After your change, your first charge, no earlier than Monday, December 14, will be CA$632.80, tax included."
-- Email 42, *Your first charge amount changed* (found at charge time): "Your first charge will be CA$632.80, tax included."
-- Email 46, *You’re subscribed*: "We charged CA$316.40, tax included." A US member with no tax collected (email 47) also reads "We charged US$200, tax included."
-- The status line under the Monday list (email 21): "Free list 2 of 2. Your next list is your first paid one: Monday, December 14, CA$316.40 with tax."
-- For contrast, the welcome email (email 9) says "After that, Roger is CA$280 a month, plus HST." A paying member's status line (email 22) says "Next charge Thursday, January 14: CA$280 plus HST."
+What changed (`src/lib/billing/prices.ts` `chargeWords` and `monthlyWords`; the tax amount comes from Stripe's own preview or the paid invoice, never typed):
 
-**(b) The no-ideas note to a paying member and "never counts as a miss" (requirements R15).** The code on main already has this sentence. The note is built in `src/lib/cora/send-job.ts` (commit 725b875), and email 27 reads: "This list is missing because of Roger, not you, and this week never counts as a missed week." The paragraph before it reads: "Every idea in the pool this week is one you already run or have had. The pool grows every week, so there will be new ones soon." If this wording is right, this point can close.
+- A charge total that includes tax reads as the price plus the tax. Email 36: "that morning we’ll charge CA$316.40 (CA$280 plus CA$36.40 HST) for your first month." The same form is used in emails 37 to 43, in the switch-to-monthly email, and in the receipt, email 46: "We charged CA$316.40 (CA$280 plus CA$36.40 HST)."
+- A monthly price reads "CA$280 a month plus HST", as in email 37: "After that, it’s CA$280 a month plus HST."
+- With no tax collected (a US member), it is just the amount. Email 47: "We charged US$200." Email 38: "After that, it’s US$200 a month."
+- The status line under the Monday list (email 21) now reads "Free list 2 of 2. Your next list is your first paid one: Monday, December 14, CA$316.40 (CA$280 plus CA$36.40 HST)." The billing page's next-charge line uses the same form.
+- An amount told before this change has no tax amount stored, so it reads "CA$316.40 in total" until the next email states it again. The leftover one-at-a-time receipt line (email 25) reads that way too, because orders do not store their tax. The list-ordered email (email 79) now says "charged CA$280 plus HST that morning".
+- The promo samples in emails 37 and 40 now add up: CA$280 less CA$56 is CA$224, plus CA$29.12 HST, so CA$253.12. The earlier render showed CA$260.40.
 
-**(c) The first invoice's higher-rate line carries the plan's product name, so it reads "Roger Monthly" twice.** This shows up on Stripe's invoice, not in a Roger email. A member whose Zack is off at their first paid Monday gets one invoice with two lines: the CA$280 plan line, and a CA$280 higher-rate line made from the same product (`src/lib/billing/subscriptions.ts`, `add_invoice_items` with the plan's product). Both lines are named "Roger Monthly". This was confirmed on a real preview invoice on 2026-11-27: CA$280 + CA$280 + HST CA$72.80 = CA$632.80.
+**(b) Already worded: the no-ideas note to a paying member and "never counts as a miss" (requirements R15).** The code on main already has this sentence. The note is built in `src/lib/cora/send-job.ts` (commit 725b875), and email 27 reads: "This list is missing because of Roger, not you, and this week never counts as a missed week." The paragraph before it reads: "Every idea in the pool this week is one you already run or have had. The pool grows every week, so there will be new ones soon." Nothing changed.
 
-No Roger email lists the lines of the first invoice. The emails give only the total, as in email 41: "After your change, your first charge, no earlier than Monday, December 14, will be CA$632.80, tax included." On later invoices the difference is its own named line, as in the itemised email (email 55): "Higher-rate adjustment for December 14 to January 14, 2027: two missed weeks: CA$280". It sits next to Stripe's plan line, "1 × Roger Monthly (at CA$280.00 / month): CA$280".
+**(c) Decided by Peter on 2026-11-27: the first invoice's higher-rate line is named for why it is owed.** Before, a member whose Zack was off at their first paid Monday got one invoice with two lines that were both named "Roger Monthly". The higher-rate line was made from the plan's own product through `add_invoice_items`, and Stripe names such a line after the product.
 
-**(d) With Zack off, the in-app getting-started card says the first list comes "once Zack has sent a report".** This is on `/app`, not in an email. Under its "monday" step, `src/components/app/onboarding-checklist.tsx` shows the same sentence whatever the member's sharing setting: "Your first list arrives on a Monday morning, once Zack has sent a report." With Zack off, a list comes every Monday without a report. The status line already handles this case. With sharing off and no card it reads "Your first list arrives on Monday.", and otherwise "Your first list arrives after Zack’s first report."
+What changed (`src/lib/billing/subscriptions.ts`, `src/lib/billing/first-charge.ts`, `src/lib/billing/adjustment.ts` `firstLineLabel`): the line now reads "Higher monthly rate: Zack not sharing", or "Higher monthly rate: two missed weeks" for a difference carried from an earlier month's misses. That matches the later invoices' line, as in email 55: "Higher-rate adjustment for December 14 to January 14, 2027: two missed weeks: CA$280". On Stripe API 2026-11-18.endive, `add_invoice_items` takes no description; Stripe refuses it as an unknown parameter. So the line is now an invoice item with that description, made just before the subscription, and Stripe puts it on the subscription's first invoice. This was checked in test mode on 2026-11-27. It gives one invoice and one charge, CA$280 + CA$280 + CA$72.80 HST = CA$632.80, the same as the preview. The line is taxed like the plan line, and a promo code takes the same amount off as before. A declined card leaves no subscription and no invoice. Roger then removes the item, so a retry never finds two. No Roger email lists the first invoice's lines, so no email changed for this point.
+
+**(d) Decided by Peter on 2026-11-27: with Zack off, the getting-started card doesn't wait for a report.** This is on `/app`, not in an email. Before, under its "Wait for Monday" step, `src/components/app/onboarding-checklist.tsx` showed the same sentence whatever the member's sharing setting: "Your first list arrives on a Monday morning, once Zack has sent a report."
+
+What changed: a member with Zack off (sharing "off") now reads "Your first list arrives on Monday morning." Members with Zack on, sharing or matching only, keep "Your first list arrives on a Monday morning, once Zack has sent a report."
+
+**Also changed on 2026-11-27, Peter's wording for two more emails:**
+
+- The welcome email (emails 9 and 10) gives both prices to every member, whatever their currency, followed by the member's own tax words: "After that, Roger is US$200 / CA$280 a month plus HST." Both amounts come from the settings. Peter wrote "CAD$280". It is "CA$280" here, to match every other price on the site.
+- The sharing-changed email, when a member turns sharing off (emails 59 and 61, in the trial and paying alike), now reads: "Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice." The amount is the member's own higher price. It then says: "If you didn’t make this change, open the Zack page and change it back. Your price depends on whether your Zack runs share what you learn about AI agents with the network." In the HTML email, "Zack page" is a link to the Zack page, and the plain text gives the address in brackets. Other sharing changes (emails 60 and 62) are unchanged.
 
 ## Sign-in and your email address
 
@@ -352,7 +359,7 @@ Welcome, Ana.
 
 Your first two Cora lists are free.
 
-After that, Roger is CA$280 a month, plus HST. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.
+After that, Roger is US$200 / CA$280 a month plus HST. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.
 
 Your next step is to connect Zack to your AI agent. It takes a few minutes.
 
@@ -380,7 +387,7 @@ Welcome, Ana.
 
 Your first two Cora lists are free.
 
-After that, Roger is US$200 a month, plus tax where it applies. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.
+After that, Roger is US$200 / CA$280 a month plus tax where it applies. Your first charge comes with your third list, and we’ll email you the exact date and amount before it happens. You can cancel any time in one click.
 
 Your next step is to set up your AI agent and the starter team. Most people finish in about half an hour.
 
@@ -712,7 +719,7 @@ Open and install: https://meetroger.ai/app/week/2026-12-07#idea-a2
 You keep your pipeline in a CRM your agent can already read.
 Open and install: https://meetroger.ai/app/week/2026-12-07#idea-a3
 
-Free list 2 of 2. Your next list is your first paid one: Monday, December 14, CA$316.40 with tax.
+Free list 2 of 2. Your next list is your first paid one: Monday, December 14, CA$316.40 (CA$280 plus CA$36.40 HST).
 
 --
 
@@ -854,7 +861,7 @@ Open and install: https://meetroger.ai/app/week/2026-11-30#idea-a2
 You keep your pipeline in a CRM your agent can already read.
 Open and install: https://meetroger.ai/app/week/2026-11-30#idea-a3
 
-This list: CA$316.40 with tax. Monthly is now the only plan. Write to us if you have questions about yours.
+This list: CA$316.40 in total. Monthly is now the only plan. Write to us if you have questions about yours.
 
 Your receipt: https://pay.stripe.com/receipts/sample
 
@@ -1148,7 +1155,7 @@ Spec B.13: 7. After the second free list, before that Monday's list email.
 ```text
 Your next list is your first paid one.
 
-Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$316.40, tax included, for your first month.
+Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$316.40 (CA$280 plus CA$36.40 HST) for your first month.
 
 If you’d rather not continue, cancel before then and nothing is charged.
 
@@ -1169,14 +1176,14 @@ Spec B.13: 7. Same, with a promo code locked in at card save (here a one-month C
 
 **Subject:** Your next list is your first paid one
 
-**Preview line:** CA$260.40, no earlier than Monday, December 14.
+**Preview line:** CA$253.12, no earlier than Monday, December 14.
 
 ```text
 Your next list is your first paid one.
 
-Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$260.40, tax included, for your first month.
+Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge CA$253.12 (CA$224 plus CA$29.12 HST) for your first month.
 
-That includes your promo code WELCOME20: CA$56 off your first month. After that, it’s CA$316.40 a month, tax included.
+That includes your promo code WELCOME20: CA$56 off your first month. After that, it’s CA$280 a month plus HST.
 
 If you’d rather not continue, cancel before then and nothing is charged.
 
@@ -1202,9 +1209,9 @@ Spec B.13: 7. Same, a US member with a three-month promo.
 ```text
 Your next list is your first paid one.
 
-Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge US$160, tax included, for your first month.
+Your free lists are done. Your next list follows Zack’s next report, no earlier than Monday, December 14, and that morning we’ll charge US$160 for your first month.
 
-That includes your promo code SPRING: US$40 off a month for your first 3 months. After that, it’s US$200 a month, tax included.
+That includes your promo code SPRING: US$40 off a month for your first 3 months. After that, it’s US$200 a month.
 
 If you’d rather not continue, cancel before then and nothing is charged.
 
@@ -1230,7 +1237,7 @@ Spec B.13: 8. 48 hours before the first charge.
 ```text
 Your first charge could be on Monday.
 
-If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$316.40, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.
+If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$316.40 (CA$280 plus CA$36.40 HST) for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.
 
 To stop, cancel before then and nothing is charged.
 
@@ -1251,12 +1258,12 @@ Spec B.13: 8. Same, with a promo that never ends.
 
 **Subject:** Your first charge could be on Monday
 
-**Preview line:** CA$260.40, no earlier than Monday, December 14.
+**Preview line:** CA$253.12, no earlier than Monday, December 14.
 
 ```text
 Your first charge could be on Monday.
 
-If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$260.40, tax included, for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.
+If Zack’s report arrives by Sunday night, your third list comes on Monday, December 14 and we’ll charge CA$253.12 (CA$224 plus CA$29.12 HST) for your first month. If it doesn’t, nothing is charged and we’ll tell you the next date.
 
 That includes your promo code FOUNDER: CA$56 off every month.
 
@@ -1284,7 +1291,7 @@ Spec B.13: 28. A change (sharing, plan, currency, address) moved the first charg
 ```text
 Your first charge amount changed.
 
-After your change, your first charge, no earlier than Monday, December 14, will be CA$632.80, tax included.
+After your change, your first charge, no earlier than Monday, December 14, will be CA$632.80 (CA$560 plus CA$72.80 HST).
 
 Billing: https://meetroger.ai/app/billing
 
@@ -1308,7 +1315,7 @@ Spec B.13: 28. At the charge, the amount differs from the one told: the list wai
 ```text
 Your first charge amount changed.
 
-Your first charge will be CA$632.80, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.
+Your first charge will be CA$632.80 (CA$560 plus CA$72.80 HST). That isn’t the amount we last told you, so we’re telling you now, before charging.
 
 We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.
 
@@ -1336,7 +1343,7 @@ Your first charge amount changed.
 
 Your promo code’s discount (WELCOME20) has ended and can no longer be applied, so your first charge is at the full price.
 
-Your first charge will be CA$316.40, tax included. That isn’t the amount we last told you, so we’re telling you now, before charging.
+Your first charge will be CA$316.40 (CA$280 plus CA$36.40 HST). That isn’t the amount we last told you, so we’re telling you now, before charging.
 
 We’ll charge it tomorrow and send your list then. If you’d rather not, you can cancel on the billing page before then.
 
@@ -1410,7 +1417,7 @@ Spec B.13: 9. The first charge succeeded.
 ```text
 You’re subscribed.
 
-We charged CA$316.40, tax included. Your third list is ready now, and a new one arrives every Monday.
+We charged CA$316.40 (CA$280 plus CA$36.40 HST). Your third list is ready now, and a new one arrives every Monday.
 
 You can cancel any time on the billing page, in one click.
 
@@ -1436,7 +1443,7 @@ Spec B.13: 9. Same, a US member with no tax collected.
 ```text
 You’re subscribed.
 
-We charged US$200, tax included. Your third list is ready now, and a new one arrives every Monday.
+We charged US$200. Your third list is ready now, and a new one arrives every Monday.
 
 You can cancel any time on the billing page, in one click.
 
@@ -1745,7 +1752,7 @@ hello@meetroger.ai
 
 File: `src/lib/mail/templates/zack-page.ts` (`sharingChangedEmail`)
 
-Spec B.13: 15. On a sharing change. The price line is the same sentence the Zack page shows before confirming (src/lib/zack/sharing-effect.ts).
+Spec B.13: 15. On a sharing change. Turning sharing off gives Peter’s explanation with the member’s own higher price (src/lib/zack/sharing-effect.ts `sharingOffPrice`); other changes give the same sentence the Zack page shows before confirming (`sharingEffect`).
 
 **Subject:** Your Zack sharing setting changed
 
@@ -1756,9 +1763,9 @@ Your sharing setting changed.
 
 Zack is now set to “Zack off”. This applies to sharing straight away.
 
-With sharing off at a Sunday cutoff, that month is billed at CA$560; the difference is added to your next invoice.
+Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.
 
-If you didn’t make this change, open the Zack page and change it back, then write to us.
+If you didn’t make this change, open the Zack page (https://meetroger.ai/app/zack) and change it back. Your price depends on whether your Zack runs share what you learn about AI agents with the network.
 
 Open the Zack page: https://meetroger.ai/app/zack
 
@@ -1801,7 +1808,7 @@ hello@meetroger.ai
 
 File: `src/lib/mail/templates/zack-page.ts` (`sharingChangedEmail`)
 
-Spec B.13: 15. Same, during the trial, before the first charge.
+Spec B.13: 15. Same, during the trial, before the first charge: the same words as for a paying member.
 
 **Subject:** Your Zack sharing setting changed
 
@@ -1812,9 +1819,9 @@ Your sharing setting changed.
 
 Zack is now set to “use for my matching only”. This applies to sharing straight away.
 
-If sharing is still off at the Sunday cutoff before your first charge (no earlier than Monday, December 14), your first month is CA$560, the rate for members whose Zack doesn’t share. After that, any month with sharing off at a Sunday cutoff is billed at CA$560, the difference added to your next invoice.
+Roger works by members sharing what their AI agents do, for the good of the whole network. If you don’t share, you can still use Roger and get your Cora lists, but your price doubles, to CA$560 a month. This applies only to months when you are not sharing, and the difference is added to your next invoice.
 
-If you didn’t make this change, open the Zack page and change it back, then write to us.
+If you didn’t make this change, open the Zack page (https://meetroger.ai/app/zack) and change it back. Your price depends on whether your Zack runs share what you learn about AI agents with the network.
 
 Open the Zack page: https://meetroger.ai/app/zack
 
@@ -2290,7 +2297,7 @@ Spec B.13: 24. An order placed.
 ```text
 Your list is ordered.
 
-You’ll get your three ideas on Monday, November 30, charged CA$280 that morning, once Zack’s report for the week has arrived.
+You’ll get your three ideas on Monday, November 30, charged CA$280 plus HST that morning, once Zack’s report for the week has arrived.
 
 You can cancel until Sunday night.
 
