@@ -66,7 +66,7 @@ export function IdeaSheet({
             <span className="font-[560] text-ink">Your score {idea.personal.score} of 100.</span> {idea.personal.reason}
           </p>
         )}
-        <p className="mt-6 text-lead">{idea.description}</p>
+        {idea.description && <p className="mt-6 text-lead">{idea.description}</p>}
 
         <dl className="mt-8 grid gap-3 sm:grid-cols-2">
           {[idea.tiles.hours, idea.tiles.eachTime, idea.tiles.heavy, idea.tiles.runBy].map((t) => (

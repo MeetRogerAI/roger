@@ -192,6 +192,29 @@ describe("parsing and validation", () => {
     expect(p.body.playbook_md).toContain("3. Open Gmail and ask [a name] or [a name] to confirm.");
   });
 
+  it("never drafts from another play's section whose title only starts the same (re-review G2)", async () => {
+    const read: Read = async () => ({
+      plays: [modelPlay({ title: "Meeting prep" }), modelPlay({ set: "B", title: "Meeting prep for a family member's appointments", sensitive: true })],
+      also_runs: [],
+    });
+    const { m, calls } = fakeModel({ read, draft: DRAFTED });
+    const id = await addRun("# Zack The Collector (for Hark) v1.9\n## Play 1: Meeting prep for a family member's appointments\nPrivate steps for a family member.\n## Play 2: Planning\nOther.\n");
+    expect(await processRun(query, id, deps(m))).toBe("accepted");
+    expect(calls.drafts).toEqual([]);
+    expect((await playsOf(id))[0]).toMatchObject({ auto_fixed: { actions: ["outline_only"], reasons: ["its playbook could not be found in the report", "Roger could not draft its setup steps"] } });
+  });
+
+  it("keeps a review-list name in a draft only when the play's own fields use it in that case, and never a person's (re-review G3)", async () => {
+    const text = `${SECTIONED}## Review list\n**Proper nouns, tools and products in this report:** Gmail, Mark, Will, Dana, Dana Whitfield.\n`;
+    const read: Read = async () => ({ plays: [modelPlay({ description: "Sorts Gmail for Dana and Dana Whitfield; will mark each one." })], also_runs: [] });
+    const findings: ReviewFinding[] = [{ playId: "p1", text: "Dana Whitfield", kind: "person", clear: true, reason: "" }];
+    const { m } = fakeModel({ read, findings, draft: `${DRAFTED}\n3. Open Gmail, ask Mark and Will, and copy Dana.` });
+    const id = await addRun(text);
+    expect(await processRun(query, id, deps(m))).toBe("accepted");
+    const [p] = await playsOf(id);
+    expect(p.body.playbook_md).toContain("3. Open Gmail, ask [a name] and [a name], and copy [a name].");
+  });
+
   it("does not draft from a section that reads as harmful: the play is an outline (review F2)", async () => {
     const read: Read = async () => ({ plays: [modelPlay()], also_runs: [] });
     const { m, calls } = fakeModel({ read, draft: DRAFTED });
@@ -393,21 +416,43 @@ describe("privacy", () => {
     const plays = await playsOf(id);
     expect(plays[0].auto_fixed?.reasons).toEqual(expect.arrayContaining(["may contain a private person name", "may contain a private company name"]));
     expect(plays[1].auto_fixed).toEqual({ actions: ["outline_only"], reasons: ["may contain a private company name"] });
-    for (const p of plays) expect(p).toMatchObject({ shareable: true, flag: null, body: { outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE, description: "", job: "" } });
-    // The name that could not be placed is gone with every field but the title.
-    expect(JSON.stringify(plays)).not.toMatch(/obrien/i);
+    // A name problem: the member's title is not used either, only a neutral one (re-review G1).
+    for (const p of plays) expect(p).toMatchObject({ shareable: true, flag: null, title: "An email and calendar play", body: { outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE, description: "", job: "" } });
+    expect(JSON.stringify(plays)).not.toMatch(/obrien|morning inbox|other/i);
   });
 
-  it("drops a privacy outline whose title still holds a name found in the run, in any case, accents or punctuation (review F1)", async () => {
+  it("never shows the member's title for a name problem, whatever form the review gave the name: unplaced, empty or reworded (re-review G1)", async () => {
     const findings: ReviewFinding[] = [
-      { playId: "p1", text: "O'Brien", kind: "person", clear: false, reason: "" },
-      { playId: "p2", text: "Mary-Jane Lowe", kind: "person", clear: false, reason: "" },
+      { playId: "p1", text: "Whitfield Consulting Ltd", kind: "company", clear: false, reason: "" },
+      { playId: "p2", text: "", kind: "person", clear: false, reason: "" },
+      { playId: "p3", text: "Soren", kind: "person", clear: true, reason: "" },
     ];
     const id = await addRun(
       report([
-        play({ title: "Friday call with OBRIEN", description: "Calls Obrien." }),
-        play({ set: "B", title: "Notes for mary jane lowe", description: "Writes up Mary Jane Lowe's notes." }),
-        play({ set: "B", title: "Other", description: "Nothing private." }),
+        play({ title: "Whitfield Consulting check-in", description: "Calls Whitfield Consulting." }),
+        play({ set: "B", title: "Notes for Lena", description: "Writes up notes." }),
+        play({ set: "B", title: "Søren’s Friday call", category: "Sales", description: "Calls Søren. Łukasz joins." }),
+      ]),
+    );
+    expect(await processRun(query, id, deps(fakeModel({ findings }).m))).toBe("accepted");
+    const [a, b, c] = await playsOf(id);
+    expect(a).toMatchObject({ shareable: true, title: "An email and calendar play", body: { title: "An email and calendar play", outline_only: true } });
+    expect(b).toMatchObject({ shareable: true, title: "An email and calendar play", body: { outline_only: true } });
+    // ø folds to o, so "Soren" is found and replaced, and the play keeps its (cleaned) title and text.
+    expect(c).toMatchObject({ shareable: true, title: "[a person]’s Friday call", body: { description: "Calls [a person]. Łukasz joins." } });
+    expect(JSON.stringify([a, b])).not.toMatch(/whitfield|lena/i);
+  });
+
+  it("drops a sensitive play whose kept title still holds a name found in the run, or a word of one that could not be placed (review F1, re-review G1)", async () => {
+    const findings: ReviewFinding[] = [
+      { playId: "p3", text: "O'Brien", kind: "person", clear: false, reason: "" },
+      { playId: "p3", text: "Whitfield Consulting Ltd", kind: "company", clear: false, reason: "" },
+    ];
+    const id = await addRun(
+      report([
+        play({ title: "Friday call with OBRIEN", sensitive: true, description: "Private." }),
+        play({ set: "B", title: "Whitfield follow-up", sensitive: true, description: "Private." }),
+        play({ set: "B", title: "Other", description: "Calls Obrien and Whitfield Consulting." }),
       ]),
     );
     expect(await processRun(query, id, deps(fakeModel({ findings }).m))).toBe("accepted");
@@ -416,7 +461,7 @@ describe("privacy", () => {
       expect(p).toMatchObject({ shareable: false, auto_fixed: null, flag: { reasons: [TITLE_NAME_REASON], fields: ["title"], rejected: true, auto: true } });
       expect(p.body).toMatchObject({ outline_only: true, description: "" });
     }
-    expect(other).toMatchObject({ shareable: true, flag: null, title: "Other", body: { description: "Nothing private." } });
+    expect(other).toMatchObject({ shareable: true, flag: null, title: "An email and calendar play", body: { outline_only: true } });
   });
 
   it("finds a name whatever its accents, and replaces it (review F1)", async () => {

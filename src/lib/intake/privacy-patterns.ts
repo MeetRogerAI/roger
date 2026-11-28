@@ -83,12 +83,27 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Text without accents: "Zoë" → "Zoe". */
+/**
+ * Letters that do not come apart into a plain letter and an accent (NFD
+ * leaves them whole), with the plain letters they are written as: "Søren" is
+ * "Soren", "Łukasz" "Lukasz", "Straße" "Strasse", "Æsir" "AEsir".
+ */
+const STROKED: Record<string, string> = {
+  ø: "o", Ø: "O", ł: "l", Ł: "L", đ: "d", Đ: "D", ð: "d", Ð: "D", ı: "i", ħ: "h", Ħ: "H", ŧ: "t", Ŧ: "T", ŀ: "l", Ŀ: "L",
+  ß: "ss", ẞ: "SS", æ: "ae", Æ: "AE", œ: "oe", Œ: "OE", þ: "th", Þ: "TH",
+};
+const STROKED_RE = new RegExp(`[${Object.keys(STROKED).join("")}]`, "gu");
+
+/** Text in plain letters, the one normaliser for names (phrasePattern, holdsAnyName): "Zoë" → "Zoe", "Søren" → "Soren", "Straße" → "Strasse". */
 export function stripDiacritics(s: string): string {
-  return s.normalize("NFD").replace(/\p{M}+/gu, "").normalize("NFC");
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .replace(STROKED_RE, (c) => STROKED[c])
+    .normalize("NFC");
 }
 
-/** Each plain Latin letter with every accented letter that folds to it ("e" → "èéêë…"), for phrasePattern. */
+/** Each plain Latin letter with every letter that folds to it ("e" → "èéêë…", "o" → "òóôõöø…"), for phrasePattern. */
 const ACCENTED = (() => {
   const m = new Map<string, string>();
   for (let cp = 0xc0; cp <= 0x24f; cp++) {
@@ -99,10 +114,14 @@ const ACCENTED = (() => {
   return m;
 })();
 
+/** Two plain letters a single letter can stand for ("ss" for "ß"), for phrasePattern. */
+const LIGATURES = Object.entries(STROKED).filter(([, plain]) => plain.length === 2);
+
 /**
- * A phrase as a pattern: any capitalisation, any accents ("Zoe Park" finds
- * "Zoë Park" and the other way round, composed or not), any run of spaces,
- * straight or curly apostrophes, whole words.
+ * A phrase as a pattern: any capitalisation, any accents or stroked letters
+ * ("Zoe Park" finds "Zoë Park", "Soren" finds "Søren", and the other way
+ * round, composed or not), any run of spaces, straight or curly apostrophes,
+ * whole words.
  */
 export function phrasePattern(phrase: string): RegExp {
   const letter = (c: string) => {
@@ -110,18 +129,27 @@ export function phrasePattern(phrase: string): RegExp {
     const accented = ACCENTED.get(c.toLowerCase());
     return accented ? `[${c}${accented}]\\p{M}*` : escapeRe(c);
   };
-  const body = stripDiacritics(phrase)
-    .trim()
-    .split(/\s+/)
-    .map((w) => [...w].map(letter).join(""))
-    .join("\\s+");
+  const word = (w: string) => {
+    const cs = [...w];
+    let out = "";
+    for (let i = 0; i < cs.length; i++) {
+      const pair = i + 1 < cs.length ? `${cs[i]}${cs[i + 1]}`.toLowerCase() : "";
+      const single = LIGATURES.filter(([, plain]) => plain.toLowerCase() === pair).map(([ch]) => ch);
+      if (single.length) {
+        out += `(?:${letter(cs[i])}${letter(cs[i + 1])}|[${single.join("")}])`;
+        i++;
+      } else out += letter(cs[i]);
+    }
+    return out;
+  };
+  const body = stripDiacritics(phrase).trim().split(/\s+/).map(word).join("\\s+");
   return new RegExp(`(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])`, "giu");
 }
 
 /**
- * For comparing names: no accents, lower case, punctuation as single spaces;
- * apostrophes both dropped ("O'Brien" as "obrien") and as a space ("Zoë's"
- * as "zoe s"), so either spelling is found.
+ * For comparing names: plain letters, lower case, punctuation as single
+ * spaces; apostrophes both dropped ("O'Brien" as "obrien") and as a space
+ * ("Zoë's" as "zoe s"), so either spelling is found.
  */
 function foldForNames(s: string): string[] {
   const base = stripDiacritics(normalise(s)).toLowerCase();
@@ -132,18 +160,22 @@ function foldForNames(s: string): string[] {
 /**
  * True when `text` still holds any of `names`, ignoring case, accents and
  * punctuation: as whole words, or (a name of two words or more) run together
- * ("DanaWhitfield"). Used on what is left of a privacy outline: its title.
+ * ("DanaWhitfield"). With `eachWord`, also any single word of three letters
+ * or more of a name ("Whitfield" of "Whitfield Consulting Ltd"), for a name
+ * the review gave in a form that could not be found. Used on what is left of
+ * a privacy outline: its title.
  */
-export function holdsAnyName(text: string, names: string[]): boolean {
+export function holdsAnyName(text: string, names: string[], eachWord: string[] = []): boolean {
   const texts = foldForNames(text);
+  const has = (f: string) => texts.some((t) => ` ${t} `.includes(` ${f} `));
   for (const n of names) {
     const forms = foldForNames(n);
-    if (forms.some((f) => texts.some((t) => ` ${t} `.includes(` ${f} `)))) return true;
+    if (forms.some(has)) return true;
     // Run together: only a name of whole words ("Dana Whitfield"), not one split at an apostrophe.
     const [f] = forms;
     if (f?.includes(" ") && texts.some((t) => t.replaceAll(" ", "").includes(f.replaceAll(" ", "")))) return true;
   }
-  return false;
+  return eachWord.some((n) => foldForNames(n).some((f) => f.split(" ").some((w) => w.length >= 3 && has(w))));
 }
 
 /** The member's own "never include" list, whole words, any capitalisation (spec check 10). */

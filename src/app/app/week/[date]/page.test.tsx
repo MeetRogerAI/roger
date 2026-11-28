@@ -80,11 +80,15 @@ describe("/app/week/[date] for a held list", () => {
   it("shows a delivered idea later removed from the pool as withdrawn, with no install text, playbook or copy button (review F4)", async () => {
     await db.query!("update picks set delivered_at = now()");
     await db.query!("update users set trial_started_at = now()");
-    await db.query!("update pool_plays set removed_at = now(), playbook_md = '1. Removed step.', paste_to_install = 'Removed install.' where title = 'Listing post'");
+    await db.query!(
+      "update pool_plays set removed_at = now(), playbook_md = '1. Removed step.', paste_to_install = 'Removed install.', description = 'Removed description.', heavy_use_for = 'Removed heavy use.', figures = '{\"current_hours_week\": 2, \"heavy_hours_week\": 4}' where title = 'Listing post'",
+    );
+    await db.query!("update picks set reason = 'Removed reason.' where pool_play_id = (select id from pool_plays where title = 'Listing post')");
     const html = await render(WEEK);
     expect(html.split("This idea was withdrawn by Roger.")).toHaveLength(1 + 2); // the card and its sheet
     expect(html).toContain("Listing post");
-    expect(html).not.toMatch(/Removed step|Removed install/);
+    // Nothing of its text: no description, heavy use, reason, steps or install text (re-review G4).
+    expect(html).not.toMatch(/Removed (step|install|description|heavy use|reason)/);
     // The other two are whole: two install texts, two copy buttons.
     expect(html.split("Secret install.")).toHaveLength(1 + 2);
     expect(html.split("Copy prompt and playbook")).toHaveLength(1 + 2);

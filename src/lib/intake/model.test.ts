@@ -88,6 +88,33 @@ describe("playSection and reviewListNames (2026-11-28 review F2)", () => {
     expect(playSection(old, "Inbox")).toBe("**Play 1: Inbox**\nReads mail.");
   });
 
+  it("matches a heading's own title word for word, never a longer title it starts (re-review G2)", () => {
+    const two = [
+      "## Play 1: Meeting prep for a family member's appointments (Set A)",
+      "Private family steps.",
+      "## Play 2: Meeting prep (Set B, my garbage, your treasure)",
+      "Work steps.",
+      "## 3. Inbox triage: about 3.5 hours a week",
+      "Mail steps.",
+    ].join("\n");
+    expect(playSection(two, "Meeting prep")).toBe("## Play 2: Meeting prep (Set B, my garbage, your treasure)\nWork steps.");
+    expect(playSection(two, "Inbox triage")).toBe("## 3. Inbox triage: about 3.5 hours a week\nMail steps.");
+    expect(playSection(two.split("\n").slice(0, 2).join("\n"), "Meeting prep")).toBe("");
+  });
+
+  it("refuses a section another play of the run could own, or one marked sensitive or outline only (re-review G2)", () => {
+    expect(playSection(report, "Inbox", ["Calendar", "inbox"])).toBe("");
+    expect(playSection(report, "Inbox", ["Calendar"])).not.toBe("");
+    const marked = "## Play 1: Kids' events (Sensitive, extra anonymization applied)\nSteps.\n## Play 2: Notes\nOutline only: what it does.";
+    expect(playSection(marked, "Kids' events")).toBe("");
+    expect(playSection(marked, "Notes")).toBe("");
+    expect(playSection("## Play 1: Inbox\nOne.\n## Play 1: Inbox\nTwo.", "Inbox")).toBe("");
+  });
+
+  it("reads names from a label that also lists numbers and dates, without the numbers (re-review G6)", () => {
+    expect(reviewListNames("## Play 1\nx\n## Review list\n**Proper nouns, numbers and dates:** Acme, 2026-11-14, 12 chats, Dana, 3M, 3 a year.")).toEqual(["Acme", "Dana", "3M"]);
+  });
+
   it("reads the review list's proper nouns, and nothing else from it", () => {
     expect(reviewListNames(report)).toEqual(["Zack The Collector", "Dana", "Northside Dental", "Realtor.ca"]);
     expect(reviewListNames("## Play 1\nx\n## Review list\nAcme, Dana")).toEqual(["Acme", "Dana"]);

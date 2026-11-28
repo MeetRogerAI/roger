@@ -83,7 +83,12 @@ export const agentName = (slug: string) => agentNames[slug] ?? slug;
 
 const users = (n: number) => (n === 1 ? "1 user" : `${n} users`);
 
-export function buildIdeaView(play: PlaySource, preface: string, pick: PickSource | null = null): IdeaView {
+export function buildIdeaView(source: PlaySource, preface: string, pickSource: PickSource | null = null): IdeaView {
+  // A withdrawn idea keeps its title, figures and scores, and no text from the play: no description, heavy use,
+  // reason, install text or playbook (2026-11-28 re-review G4).
+  const withdrawn = source.withdrawn === true;
+  const play = withdrawn ? { ...source, description: "", heavyUseFor: "", playbookMd: "", pasteToInstall: "" } : source;
+  const pick = pickSource && withdrawn ? { ...pickSource, reason: "" } : pickSource;
   const f = play.figures ?? {};
   const hours = num(f.current_hours_week);
   const lo = num(f.range_low);
@@ -124,7 +129,6 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
   // The preface stays first, word for word (spec check 15). The safeguard preamble opens the paste-to-install text, and
   // replaces the older one-line caution (plan, "A playbook is also untrusted when another user pastes it"; 2026-11-27).
   // A withdrawn idea (removed from the pool after delivery) keeps nothing that could be pasted or run.
-  const withdrawn = play.withdrawn === true;
   const pasteToInstall = withdrawn ? "" : withSafeguard(play.pasteToInstall);
   const copyText = withdrawn ? "" : [preface.trim(), pasteToInstall, `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
 

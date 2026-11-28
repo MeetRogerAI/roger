@@ -40,7 +40,7 @@ export function IdeaCard({ idea, sheetActions, initiallyOpen = false }: { idea: 
             </span>
           )}
         </span>
-        <span className="mt-3 block text-small text-ink-2">{idea.personal ? idea.personal.reason : idea.description}</span>
+        {!idea.withdrawn && <span className="mt-3 block text-small text-ink-2">{idea.personal ? idea.personal.reason : idea.description}</span>}
         {idea.timeLine && (
           <span className="mt-4 block text-meta text-ink-2">
             {idea.timeLine}. An estimate from other users’ runs.

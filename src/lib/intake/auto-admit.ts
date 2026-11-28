@@ -95,23 +95,50 @@ function clearText(v: unknown): unknown {
   return v;
 }
 
+/** The title a privacy outline shows in place of the member's own when a name could not be placed: "An email and calendar play". */
+export function outlineTitle(category: string): string {
+  const c = category.trim().toLowerCase() || "shared";
+  return `${/^[aeiou]/.test(c) ? "An" : "A"} ${c} play`;
+}
+
+export type OutlineNames = {
+  /** Every name the review found with its text: replaced in the title, which must then hold none of them. */
+  found: { text: string; kind: string }[];
+  /** Names that could not be placed: each of their words of three letters or more must be absent from the title too. */
+  unplaced?: string[];
+  /**
+   * The outline comes from a name problem (a name that could not be placed,
+   * one with no text, or none found again), not only from "sensitive": the
+   * member's title is not used at all, only outlineTitle (2026-11-28 re-review G1).
+   */
+  hideTitle?: boolean;
+};
+
 /**
  * The privacy outline (2026-11-28 review F1), for a play Zack marked
  * sensitive or with a name that could not be placed: the title and category
  * only, every other text field emptied, and a neutral note for its steps.
- * The title is cleaned again (the patterns and every name found, longest
- * first); `titleHoldsName` is true when it still holds any name found, in any
- * case or accents, and then the caller drops the play.
+ * For a name problem the title is a neutral one (outlineTitle). Otherwise the
+ * member's title is cleaned again (the patterns and every name found, longest
+ * first); `titleHoldsName` is true when it still holds any name found, or a
+ * word of one that could not be placed, in any case or accents, and then the
+ * caller drops the play.
  */
-export function privacyOutline<T extends Record<string, unknown> & { title: string }>(play: T, names: { text: string; kind: string }[]): { play: T; titleHoldsName: boolean } {
-  const found = names.filter((n) => n.kind !== "harm" && n.text.trim()).sort((a, b) => b.text.length - a.text.length);
-  let title = replacePatterns(play.title).text;
-  for (const n of found) title = replaceName(title, n.text, placeholderFor(n.kind)).value;
+export function privacyOutline<T extends Record<string, unknown> & { title: string }>(play: T, names: OutlineNames): { play: T; titleHoldsName: boolean } {
+  const found = names.found.filter((n) => n.kind !== "harm" && n.text.trim()).sort((a, b) => b.text.length - a.text.length);
+  let title = names.hideTitle ? outlineTitle(typeof play.category === "string" ? play.category : "") : replacePatterns(play.title).text;
+  if (!names.hideTitle) for (const n of found) title = replaceName(title, n.text, placeholderFor(n.kind)).value;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(play)) out[k] = OUTLINE_KEEPS.has(k) || (k === "origin" && typeof v === "string" && ORIGINS.has(v)) ? v : clearText(v);
   return {
     play: { ...out, title, outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE } as unknown as T,
-    titleHoldsName: holdsAnyName(title, found.map((n) => n.text)),
+    titleHoldsName:
+      !names.hideTitle &&
+      holdsAnyName(
+        title,
+        found.map((n) => n.text),
+        names.unplaced ?? [],
+      ),
   };
 }
 
@@ -169,8 +196,9 @@ export async function draftPlaybook(
   report: string,
   neverWords: string[],
   names: { text: string; kind: string }[] = [],
+  locate: { title?: string; others?: string[] } = {},
 ): Promise<DraftResult> {
-  const section = playSection(report, play.title);
+  const section = playSection(report, locate.title ?? play.title, locate.others ?? []);
   if (!section || harmFlags(section).length) return { kind: "none" };
   const found = names.filter((n) => n.kind !== "harm" && n.text.trim()).sort((a, b) => b.text.length - a.text.length);
   const clean = (s: string) => {
@@ -178,9 +206,13 @@ export async function draftPlaybook(
     for (const n of found) t = replaceName(t, n.text, placeholderFor(n.kind)).value;
     return t;
   };
+  // A review-list name stays in the draft only if the play's own reviewed fields use it in exactly that case
+  // ("Gmail", not "mark" for "Mark"), and never one the review called a person (re-review G3).
   const fields = allStrings(play).join("\n");
+  const people = found.filter((n) => n.kind === "person").map((n) => n.text);
+  const exempt = (n: string) => new RegExp(phrasePattern(n).source, "u").test(fields) && !holdsAnyName(n, people) && !people.some((p) => holdsAnyName(p, [n]));
   const listed = reviewListNames(report)
-    .filter((n) => !phrasePattern(n).test(fields))
+    .filter((n) => !exempt(n))
     .sort((a, b) => b.length - a.length);
   const failed = (e: unknown): DraftResult => {
     if (isModelUnavailable(e)) throw e;

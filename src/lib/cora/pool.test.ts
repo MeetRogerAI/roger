@@ -3,10 +3,19 @@ import { removeFromPool } from "@/lib/admin/flags";
 import type { Query } from "@/lib/db-query";
 import type { IntakeModel } from "@/lib/intake/model";
 import { testDb } from "@/test-helpers/pglite-db";
-import { mergePending, type MergeModel, type MergePlay, type PoolCandidate } from "./merge";
+import { gatewayMergeModel, mergePending, type MergeModel, type MergePlay, type PoolCandidate } from "./merge";
 import { dateFromFileName, importSeedRun } from "./seed-import";
 
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
+/** The gateway merge model's one call, stubbed: what it was asked, and what it answers. */
+const gen = vi.hoisted(() => ({ calls: [] as { system: string; prompt: string }[], output: { match: "none", sure: false } }));
+vi.mock("ai", async (orig) => ({
+  ...(await orig<typeof import("ai")>()),
+  generateText: async (a: { system: string; prompt: string }) => {
+    gen.calls.push(a);
+    return { output: gen.output };
+  },
+}));
 
 let query: Query;
 const cleanReview: IntakeModel = { readRun: async () => Promise.reject(new Error("unused")), review: async () => [], draftPlaybook: async () => "" };
@@ -174,38 +183,49 @@ describe("mergePending, review follow-ups", () => {
   });
 });
 
-describe("a removed pool play never comes back under a new id (2026-11-28 review F3)", () => {
-  const never: MergeModel = { sameJob: async () => null };
-  async function removedInboxTriage() {
+describe("a removed pool play never comes back under a new id (2026-11-28 review F3, re-review G5)", () => {
+  async function removedPlay(title = "Inbox triage", job = "inbox sort and draft morning mail", category = "Email and calendar") {
     const a = await user("a@example.com");
-    await runWith(a, [play("Inbox triage", "inbox sort and draft morning mail")], { week: "2026-11-23" });
+    await runWith(a, [play(title, job, { category })], { week: "2026-11-23" });
     await mergePending(query, keyModel().m);
-    const [{ id }] = await query<{ id: string }>("select id from pool_plays");
+    const [{ id }] = await query<{ id: string }>("select id from pool_plays where title = $1", [title]);
     await removeFromPool(query, "admin@example.com", id);
     return { a, id };
   }
   const placedIn = async (title: string) => (await query<{ pool_play_id: string | null }>("select pool_play_id from plays where title = $1", [title]))[0]?.pool_play_id;
+  const asking = () => {
+    const asked: string[] = [];
+    return { asked, m: { sameJob: async (p: MergePlay) => (asked.push(p.title), null) } as MergeModel };
+  };
 
-  it("places a play with its title (anyone's), or its member's same job reworded in case and punctuation, into it without asking the model", async () => {
-    const { a, id } = await removedInboxTriage();
+  it("places, without asking the model, its title from its member or in its category, its member's same job, or its member's reworded play in its category", async () => {
+    const { a, id } = await removedPlay();
     const b = await user("b@example.com");
     await runWith(b, [play("INBOX: Triage!", "something else entirely")]);
-    await runWith(a, [play("Morning mail", "Inbox sort, and draft morning mail.")], { week: "2026-12-07" });
-    const asked: string[] = [];
-    const m: MergeModel = { sameJob: async (p) => (asked.push(p.title), null) };
-    expect(await mergePending(query, m)).toMatchObject({ joined: 2, created: 0 });
+    await runWith(a, [play("Inbox triage", "a different job", { category: "Operations" }), play("Morning mail", "Inbox sort, and draft morning mail.", { set: "B" })], { week: "2026-12-07" });
+    await runWith(a, [play("Morning inbox drafts", "draft the morning mail from the inbox each weekday")], { week: "2026-12-14" });
+    const { asked, m } = asking();
+    expect(await mergePending(query, m)).toMatchObject({ joined: 4, created: 0 });
     expect(asked).toEqual([]);
-    expect(await placedIn("INBOX: Triage!")).toBe(id);
-    expect(await placedIn("Morning mail")).toBe(id);
+    for (const t of ["INBOX: Triage!", "Inbox triage", "Morning mail", "Morning inbox drafts"]) expect(await placedIn(t)).toBe(id);
     expect(await query("select active from pool_plays")).toEqual([{ active: false }]);
-    // Another member's same job is not enough on its own: the model decides, and here it says none.
-    const c = await user("c@example.com");
-    await runWith(c, [play("Their own triage", "inbox sort and draft morning mail")]);
-    expect(await mergePending(query, never)).toMatchObject({ created: 1 });
   });
 
-  it("offers every removed play to the model, of any category and past the candidate cut", async () => {
-    const { id } = await removedInboxTriage();
+  it("never swallows another member's play for a shared title in another category, or a same-job play by someone else: the model decides", async () => {
+    const { a, id } = await removedPlay("Weekly report", "monday numbers into a summary for the team", "Marketing");
+    const b = await user("b@example.com");
+    await runWith(b, [play("Weekly report", "friday client billing totals", { category: "Operations" }), play("Team summary", "monday numbers into a summary for the team", { set: "B", category: "Marketing" })]);
+    // Same member, other category, reworded: not enough on its own either.
+    await runWith(a, [play("Numbers digest", "monday numbers into a summary", { category: "Sales" })], { week: "2026-12-07" });
+    const { asked, m } = asking();
+    expect(await mergePending(query, m)).toMatchObject({ created: 3, joined: 0 });
+    expect(asked.sort()).toEqual(["Numbers digest", "Team summary", "Weekly report"]);
+    for (const t of ["Team summary", "Numbers digest"]) expect(await placedIn(t)).not.toBe(id);
+    expect(await query("select 1 from plays where pool_play_id = $1", [id])).toHaveLength(1);
+  });
+
+  it("offers the ten closest removed plays to the model, of any category and past the candidate cut, marked removed", async () => {
+    const { id } = await removedPlay();
     await query("update pool_plays set category = 'Operations' where id = $1", [id]);
     for (let i = 0; i < 45; i++) {
       await query(
@@ -213,26 +233,65 @@ describe("a removed pool play never comes back under a new id (2026-11-28 review
         [`Filler ${i}`, `filler job number ${i} with many shared words inbox triage`],
       );
     }
+    for (let i = 0; i < 12; i++) {
+      await query(
+        "insert into pool_plays (title, category, description, playbook_md, paste_to_install, job, first_seen, last_seen, removed_at) values ($1, 'Sales', 'd', 'p', 'i', $2, '2026-11-23', '2026-11-23', now())",
+        [`Gone ${i}`, `unrelated removed job ${i}`],
+      );
+    }
     const b = await user("b@example.com");
     await runWith(b, [play("Mail sorter", "inbox sort again")]);
-    let offered: string[] = [];
-    const m: MergeModel = { sameJob: async (_p, cands) => ((offered = cands.map((c) => c.id)), cands.find((c) => c.id === id)?.id ?? null) };
+    let offered: PoolCandidate[] = [];
+    const m: MergeModel = { sameJob: async (_p, cands) => ((offered = cands), cands.find((c) => c.id === id)?.id ?? null) };
     expect(await mergePending(query, m)).toMatchObject({ joined: 1, created: 0 });
-    expect(offered).toContain(id);
-    expect(offered).toHaveLength(41);
+    expect(offered).toHaveLength(40 + 10);
+    expect(offered.filter((c) => c.removed)).toHaveLength(10);
+    expect(offered.find((c) => c.id === id)).toMatchObject({ removed: true });
+    expect(offered.filter((c) => c.title.startsWith("Filler")).every((c) => !c.removed)).toBe(true);
     expect(await placedIn("Mail sorter")).toBe(id);
   });
 
-  it("when the merge decision keeps failing, places a play near a removed one into it rather than a new pool play; others are kept separate as before", async () => {
-    const { id } = await removedInboxTriage();
+  it("tells the model which candidates were removed, and takes a match to one even when it is not sure", async () => {
+    const cands: PoolCandidate[] = [
+      { id: "live-1", title: "Inbox", job: "inbox sort", description: "d" },
+      { id: "gone-1", title: "Inbox triage", job: "inbox sort", description: "d", removed: true },
+    ];
+    const p = { id: "p", title: "Mail sorter", category: "Email and calendar", job: "inbox sort", description: "d" };
+    gen.output = { match: "gone-1", sure: false };
+    expect(await gatewayMergeModel.sameJob(p, cands)).toBe("gone-1");
+    expect(gen.calls[0].prompt).toMatch(/id="gone-1" status="removed by an admin"/);
+    expect(gen.calls[0].prompt).not.toMatch(/id="live-1" status/);
+    expect(gen.calls[0].system).toContain('status="removed by an admin"');
+    // When in doubt, none, for a play still in the pool.
+    gen.output = { match: "live-1", sure: false };
+    expect(await gatewayMergeModel.sameJob(p, cands)).toBeNull();
+    gen.output = { match: "live-1", sure: true };
+    expect(await gatewayMergeModel.sameJob(p, cands)).toBe("live-1");
+  });
+
+  it("when the merge decision keeps failing, places a play plainly the same as a removed one of its category into it; anything else is kept separate as before", async () => {
+    const { id } = await removedPlay();
     const b = await user("b@example.com");
-    await runWith(b, [play("Inbox sorter", "inbox sorting of morning mail"), play("Calendar prep", "calendar briefs", { set: "B" })]);
-    const failing = keyModel(new Set(["Inbox sorter", "Calendar prep"])).m;
-    for (let i = 0; i < 2; i++) expect(await mergePending(query, failing)).toMatchObject({ failed: 2, created: 0, joined: 0 });
-    expect(await mergePending(query, failing)).toMatchObject({ failed: 2, created: 1, joined: 1 });
+    await runWith(b, [
+      play("Inbox sorter", "inbox sorting of morning mail"),
+      play("Calendar prep", "calendar briefs", { set: "B" }),
+      play("Inbox sorter too", "inbox sorting of morning mail", { set: "B", category: "Operations" }),
+    ]);
+    const failing = keyModel(new Set(["Inbox sorter", "Calendar prep", "Inbox sorter too"])).m;
+    for (let i = 0; i < 2; i++) expect(await mergePending(query, failing)).toMatchObject({ failed: 3, created: 0, joined: 0 });
+    expect(await mergePending(query, failing)).toMatchObject({ failed: 3, created: 2, joined: 1 });
     expect(await placedIn("Inbox sorter")).toBe(id);
-    expect((await pool()).map((p) => p.title)).toEqual(["Calendar prep", "Inbox triage"]);
-    expect(await query("select title from pool_plays where active")).toEqual([{ title: "Calendar prep" }]);
+    expect((await pool()).map((p) => p.title)).toEqual(["Calendar prep", "Inbox sorter too", "Inbox triage"]);
+  });
+
+  it("a play with only a word or two in common with a removed one is not placed on a failed decision", async () => {
+    const { id } = await removedPlay();
+    const b = await user("b@example.com");
+    await runWith(b, [play("Inbox zero coaching", "weekly coaching notes about inbox habits and focus time")]);
+    const failing = keyModel(new Set(["Inbox zero coaching"])).m;
+    for (let i = 0; i < 3; i++) await mergePending(query, failing);
+    expect(await placedIn("Inbox zero coaching")).not.toBe(id);
+    expect(await placedIn("Inbox zero coaching")).not.toBeNull();
   });
 });
 

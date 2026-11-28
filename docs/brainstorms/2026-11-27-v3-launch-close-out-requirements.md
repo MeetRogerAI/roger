@@ -65,7 +65,7 @@ All work happens in git worktrees (this project: `../roger-launch`, branch `laun
 All 18 pilot runs are on production (R15 counted 13 when it was written): 26 plays are in the pool and 38 are held. R26, R28 and R29 replace the "linked to the pilots" part of R15. R25 and R27 are launch work Peter added on 2026-11-27. The state of the work is in `docs/handoffs/2026-11-28-launch-close-out.md`. Where the handoff and this section differ, this section wins.
 - R25. **No manual flag review** (Peter, 2026-11-27). Every shared play is admitted with a safeguard, or dropped:
   - A missing playbook is drafted by the model and marked as drafted. If drafting fails, the play is admitted as an outline only.
-  - A privacy flag redacts the play, or keeps it as an outline only. That privacy outline is the title and category only; the title is checked again, and the play is dropped if it still holds a name (2026-11-28 review).
+  - A privacy flag redacts the play, or keeps it as an outline only. That privacy outline is the title and category only; the title is checked again, and the play is dropped if it still holds a name; when the outline comes from a name rather than "sensitive", a neutral title ("A sales play") replaces the member's (2026-11-28 review).
   - Harm is dropped and logged.
   - A one-time pass applies the same rules to the 38 held plays. The 26 pooled plays passed intake with no flag, so they are not checked again. Like every play, they carry the safeguard preamble in lists. In the pass, a play whose name review or draft fails stays held for the next run; it is never admitted.
   - `/admin/flags` becomes a log of what was auto-fixed or dropped. Approve and Reject go; Edit stays.

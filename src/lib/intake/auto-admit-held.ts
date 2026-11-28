@@ -35,9 +35,9 @@ import type { Play } from "./validate";
  *
  * A held name flag stores only its reason, never the name, so the play is
  * reviewed again: every name found is replaced; if one cannot be placed (or
- * none is found), it is admitted as a privacy outline, title and category
- * only, and dropped if its title still holds a name. Harm the new review
- * finds drops it. A model call that fails (the name review or the draft, for
+ * none is found), it is admitted as a privacy outline: its category and a
+ * neutral title ("A sales play"), never the member's own (re-review G1).
+ * Harm the new review finds drops it. A model call that fails (the name review or the draft, for
  * any reason but credits or the key, which stop the backfill) leaves the play
  * held, counted as skipped, for the next run (2026-11-28 review F1, F6). It
  * ends by settling every run with no open flag left (F10).
@@ -55,12 +55,24 @@ export type BackfillTally = {
   left: number;
 };
 
-type HeldRow = { id: string; revision: number; title: string; body: Record<string, unknown>; reasons: string[] | null; raw_text: string; never_words: string[] | null };
+type HeldRow = {
+  id: string;
+  revision: number;
+  title: string;
+  category: string;
+  body: Record<string, unknown>;
+  reasons: string[] | null;
+  raw_text: string;
+  never_words: string[] | null;
+  /** The titles of the run's other plays: a section one of them could own is never drafted from. */
+  others: string[] | null;
+};
 
 export async function autoAdmitHeld(q: Query, model: IntakeModel, o: { apply: boolean; limit?: number }): Promise<BackfillTally> {
   const t: BackfillTally = { held: 0, dropped: 0, drafted: 0, redacted: 0, outlined: 0, admitted: 0, skipped: 0, left: 0 };
   const rows = await q<HeldRow>(
-    `select p.id, p.revision, p.title, p.body, p.flag->'reasons' as reasons, coalesce(r.raw_text, '') as raw_text, zs.never_words
+    `select p.id, p.revision, p.title, p.category, p.body, p.flag->'reasons' as reasons, coalesce(r.raw_text, '') as raw_text, zs.never_words,
+            (select array_agg(o.title) from plays o where o.run_id = p.run_id and o.id <> p.id) as others
      from plays p join runs r on r.id = p.run_id left join zack_settings zs on zs.user_id = p.user_id
      where ${OPEN_FLAG}
      order by p.week_of, p.id
@@ -89,11 +101,14 @@ export async function autoAdmitHeld(q: Query, model: IntakeModel, o: { apply: bo
     }
 
     const { privacy, ...rest } = row.body;
-    let play = { ...rest, title: str(rest.title) || row.title } as Play & Record<string, unknown>;
+    let play = { ...rest, title: str(rest.title) || row.title, category: str(rest.category) || row.category } as Play & Record<string, unknown>;
     const actions = new Set<FixAction>();
     const reasons = new Set<string>([...kinds.names, ...(kinds.sensitive ? [SENSITIVE_REASON] : []), ...(kinds.quality ? [QUALITY_REASON] : [])]);
     let outline = kinds.sensitive;
     let found: { text: string; kind: string }[] = [];
+    let unplaced: string[] = [];
+    // A name problem (one not placed, with no text, or none found again) never shows the member's title (re-review G1).
+    let hideTitle = false;
 
     if (kinds.names.length) {
       const r = await reviewNames(model, play);
@@ -107,12 +122,13 @@ export async function autoAdmitHeld(q: Query, model: IntakeModel, o: { apply: bo
       }
       play = r.play as typeof play;
       found = r.names;
+      unplaced = r.unplaced;
       if (r.replaced) actions.add("redacted");
-      if (!r.allPlaced) outline = true;
+      if (!r.allPlaced) outline = hideTitle = true;
     }
     let drafted = false;
     if (outline) {
-      const p = privacyOutline(play, found);
+      const p = privacyOutline(play, { found, unplaced, hideTitle });
       if (p.titleHoldsName) {
         await drop(row, [TITLE_NAME_REASON]);
         continue;
@@ -126,6 +142,7 @@ export async function autoAdmitHeld(q: Query, model: IntakeModel, o: { apply: bo
         row.raw_text,
         row.never_words ?? [],
         found,
+        { others: row.others ?? [] },
       );
       if (d.kind === "error") {
         t.skipped++;
@@ -159,7 +176,7 @@ export async function autoAdmitHeld(q: Query, model: IntakeModel, o: { apply: bo
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
-type NameReview = { kind: "error" } | { kind: "harm" } | { kind: "ok"; play: Record<string, unknown>; names: { text: string; kind: string }[]; replaced: boolean; allPlaced: boolean };
+type NameReview = { kind: "error" } | { kind: "harm" } | { kind: "ok"; play: Record<string, unknown>; names: { text: string; kind: string }[]; unplaced: string[]; replaced: boolean; allPlaced: boolean };
 
 /**
  * Reviews a held play again for names. Every name found is replaced, longest
@@ -183,6 +200,7 @@ async function reviewNames(model: IntakeModel, play: Record<string, unknown>): P
   let out = play;
   let replaced = false;
   let allPlaced = names.length > 0;
+  const unplaced: string[] = [];
   for (const f of names) {
     if (!f.text.trim()) {
       allPlaced = false;
@@ -192,7 +210,10 @@ async function reviewNames(model: IntakeModel, play: Record<string, unknown>): P
     out = r.value;
     if (r.count > 0) replaced = true;
     // A shorter name inside a longer one already replaced is fine; any other name that cannot be found is not.
-    else if (!names.some((g) => g !== f && g.text.length > f.text.length && phrasePattern(f.text).test(g.text))) allPlaced = false;
+    else if (!names.some((g) => g !== f && g.text.length > f.text.length && phrasePattern(f.text).test(g.text))) {
+      allPlaced = false;
+      unplaced.push(f.text);
+    }
   }
-  return { kind: "ok", play: out, names: names.filter((n) => n.text.trim()), replaced, allPlaced };
+  return { kind: "ok", play: out, names: names.filter((n) => n.text.trim()), unplaced, replaced, allPlaced };
 }

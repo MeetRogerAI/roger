@@ -127,7 +127,7 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
     return giveUpIfLast(q, run);
   }
   let alsoRunsOut = alsoRuns;
-  applyFindings(findings, plays, () => {
+  const { unplaced } = applyFindings(findings, plays, () => {
     alsoRunsOut = [];
   });
   for (const a of alsoRunsOut) for (const n of findings.filter((f) => f.playId === "also" && f.clear && f.kind !== "harm")) {
@@ -139,7 +139,7 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
   const names = findings.filter((f) => f.kind !== "harm" && f.text.trim());
   // Every draft at once, so a run with several stays inside the arrival route's time limit (2026-11-28 review F7).
   const drafts = await Promise.all(
-    plays.map((p) =>
+    plays.map((p, i) =>
       p.harm.size || p.outline.size || !p.quality
         ? null
         : draftPlaybook(
@@ -148,6 +148,8 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
             run.raw_text,
             run.never_words ?? [],
             names,
+            // The section is found by the title as the report wrote it, and never one another play of the run could own (G2).
+            { title: kept[i].title, others: parsed.plays.filter((x) => x !== kept[i]).map((x) => x.title) },
           ),
     ),
   );
@@ -157,7 +159,9 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
     if (p.harm.size) continue;
     if (p.outline.size) {
       // Title and category only; a title that still holds a name found in the run drops the play (2026-11-28 review F1).
-      const o = privacyOutline(p.play, names);
+      // An outline for a name problem (not only "sensitive") never shows the member's title (re-review G1).
+      const hideTitle = [...p.outline].some((r) => r !== SENSITIVE_REASON);
+      const o = privacyOutline(p.play, { found: names, unplaced, hideTitle });
       p.play = o.play;
       if (o.titleHoldsName) {
         p.harm.add(TITLE_NAME_REASON);
@@ -290,7 +294,7 @@ function cleanPlay(play: Play, id: string, neverWords: string[], parsedBy: "bloc
  * play, when the finding names a play that does not exist). Harm drops its
  * play (every play, when it cannot be placed). Fails closed.
  */
-function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns: () => void) {
+function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns: () => void): { unplaced: string[] } {
   const known = (id: string) => plays.find((p) => p.id === id);
   const target = (id: string) => (known(id) ? [known(id)!] : plays);
   const outline = (id: string, kind: string) => {
@@ -301,6 +305,7 @@ function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns
   };
   const names = findings.filter((f) => f.kind !== "harm" && f.text.trim()).sort((a, b) => b.text.length - a.text.length);
   const done: string[] = [];
+  const unplaced: string[] = [];
   for (const f of names) {
     // "Dana" after "Dana Whitfield" was replaced has nothing left to replace, and that is fine.
     const inLonger = done.some((d) => phrasePattern(f.text).test(d));
@@ -318,7 +323,10 @@ function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns
       }
     }
     if (count > 0) for (const p of plays) p.replaced.push({ kind: f.kind, placeholder });
-    else if (f.playId !== "also") outline(f.playId, f.kind);
+    else {
+      unplaced.push(f.text);
+      if (f.playId !== "also") outline(f.playId, f.kind);
+    }
   }
   for (const f of findings.filter((x) => x.kind === "harm" || !x.clear || !x.text.trim())) {
     if (f.playId === "also") {
@@ -329,6 +337,7 @@ function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns
     if (f.kind === "harm") for (const p of target(f.playId)) p.harm.add(modelHarmReason(f.reason));
     else if (!f.text.trim()) outline(f.playId, f.kind);
   }
+  return { unplaced };
 }
 
 type Read = { kind: "ok"; run: unknown } | { kind: "cut_off" };

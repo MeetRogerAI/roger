@@ -109,6 +109,26 @@ describe("phrasePattern and holdsAnyName (2026-11-28 review F1)", () => {
     expect(phrasePattern("Ann").test("Annual planning")).toBe(false);
   });
 
+  it("matches letters NFD leaves whole, and the plain spelling of them, either way round (re-review G1)", () => {
+    for (const [name, text] of [
+      ["Soren", "Søren"],
+      ["Søren", "SOREN"],
+      ["Lukasz", "Łukasz"],
+      ["Strasse", "Straße"],
+      ["Aesir Labs", "Æsir Labs"],
+      ["Dorte", "Đorte"],
+    ]) {
+      expect(`call ${text} now`.replace(phrasePattern(name), "X")).toBe("call X now");
+      expect(holdsAnyName(`call ${text} now`, [name])).toBe(true);
+    }
+  });
+
+  it("with eachWord, finds any word of three letters or more of a name the review gave in another form (re-review G1)", () => {
+    expect(holdsAnyName("Whitfield follow-up", ["Whitfield Consulting Ltd"])).toBe(false);
+    expect(holdsAnyName("Whitfield follow-up", [], ["Whitfield Consulting Ltd"])).toBe(true);
+    expect(holdsAnyName("Weekly follow-up", [], ["Whitfield Consulting Ltd", "Jo"])).toBe(false);
+  });
+
   it("finds a name left in a text in any case, accents or punctuation, or run together", () => {
     expect(holdsAnyName("Friday call with OBRIEN", ["O'Brien"])).toBe(true);
     expect(holdsAnyName("Notes for mary jane lowe", ["Mary-Jane Lowe"])).toBe(true);

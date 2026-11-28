@@ -121,11 +121,13 @@ describe("the auto-admit backfill", () => {
       auto_fixed: { actions: ["outline_only"], reasons: ["its playbook could not be found in the report", "Roger could not draft its setup steps"] },
       body: { outline_only: true, playbook_md: OUTLINE_NOTE, description: "What Undraftable does." },
     });
-    // Privacy: the name the review finds again is replaced everywhere; none found, or sensitive, is a privacy outline: the title only.
+    // Privacy: the name the review finds again is replaced everywhere; sensitive is a privacy outline, its own title only; a name not
+    // found again is a privacy outline with a neutral title, never the member's (re-review G1).
     const thanks = await byTitle("Client thanks");
     expect(thanks).toMatchObject({ shareable: true, auto_fixed: { actions: ["redacted"] }, body: { description: "Thanks [a person] each Friday.", playbook_md: "1. Thank [a person]." } });
     expect(JSON.stringify(thanks)).not.toMatch(/dana/i);
-    expect(await byTitle("Vague name")).toMatchObject({ shareable: true, auto_fixed: { actions: ["outline_only"] }, body: { outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE, description: "", job: "" } });
+    expect(await byTitle("An operations play")).toMatchObject({ shareable: true, auto_fixed: { actions: ["outline_only"] }, body: { outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE, description: "", job: "" } });
+    expect(JSON.stringify(await plays())).not.toContain("Vague name");
     const school = await byTitle("School events");
     expect(school).toMatchObject({ shareable: true, auto_fixed: { actions: ["outline_only"], reasons: ["Zack marked it sensitive"] }, body: { outline_only: true, playbook_md: PRIVACY_OUTLINE_NOTE, description: "", heavy_use_for: "" } });
     expect(JSON.stringify(school.body)).not.toMatch(/Lena|school email/);
@@ -145,7 +147,7 @@ describe("the auto-admit backfill", () => {
     const merge = await mergePending(query, { sameJob: async () => null });
     expect(merge.created).toBe(6);
     const pool = await query<{ title: string; playbook_drafted: boolean }>("select title, playbook_drafted from pool_plays order by title");
-    expect(pool.map((p) => p.title)).toEqual(["Clean", "Client thanks", "Inbox triage", "School events", "Undraftable", "Vague name"]);
+    expect(pool.map((p) => p.title)).toEqual(["An operations play", "Clean", "Client thanks", "Inbox triage", "School events", "Undraftable"]);
     expect(pool.filter((p) => p.playbook_drafted).map((p) => p.title)).toEqual(["Inbox triage"]);
   });
 
@@ -169,17 +171,28 @@ describe("the auto-admit backfill", () => {
     }
   });
 
-  it("keeps the names it could replace when another cannot be placed, as a privacy outline; a title that still holds a name drops the play (review F1)", async () => {
+  it("keeps the names it could replace when another cannot be placed, as a privacy outline with a neutral title, never the member's (review F1, re-review G1)", async () => {
     await query("delete from plays");
     await addPlay(1, "Thanks for Dana Whitfield", held(["may contain a private person name"]), { description: "Thanks Dana Whitfield and Obrien.", playbook_md: "1. Thank them." });
     await addPlay(2, "Call Obrien each Friday", held(["may contain a private person name"]), { description: "Calls Obrien.", playbook_md: "1. Call." });
     const t = await autoAdmitHeld(query, fakeModel().m, { apply: true });
-    expect(t).toMatchObject({ held: 2, admitted: 1, dropped: 1, redacted: 1, outlined: 1, left: 0 });
-    const thanks = (await plays())[0];
-    expect(thanks).toMatchObject({ title: "Thanks for [a person]", shareable: true, auto_fixed: { actions: ["redacted", "outline_only"] }, body: { title: "Thanks for [a person]", description: "", playbook_md: PRIVACY_OUTLINE_NOTE } });
-    expect(JSON.stringify(thanks)).not.toMatch(/dana|obrien/i);
-    expect((await plays())[1]).toMatchObject({ shareable: false, auto_fixed: null, flag: { reasons: ["may contain a private person name", TITLE_NAME_REASON], rejected: true, auto: true } });
+    expect(t).toMatchObject({ held: 2, admitted: 2, dropped: 0, redacted: 1, outlined: 2, left: 0 });
+    const [thanks, call] = await plays();
+    expect(thanks).toMatchObject({ title: "An operations play", shareable: true, auto_fixed: { actions: ["redacted", "outline_only"] }, body: { title: "An operations play", category: "Operations", description: "", playbook_md: PRIVACY_OUTLINE_NOTE } });
+    expect(call).toMatchObject({ title: "An operations play", shareable: true, auto_fixed: { actions: ["outline_only"] } });
+    expect(JSON.stringify([thanks, call])).not.toMatch(/dana|obrien|thanks for|friday/i);
     expect((await query<{ status: string }>("select status from runs"))[0].status).toBe("accepted");
+  });
+
+  it("drops a sensitive play whose title, the one text it keeps, still holds a name the review found (review F1)", async () => {
+    await query("delete from plays");
+    await addPlay(1, "DanaWhitfield sync", held(["may contain a private person name", "Zack marked it sensitive"]), { description: "Calls Dana Whitfield.", playbook_md: "1. Call." });
+    await addPlay(2, "Weekly sync", held(["may contain a private person name", "Zack marked it sensitive"]), { description: "Calls Dana Whitfield.", playbook_md: "1. Call." });
+    expect(await autoAdmitHeld(query, fakeModel().m, { apply: true })).toMatchObject({ held: 2, admitted: 1, dropped: 1, left: 0 });
+    const [dropped, kept] = await plays();
+    expect(dropped).toMatchObject({ shareable: false, auto_fixed: null, flag: { reasons: ["may contain a private person name", "Zack marked it sensitive", TITLE_NAME_REASON], rejected: true, auto: true } });
+    // Every name was placed and the play is only sensitive, so its own title is kept, checked.
+    expect(kept).toMatchObject({ title: "Weekly sync", shareable: true, auto_fixed: { actions: ["redacted", "outline_only"] }, body: { description: "" } });
   });
 
   it("leaves a play held when drafting its steps hits a model error, and drafts it on the next run (review F6)", async () => {

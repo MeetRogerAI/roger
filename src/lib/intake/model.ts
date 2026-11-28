@@ -225,35 +225,54 @@ export function slicePlaybook(report: string, first: string, last: string, title
 const SECTION_CHARS = 20_000;
 
 /**
- * One play's own section of the report, for drafting its steps (2026-11-28
- * review F2): from the line that carries its title (a heading by preference)
- * to the next heading of the same level or higher, and never into the review
- * list. "" when the title cannot be found before the review list: then the
- * play is not drafted, rather than drafted from the whole report.
+ * A heading's own title, as words: without its markdown, a "Play 2:" or "2."
+ * number, a "(Set A ...)" or "(Sensitive ...)" note, or a ": about 3.5 hours
+ * a week" figure. Also used on a play's title, which may carry the same.
  */
-export function playSection(report: string, title: string): string {
+export function headingTitle(line: string): string {
+  const t = loose(line)
+    .replace(/^\s*(?:play\s*)?\d+\s*[:.)\-]\s*/i, "")
+    .replace(/\s*\((?:set\s+[ab]\b|sensitive|outline)[^)]*\)/gi, " ")
+    .replace(/\s*[:\-]\s*(?:about\s+|~\s*)?[\d.,]+\s*(?:hours?|hrs?|minutes?|mins?)\b.*$/i, "");
+  return t
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** Zack marks a sensitive play's section in the report: never drafted from. */
+const SENSITIVE_SECTION = /extra anonymi[sz]ation|\(\s*sensitive\b|\boutline only\b/i;
+
+/**
+ * One play's own section of the report, for drafting its steps (2026-11-28
+ * review F2, re-review G2): from the one heading (a markdown heading, or a
+ * line in bold) whose own title is the play's title, word for word, to the
+ * next heading of the same level or higher, and never into the review list.
+ * "" (the play is not drafted, rather than drafted from the wrong text) when
+ * no heading has that title, more than one has, another play of the run has
+ * the same title (`others`), or the section is marked sensitive or outline only.
+ */
+export function playSection(report: string, title: string, others: string[] = []): string {
+  const want = headingTitle(title);
+  if (!want || others.some((o) => headingTitle(o) === want)) return "";
   const limit = reviewListAt(report);
-  const re = loosePattern(title);
-  if (!re) return "";
-  let at: { line: number; level: number } | null = null;
-  for (const m of report.matchAll(re)) {
-    if (m.index >= limit) break;
-    const line = report.lastIndexOf("\n", m.index) + 1;
-    const head = /^(#{1,6})\s/.exec(report.slice(line, m.index + 1));
-    const bold = report.startsWith("**", line);
-    if (head || bold) {
-      at = { line, level: head ? head[1].length : 2 };
-      break;
-    }
-    at ??= { line, level: 2 };
+  const hits: { line: number; level: number }[] = [];
+  let line = 0;
+  for (const text of report.slice(0, limit).split("\n")) {
+    const head = /^(#{1,6})\s/.exec(text);
+    if ((head || /^\s*\*\*.+\*\*\s*$/.test(text)) && headingTitle(text) === want) hits.push({ line, level: head ? head[1].length : 2 });
+    line += text.length + 1;
   }
-  if (!at) return "";
-  const rest = report.slice(at.line, limit);
+  if (hits.length !== 1) return "";
+  const rest = report.slice(hits[0].line, limit);
   const firstLineEnd = rest.indexOf("\n") < 0 ? rest.length : rest.indexOf("\n");
   // The next heading as high as this one, or a bold "Play" line (an older report's play heading).
-  const next = new RegExp(`^(?:#{1,${at.level}}\\s|\\*\\*Play\\b)`, "m").exec(rest.slice(firstLineEnd));
+  const next = new RegExp(`^(?:#{1,${hits[0].level}}\\s|\\*\\*Play\\b)`, "m").exec(rest.slice(firstLineEnd));
   const end = next ? firstLineEnd + next.index : rest.length;
-  return rest.slice(0, Math.min(end, SECTION_CHARS)).trim();
+  const section = rest.slice(0, Math.min(end, SECTION_CHARS)).trim();
+  return SENSITIVE_SECTION.test(section) ? "" : section;
 }
 
 /**
@@ -267,7 +286,8 @@ export function reviewListNames(report: string): string[] {
   const lines = report.slice(at).split(/^```/m)[0].split("\n");
   // The heading's own line may carry the list ("**Review list:** Acme, Dana").
   lines[0] = lines[0].replace(REVIEW_LIST, "").replace(/^[*_\s]*:?[*_\s]*/, "");
-  const isNamesLabel = (label: string) => /proper noun|\bnames?\b/i.test(label) && !/number|date|count/i.test(label);
+  // A label that names names, alone or with numbers and dates ("Proper nouns, numbers and dates:"); its number items are dropped below (re-review G6).
+  const isNamesLabel = (label: string) => /proper noun|\bnames?\b/i.test(label);
   const parsed = lines.map((raw) => {
     const line = raw.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "").replace(/[*_`]/g, "").trim();
     const colon = line.indexOf(":");
@@ -292,7 +312,9 @@ export function reviewListNames(report: string): string[] {
   const out = new Set<string>();
   for (const part of items.flatMap((s) => s.split(/[,;]/))) {
     const name = part.replace(/\([^)]*\)/g, "").replace(/\.$/, "").trim();
-    if (name.length >= 2 && name.length <= 80 && /\p{L}/u.test(name) && !/^(?:none|n\/a)$/i.test(name)) out.add(name);
+    // A number or a date, alone or with a few plain words ("2026-11-14", "12 chats", "3 a year"), is not a name.
+    const isNumber = /^\d[\d.,:/\s–-]*(?:\s+[a-z]+){0,3}$/.test(name);
+    if (name.length >= 2 && name.length <= 80 && /\p{L}/u.test(name) && !isNumber && !/^(?:none|n\/a)$/i.test(name)) out.add(name);
   }
   return [...out];
 }

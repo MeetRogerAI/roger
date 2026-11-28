@@ -72,8 +72,12 @@ describe("buildIdeaView", () => {
 
   it("keeps nothing to paste, copy or follow once the idea is withdrawn (removed from the pool, review F4)", () => {
     expect(buildIdeaView(play, preface).withdrawn).toBe(false);
-    const v = buildIdeaView({ ...play, withdrawn: true }, preface, { personalScore: 66, reason: "Fits." });
-    expect(v).toMatchObject({ withdrawn: true, pasteToInstall: "", playbookMd: "", copyText: "", howWorkedOut: null, title: play.title, description: play.description });
+    const v = buildIdeaView({ ...play, withdrawn: true }, preface, { personalScore: 66, reason: "Fits your follow-up work." });
+    // Nothing from the play's text either: description, heavy use and the reason go too (re-review G4); the title and figures stay.
+    expect(v).toMatchObject({ withdrawn: true, pasteToInstall: "", playbookMd: "", copyText: "", howWorkedOut: null, title: play.title, description: "", personal: { score: 66, reason: "" } });
+    expect(v.tiles.heavy.detail).toBe("Not enough figures yet");
+    expect(JSON.stringify(v)).not.toContain(play.description);
+    expect(JSON.stringify(v)).not.toContain(`for ${play.heavyUseFor}`);
   });
 
   it("puts the safeguard preamble at the top of the paste-to-install text, so a play copied alone carries it (2026-11-27)", () => {
