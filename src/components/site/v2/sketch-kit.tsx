@@ -14,15 +14,9 @@ import "./placeholder.css";
 /** A sketch prints the v1 words, with the amounts filled in. It never types a line of copy. */
 export type SketchProps = { copy: V1Copy; amounts: Amounts };
 
-/** The five header links of a site version (spec A.3), in the copy's own words. */
+/** The header links of a site version (spec A.3), in the copy's own words and order. */
 export function navItems(copy: V1Copy): { href: string; label: string }[] {
-  return [
-    { href: "/how-it-works", label: copy.nav.howItWorks },
-    { href: "/#price", label: copy.nav.pricing },
-    { href: "/library", label: copy.nav.library },
-    { href: "/faq", label: copy.nav.faq },
-    { href: "/about", label: copy.nav.about },
-  ];
+  return copy.nav.map(({ href, label }) => ({ href, label }));
 }
 
 /**
