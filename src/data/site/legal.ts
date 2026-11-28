@@ -154,7 +154,7 @@ export const siteTerms: LegalDoc = {
       heading: "The free trial",
       body: [
         "Your first {freeLists} Cora Curations are free. A Cora Curation is the set of ideas Roger sends you on a Monday. Only a Cora Curation that is delivered to you counts as one of them.",
-        "We ask for a card when you sign up, and it is kept on file. It is not charged then.",
+        "We ask for a card when your first Cora Curation is ready, and it is kept on file. It is not charged then.",
         "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
         "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
       ],

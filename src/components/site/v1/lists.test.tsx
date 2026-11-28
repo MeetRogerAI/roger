@@ -196,7 +196,7 @@ describe("the days of the week and the first-weeks steps on /how-it-works", () =
     const first = [...section(page, "first-weeks").matchAll(/<li[^>]*>\s*<span[^>]*>(\d+)<\/span>\s*<span class="text-body">(.*?)<\/span>/g)].map((m) => [m[1], text(m[2])]);
     expect(first.map(([number]) => number)).toEqual(["1", "2", "3", "4", "5"]);
     expect(first[0][1]).toBe("Zack runs on Sunday.");
-    expect(first[1][1]).toBe("You start, and we ask for a card. It is not charged.");
+    expect(first[1][1]).toBe("You start. No card is needed yet.");
     expect(first.map(([, words]) => words).join(" ")).not.toContain("the trial closes without a charge");
   });
 

@@ -337,7 +337,7 @@ describe("terms say each point in the spec's list", () => {
     expect(trial).toContain("Your first two Cora Curations are free.");
     expect(trial).toContain("A Cora Curation is the set of ideas Roger sends you on a Monday.");
     expect(trial).toContain("Only a Cora Curation that is delivered to you counts as one of them.");
-    expect(trial).toContain("We ask for a card when you sign up, and it is kept on file. It is not charged then.");
+    expect(trial).toContain("We ask for a card when your first Cora Curation is ready, and it is kept on file. It is not charged then.");
     expect(trial).toContain("Your card is charged with your third Cora Curation, and once a month after that. Cancel before then and you pay nothing.");
     expect(trial).toContain("If no first Cora Curation is delivered within 21 days of sign-up, the trial closes without a charge.");
   });

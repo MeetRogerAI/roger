@@ -632,7 +632,7 @@ describe("v1 copy", () => {
     expect(shared.buttons.start).toBe("Get two free Cora Curations");
     // One label for every start button: there is no shorter one for the header.
     expect(Object.keys(shared.buttons).sort()).toEqual(["openApp", "signIn", "start"]);
-    expect(shared.cardLine).toBe("Card required. Charged only with your third Cora Curation.");
+    expect(shared.cardLine).toBe("We ask for your card when your first Cora Curation is ready.");
     expect(shared.trialLine).toBe("Your first two Cora Curations are free. Payment starts in week 3.");
     expect(shared.questions.map((g) => g.title)).toEqual(["Getting started", "Zack and privacy", "Cora and the ideas", "Price and billing"]);
     expect(shared.questions.flatMap((g) => g.items)).toHaveLength(18);
@@ -700,7 +700,7 @@ describe("v1 copy", () => {
     expect(items.find((i) => i.q === "When is my card charged?")?.a).toBe(
       "The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",
     );
-    expect(copy.cardLine).toBe("Card required. Charged only with your third Cora Curation.");
+    expect(copy.cardLine).toBe("We ask for your card when your first Cora Curation is ready.");
     expect(items.map((i) => i.q)).not.toContain("Can I buy one list at a time?");
   });
 
