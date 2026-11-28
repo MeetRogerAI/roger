@@ -88,3 +88,14 @@ built-in text for that one render.
 - November 27, 2026 (U11 review): `clearedTestimonials` in `src/lib/site/testimonials.ts` had the same shape (one
   hour), so a failed read removed the homepage's testimonials section for up to an hour. Its cached part now throws
   and `getTestimonials` catches around it; `src/lib/site/testimonials.test.ts` holds the shape.
+- November 28, 2026 (whole-branch review before launch): `getV3SettingsForDisplay` in `src/lib/v3-settings-display.ts`
+  (from `main`) caught inside its cached body, and the v1 site's two cached readers on top of it, `getAmounts` and
+  `getPlaybookPreface`, inherited the fault one level up: a cached function that calls a catching function stores
+  the fallback in its own entry too, even once the inner one is fixed. A dropped connection during a regeneration
+  showed the default prices as the public price. Now `cachedV3SettingsForDisplay` throws, the cached amounts and
+  preface call it (never the catching wrapper), and each has its own wrapper with the fallback. `getUseCases` and
+  `getVerifiedUseCaseCount` in `src/lib/library-source.ts` had the plain shape (the seed library for an hour) and
+  were changed the same way.
+- The shape is now held for the whole repo by `src/lib/use-cache-shape.test.ts`: every `"use cache"` body under
+  `src/` must contain no `try` and no `catch`. A cached reader built on another reader must call that reader's cached
+  (throwing) function; `src/lib/v3-settings-display.test.ts` holds that for the amounts and the preface.

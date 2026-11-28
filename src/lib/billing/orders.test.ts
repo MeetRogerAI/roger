@@ -272,7 +272,7 @@ describe("review follow-ups (12b)", () => {
 });
 
 describe("while one at a time is not offered (the switch off, as at launch)", () => {
-  const REFUSAL = "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday. You can switch to monthly on the billing page.";
+  const REFUSAL = "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday. Monthly is now the only plan. Write to us if you have questions about yours.";
 
   it("refuses a new order from an account on the plan, in the action itself: nothing stored, nothing sent, nothing charged on Monday", async () => {
     offer.on = false;

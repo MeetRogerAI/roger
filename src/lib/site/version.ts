@@ -68,7 +68,7 @@ export function bySite<T>(site: ServedSite, choices: { circles: T; built: T; leg
 
 /**
  * Robots metadata for a page that belongs to the legacy site only (companies,
- * setup, workshops, refunds, packs): kept out of search unless that site is served.
+ * setup, workshops, packs): kept out of search unless that site is served.
  */
 export function hiddenLegacyRobots(site: ServedSite = getServedSite()): { robots?: { index: false; follow: false } } {
   return site === "legacy" ? {} : { robots: { index: false, follow: false } };

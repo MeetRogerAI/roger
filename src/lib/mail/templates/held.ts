@@ -17,7 +17,7 @@ export function firstListHeldEmail(o: { week: string; titles: string[]; paymentU
     paragraphs: [
       `Cora picked ${o.titles.length === 1 ? "this idea" : "these ideas"} for you for the week of ${longDate(o.week)}:`,
       ...o.titles.map((t, n) => `${n + 1}. ${t}`),
-      "Add your card to see why each one fits you and how to set it up. Your first two lists are free, and nothing is charged today.",
+      "Add your card to see why each one fits you and how to set it up. Your first two Cora Curations are free, and nothing is charged today.",
     ],
     button: { label: HELD_BUTTON, url: o.paymentUrl },
   });

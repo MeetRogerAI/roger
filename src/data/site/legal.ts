@@ -18,6 +18,7 @@
 import { siteConfig } from "@/data/config";
 import type { LegalDoc } from "@/data/legal";
 import { fillCopy, type Amounts } from "@/lib/site/amounts";
+import { trialCloseRule } from "./v1";
 
 const email = siteConfig.contactEmail;
 
@@ -175,9 +176,13 @@ export const siteTerms: LegalDoc = {
       heading: "The free trial",
       body: [
         "Your first {freeLists} Cora Curations are free. A Cora Curation is the set of ideas Roger sends you on a Monday. Only a Cora Curation that is delivered to you counts as one of them.",
-        "We ask for a card when your first Cora Curation is ready, and it is kept on file. It is not charged then.",
+        // Main's held list (src/lib/app/held.ts): with no card, the first Cora Curation is titles only until the card is saved (src/lib/cora/unlock.ts).
+        "We ask for a card when your first Cora Curation is ready, and it is kept on file. It is not charged then. Until a card is saved, your first Cora Curation shows only its titles, and the full ideas open once a card is added.",
         "Your card is charged with your {firstPaidList} Cora Curation, and once a month after that. Cancel before then and you pay nothing.",
-        "If no first Cora Curation is delivered within {trialCloseDays} days of sign-up, the trial closes without a charge.",
+        // Main's trial clocks (src/lib/housekeeping/trial.ts and clocks.ts): card saved, trialCloseDays from the card; no card,
+        // HELD_CLOSE_DAYS (14, a constant, not a setting) from the first titles-only email, else trialCloseDays from sign-up;
+        // each Monday with no Cora Curation because of Roger moves the close a week.
+        trialCloseRule,
       ],
     },
     {
@@ -199,10 +204,18 @@ export const siteTerms: LegalDoc = {
       ],
     },
     {
-      // The Payment page's "Terms and refunds" link (main, components/app/payment/trust.tsx) opens /terms#roger-monthly.
+      // The Payment page's "Terms and refunds" link (main, components/app/payment/trust.tsx) opens /terms#roger-monthly,
+      // and /refunds redirects here (next.config.ts). The refund, payment-failure and consumer-law paragraphs are main's
+      // approved "Roger monthly" section (src/data/legal.ts rogerMonthlyTerms, approved by Peter on 2026-11-26), word for
+      // word but for the number of free Cora Curations, which comes from the settings here (Peter, November 28, 2026).
       id: "roger-monthly",
       heading: "Refunds and cancelling",
-      body: ["There are no refunds.", "You can cancel any time, in one click. Your access continues to the end of the month you have paid for."],
+      body: [
+        "No refunds. Because you can try Roger free for {freeLists} Cora Curations and cancel any time, we don’t refund charges already made, including for the rest of a month after you cancel. If we charge you by mistake (for example, twice for the same month, or after your plan ended), tell us and we refund the mistaken charge in full to your card.",
+        "You can cancel any time, in one click. Your access continues to the end of the month you have paid for.",
+        "If a payment fails. Your Cora Curations pause until you update your card in Billing, then start again straight away.",
+        "Your rights. Nothing here takes away a right you have under the consumer law where you live.",
+      ],
     },
     {
       id: "tax",

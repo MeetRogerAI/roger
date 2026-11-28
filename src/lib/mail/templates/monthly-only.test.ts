@@ -120,7 +120,9 @@ describe("the emails, with monthly the only plan (Peter, November 26, 2026)", ()
     for (const mail of told()) {
       expect(all(mail), mail.subject).not.toMatch(/order again|ordering again|you can still order/i);
       expect(mail.text, mail.subject).toContain(NOT_OFFERED);
-      expect(mail.text, mail.subject).toMatch(/monthly/);
+      // The switch to monthly no longer exists (November 28, 2026): the billing page's own close, never a switch.
+      expect(mail.text, mail.subject).toContain("Monthly is now the only plan. Write to us if you have questions about yours.");
+      expect(all(mail), mail.subject).not.toMatch(/switch to monthly|switch to monthly again/i);
     }
     // What happened to the order, and that nothing was charged, is said either way.
     expect(orderNoListEmail({ week: WEEK, reason: "no_run" }).text).toMatch(/so nothing was charged\.\s+Your order doesn’t carry over\./);

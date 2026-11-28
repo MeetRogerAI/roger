@@ -547,7 +547,7 @@ describe("while one at a time is not offered (the switch off, as at launch)", ()
   it("sends no Friday order prompt, and takes no new order from an account on the plan", async () => {
     const id = await member({ status: "active", plan: "per_run" });
     expect(await sendOrderPrompts(query, { settings, now: new Date("2026-12-11T16:00:00Z"), query, transport })).toBe(0);
-    expect(await placeOrder(query, { userId: id, week: WEEK, now: SATURDAY, settings, query, transport })).toEqual({ ok: false, message: `${REFUSAL} You can switch to monthly on the billing page.` });
+    expect(await placeOrder(query, { userId: id, week: WEEK, now: SATURDAY, settings, query, transport })).toEqual({ ok: false, message: `${REFUSAL} Monthly is now the only plan. Write to us if you have questions about yours.` });
     expect(await query("select 1 from orders")).toEqual([]);
     expect(await query("select 1 from notifications where kind = 'order_prompt'")).toEqual([]);
     expect(sent).toEqual([]);

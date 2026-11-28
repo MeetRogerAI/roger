@@ -24,6 +24,16 @@ describe("the redirect list", () => {
     expect(list.filter((r) => r.source === "/agents")).toEqual([{ source: "/agents", destination: "/", permanent: true }]);
   });
 
+  // Peter's decision of November 28, 2026: /refunds is deleted. The refund rule is the terms' refunds section, the one main's Payment page link opens.
+  it("sends /refunds to the terms' refunds section, permanently, and that section has the id the redirect names", async () => {
+    const list = await nextConfig.redirects!();
+    expect(list.filter((r) => r.source === "/refunds")).toEqual([{ source: "/refunds", destination: "/terms#roger-monthly", permanent: true }]);
+    expect(existsSync(path.join(process.cwd(), "src/app/refunds"))).toBe(false);
+    const { siteTerms } = await import("@/data/site/legal");
+    expect(siteTerms.sections.find((s) => s.id === "roger-monthly")?.heading).toBe("Refunds and cancelling");
+    expect(Object.keys(await import("@/data/legal"))).not.toContain("refunds");
+  });
+
   it("has no /pricing or /agents route, page component or traced files left, and the price section has the id the redirect names", () => {
     const at = (name: string) => existsSync(path.join(process.cwd(), name));
     for (const name of ["src/app/pricing", "src/app/agents", "src/components/site/v1/pricing.tsx", "src/components/site/v1/agents.tsx"]) expect(at(name), name).toBe(false);

@@ -85,7 +85,7 @@ export function totalText(p: MonthlyPreview): string {
  * charged, so naming the currency adds nothing here. Every other amount still names it (spec A.16 check 5).
  */
 export function dueToday(): { lead: string; rest: string } {
-  return { lead: "Due today: $0.", rest: "Your first charge comes with your third list." };
+  return { lead: "Due today: $0.", rest: "Your first charge comes with your third Cora Curation." };
 }
 
 /** The country picker: Canada and the US (Peter, 2026-11-26), plus "Another country", which only explains. */

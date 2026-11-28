@@ -101,5 +101,5 @@ export async function updateCardAction(): Promise<BillingState> {
     return { status: "error", message: "Something went wrong on our side. Try again in a minute." };
   }
   if (r.ok) redirect(r.url);
-  return { status: "error", message: r.reason === "no_card_yet" ? "There is no card on this account yet. We ask for it when your first list is ready." : "This account can’t take a new card." };
+  return { status: "error", message: r.reason === "no_card_yet" ? "There is no card on this account yet. We ask for it when your first Cora Curation is ready." : "This account can’t take a new card." };
 }

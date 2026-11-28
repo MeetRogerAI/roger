@@ -16,7 +16,7 @@ describe("PriceBox", () => {
     expect(t).toContain("Roger monthly CA$280");
     expect(t).toContain("Tax Calculated from your billing address");
     expect(t).toContain("Total per month CA$280 + tax");
-    expect(t).toContain("Due today: $0. Your first charge comes with your third list.");
+    expect(t).toContain("Due today: $0. Your first charge comes with your third Cora Curation.");
   });
 
   it("with an Ontario address: HST with its rate, and the total", () => {

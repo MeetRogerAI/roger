@@ -126,7 +126,7 @@ describe("while one at a time is not offered (the switch off, as at launch)", ()
     await passHours(w, toronto("2026-12-26", "12:00"), 6);
     const before = w.mail(m.email).length;
     const refused = await order("2026-12-28");
-    expect(refused).toEqual({ ok: false, message: "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday. You can switch to monthly on the billing page." });
+    expect(refused).toEqual({ ok: false, message: "Ordering one Cora Curation at a time isn’t offered at the moment. Monthly brings a Cora Curation every Monday. Monthly is now the only plan. Write to us if you have questions about yours." });
     expect(await orderStatus("2026-12-28")).toBeNull();
     expect(w.mail(m.email)).toHaveLength(before);
 
