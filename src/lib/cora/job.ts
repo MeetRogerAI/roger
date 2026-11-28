@@ -11,7 +11,7 @@ import { eligiblePlays } from "./eligible";
 import { boundFit, codeFit, needsLine, reasonFor, type FitModel, type FitResult } from "./fit";
 import { mergePending, type MergeModel } from "./merge";
 import { pickThree, type Fitted } from "./pick";
-import { scorePool, WEIGHTS, type Figures, type Scored } from "./score";
+import { networkScore, scorePool, type Figures, type Scored } from "./score";
 import { whoGetsAList } from "./who-gets-a-list";
 import { NO_CARD_TRIAL_SQL } from "@/lib/billing/has-card";
 import { FIRST_LIST_PENDING_SQL } from "./deliver";
@@ -168,7 +168,7 @@ async function step(q: Query, deps: CoraDeps, o: StepOptions, phase: string): Pr
     await rebuildContent(q, o.week);
     const pool = await loadPool(q, o.week);
     const users = (await loadUsers(q, o.week, { now: o.now })).filter((u) => whoGetsAList(u.facts, "pick").gets);
-    const plays = pool.rows.map((r) => ({ id: r.id, title: r.title, evidence: pool.evidence.get(r.id) ?? [], reachCount: users.filter((u) => couldUse(u, r)).length }));
+    const plays = pool.rows.map((r) => ({ id: r.id, title: r.title, evidence: pool.evidence.get(r.id) ?? [], reachCount: users.filter((u) => couldUse(u, r)).length, drafted: r.playbook_drafted }));
     const { scored, retired } = scorePool(plays, { asOf: o.week, weights: o.settings.recencyWeights, activeUsers: users.length });
     // This is the week's snapshot: picking reads these stored scores, so every user is ranked against the same pool.
     await q(
@@ -240,13 +240,12 @@ export function cardFigures(f: Figures): Record<string, unknown> {
 }
 
 async function storedScores(q: Query): Promise<Scored[]> {
-  const rows = await q<{ id: string; title: string; f_hours: number; f_reach: number; f_ease: number; f_proof: number; f_surprise: number; figures: { cora: Figures } }>(
-    `select id, title, f_hours, f_reach, f_ease, f_proof, f_surprise, figures from pool_plays where active and score is not null`,
+  const rows = await q<{ id: string; title: string; f_hours: number; f_reach: number; f_ease: number; f_proof: number; f_surprise: number; figures: { cora: Figures }; playbook_drafted: boolean }>(
+    `select id, title, f_hours, f_reach, f_ease, f_proof, f_surprise, figures, playbook_drafted from pool_plays where active and score is not null`,
   );
   return rows.map((r) => {
     const f = { hours: r.f_hours, reach: r.f_reach, ease: r.f_ease, proof: r.f_proof, surprise: r.f_surprise };
-    const raw = f.hours * WEIGHTS.hours + f.reach * WEIGHTS.reach + f.ease * WEIGHTS.ease + f.proof * WEIGHTS.proof + f.surprise * WEIGHTS.surprise;
-    return { id: r.id, title: r.title, figures: r.figures.cora, reachShare: 0, f, score: raw / 10 };
+    return { id: r.id, title: r.title, figures: r.figures.cora, reachShare: 0, f, score: networkScore(f, r.playbook_drafted) };
   });
 }
 
@@ -260,10 +259,11 @@ async function rebuildContent(q: Query, week: string) {
   if (!updates.length) return;
   await q(
     `update pool_plays pp set title = s.title, description = s.description, playbook_md = s.playbook_md, paste_to_install = s.paste_to_install,
-       heavy_use_for = s.heavy_use_for, job = case when s.job <> '' then s.job else pp.job end
-     from jsonb_to_recordset($1::jsonb) as s(id uuid, title text, description text, playbook_md text, paste_to_install text, heavy_use_for text, job text)
+       heavy_use_for = s.heavy_use_for, job = case when s.job <> '' then s.job else pp.job end, playbook_drafted = s.playbook_drafted
+     from jsonb_to_recordset($1::jsonb) as s(id uuid, title text, description text, playbook_md text, paste_to_install text, heavy_use_for text, job text, playbook_drafted boolean)
      where pp.id = s.id and not pp.is_public_sample
-       and (pp.title, pp.description, pp.playbook_md, pp.paste_to_install, pp.heavy_use_for) is distinct from (s.title, s.description, s.playbook_md, s.paste_to_install, s.heavy_use_for)`,
+       and (pp.title, pp.description, pp.playbook_md, pp.paste_to_install, pp.heavy_use_for, pp.playbook_drafted)
+         is distinct from (s.title, s.description, s.playbook_md, s.paste_to_install, s.heavy_use_for, s.playbook_drafted)`,
     [JSON.stringify(updates)],
   );
 }

@@ -8,7 +8,7 @@ import { dateFromFileName, importSeedRun } from "./seed-import";
 vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
 
 let query: Query;
-const cleanReview: IntakeModel = { readRun: async () => Promise.reject(new Error("unused")), review: async () => [] };
+const cleanReview: IntakeModel = { readRun: async () => Promise.reject(new Error("unused")), review: async () => [], draftPlaybook: async () => "" };
 
 /** A merge stand-in: plays whose job contains the same key word are the same. */
 function keyModel(fail = new Set<string>()) {

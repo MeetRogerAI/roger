@@ -22,7 +22,7 @@ const ONE_AM = new Date("2026-11-30T06:05:00Z");
 const live = mergeV3([{ key: "v3.cycleLive", value: true }]);
 const off = mergeV3([]);
 
-const intake: IntakeModel = { readRun: async () => Promise.reject(new Error("unused")), review: async () => [] };
+const intake: IntakeModel = { readRun: async () => Promise.reject(new Error("unused")), review: async () => [], draftPlaybook: async () => "" };
 const merge: MergeModel = { sameJob: async (p, cands) => cands.find((c) => c.job.split(" ")[0] === p.job.split(" ")[0])?.id ?? null };
 const fit: FitModel = {
   fit: async (_u, cands) => cands.map((c) => ({ id: c.id, fit: 3 as const, frictionMatch: false, why: "category" as const })),

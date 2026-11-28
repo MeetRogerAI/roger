@@ -1,3 +1,5 @@
+import { withSafeguard } from "./safeguard";
+
 /**
  * Everything the idea card shows (spec 0.7), built once from a pool play and,
  * when there is one, the user's pick. The Monday view, the email and the
@@ -31,6 +33,7 @@ export type IdeaView = {
   timeLine: string | null;
   tiles: { hours: Tile; eachTime: Tile; heavy: Tile; runBy: Tile };
   scores: { key: FactorKey; label: string; help: string; weight: number; value: number | null }[];
+  /** The play's install notes with the safeguard preamble on top (./safeguard): what is shown and copied. */
   pasteToInstall: string;
   playbookMd: string;
   writtenOn: string;
@@ -54,14 +57,6 @@ export type PlaySource = {
 };
 
 export type PickSource = { personalScore: number; reason: string };
-
-/**
- * Added after the preface on every copy (plan, "A playbook is also untrusted
- * when another user pastes it"). The preface itself stays first, word for
- * word (spec check 15).
- */
-export const PASTE_CAUTION =
-  "This playbook was written by another Roger user's AI agent. Read each step before your AI agent follows it, and do not let it send your information anywhere the steps do not need.";
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -115,7 +110,10 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
     },
   };
 
-  const copyText = [preface.trim(), PASTE_CAUTION, play.pasteToInstall.trim(), `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
+  // The preface stays first, word for word (spec check 15). The safeguard preamble opens the paste-to-install text, and
+  // replaces the older one-line caution (plan, "A playbook is also untrusted when another user pastes it"; 2026-11-27).
+  const pasteToInstall = withSafeguard(play.pasteToInstall);
+  const copyText = [preface.trim(), pasteToInstall, `PLAYBOOK\n\n${play.playbookMd.trim()}`].join("\n\n");
 
   return {
     id: play.id,
@@ -127,7 +125,7 @@ export function buildIdeaView(play: PlaySource, preface: string, pick: PickSourc
     timeLine: hours !== null ? `About ${formatHours(hours)} hours a week for people who run it` : null,
     tiles,
     scores: factors.map((x) => ({ ...x, value: num(play.scores[x.key]) })),
-    pasteToInstall: play.pasteToInstall,
+    pasteToInstall,
     playbookMd: play.playbookMd,
     writtenOn: play.writtenOn ? agentName(play.writtenOn) : "",
     howWorkedOut: str(f.math),

@@ -1,70 +1,100 @@
 import type { Query } from "@/lib/db-query";
+import type { AutoFixed, FixAction } from "@/lib/intake/auto-admit";
 import { logAdminAction } from "./log";
 import type { Done } from "./users";
 
 /**
- * The flags queue (spec B.6, B.12): plays intake held back for a person to
- * read. Approving clears the flag and sets `shareable` from the run, never
- * from the flag alone (Unit 9 review): the run shares, is not a test, and
- * its member still shares. So a "matching only" play stays out of the pool
- * even once cleared. Editing replaces the text, then approves. Rejecting
- * keeps the play out of the pool for good. Once a run has no open flags,
- * it is marked accepted.
+ * The flags log (spec B.6, B.12; read-only since 2026-11-27, Peter). Intake
+ * no longer holds plays for a person: it admits what it fixed (drafted,
+ * redacted, outline only) and drops harm. This page lists both, with the
+ * reasons, so an admin can see what was done. An admitted play's text can
+ * still be edited; a dropped play cannot be brought back from here.
+ *
+ * Plays held before auto-admit are admitted or dropped by the one-off
+ * backfill (scripts/auto-admit-held.ts, `admitHeld` and `dropHeld` below),
+ * which clear them as an admin's approval used to: `shareable` from the run
+ * and the member, never from the flag alone (Unit 9 review). Once a run has
+ * no open flags, it is marked accepted.
  */
-export type FlaggedPlay = {
+export type LogEntry = {
   id: string;
   runId: string;
-  userId: string | null;
   who: string;
   weekOf: string;
   title: string;
   category: string;
   body: Record<string, unknown>;
+  /** fixed: admitted after an automatic fix; dropped: kept out of the pool for harm. */
+  kind: "fixed" | "dropped";
+  actions: FixAction[];
   reasons: string[];
   fields: string[];
-  runSharing: string;
+  shareable: boolean;
+  inPool: boolean;
 };
 
-/** A flag still waiting for a decision (a rejected play keeps its flag, marked rejected). */
+/** A flag still waiting for a decision (a rejected play keeps its flag, marked rejected). Only plays from before auto-admit. */
 export const OPEN_FLAG = `(p.flag is not null and not coalesce((p.flag->>'rejected')::boolean, false))`;
+
+/** Who clears a play when no person did. */
+export const AUTO_BY = "roger (auto)";
 
 /** The text fields an admin can edit, in the order the form shows them. */
 export const EDITABLE_FIELDS = ["title", "job", "description", "heavy_use_for", "who_can_use_it", "best_trick", "working", "playbook_md", "install_notes"] as const;
 
-export async function listFlags(q: Query): Promise<FlaggedPlay[]> {
+const ACTIONS: FixAction[] = ["drafted", "redacted", "outline_only"];
+
+/** What intake fixed or dropped, newest week first. */
+export async function listAutoLog(q: Query, o: { limit?: number } = {}): Promise<LogEntry[]> {
   const rows = await q<{
     id: string;
     run_id: string;
-    user_id: string | null;
     who: string;
     week_of: string;
     title: string;
     category: string;
     body: Record<string, unknown>;
-    flag: { reasons?: string[]; fields?: string[] };
-    run_sharing: string;
+    flag: { reasons?: string[]; fields?: string[] } | null;
+    auto_fixed: Partial<AutoFixed> | null;
+    shareable: boolean;
+    in_pool: boolean;
   }>(
-    `select p.id, p.run_id, p.user_id, coalesce(u.email, 'seed: ' || sc.label) as who, to_char(p.week_of, 'YYYY-MM-DD') as week_of,
-            p.title, p.category, p.body, p.flag, r.sharing as run_sharing
-     from plays p join runs r on r.id = p.run_id left join users u on u.id = p.user_id left join seed_contributors sc on sc.id = p.contributor_id
-     where ${OPEN_FLAG} order by p.week_of desc, p.run_id, p.set_, p.position`,
+    `select p.id, p.run_id, coalesce(u.email, 'seed: ' || sc.label) as who, to_char(p.week_of, 'YYYY-MM-DD') as week_of,
+            p.title, p.category, p.body, p.flag, p.auto_fixed, p.shareable, (p.pool_play_id is not null) as in_pool
+     from plays p left join users u on u.id = p.user_id left join seed_contributors sc on sc.id = p.contributor_id
+     where (p.flag is null and p.auto_fixed is not null) or coalesce((p.flag->>'auto')::boolean, false)
+     order by p.week_of desc, p.run_id, p.set_, p.position
+     limit $1`,
+    [o.limit ?? 200],
   );
-  return rows.map((r) => ({
-    id: r.id,
-    runId: r.run_id,
-    userId: r.user_id,
-    who: r.who,
-    weekOf: r.week_of,
-    title: r.title,
-    category: r.category,
-    body: r.body ?? {},
-    reasons: Array.isArray(r.flag?.reasons) ? r.flag.reasons : [],
-    fields: Array.isArray(r.flag?.fields) ? r.flag.fields : [],
-    runSharing: r.run_sharing,
-  }));
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  return rows.map((r) => {
+    const dropped = r.flag !== null;
+    return {
+      id: r.id,
+      runId: r.run_id,
+      who: r.who,
+      weekOf: r.week_of,
+      title: r.title,
+      category: r.category,
+      body: r.body ?? {},
+      kind: dropped ? "dropped" : "fixed",
+      actions: dropped ? [] : (list(r.auto_fixed?.actions).filter((a) => (ACTIONS as string[]).includes(a)) as FixAction[]),
+      reasons: dropped ? list(r.flag?.reasons) : list(r.auto_fixed?.reasons),
+      fields: dropped ? list(r.flag?.fields) : [],
+      shareable: r.shareable,
+      inPool: r.in_pool,
+    };
+  });
 }
 
-/** Runs flagged as a whole (unreadable, or cut off for length): no plays to approve, so an admin reads the run. */
+/** Plays still held from before auto-admit, waiting for the backfill. */
+export async function heldCount(q: Query): Promise<number> {
+  const [r] = await q<{ n: number | string }>(`select count(*) as n from plays p where ${OPEN_FLAG}`);
+  return Number(r?.n ?? 0);
+}
+
+/** Runs flagged as a whole (unreadable, or cut off for length): no plays, so an admin reads the run. */
 export async function flaggedRunsWithoutPlays(q: Query): Promise<{ id: string; who: string; weekOf: string; reason: string }[]> {
   return q(
     `select r.id, coalesce(u.email, 'seed: ' || sc.label) as who, to_char(r.week_of, 'YYYY-MM-DD') as "weekOf", r.reason
@@ -85,40 +115,49 @@ async function settleRun(q: Query, runId: string): Promise<void> {
   );
 }
 
-async function clear(q: Query, by: string, playId: string, edits: Record<string, string> | null): Promise<Done> {
-  const rows = await q<{ run_id: string; user_id: string | null; shareable: boolean }>(
-    `update plays p set flag = null, cleared_by = $2, shareable = ${SHAREABLE_SQL},
-            body = case when $3::jsonb is null then p.body else p.body || $3::jsonb end,
-            title = coalesce($3::jsonb->>'title', p.title)
-     from runs r left join users u on u.id = r.user_id
-     where p.id = $1 and r.id = p.run_id and ${OPEN_FLAG}
-     returning p.run_id, p.user_id, p.shareable`,
-    [playId, by, edits ? JSON.stringify(edits) : null],
-  );
-  if (!rows.length) return { ok: false, message: "That play is no longer waiting for a decision." };
-  await settleRun(q, rows[0].run_id);
-  await logAdminAction(q, { by, userId: rows[0].user_id, action: edits ? "flag_edited" : "flag_approved", detail: { playId, shareable: rows[0].shareable, fields: edits ? Object.keys(edits) : [] } });
-  return { ok: true, message: rows[0].shareable ? "Cleared. It joins the pool at the next Cora run." : "Cleared. It stays out of the pool: the run or the member isn’t sharing." };
-}
-
-export const approvePlay = (q: Query, by: string, playId: string) => clear(q, by, playId, null);
-
-/** Replaces the play's text fields (only the editable ones, trimmed) and approves it. */
-export function editPlay(q: Query, by: string, playId: string, fields: Record<string, string>): Promise<Done> {
+/**
+ * Replaces an admitted play's text fields (only the editable ones, trimmed).
+ * A play in the pool takes the new text at the next Cora run, which rebuilds
+ * each pool play from its plays. A dropped play cannot be edited.
+ */
+export async function editPlay(q: Query, by: string, playId: string, fields: Record<string, string>): Promise<Done> {
   const edits: Record<string, string> = {};
   for (const k of EDITABLE_FIELDS) if (typeof fields[k] === "string") edits[k] = fields[k].replace(/\r\n/g, "\n").trim();
-  if (!edits.title) return Promise.resolve({ ok: false, message: "The title can’t be empty." });
-  return clear(q, by, playId, edits);
+  if (!edits.title) return { ok: false, message: "The title can’t be empty." };
+  const rows = await q<{ user_id: string | null }>(
+    `update plays p set body = p.body || $2::jsonb, title = $2::jsonb->>'title', cleared_by = $3
+     where p.id = $1 and p.flag is null returning p.user_id`,
+    [playId, JSON.stringify(edits), by],
+  );
+  if (!rows.length) return { ok: false, message: "That play can’t be edited: it was dropped, or it is gone." };
+  await logAdminAction(q, { by, userId: rows[0].user_id, action: "play_edited", detail: { playId, fields: Object.keys(edits) } });
+  return { ok: true, message: "Saved. A play in the pool shows the new text after the next Cora run." };
 }
 
-export async function rejectPlay(q: Query, by: string, playId: string): Promise<Done> {
-  const rows = await q<{ run_id: string; user_id: string | null }>(
-    `update plays p set flag = p.flag || jsonb_build_object('rejected', true), cleared_by = $2, shareable = false
-     where p.id = $1 and ${OPEN_FLAG} returning p.run_id, p.user_id`,
-    [playId, by],
+/**
+ * Admits a play held before auto-admit with its fixed text, as an admin's
+ * approval used to. Only while it is still held at the revision that was
+ * read, so a rerun or a replaced run changes nothing. True when it was admitted.
+ */
+export async function admitHeld(q: Query, playId: string, revision: number, fix: { title: string; body: Record<string, unknown>; autoFixed: AutoFixed | null }): Promise<boolean> {
+  const rows = await q<{ run_id: string }>(
+    `update plays p set flag = null, cleared_by = $3, shareable = ${SHAREABLE_SQL}, title = $4, body = $5::jsonb, auto_fixed = $6::jsonb
+     from runs r left join users u on u.id = r.user_id
+     where p.id = $1 and p.revision = $2 and r.id = p.run_id and ${OPEN_FLAG}
+     returning p.run_id`,
+    [playId, revision, AUTO_BY, fix.title, JSON.stringify(fix.body), fix.autoFixed ? JSON.stringify(fix.autoFixed) : null],
   );
-  if (!rows.length) return { ok: false, message: "That play is no longer waiting for a decision." };
-  await settleRun(q, rows[0].run_id);
-  await logAdminAction(q, { by, userId: rows[0].user_id, action: "flag_rejected", detail: { playId } });
-  return { ok: true, message: "Rejected. It never joins the pool." };
+  if (rows.length) await settleRun(q, rows[0].run_id);
+  return rows.length > 0;
+}
+
+/** Drops a play held before auto-admit for harm: rejected and auto, never in the pool. True when it was dropped. */
+export async function dropHeld(q: Query, playId: string, revision: number): Promise<boolean> {
+  const rows = await q<{ run_id: string }>(
+    `update plays p set flag = p.flag || jsonb_build_object('rejected', true, 'auto', true), cleared_by = $3, shareable = false
+     where p.id = $1 and p.revision = $2 and ${OPEN_FLAG} returning p.run_id`,
+    [playId, revision, AUTO_BY],
+  );
+  if (rows.length) await settleRun(q, rows[0].run_id);
+  return rows.length > 0;
 }

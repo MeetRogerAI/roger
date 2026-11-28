@@ -35,6 +35,8 @@ export type PoolPlay = {
   evidence: Evidence[];
   /** Active users who could use it (spec B.7 change 5; judged upstream). */
   reachCount: number;
+  /** Its playbook was drafted by Roger, not written by a member's agent (2026-11-27). */
+  drafted?: boolean;
 };
 
 type Weights = V3Settings["recencyWeights"];
@@ -190,6 +192,22 @@ export function deciles(values: (number | null)[], best: "high" | "low"): number
 
 export const WEIGHTS = { hours: 30, reach: 25, ease: 10, proof: 15, surprise: 20 } as const;
 
+/**
+ * Points off the network score (0 to 100) for a pool play whose playbook Roger
+ * drafted from a member's report rather than one a member's agent wrote and
+ * ran (Peter, 2026-11-27). Small on purpose: one point, the size of a single
+ * Ease decile step and less than one of any other factor, so a proven setup
+ * wins a tie or a near tie and a clearly better drafted play still ranks
+ * above a weaker one. Outline-only plays are not penalised.
+ */
+export const DRAFTED_PENALTY = 1;
+
+/** The network score from the factor scores: scaled so all tens is 100, less the drafted penalty. Not rounded. */
+export function networkScore(f: { hours: number; reach: number; ease: number; proof: number; surprise: number }, drafted = false): number {
+  const raw = f.hours * WEIGHTS.hours + f.reach * WEIGHTS.reach + f.ease * WEIGHTS.ease + f.proof * WEIGHTS.proof + f.surprise * WEIGHTS.surprise;
+  return raw / 10 - (drafted ? DRAFTED_PENALTY : 0);
+}
+
 export type Scored = {
   id: string;
   title: string;
@@ -212,8 +230,7 @@ export function scorePool(plays: PoolPlay[], o: { asOf: string; weights: Weights
   const s = deciles(active.map((x) => x.fig.surprise), "low");
   const scored = active.map((x, i) => {
     const f = { hours: h[i], reach: r[i], ease: e[i], proof: pr[i], surprise: s[i] };
-    const raw = f.hours * WEIGHTS.hours + f.reach * WEIGHTS.reach + f.ease * WEIGHTS.ease + f.proof * WEIGHTS.proof + f.surprise * WEIGHTS.surprise;
-    return { id: x.p.id, title: x.p.title, figures: x.fig, reachShare: reach[i], f, score: raw / 10 };
+    return { id: x.p.id, title: x.p.title, figures: x.fig, reachShare: reach[i], f, score: networkScore(f, x.p.drafted) };
   });
   return { scored: scored.sort(byRank), retired: withFigures.filter((x) => x.fig.retired).map((x) => x.p.id) };
 }

@@ -10,7 +10,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { chooseSample, clearSample, moveTestimonial, saveTestimonial, setTestimonialCleared, TESTIMONIALS_TAG } from "@/lib/admin/content";
 import { chargeAndSendNow } from "@/lib/admin/cora";
 import { setContributorEmail } from "@/lib/admin/contributors";
-import { approvePlay, EDITABLE_FIELDS, editPlay, rejectPlay } from "@/lib/admin/flags";
+import { EDITABLE_FIELDS, editPlay } from "@/lib/admin/flags";
 import { audited, logAdminAction } from "@/lib/admin/log";
 import { setSwitch, type LaunchSwitch } from "@/lib/admin/launch-switches";
 import { opsWeek } from "@/lib/admin/ops";
@@ -205,22 +205,17 @@ export async function changeEmailAction(_p: V3State, fd: FormData): Promise<V3St
 // ---------------------------------------------------------------------------
 // Flags
 
+/** Edits an admitted play's text (the flags log is read-only otherwise: nothing waits for approval since 2026-11-27). */
 export async function flagAction(_p: V3State, fd: FormData): Promise<V3State> {
   const by = await requireAdmin();
   const playId = idOf(fd, "playId");
   if (!playId) return bad("No such play.");
-  const decision = field(fd, "decision", 10);
-  let r: Done;
-  if (decision === "approve") r = await approvePlay(query, by, playId);
-  else if (decision === "reject") r = await rejectPlay(query, by, playId);
-  else if (decision === "edit") {
-    const fields: Record<string, string> = {};
-    for (const k of EDITABLE_FIELDS) {
-      const v = fd.get(k);
-      if (typeof v === "string") fields[k] = v.slice(0, k === "playbook_md" ? 40_000 : 8_000);
-    }
-    r = await editPlay(query, by, playId, fields);
-  } else return bad("Choose approve, edit or reject.");
+  const fields: Record<string, string> = {};
+  for (const k of EDITABLE_FIELDS) {
+    const v = fd.get(k);
+    if (typeof v === "string") fields[k] = v.slice(0, k === "playbook_md" ? 40_000 : 8_000);
+  }
+  const r: Done = await editPlay(query, by, playId, fields);
   refresh();
   return state(r);
 }

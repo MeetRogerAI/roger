@@ -181,13 +181,13 @@ export async function mergePending(
                where id = $1 and merged_at is null returning id
              ),
              np as (
-               insert into pool_plays (id, title, category, description, heavy_use_for, playbook_md, paste_to_install, job, first_seen, last_seen)
-               select $10, $2, $3, $4, $5, $6, $7, $8, $9, $9 from claim where (select shared from ok)
+               insert into pool_plays (id, title, category, description, heavy_use_for, playbook_md, paste_to_install, job, first_seen, last_seen, playbook_drafted)
+               select $10, $2, $3, $4, $5, $6, $7, $8, $9, $9, $11 from claim where (select shared from ok)
                returning id
              ),
              who as (insert into pool_play_contributors (pool_play_id, contributor) select np.id, ${CONTRIBUTOR} from np on conflict do nothing)
              select exists (select 1 from np) as created, exists (select 1 from claim) as claimed`,
-            [p.id, p.title, p.category, s("description"), s("heavy_use_for"), s("playbook_md"), s("install_notes"), p.job, p.week_of, newId],
+            [p.id, p.title, p.category, s("description"), s("heavy_use_for"), s("playbook_md"), s("install_notes"), p.job, p.week_of, newId, b.playbook_drafted === true],
           );
           if (r?.created) tally.created++;
           else if (r?.claimed) tally.kept++;

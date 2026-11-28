@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { v3Defaults } from "@/data/config";
-import { deciles, mergedFigures, personalScore, recencyWeight, scorePool, weightedMedian, type Evidence, type PoolPlay } from "./score";
+import { deciles, DRAFTED_PENALTY, mergedFigures, networkScore, personalScore, recencyWeight, scorePool, weightedMedian, type Evidence, type PoolPlay } from "./score";
+import { bestContent } from "./context";
 
 const W = v3Defaults.recencyWeights;
 const AS_OF = "2026-11-30";
@@ -181,3 +182,38 @@ describe("review follow-ups", () => {
 
 
 });
+
+describe("a Roger-drafted playbook (2026-11-27)", () => {
+  const twins: PoolPlay[] = [
+    { id: "proven", title: "Z proven", reachCount: 1, evidence: [ev({ contributor: "a" })] },
+    { id: "drafted", title: "A drafted", reachCount: 1, evidence: [ev({ contributor: "b" })], drafted: true },
+  ];
+
+  it("takes a small, documented penalty, so a proven setup wins a tie it would otherwise lose on title", () => {
+    expect(DRAFTED_PENALTY).toBeGreaterThan(0);
+    expect(DRAFTED_PENALTY).toBeLessThanOrEqual(WEIGHTS_EASE_STEP);
+    const { scored } = scorePool(twins, { asOf: AS_OF, weights: W, activeUsers: 2 });
+    expect(scored.map((s) => s.id)).toEqual(["proven", "drafted"]);
+    expect(scored[0].score - scored[1].score).toBe(DRAFTED_PENALTY);
+    // Without the mark the same two would rank by title: "A drafted" first.
+    expect(scorePool(twins.map((p) => ({ ...p, drafted: false })), { asOf: AS_OF, weights: W, activeUsers: 2 }).scored[0].id).toBe("drafted");
+  });
+
+  it("is the same in the stored scores picking reads, and small next to a real difference", () => {
+    const f = { hours: 10, reach: 10, ease: 10, proof: 10, surprise: 10 };
+    expect(networkScore(f)).toBe(100);
+    expect(networkScore(f, true)).toBe(100 - DRAFTED_PENALTY);
+    // One decile of Hours is worth three points: a better drafted play still ranks first.
+    expect(networkScore({ ...f, hours: 9 })).toBeLessThan(networkScore(f, true));
+  });
+
+  it("never applies to a pool play whose content comes from a member's own playbook", () => {
+    const own = { title: "Own", playbook_md: "1. Short.", confidence: "Low" };
+    const drafted = { title: "Drafted", playbook_md: "Setup steps drafted by Roger... a much longer playbook than the member's own", confidence: "High", basis: "Actual", playbook_drafted: true };
+    expect(bestContent([drafted, own])).toMatchObject({ playbook_md: "1. Short.", playbook_drafted: false });
+    expect(bestContent([drafted])).toMatchObject({ playbook_drafted: true });
+  });
+});
+
+/** One decile step of Ease, in network-score points (the smallest factor). */
+const WEIGHTS_EASE_STEP = 1;

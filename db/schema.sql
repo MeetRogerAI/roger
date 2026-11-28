@@ -800,3 +800,13 @@ alter table seed_contributors add column if not exists email text;
 create index if not exists seed_contributors_email_lower on seed_contributors (lower(email)) where email is not null;
 do $$ declare c record; begin for c in select conname from pg_constraint where conrelid = 'seed_contributors'::regclass and contype = 'u' and conkey = array[(select attnum from pg_attribute where attrelid = 'seed_contributors'::regclass and attname = 'user_id')]::int2[] loop execute format('alter table seed_contributors drop constraint %I', c.conname); end loop; end $$;
 create index if not exists seed_contributors_user on seed_contributors (user_id) where user_id is not null;
+
+-- 2026-11-27, auto-admit (Peter): no more manual flag review. Intake admits
+-- every play it can make safe and drops harm on its own. auto_fixed records
+-- what it changed so /admin/flags can show it (actions: drafted, redacted,
+-- outline_only; with the reasons, never the private text). A play dropped for
+-- harm keeps the rejected flag, marked auto. playbook_drafted marks a pool
+-- play whose playbook Roger drafted from the member's report (Cora ranks it
+-- a little lower, src/lib/cora/score.ts DRAFTED_PENALTY).
+alter table plays add column if not exists auto_fixed jsonb;
+alter table pool_plays add column if not exists playbook_drafted boolean not null default false;

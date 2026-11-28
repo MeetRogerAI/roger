@@ -22,6 +22,8 @@ export type PoolRow = {
   who_can_use_it: string;
   requires: { connections: string[]; features: string[] };
   active: boolean;
+  /** Roger drafted its playbook from the member's report (2026-11-27): ranked a little lower. */
+  playbook_drafted: boolean;
 };
 
 type EvidenceRow = { pool_play_id: string; contributor: string; week_of: string; set_: string; body: Record<string, unknown> };
@@ -57,7 +59,7 @@ function toEvidence(r: EvidenceRow): Evidence {
 /** Every pool play with its shareable evidence up to `week`. */
 export async function loadPool(q: Query, week: string): Promise<{ rows: PoolRow[]; evidence: Map<string, Evidence[]>; bodies: Map<string, Record<string, unknown>[]> }> {
   const rows = await q<PoolRow>(
-    `select id, title, category, job, heavy_use_for, description, '' as who_can_use_it, '{"connections":[],"features":[]}'::jsonb as requires, active from pool_plays order by id`,
+    `select id, title, category, job, heavy_use_for, description, '' as who_can_use_it, '{"connections":[],"features":[]}'::jsonb as requires, active, playbook_drafted from pool_plays order by id`,
   );
   const ev = await q<EvidenceRow>(
     `select p.pool_play_id, coalesce(sc.user_id::text, p.user_id::text, 'seed:' || p.contributor_id::text) as contributor,
@@ -94,12 +96,17 @@ const LEVEL: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
 /**
  * v1.1 Step 1.3: a pool play's text comes from its best evidence: the highest
  * confidence with an Actual basis, then the most complete playbook. The title
- * is the plainest under eight words. Heavy use for: the most common.
+ * is the plainest under eight words. Heavy use for: the most common. A
+ * member's own playbook always wins over one Roger drafted (2026-11-27), and
+ * the pool play is marked drafted only when its playbook is a drafted one.
  */
-export function bestContent(bodies: Record<string, unknown>[]): { title: string; description: string; playbook_md: string; paste_to_install: string; heavy_use_for: string; job: string } | null {
+export function bestContent(
+  bodies: Record<string, unknown>[],
+): { title: string; description: string; playbook_md: string; paste_to_install: string; heavy_use_for: string; job: string; playbook_drafted: boolean } | null {
   if (!bodies.length) return null;
+  const drafted = (b: Record<string, unknown>) => (b.playbook_drafted === true ? 1 : 0);
   const rank = (b: Record<string, unknown>) => (LEVEL[str(b.confidence)] ?? 0) * 10 + (str(b.basis) === "Actual" ? 5 : 0);
-  const best = [...bodies].sort((a, b) => rank(b) - rank(a) || str(b.playbook_md).length - str(a.playbook_md).length)[0];
+  const best = [...bodies].sort((a, b) => drafted(a) - drafted(b) || rank(b) - rank(a) || str(b.playbook_md).length - str(a.playbook_md).length)[0];
   const titles = bodies.map((b) => str(b.title)).filter((t) => t && t.split(/\s+/).length < 8);
   const title = titles.sort((a, b) => a.length - b.length || a.localeCompare(b))[0] ?? str(best.title);
   const counts = new Map<string, number>();
@@ -108,7 +115,15 @@ export function bestContent(bodies: Record<string, unknown>[]): { title: string;
     if (h) counts.set(h, (counts.get(h) ?? 0) + 1);
   }
   const heavy = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? str(best.heavy_use_for);
-  return { title, description: str(best.description), playbook_md: str(best.playbook_md), paste_to_install: str(best.install_notes), heavy_use_for: heavy, job: str(best.job) };
+  return {
+    title,
+    description: str(best.description),
+    playbook_md: str(best.playbook_md),
+    paste_to_install: str(best.install_notes),
+    heavy_use_for: heavy,
+    job: str(best.job),
+    playbook_drafted: best.playbook_drafted === true,
+  };
 }
 
 export type CoraUser = {

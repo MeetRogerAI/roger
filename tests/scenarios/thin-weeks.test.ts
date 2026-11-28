@@ -10,8 +10,8 @@ vi.mock("@/lib/secrets", () => ({ getSecret: async () => "test-key" }));
  * short list, which is still a delivered list (a free list used, the
  * third-list charge made, an order charged in full); the week after, nothing
  * is left that fits, so no list, no charge, no free list used, a note, and an
- * alert. Members' own runs carry a link in every playbook, so intake flags
- * them and nothing new reaches the pool; a flagged run still counts as
+ * alert. Members' own runs carry a link in every playbook, so intake drops
+ * those plays (2026-11-27) and nothing new reaches the pool; the run still counts as
  * arrived (spec B.6 rule 6).
  */
 let w: World;
@@ -41,7 +41,7 @@ beforeEach(async () => {
   expect((await linkContributor(w.query, "peter@example.com", seed.contributorId, movedOn.id)).ok).toBe(true);
 });
 
-/** Saturday's order, Sunday's runs (flagged: a link in each playbook), then the Monday. */
+/** Saturday's order, Sunday's runs (each play dropped for a link in its playbook), then the Monday. */
 async function week(monday_: string) {
   await w.at(toronto(addDays(monday_, -2), "12:00"));
   expect(await order(w, single, monday_)).toEqual({ ok: true });
@@ -56,7 +56,7 @@ describe("thin weeks", () => {
   it("sends a short list as a full list, then no list when nothing fits, with the right note for each member", async () => {
     // Week A: two plays in the pool. Every member but the linked one gets both, as a short list.
     const a = await week(A);
-    expect(await w.query(`select status from runs where user_id is not null group by status`)).toEqual([{ status: "flagged" }]);
+    expect(await w.query(`select status from runs where user_id is not null group by status`)).toEqual([{ status: "accepted" }]);
     for (const m of [trial, third, paying, single]) {
       expect(await outcome(w, m.id, A)).toBe("short");
       expect(await delivered(w, m.id, A)).toHaveLength(2);

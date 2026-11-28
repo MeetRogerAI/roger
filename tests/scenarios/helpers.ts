@@ -569,7 +569,7 @@ export async function newWorld(o: { start: string; settings?: { key: string; val
   const mail = mailOf({ query, transport });
   const cora: CoraDeps = {
     // Every scenario run carries a roger-run block, so intake parses by code; the review finds nothing.
-    intake: { readRun: async () => Promise.reject(new Error("scenario runs carry a roger-run block")), review: async () => [] },
+    intake: { readRun: async () => Promise.reject(new Error("scenario runs carry a roger-run block")), review: async () => [], draftPlaybook: async () => "" },
     // When in doubt, keep them separate: every play is its own pool play.
     merge: { sameJob: async () => null },
     fit: { fit: async (_u, cands) => cands.map((c) => ({ id: c.id, fit: 3 as const, frictionMatch: false, why: "category" as const })) },

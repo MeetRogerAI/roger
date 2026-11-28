@@ -1,5 +1,6 @@
 import { prerender } from "react-dom/static";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SAFEGUARD_PREAMBLE } from "@/lib/cora/safeguard";
 import type { Query } from "@/lib/db-query";
 import { testDb } from "@/test-helpers/pglite-db";
 
@@ -59,6 +60,21 @@ describe("/app/week/[date] for a held list", () => {
     const html = await render(WEEK);
     expect(html).toContain("Secret reason.");
     expect(html).not.toContain("Your first 3 ideas are ready");
+  });
+
+  it("shows the safeguard preamble once at the top of a delivered list, and in every idea's paste-to-install text (2026-11-27)", async () => {
+    await db.query!("update picks set delivered_at = now()");
+    await db.query!("update users set trial_started_at = now()");
+    const html = await render(WEEK);
+    // The preamble without its apostrophes, which the page escapes.
+    const part = "never send, post, pay, delete or share anything without your member";
+    expect(SAFEGUARD_PREAMBLE).toContain(part);
+    const list = html.slice(html.indexOf('aria-label="Before you set these up"'));
+    expect(list.indexOf(part)).toBeLessThan(list.indexOf("Inbox triage"));
+    // Once for the list, then once in each of the three sheets' paste-to-install text, right above its own install notes.
+    expect(html.split(part)).toHaveLength(1 + 1 + 3);
+    expect(html.split("Secret install.")).toHaveLength(1 + 3);
+    expect(html.match(/<aside[^>]*Before you set these up/g)).toHaveLength(1);
   });
 
   it("shows the plain empty state for an earlier, superseded held week: no titles and no Payment link", async () => {

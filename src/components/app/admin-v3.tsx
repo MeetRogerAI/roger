@@ -349,34 +349,22 @@ const FIELD_LABELS: Record<string, string> = {
   install_notes: "Install notes",
 };
 
-/** One flagged play: approve, reject, or edit then approve. */
-export function FlagDecision({ playId, fields }: { playId: string; fields: Record<string, string> }) {
+/** An admitted play's text, editable after the fact (the flags log, 2026-11-27: nothing waits for approval). */
+export function PlayEdit({ playId, fields }: { playId: string; fields: Record<string, string> }) {
   const [s, act, pending] = useActionState(flagAction, idle);
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState(fields);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <form action={act}>
-          <Hidden values={{ playId, decision: "approve" }} />
-          <button type="submit" disabled={pending} className={small}>
-            Approve
-          </button>
-        </form>
         <button type="button" onClick={() => setEditing((e) => !e)} className={quiet} aria-expanded={editing}>
           {editing ? "Stop editing" : "Edit"}
         </button>
-        <form action={act}>
-          <Hidden values={{ playId, decision: "reject" }} />
-          <button type="submit" disabled={pending} className={quiet}>
-            Reject
-          </button>
-        </form>
         <Msg s={s} />
       </div>
       {editing && (
         <form action={act} className="space-y-3 rounded-[var(--radius-inner)] bg-ground-2 p-4">
-          <Hidden values={{ playId, decision: "edit" }} />
+          <Hidden values={{ playId }} />
           {Object.keys(values).map((k) => (
             <div key={k}>
               <label className={label} htmlFor={`${playId}-${k}`}>
@@ -393,7 +381,7 @@ export function FlagDecision({ playId, fields }: { playId: string; fields: Recor
             </div>
           ))}
           <button type="submit" disabled={pending} className={small}>
-            {pending ? "Saving…" : "Save edits and approve"}
+            {pending ? "Saving…" : "Save edits"}
           </button>
         </form>
       )}

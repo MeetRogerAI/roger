@@ -1,25 +1,30 @@
 import { appUrl, esc, renderEmail, type Rendered } from "../layout";
+import { SAFEGUARD_PREAMBLE } from "@/lib/cora/safeguard";
 import { longDate } from "@/lib/dates";
 
 /**
  * Spec B.8 item 3: the Monday email. Each idea with its title, the reason it
  * fits, the time line and one button; then the status line, always. Nothing
- * says where a play came from (spec check 14).
+ * says which member a play came from (spec check 14). The safeguard preamble
+ * sits once above the ideas (2026-11-27), as at the top of every install list.
  */
 export type EmailIdea = { id: string; title: string; reason: string; timeLine: string | null };
 
 function ideasBlock(week: string, ideas: EmailIdea[]): { html: string; text: string } {
   const url = (id: string) => appUrl(`/app/week/${week}#idea-${id}`);
-  const html = ideas
-    .map(
-      (i, n) =>
-        `<div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">${n + 1}. ${esc(i.title)}</p>` +
-        `<p style="margin:4px 0 0;color:#444">${esc(i.reason)}</p>` +
-        (i.timeLine ? `<p style="margin:4px 0 0;color:#444">${esc(i.timeLine)}</p>` : "") +
-        `<p style="margin:10px 0 0"><a href="${esc(url(i.id))}" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div>`,
-    )
-    .join("");
-  const text = ideas.map((i, n) => [`${n + 1}. ${i.title}`, i.reason, i.timeLine, `Open and install: ${url(i.id)}`].filter(Boolean).join("\n")).join("\n\n");
+  const preamble = `<p style="margin:0 0 24px;padding:12px 14px;background:#f4f1ec;border-radius:8px;color:#444;font-size:14px">${esc(SAFEGUARD_PREAMBLE)}</p>`;
+  const html =
+    preamble +
+    ideas
+      .map(
+        (i, n) =>
+          `<div style="margin:0 0 24px"><p style="margin:0;font-weight:600;font-size:17px">${n + 1}. ${esc(i.title)}</p>` +
+          `<p style="margin:4px 0 0;color:#444">${esc(i.reason)}</p>` +
+          (i.timeLine ? `<p style="margin:4px 0 0;color:#444">${esc(i.timeLine)}</p>` : "") +
+          `<p style="margin:10px 0 0"><a href="${esc(url(i.id))}" style="display:inline-block;background:#9a5226;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-size:15px;font-weight:600">Open and install</a></p></div>`,
+      )
+      .join("");
+  const text = [SAFEGUARD_PREAMBLE, ...ideas.map((i, n) => [`${n + 1}. ${i.title}`, i.reason, i.timeLine, `Open and install: ${url(i.id)}`].filter(Boolean).join("\n"))].join("\n\n");
   return { html, text };
 }
 

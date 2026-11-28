@@ -43,7 +43,7 @@ const REPLACE: Rule[] = [
   { kind: "long_number", re: /(?<![\w.])\d(?:[\s-]?\d){7,}(?!\w|\.\d)/g, placeholder: "[a number]" },
 ];
 
-/** Things in a playbook that could hurt whoever pastes it. Flagged for an admin; never auto-fixed. */
+/** Things in a playbook that could hurt whoever pastes it. The play is dropped (2026-11-27); never auto-fixed. */
 const HARM: { flag: string; re: RegExp }[] = [
   { flag: "contains a link", re: /(?:\b(?:https?|ftp|javascript|data|file):|(?<![\w/])\/\/\w|\bwww\.)/i },
   { flag: "contains a link", re: new RegExp(`(?<![\\w@.-])(?:[a-z0-9-]+\\.)+${TLD}\\b`, "i") },

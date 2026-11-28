@@ -2,6 +2,22 @@ import { isModelUnavailable, rethrowIfUnavailable } from "@/lib/ai/errors";
 import type { Query } from "@/lib/db-query";
 import { sendToUser, type MailDeps } from "@/lib/mail/send";
 import { runNeedsALookEmail } from "@/lib/mail/templates/run-needs-a-look";
+import {
+  allStrings,
+  DRAFT_FAILED_REASON,
+  draftPlaybook,
+  mapStrings,
+  modelHarmReason,
+  NAME_PLACEHOLDER,
+  nameReason,
+  QUALITY_REASON,
+  replaceName,
+  SENSITIVE_REASON,
+  toOutline,
+  type AutoFixed,
+  type DroppedFlag,
+  type FixAction,
+} from "./auto-admit";
 import { ModelCutOff, slicePlaybook, type IntakeModel, type ReviewFinding } from "./model";
 import { parseProfileBlock, parseRunBlock } from "./parse-block";
 import { harmFlags, phrasePattern, replaceNeverWords, replacePatterns } from "./privacy-patterns";
@@ -14,6 +30,11 @@ import { validateRun, type ParsedRun, type Play } from "./validate";
  *
  * Whether a play is shareable is decided here from what is known now; Cora
  * checks the user's sharing again at the cutoff before anything is pooled.
+ *
+ * Since 2026-11-27 (Peter) no play waits for a person: what used to be held
+ * is drafted, redacted or kept as an outline and admitted, and harm is
+ * dropped (see ./auto-admit). Only a run that cannot be read at all is still
+ * flagged as a whole for an admin.
  */
 export const MAX_ATTEMPTS = 3;
 
@@ -39,8 +60,6 @@ const REASON = {
   unreadable: "Zack's report couldn't be read automatically, so someone at Roger will read it. It still counts for this week.",
   tooLong: "Zack's report was too long to read automatically, so someone at Roger will read it. It still counts for this week.",
 };
-
-const NAME_PLACEHOLDER: Record<"person" | "company" | "place", string> = { person: "[a person]", company: "[a company]", place: "[a place]" };
 
 export async function processRun(q: Query, runId: string, deps: IntakeDeps): Promise<Outcome> {
   // Claim an attempt before any model call, so a run that hangs or is killed moves towards an admin.
@@ -107,53 +126,85 @@ async function processClaimed(q: Query, run: RunRow & { attempts: number }, deps
   }
   let alsoRunsOut = alsoRuns;
   applyFindings(findings, plays, () => {
-    alsoRunsOut = []; // Runners-up are matching context only; anything unclear in them is simply dropped.
+    alsoRunsOut = [];
   });
   for (const a of alsoRunsOut) for (const n of findings.filter((f) => f.playId === "also" && f.clear && f.kind !== "harm")) {
     a.title = a.title.replace(phrasePattern(n.text), NAME_PLACEHOLDER[n.kind as keyof typeof NAME_PLACEHOLDER]);
     a.job = a.job.replace(phrasePattern(n.text), NAME_PLACEHOLDER[n.kind as keyof typeof NAME_PLACEHOLDER]);
   }
 
-  // 4. Result. A "matching only" or test run never yields shareable plays, cleared or not.
+  // 4. Auto-admit (2026-11-27): harm is dropped; an outline replaces what cannot be made safe; a missing playbook is drafted.
+  for (const p of plays) {
+    if (p.harm.size) continue;
+    if (p.outline.size) {
+      p.play = toOutline(p.play, [...p.outline].every((r) => r === SENSITIVE_REASON));
+      p.actions.add("outline_only");
+      continue;
+    }
+    if (!p.quality) continue;
+    const drafted = await draftPlaybook(
+      deps.model,
+      { title: p.play.title, description: p.play.description, job: p.play.job, install_notes: p.play.install_notes },
+      run.raw_text,
+      run.never_words ?? [],
+    );
+    if (drafted) {
+      p.play = { ...p.play, playbook_md: drafted };
+      p.drafted = true;
+      p.actions.add("drafted");
+    } else {
+      p.play = toOutline(p.play, false);
+      p.actions.add("outline_only");
+      p.reasons.add(DRAFT_FAILED_REASON);
+    }
+  }
+
+  // 5. Result. A "matching only" or test run never yields shareable plays.
   const shareableRun = run.sharing === "share" && (run.contributor_id !== null || run.user_sharing === "share") && !run.is_test;
   const counters: Record<string, number> = {};
   const rows = plays.map((p) => {
     const position = (counters[p.play.set] = (counters[p.play.set] ?? 0) + 1);
-    const flagged = p.flags.size > 0;
+    const dropped = p.harm.size > 0;
+    // Reasons and where, never the private text itself.
+    const flag: DroppedFlag | null = dropped ? { reasons: [...p.harm], fields: [...p.harmFields], rejected: true, auto: true } : null;
+    const autoFixed: AutoFixed | null = !dropped && p.actions.size ? { actions: [...p.actions], reasons: [...p.reasons] } : null;
     return {
       set_: p.play.set,
       position,
       title: p.play.title,
       category: p.play.category,
-      body: { ...p.play, privacy: p.replaced },
-      shareable: shareableRun && !flagged,
-      // Reasons and where, never the private text itself.
-      flag: flagged ? { reasons: [...p.flags], fields: [...p.flagFields] } : null,
+      body: { ...p.play, privacy: p.replaced, ...(p.drafted ? { playbook_drafted: true } : {}) },
+      shareable: shareableRun && !dropped,
+      flag,
+      auto_fixed: autoFixed,
     };
   });
-  const status = rows.some((r) => r.flag) ? "flagged" : "accepted";
+  const status = "accepted";
   const stored = { ...parsed, plays: rows.map((r) => r.body), also_runs: alsoRunsOut };
   const ok = await finish(q, run, { status, reason: "", parsed: stored, parsedBy, plays: rows });
   return ok ? status : "skipped";
 }
 
-type Cleaned = { id: string; play: Play; flags: Set<string>; flagFields: Set<string>; replaced: { kind: string; placeholder: string }[] };
-
-/** Every string in a value, depth first. */
-function allStrings(v: unknown): string[] {
-  if (typeof v === "string") return [v];
-  if (Array.isArray(v)) return v.flatMap(allStrings);
-  if (v && typeof v === "object") return Object.values(v).flatMap(allStrings);
-  return [];
-}
-
-/** Applies `f` to every string in a value, keeping its shape. */
-function mapStrings<T>(v: T, f: (s: string, path: string) => string, path = ""): T {
-  if (typeof v === "string") return f(v, path) as T;
-  if (Array.isArray(v)) return v.map((x, i) => mapStrings(x, f, `${path}[${i}]`)) as T;
-  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, mapStrings(x, f, path ? `${path}.${k}` : k)])) as T;
-  return v;
-}
+/**
+ * One play on its way through intake: its text, why it would once have been
+ * held, sorted by kind (harm drops it; outline and quality are fixed), and
+ * what was done.
+ */
+type Cleaned = {
+  id: string;
+  play: Play;
+  harm: Set<string>;
+  harmFields: Set<string>;
+  /** The playbook could not be found: draft it. */
+  quality: boolean;
+  /** Reasons to keep it as an outline: sensitive, or a name that could not be placed or replaced. */
+  outline: Set<string>;
+  /** Every hold reason that was fixed, for the log. */
+  reasons: Set<string>;
+  actions: Set<FixAction>;
+  drafted: boolean;
+  replaced: { kind: string; placeholder: string }[];
+};
 
 function cleanStrings<T>(v: T, neverWords: string[]) {
   const replaced: { kind: string; placeholder: string }[] = [];
@@ -184,29 +235,52 @@ function statedIn(report: string, n: number): boolean {
 function cleanPlay(play: Play, id: string, neverWords: string[], parsedBy: "block" | "model", report: string): Cleaned {
   const c = cleanStrings(play, neverWords);
   const out = c.value;
+  const p: Cleaned = {
+    id,
+    play: out,
+    harm: c.flags,
+    harmFields: c.flagFields,
+    quality: false,
+    outline: new Set(),
+    reasons: new Set(),
+    actions: new Set(),
+    drafted: false,
+    replaced: c.replaced,
+  };
   if (parsedBy === "model") {
     for (const f of FIGURES) if (out[f] != null && !statedIn(report, out[f])) out[f] = null;
     if (!out.outline_only && out.playbook_md.trim().length < 50) {
-      c.flags.add("its playbook could not be found in the report");
-      c.flagFields.add("playbook_md");
+      p.quality = true;
+      p.reasons.add(QUALITY_REASON);
     }
   }
-  if (play.sensitive) c.flags.add("Zack marked it sensitive");
-  return { id, play: out, flags: c.flags, flagFields: c.flagFields, replaced: c.replaced };
+  if (play.sensitive) {
+    p.outline.add(SENSITIVE_REASON);
+    p.reasons.add(SENSITIVE_REASON);
+  }
+  return p;
 }
 
 /**
- * Names and harm from the model review. Clear names are replaced in every
- * play, longest first, in any capitalisation; a clear name that replaces
- * nothing, an unclear name, any harm, or a finding for a play that does not
- * exist, flags (every play, when it cannot be placed). Fails closed.
+ * Names and harm from the model review. Every name is replaced in every play,
+ * longest first, in any capitalisation: a clear one silently, an unclear one
+ * recorded as redacted (2026-11-27: replaced rather than held). A name that
+ * replaces nothing, or has no text, makes its play an outline (every play,
+ * when the finding names a play that does not exist). Harm drops its play
+ * (every play, when it cannot be placed). Fails closed.
  */
 function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns: () => void) {
-  const flag = (target: Cleaned[], reason: string) => target.forEach((p) => p.flags.add(reason));
   const known = (id: string) => plays.find((p) => p.id === id);
-  const clear = findings.filter((f) => f.kind !== "harm" && f.clear && f.text.trim()).sort((a, b) => b.text.length - a.text.length);
+  const target = (id: string) => (known(id) ? [known(id)!] : plays);
+  const outline = (id: string, kind: string) => {
+    for (const p of target(id)) {
+      p.outline.add(nameReason(kind));
+      p.reasons.add(nameReason(kind));
+    }
+  };
+  const names = findings.filter((f) => f.kind !== "harm" && f.text.trim()).sort((a, b) => b.text.length - a.text.length);
   const done: string[] = [];
-  for (const f of clear) {
+  for (const f of names) {
     // "Dana" after "Dana Whitfield" was replaced has nothing left to replace, and that is fine.
     const inLonger = done.some((d) => phrasePattern(f.text).test(d));
     done.push(f.text);
@@ -214,23 +288,25 @@ function applyFindings(findings: ReviewFinding[], plays: Cleaned[], dropAlsoRuns
     const placeholder = NAME_PLACEHOLDER[f.kind as keyof typeof NAME_PLACEHOLDER];
     let count = 0;
     for (const p of plays) {
-      p.play = mapStrings(p.play, (s) =>
-        s.replace(phrasePattern(f.text), () => {
-          count++;
-          return placeholder;
-        }),
-      );
+      const r = replaceName(p.play, f.text, placeholder);
+      p.play = r.value;
+      count += r.count;
+      if (r.count > 0 && !f.clear) {
+        p.actions.add("redacted");
+        p.reasons.add(nameReason(f.kind));
+      }
     }
     if (count > 0) for (const p of plays) p.replaced.push({ kind: f.kind, placeholder });
-    else if (f.playId !== "also") flag(known(f.playId) ? [known(f.playId)!] : plays, `may contain a private ${f.kind} name`);
+    else if (f.playId !== "also") outline(f.playId, f.kind);
   }
-  for (const f of findings.filter((x) => x.kind === "harm" || !x.clear)) {
+  for (const f of findings.filter((x) => x.kind === "harm" || !x.clear || !x.text.trim())) {
     if (f.playId === "also") {
+      // Runners-up are matching context only; anything unclear in them is simply dropped.
       dropAlsoRuns();
       continue;
     }
-    const reason = f.kind === "harm" ? `could harm whoever runs it: ${f.reason.slice(0, 120) || "see the playbook"}` : `may contain a private ${f.kind} name`;
-    flag(known(f.playId) ? [known(f.playId)!] : plays, reason);
+    if (f.kind === "harm") for (const p of target(f.playId)) p.harm.add(modelHarmReason(f.reason));
+    else if (!f.text.trim()) outline(f.playId, f.kind);
   }
 }
 
@@ -259,7 +335,7 @@ async function readWithModel(report: string, model: IntakeModel): Promise<Read> 
   return { kind: "cut_off" };
 }
 
-type PlayRow = { set_: string; position: number; title: string; category: string; body: unknown; shareable: boolean; flag: unknown };
+type PlayRow = { set_: string; position: number; title: string; category: string; body: unknown; shareable: boolean; flag: unknown; auto_fixed: unknown };
 
 async function finish(q: Query, run: RunRow, r: { status: string; reason: string; parsed: unknown; parsedBy: "block" | "model" | null; plays: PlayRow[] }): Promise<boolean> {
   const [res] = await q<{ updated: number | string }>(
@@ -269,11 +345,11 @@ async function finish(q: Query, run: RunRow, r: { status: string; reason: string
        returning id, user_id, contributor_id, week_of, revision
      ),
      ins as (
-       insert into plays (run_id, user_id, contributor_id, week_of, set_, position, title, category, body, shareable, flag, revision)
-       select r.id, r.user_id, r.contributor_id, r.week_of, p.set_, p.position, p.title, p.category, p.body, p.shareable, p.flag, r.revision
-       from r, jsonb_to_recordset($7::jsonb) as p(set_ text, position int, title text, category text, body jsonb, shareable boolean, flag jsonb)
+       insert into plays (run_id, user_id, contributor_id, week_of, set_, position, title, category, body, shareable, flag, auto_fixed, revision)
+       select r.id, r.user_id, r.contributor_id, r.week_of, p.set_, p.position, p.title, p.category, p.body, p.shareable, p.flag, p.auto_fixed, r.revision
+       from r, jsonb_to_recordset($7::jsonb) as p(set_ text, position int, title text, category text, body jsonb, shareable boolean, flag jsonb, auto_fixed jsonb)
        on conflict (run_id, set_, position) do update set title = excluded.title, category = excluded.category, body = excluded.body,
-         shareable = excluded.shareable, flag = excluded.flag, revision = excluded.revision, week_of = excluded.week_of,
+         shareable = excluded.shareable, flag = excluded.flag, auto_fixed = excluded.auto_fixed, cleared_by = null, revision = excluded.revision, week_of = excluded.week_of,
          -- New text is a new play for Cora: it is placed in the pool again, never left on the old one's pool play.
          pool_play_id = null, merged_at = null
        returning id

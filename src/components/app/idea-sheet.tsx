@@ -82,7 +82,7 @@ export function IdeaSheet({
           <p className="mt-2 text-small text-ink-2">
             The button copies this prompt with the full playbook under it. Paste both into your AI agent, then answer its setup questions.
           </p>
-          <blockquote className="mt-4 border-l-2 border-rule-strong pl-4 text-small">{idea.pasteToInstall}</blockquote>
+          <blockquote className="mt-4 whitespace-pre-line border-l-2 border-rule-strong pl-4 text-small">{idea.pasteToInstall}</blockquote>
           <CopyTextButton text={idea.copyText} label="Copy prompt and playbook" className="btn btn-m mt-5" />
           {idea.writtenOn && (
             <p className="mt-4 text-meta text-ink-2">

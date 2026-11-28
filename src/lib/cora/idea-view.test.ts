@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { v3Defaults } from "@/data/config";
-import { buildIdeaView, formatHours, PASTE_CAUTION, type PlaySource } from "./idea-view";
+import { buildIdeaView, formatHours, type PlaySource } from "./idea-view";
+import { SAFEGUARD_PREAMBLE } from "./safeguard";
 
 const fixture = JSON.parse(readFileSync(new URL("../../../db/seeds/sample-play.fixture.json", import.meta.url), "utf8"));
 
@@ -59,13 +60,20 @@ describe("buildIdeaView", () => {
     expect(v.personal).toEqual({ score: 66, reason: "Matches your client follow-up work." });
   });
 
-  it("starts every copy with the preface, word for word, then the caution, prompt and playbook", () => {
+  it("starts every copy with the preface, word for word, then the safeguard preamble once, the prompt and the playbook", () => {
     const v = buildIdeaView(play, preface);
     expect(v.copyText.startsWith(preface)).toBe(true);
     const parts = v.copyText.split("\n\n");
-    expect(parts[1]).toBe(PASTE_CAUTION);
+    expect(parts[1]).toBe(SAFEGUARD_PREAMBLE);
+    expect(v.copyText.split(SAFEGUARD_PREAMBLE)).toHaveLength(2);
     expect(v.copyText).toContain(play.pasteToInstall);
     expect(v.copyText).toContain(`PLAYBOOK\n\n${play.playbookMd.trim()}`);
+  });
+
+  it("puts the safeguard preamble at the top of the paste-to-install text, so a play copied alone carries it (2026-11-27)", () => {
+    const v = buildIdeaView(play, preface);
+    expect(v.pasteToInstall).toBe(`${SAFEGUARD_PREAMBLE}\n\n${play.pasteToInstall.trim()}`);
+    expect(buildIdeaView({ ...play, pasteToInstall: "  " }, preface).pasteToInstall).toBe(SAFEGUARD_PREAMBLE);
   });
 
   it("says counted when the basis is Actual", () => {
