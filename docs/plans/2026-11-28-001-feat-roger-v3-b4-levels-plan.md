@@ -612,7 +612,7 @@ flowchart LR
 
 **Switch-off proof:** `rogerLevels` is unchanged and asserted. The new exports aren't imported by any route.
 
-- [ ] **Unit 3: B4 schema and the `v3.levelsLive` switch**
+- [x] **Unit 3: B4 schema and the `v3.levelsLive` switch**
 
 **Goal:** Every B4 table and column, the never-lower trigger, the switches (off), their admin toggles, and the query-trace test helper with its exception list.
 
@@ -657,6 +657,11 @@ flowchart LR
 - The switch exists, is off, and is visible on the settings page.
 
 **Switch-off proof:** adds tables, nullable columns and a trigger on a new table only. The existing schema, settings and features tests pass unchanged. The settings page gains one admin-only form; no member page changes.
+
+> **From the Unit 3 schema review (2026-11-28), for later units:**
+> - Unit 5: a block's `platform` is one of the contract's five values. Zack's agents without their own instruction file (Instinct, Muse, Dots, Viktor) use Grok Bot's file and report `other`; intake never writes a raw agent slug into `level_submissions.platform`. Test an Instinct member's submission.
+> - Unit 7: the rescore upsert on `user_levels` leaves `level_reset_at`, `level_reset_by` and `level_reset_reason` out of its SET list, so a rescore never erases the audit stamp. Add tests: an `insert ... on conflict do update` that lowers or nulls `level_earned` is refused by the trigger, and a rescore after a reset keeps the reset columns.
+> - Unit 14: apply db/schema.sql to a database that already holds B1–B3 rows (cora_user_weeks, picks, zack_profiles) and check the B4 ALTERs and CHECKs pass; assert the trigger function splits as one statement containing its full body.
 
 - [ ] **Unit 4: Cora change 8, "Also runs" and Setup matched to pool plays**
 

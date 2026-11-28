@@ -370,6 +370,195 @@ describe("schema.sql on Postgres", () => {
     });
   });
 
+  describe("B4 (plan 2026-11-28-001, Unit 3)", () => {
+    const user = async (email: string) => (await db.query<{ id: string }>("insert into users (email) values ($1) returning id", [email])).rows[0].id;
+    const playRow = async (title: string) =>
+      (
+        await db.query<{ id: string }>(
+          "insert into pool_plays (title, category, description, playbook_md, paste_to_install, first_seen, last_seen) values ($1, 'Research', 'd', 'p', 'i', '2026-11-16', '2026-11-16') returning id",
+          [title],
+        )
+      ).rows[0].id;
+    const submission = (u: string, platform: string, o: { week?: string; test?: boolean; status?: string; evidence?: string | null } = {}) =>
+      db.query(
+        "insert into level_submissions (user_id, week_of, platform, is_test, zack_version, contract_version, status, evidence) values ($1, $2, $3, $4, '2.1', 1, $5, $6::jsonb)",
+        [u, o.week ?? "2026-11-30", platform, o.test ?? false, o.status ?? "valid", o.evidence === undefined ? "{}" : o.evidence],
+      );
+    const level = (u: string, earned: number | null) =>
+      db.query("insert into user_levels (user_id, score_status, level_earned, live_level, rules_version) values ($1, 'scored', $2, $2, 'v1')", [u, earned]);
+    const earnedOf = async (u: string) => (await db.query<{ e: number | null }>("select level_earned as e from user_levels where user_id = $1", [u])).rows[0].e;
+
+    it("has the B4 tables and columns", async () => {
+      const tables = (
+        await db.query<{ t: string }>("select table_name as t from information_schema.tables where table_schema = 'public'")
+      ).rows.map((r) => r.t);
+      for (const t of ["level_submissions", "level_items", "user_levels", "pool_play_level_tags", "cora_job_matches"]) expect(tables).toContain(t);
+      const cols = await columns();
+      for (const c of [
+        "user_levels.level_earned", "user_levels.live_level", "user_levels.provisional_level", "user_levels.provisional_source", "user_levels.computed_from",
+        "user_levels.rules_version", "user_levels.score_status", "user_levels.level_reset_at", "user_levels.level_reset_reason", "user_levels.next_open_core",
+        "pool_play_level_tags.item_ids_version", "pool_play_level_tags.entry_bound", "cora_user_weeks.review_hold", "cora_user_weeks.review_hold_reserve",
+        "picks.slot", "picks.moves_item", "zack_profiles.has_level_block", "level_submissions.evidence", "cora_job_matches.pool_through",
+      ]) expect(cols).toContain(c);
+    });
+
+    it("keeps B1 to B3 inserts working: the new columns on old tables are null or false", async () => {
+      const u = await user("b4old@example.com");
+      const p = await playRow("Old play");
+      await db.query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2026-11-30', 'picked')", [u]);
+      await db.query("insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason) values ($1, '2026-11-30', 1, $2, 50, 3, 'r')", [u, p]);
+      await db.query("insert into zack_profiles (user_id, week_of, route, raw_text) values ($1, '2026-11-30', 'connector', 'x')", [u]);
+      const [w] = (await db.query<Record<string, unknown>>("select review_hold, review_hold_level, review_hold_reserve from cora_user_weeks where user_id = $1", [u])).rows;
+      expect(w).toEqual({ review_hold: null, review_hold_level: null, review_hold_reserve: null });
+      const [k] = (await db.query<Record<string, unknown>>("select slot, moves_item from picks where user_id = $1", [u])).rows;
+      expect(k).toEqual({ slot: null, moves_item: null });
+      const [z] = (await db.query<{ has_level_block: boolean }>("select has_level_block from zack_profiles where user_id = $1", [u])).rows;
+      expect(z.has_level_block).toBe(false);
+    });
+
+    it("keeps one submission per member, week, platform and test flag, but one per platform in a week", async () => {
+      const u = await user("sub1@example.com");
+      await submission(u, "claude");
+      await expect(submission(u, "claude")).rejects.toThrow();
+      await expect(submission(u, "hark")).resolves.toBeTruthy();
+      await expect(submission(u, "claude", { test: true })).resolves.toBeTruthy();
+      await expect(submission(u, "claude", { week: "2026-12-07" })).resolves.toBeTruthy();
+      await expect(submission(u, "chatgpt", { week: "2026-12-14" })).rejects.toThrow();
+      // Evidence exactly when valid: a rejected block keeps none.
+      await expect(submission(u, "duet", { status: "rejected" })).rejects.toThrow();
+      await expect(submission(u, "duet", { status: "rejected", evidence: null })).resolves.toBeTruthy();
+      await expect(submission(u, "other", { evidence: null })).rejects.toThrow();
+      await expect(
+        db.query("insert into level_submissions (user_id, week_of, platform, contract_version, status, reason) values ($1, '2026-12-21', 'other', 1, 'rejected', $2)", [u, "x".repeat(1001)]),
+      ).rejects.toThrow();
+    });
+
+    it("checks levels 0 to 9, the item ID format, and the states", async () => {
+      const u = await user("chk@example.com");
+      await expect(level(u, 10)).rejects.toThrow();
+      await expect(db.query("insert into user_levels (user_id, provisional_level, provisional_source) values ($1, -1, 'quiz')", [u])).rejects.toThrow();
+      await expect(db.query("insert into user_levels (user_id, provisional_level, provisional_source) values ($1, 3, 'guess')", [u])).rejects.toThrow();
+      await expect(db.query("insert into user_levels (user_id, score_status) values ($1, 'maybe')", [u])).rejects.toThrow();
+      await expect(db.query("insert into user_levels (user_id, score_status, rules_version) values ($1, 'no_valid_submission', 'v1')", [u])).resolves.toBeTruthy();
+      const item = (id: string, live = true, source: string | null = "zack") =>
+        db.query("insert into level_items (user_id, item_id, live, source) values ($1, $2, $3, $4)", [u, id, live, source]);
+      await expect(item("10.01")).rejects.toThrow();
+      await expect(item("4.1")).rejects.toThrow();
+      await expect(item("4.01", true, "guess")).rejects.toThrow();
+      await expect(item("4.01", true, null)).rejects.toThrow();
+      await expect(item("4.01")).resolves.toBeTruthy();
+      await expect(item("4.D1", false, null)).resolves.toBeTruthy();
+      await expect(item("4.01")).rejects.toThrow();
+      const p = await playRow("Tag checks");
+      const tag = (o: { entry?: number; bound?: number; status?: string; unlocks?: string; by?: string }) =>
+        db.query("insert into pool_play_level_tags (pool_play_id, unlocks, entry_level, entry_bound, status, proposed_by, item_ids_version) values ($1, $2::text[], $3, $4, $5, $6, 'ids1') on conflict (pool_play_id) do update set status = excluded.status", [
+          p, o.unlocks ?? "{4.01,4.04}", o.entry ?? 3, o.bound ?? 3, o.status ?? "proposed", o.by ?? "model",
+        ]);
+      await expect(tag({ entry: 2, bound: 3 })).rejects.toThrow();
+      await expect(tag({ unlocks: "{9.99x}" })).rejects.toThrow();
+      await expect(tag({ status: "done" })).rejects.toThrow();
+      await expect(tag({ by: "member" })).rejects.toThrow();
+      await expect(tag({})).resolves.toBeTruthy();
+      await expect(tag({ status: "stale" })).resolves.toBeTruthy();
+      await expect(tag({ unlocks: "{}", entry: 0, bound: 0 })).resolves.toBeTruthy();
+      await db.query("insert into cora_user_weeks (user_id, week_of, outcome) values ($1, '2026-11-30', 'picked')", [u]);
+      const hold = (state: string, reserve: string | null = null) =>
+        db.query("update cora_user_weeks set review_hold = $2, review_hold_reserve = $3::jsonb where user_id = $1", [u, state, reserve]);
+      await expect(hold("held")).rejects.toThrow();
+      await expect(hold("waiting", JSON.stringify(Array.from({ length: 6 }, (_, i) => ({ pool_play_id: String(i) }))))).rejects.toThrow();
+      await expect(hold("waiting", '{"a": 1}')).rejects.toThrow();
+      await expect(hold("waiting", JSON.stringify([{ pool_play_id: "x", slot: "gap", item: "4.05", reason: "r" }]))).resolves.toBeTruthy();
+      await expect(hold("sent_unreviewed")).resolves.toBeTruthy();
+      const q = await playRow("Pick checks");
+      await db.query("insert into picks (user_id, week_of, position, pool_play_id, personal_score, fit, reason) values ($1, '2026-11-30', 1, $2, 50, 3, 'r')", [u, q]);
+      await expect(db.query("update picks set slot = 'best' where user_id = $1", [u])).rejects.toThrow();
+      await expect(db.query("update picks set moves_item = '10.01' where user_id = $1", [u])).rejects.toThrow();
+      await expect(db.query("update picks set slot = 'gap', moves_item = '4.05' where user_id = $1", [u])).resolves.toBeTruthy();
+      await expect(
+        db.query("insert into cora_job_matches (user_id, source, text_key) values ($1, 'profile', $2)", [u, "a".repeat(64)]),
+      ).rejects.toThrow();
+      await expect(db.query("insert into cora_job_matches (user_id, source, text_key) values ($1, 'setup', 'short')", [u])).rejects.toThrow();
+    });
+
+    describe("the never-lower trigger", () => {
+      it("refuses a lower level_earned, or a null one", async () => {
+        const u = await user("nl1@example.com");
+        await level(u, 5);
+        await expect(db.query("update user_levels set level_earned = 4 where user_id = $1", [u])).rejects.toThrow(/never goes down/);
+        await expect(db.query("update user_levels set level_earned = null where user_id = $1", [u])).rejects.toThrow(/never goes down/);
+        // A reason without a new reset time, or a reset time without a reason, is not a reset.
+        await expect(db.query("update user_levels set level_earned = 4, level_reset_reason = 'wrong' where user_id = $1", [u])).rejects.toThrow();
+        await expect(db.query("update user_levels set level_earned = 4, level_reset_at = now(), level_reset_by = 'a@example.com' where user_id = $1", [u])).rejects.toThrow();
+        expect(await earnedOf(u)).toBe(5);
+      });
+
+      it("allows a raise, an unchanged level, and other columns changing", async () => {
+        const u = await user("nl2@example.com");
+        await level(u, 5);
+        await db.query("update user_levels set level_earned = 6 where user_id = $1", [u]);
+        await db.query("update user_levels set live_level = 3, level_earned = greatest(level_earned, 4) where user_id = $1", [u]);
+        expect(await earnedOf(u)).toBe(6);
+        // A first score from null (provisional only) is a raise.
+        const v = await user("nl3@example.com");
+        await db.query("insert into user_levels (user_id, provisional_level, provisional_source) values ($1, 7, 'quiz')", [v]);
+        await db.query("update user_levels set level_earned = 3, score_status = 'scored' where user_id = $1", [v]);
+        expect(await earnedOf(v)).toBe(3);
+      });
+
+      it("allows the audited admin reset: a new level_reset_at with a reason in the same update", async () => {
+        const u = await user("nl4@example.com");
+        await level(u, 6);
+        const reset = (at: string) =>
+          db.query("update user_levels set level_earned = null, level_reset_at = $2, level_reset_by = 'admin@example.com', level_reset_reason = 'Forged block' where user_id = $1", [u, at]);
+        await reset("2026-12-01T10:00:00Z");
+        expect(await earnedOf(u)).toBe(null);
+        await db.query("update user_levels set level_earned = 4 where user_id = $1", [u]);
+        // The same reset time again is not a new reset.
+        await expect(db.query("update user_levels set level_earned = 2, level_reset_reason = 'Again' where user_id = $1", [u])).rejects.toThrow(/never goes down/);
+        await expect(reset("2026-12-01T10:00:00Z")).rejects.toThrow(/never goes down/);
+        await reset("2026-12-02T10:00:00Z");
+        expect(await earnedOf(u)).toBe(null);
+        await expect(
+          db.query("update user_levels set level_reset_reason = $2 where user_id = $1", [u, "x".repeat(301)]),
+        ).rejects.toThrow();
+      });
+
+      it("is replaced, not duplicated, by a second apply, and still guards after it", async () => {
+        await apply();
+        const n = (await db.query<{ n: number }>("select count(*)::int as n from pg_trigger where tgname = 'user_levels_never_lower'")).rows[0].n;
+        expect(n).toBe(1);
+        const u = await user("nl5@example.com");
+        await level(u, 5);
+        await expect(db.query("update user_levels set level_earned = 4 where user_id = $1", [u])).rejects.toThrow(/never goes down/);
+        // Retention deletes the row; the trigger is on update only.
+        await db.query("delete from user_levels where user_id = $1", [u]);
+        expect((await db.query("select 1 from user_levels where user_id = $1", [u])).rows).toHaveLength(0);
+      });
+    });
+
+    it("removes every member-owned B4 row with the account, and a play's tag with the play", async () => {
+      const u = await user("gone@example.com");
+      const other = await user("stays@example.com");
+      const p = await playRow("Matched play");
+      await submission(u, "claude");
+      await submission(other, "claude");
+      await level(u, 3);
+      await db.query("insert into level_items (user_id, item_id, live, source) values ($1, '1.01', true, 'zack')", [u]);
+      await db.query("insert into cora_job_matches (user_id, source, text_key, pool_play_id, pool_through) values ($1, 'also_runs', $2, $3, now())", [u, "b".repeat(64), p]);
+      await db.query("insert into cora_job_matches (user_id, source, text_key, pool_play_id) values ($1, 'setup', $2, $3)", [other, "c".repeat(64), p]);
+      await db.query("insert into pool_play_level_tags (pool_play_id, entry_level, entry_bound, proposed_by, item_ids_version) values ($1, 2, 0, 'model', 'ids1')", [p]);
+      await db.query("delete from users where id = $1", [u]);
+      for (const t of ["level_submissions", "level_items", "user_levels", "cora_job_matches"]) {
+        expect((await db.query(`select 1 from ${t} where user_id = $1`, [u])).rows, t).toHaveLength(0);
+      }
+      expect((await db.query("select 1 from level_submissions where user_id = $1", [other])).rows).toHaveLength(1);
+      // A deleted play leaves the cached judgment as "no match" and takes its tag with it.
+      await db.query("delete from pool_plays where id = $1", [p]);
+      expect((await db.query<{ pool_play_id: string | null }>("select pool_play_id from cora_job_matches where user_id = $1", [other])).rows).toEqual([{ pool_play_id: null }]);
+      expect((await db.query("select 1 from pool_play_level_tags where pool_play_id = $1", [p])).rows).toHaveLength(0);
+    });
+  });
+
   it("increments a rate counter in one statement", async () => {
     const hit = () =>
       db.query<{ count: number }>(

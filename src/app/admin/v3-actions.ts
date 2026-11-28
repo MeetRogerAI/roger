@@ -433,3 +433,22 @@ export async function saveB3SwitchesAction(_p: V3State, fd: FormData): Promise<V
   updateTag("settings");
   return { status: "ok", message: "Saved.", at: Date.now() };
 }
+
+/** The B4 switches (B4 plan Unit 3), both off by default: levels live, and the one-time seed tagging. */
+const B4_SWITCHES = ["levelsLive", "levelTagsOn"] as const;
+
+/** Saves the two B4 switches together (one statement), and logs the values saved. */
+export async function saveB4SwitchesAction(_p: V3State, fd: FormData): Promise<V3State> {
+  const by = await requireAdmin();
+  const patch = Object.fromEntries(B4_SWITCHES.map((k) => [k, fd.get(k) === "on"])) as Record<(typeof B4_SWITCHES)[number], boolean>;
+  try {
+    await saveV3Settings(patch);
+  } catch (e) {
+    // As for B3: only the error's name is logged, and the message is fixed.
+    console.error("[admin] B4 switches not saved", e instanceof Error ? e.name : "Error");
+    return bad("Not saved. Try again.");
+  }
+  await logAdminAction(query, { by, action: "v3_switches_saved", detail: patch });
+  updateTag("settings");
+  return { status: "ok", message: "Saved.", at: Date.now() };
+}

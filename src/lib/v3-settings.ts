@@ -68,6 +68,12 @@ export const v3Schema = z
     reviewBotOn: z.boolean(),
     feedbackOn: z.boolean(),
     coraUpgradesOn: z.boolean(),
+    // B4 switches (B4 plan Unit 3), the same way: defaults in v3Defaults, so a saved set from
+    // before B4 still reads. levelsLive gates member surfaces through featureOn and is read raw by
+    // the engine and Cora; levelTagsOn (the hourly seed tagging) is read raw. No new rule goes on
+    // this fail-closed read (docs/solutions/logic-errors/tightening-a-fail-closed-settings-read-*).
+    levelsLive: z.boolean(),
+    levelTagsOn: z.boolean(),
     sessionDay: z.string().max(40),
     sessionTime: z.string().max(40),
     sessionLink: z.union([z.literal(""), z.url()]),

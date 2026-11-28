@@ -64,6 +64,25 @@ describe("mergeV3", () => {
     expect([s.reviewBotOn, s.feedbackOn, s.coraUpgradesOn]).toEqual([false, false, false]);
   });
 
+  it("has the B4 switches, off by default, takes a saved true, and fails closed on an invalid value (B4 plan Unit 3)", () => {
+    const s = mergeV3([]);
+    for (const k of ["levelsLive", "levelTagsOn"] as const) {
+      expect(s[k]).toBe(false);
+      expect(mergeV3([{ key: `v3.${k}`, value: true }])[k]).toBe(true);
+      expect(() => mergeV3([{ key: `v3.${k}`, value: "on" }])).toThrow();
+    }
+  });
+
+  it("still reads a saved set from before B4, with the B4 switches off", () => {
+    // Every key B3 knew, saved (with the cycle live): neither B4 switch is among them.
+    const b3Rows = Object.entries(mergeV3([]))
+      .filter(([k]) => !["levelsLive", "levelTagsOn"].includes(k))
+      .map(([k, value]) => ({ key: `v3.${k}`, value: k === "cycleLive" || k === "coraUpgradesOn" ? true : value }));
+    const s = mergeV3(b3Rows);
+    expect([s.cycleLive, s.coraUpgradesOn]).toEqual([true, true]);
+    expect([s.levelsLive, s.levelTagsOn]).toEqual([false, false]);
+  });
+
   it("loads a stored stats time outside 08:00 to 12:00 as the default instead of failing", () => {
     expect(mergeV3([]).statsAt).toBe("09:00");
     expect(mergeV3([{ key: "v3.statsAt", value: "13:00" }]).statsAt).toBe("09:00");

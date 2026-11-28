@@ -20,6 +20,7 @@ import {
   rebuildPointsAction,
   runJobAction,
   saveB3SwitchesAction,
+  saveB4SwitchesAction,
   saveNoteAction,
   saveTestimonialAction,
   seedImportAction,
@@ -671,6 +672,44 @@ export function B3SwitchesForm({ values }: { values: Record<(typeof B3_SWITCH_RO
     <form action={act} className="space-y-4 rounded-[var(--radius-object)] border border-rule bg-surface p-6 sm:p-8">
       <h2 className="text-title">B3 switches</h2>
       {B3_SWITCH_ROWS.map((r) => (
+        <label key={r.name} className="flex items-start gap-3 text-small">
+          <input type="checkbox" name={r.name} defaultChecked={values[r.name]} className="mt-0.5 size-4 accent-[var(--color-accent)]" />
+          <span>
+            <span className="font-[600]">{r.label}</span>
+            <span className="block text-ink-2">{r.hint}</span>
+          </span>
+        </label>
+      ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" disabled={pending} className={small}>
+          {pending ? "Saving…" : "Save switches"}
+        </button>
+        <Msg s={s} />
+      </div>
+    </form>
+  );
+}
+
+const B4_SWITCH_ROWS = [
+  {
+    name: "levelsLive",
+    label: "Levels live",
+    hint: "Scores members from their Zack 2.1 level blocks, and Cora uses levels for eligibility, slots and the review hold. Members see their chart and Level line only with sign-up open and the cycle live. Go-live steps first: one valid real run per agent, the rulings confirmed, every active pool play tagged.",
+  },
+  {
+    name: "levelTagsOn",
+    label: "Tag pool plays for levels",
+    hint: "The hourly pass proposes level tags for untagged pool plays, 10 a pass, even with levels off. Review them on /admin/levels/tags. Turn it off once the seed pool is tagged.",
+  },
+] as const;
+
+/** The B4 switches (B4 plan Unit 3), both off by default. */
+export function B4SwitchesForm({ values }: { values: Record<(typeof B4_SWITCH_ROWS)[number]["name"], boolean> }) {
+  const [s, act, pending] = useActionState(saveB4SwitchesAction, idle);
+  return (
+    <form action={act} className="space-y-4 rounded-[var(--radius-object)] border border-rule bg-surface p-6 sm:p-8">
+      <h2 className="text-title">B4 switches</h2>
+      {B4_SWITCH_ROWS.map((r) => (
         <label key={r.name} className="flex items-start gap-3 text-small">
           <input type="checkbox" name={r.name} defaultChecked={values[r.name]} className="mt-0.5 size-4 accent-[var(--color-accent)]" />
           <span>

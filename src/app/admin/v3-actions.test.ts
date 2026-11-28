@@ -82,6 +82,7 @@ describe("every v3 admin action refuses a signed-in non-admin", () => {
     ["rebuildPoints", () => actions.rebuildPointsAction()],
     ["seedImport", () => actions.seedImportAction(idle, form({ label: "Rob", agent: "hark", ranOn: "2026-11-12", text: "x" }))],
     ["saveB3Switches", () => actions.saveB3SwitchesAction(idle, form({ reviewBotOn: "on" }))],
+    ["saveB4Switches", () => actions.saveB4SwitchesAction(idle, form({ levelsLive: "on" }))],
   ];
 
   it("covers every exported action", () => {
@@ -129,6 +130,25 @@ describe("for an admin", () => {
     } finally {
       err.mockRestore();
     }
+  });
+
+  it("saves the two B4 switches together and logs the values (B4 plan Unit 3)", async () => {
+    admin = "admin@example.com";
+    expect(await actions.saveB4SwitchesAction({ status: "idle" }, form({ levelTagsOn: "on" }))).toMatchObject({ status: "ok", message: "Saved." });
+    expect(savedV3).toEqual([{ levelsLive: false, levelTagsOn: true }]);
+    expect(await current("select admin_email, action, detail from admin_actions")).toEqual([
+      { admin_email: "admin@example.com", action: "v3_switches_saved", detail: { levelsLive: false, levelTagsOn: true } },
+    ]);
+    // A failed save shows the fixed message, logs only the error's name, and records no admin action.
+    saveV3Fails = true;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await actions.saveB4SwitchesAction({ status: "idle" }, form({ levelsLive: "on" }))).toMatchObject({ status: "error", message: "Not saved. Try again." });
+      expect(err.mock.calls).toEqual([["[admin] B4 switches not saved", "Error"]]);
+    } finally {
+      err.mockRestore();
+    }
+    expect(await current("select 1 from admin_actions")).toHaveLength(1);
   });
 
   it("adding a feedback reply is rate-limited, storing and logging nothing (whole-branch review)", async () => {

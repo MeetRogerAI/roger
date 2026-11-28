@@ -1249,3 +1249,162 @@ alter table picks add column if not exists kind text not null default 'new' chec
 alter table picks add column if not exists whats_better text;
 -- An earlier B3 draft added picks_user; the primary key (user_id, week_of, position) already serves it.
 drop index if exists picks_user;
+
+-- 2026-11-28, B4 (levels), Unit 3. Plan:
+-- docs/plans/2026-11-28-001-feat-roger-v3-b4-levels-plan.md. Every B4 table
+-- and column. Members see nothing of it while v3.levelsLive is off (the
+-- default). Level intake captures whatever the switch says, but with no Zack
+-- 2.1 live no block arrives, so these tables stay empty. New tables only, and
+-- nullable columns (or a constant default) on old ones, so no table is
+-- rewritten and every B1 to B3 insert works before and after the deploy.
+--
+-- level_submissions: one validated, minimised roger-level block (or the
+-- reason it was rejected) per member, profile week, platform and test flag.
+-- A replacement from the same platform in the same week replaces it
+-- (revision + 1); a second platform the same week adds its own row. That is
+-- how a member's platforms combine into one level while zack_profiles keeps
+-- one profile a week. evidence is the minimised shape the engine reads (no
+-- names, no free text) and is present exactly when the block is valid.
+-- reason holds issue paths and codes only, never a value from the block.
+-- Gone with the account, and erased by retention.
+create table if not exists level_submissions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users (id) on delete cascade,
+  week_of date not null,
+  platform text not null check (platform in ('claude', 'grok-bot', 'hark', 'duet', 'other')),
+  is_test boolean not null default false,
+  zack_version text check (char_length(zack_version) <= 20),
+  contract_version int not null check (contract_version >= 1),
+  status text not null check (status in ('valid', 'rejected')),
+  reason text not null default '' check (char_length(reason) <= 1000),
+  evidence jsonb,
+  received_at timestamptz not null default now(),
+  revision int not null default 0,
+  check ((status = 'valid') = (evidence is not null))
+);
+create unique index if not exists level_submissions_one on level_submissions (user_id, week_of, platform, is_test);
+create index if not exists level_submissions_received on level_submissions (received_at);
+
+-- level_items: each check item's live state for a member, from the engine's
+-- last score (rule 2.2). source says how a live 1 was settled (zack, roger or
+-- self, for rule 2.1's three verified core items) and is required when live.
+-- The item ID format is the data file's (src/data/roger-levels.ts): level,
+-- a dot, then two digits or D and a digit. Gone with the account.
+create table if not exists level_items (
+  user_id uuid not null references users (id) on delete cascade,
+  item_id text not null check (item_id ~ '^[1-9][.]([0-9]{2}|D[0-9])$'),
+  live boolean not null,
+  source text check (source in ('zack', 'roger', 'self')),
+  last_evidence_on date,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, item_id),
+  check (not live or source is not null)
+);
+
+-- user_levels: one row per member. level_earned is rule 2.3's earned level
+-- (null until scored, never lower: the trigger below), live_level what
+-- today's chart alone supports. The gaps and next-level lists are computed
+-- from the row the upsert writes (Unit 7). score_status is scored, or
+-- no_valid_submission for a member whose submissions are all test or
+-- rejected (so the hourly rescore doesn't pick them again until a newer
+-- submission or a rules change), and null for a provisional-only row.
+-- provisional_level comes from quiz question 5 or an admin, until the first
+-- scored submission replaces it (not a floor). rules_version is the
+-- LEVELS_RULES_VERSION scored under, computed_from the newest submission
+-- read. level_reset_at, by and reason record the audited admin reset, the
+-- only way level_earned goes down. Gone with the account, and erased by
+-- retention with the evidence.
+create table if not exists user_levels (
+  user_id uuid primary key references users (id) on delete cascade,
+  score_status text check (score_status in ('scored', 'no_valid_submission')),
+  level_earned int check (level_earned between 0 and 9),
+  earned_at timestamptz,
+  first_scored_at timestamptz,
+  live_level int check (live_level between 0 and 9),
+  core_gaps text[] not null default '{}',
+  elective_gaps text[] not null default '{}',
+  next_open text[] not null default '{}',
+  next_open_core int check (next_open_core >= 0),
+  provisional_level int check (provisional_level between 0 and 9),
+  provisional_source text check (provisional_source in ('quiz', 'admin')),
+  provisional_set_by text,
+  provisional_at timestamptz,
+  level_reset_at timestamptz,
+  level_reset_by text,
+  level_reset_reason text check (char_length(level_reset_reason) between 1 and 300),
+  rules_version text,
+  computed_from timestamptz,
+  computed_at timestamptz,
+  check ((provisional_level is null) = (provisional_source is null)),
+  check (level_reset_at is null or (level_reset_by is not null and level_reset_reason is not null))
+);
+-- Never lower (levels file rule 2.3, check 54): an update that lowers
+-- level_earned, or clears it, is refused unless the same update sets a new
+-- level_reset_at with a reason (the audited admin reset). The rescore's
+-- greatest(...) already never lowers it; this stops any other statement.
+-- Retention deletes the row, which the trigger doesn't cover.
+create or replace function user_levels_never_lower() returns trigger language plpgsql as $$ begin if old.level_earned is not null and (new.level_earned is null or new.level_earned < old.level_earned) and not (new.level_reset_at is not null and new.level_reset_at is distinct from old.level_reset_at and new.level_reset_reason is not null) then raise exception 'user_levels.level_earned never goes down without an admin reset (a new level_reset_at and a reason)' using errcode = '23514'; end if; return new; end $$;
+create or replace trigger user_levels_never_lower before update on user_levels for each row execute function user_levels_never_lower();
+
+-- pool_play_level_tags: a pool play's level tag (R31), proposed by the
+-- hourly tag task or an admin and decided on /admin/levels/tags. unlocks are
+-- item IDs; entry_bound is computed in code from them, and entry_level is
+-- never below it. item_ids_version is a hash of the data file's item ID set:
+-- a tag naming a removed or renumbered ID goes stale, which counts as
+-- untagged. Goes with the play.
+create table if not exists pool_play_level_tags (
+  pool_play_id uuid primary key references pool_plays (id) on delete cascade,
+  unlocks text[] not null default '{}' check (array_to_string(unlocks, ' ') ~ '^([1-9][.]([0-9]{2}|D[0-9])( [1-9][.]([0-9]{2}|D[0-9]))*)?$'),
+  entry_level int not null check (entry_level between 0 and 9),
+  entry_bound int not null check (entry_bound between 0 and 9),
+  status text not null default 'proposed' check (status in ('proposed', 'approved', 'rejected', 'stale')),
+  rationale text not null default '' check (char_length(rationale) <= 300),
+  proposed_by text not null check (proposed_by in ('model', 'admin')),
+  proposed_at timestamptz not null default now(),
+  decided_by text,
+  decided_at timestamptz,
+  item_ids_version text not null,
+  check (entry_level >= entry_bound)
+);
+create index if not exists pool_play_level_tags_status on pool_play_level_tags (status);
+
+-- cora_job_matches (Cora change 8): the cached judgment of whether a
+-- member's "Also runs" or Setup job is a pool play they already run. text_key
+-- is the sha-256 (hex) of the normalised job text, so no member text is kept
+-- here. pool_play_id null means no match (or the matched play was deleted).
+-- pool_through is the newest pool play considered: a newer play means the
+-- text is judged again. Gone with the account, and erased by retention.
+create table if not exists cora_job_matches (
+  user_id uuid not null references users (id) on delete cascade,
+  source text not null check (source in ('also_runs', 'setup')),
+  text_key text not null check (text_key ~ '^[0-9a-f]{64}$'),
+  pool_play_id uuid references pool_plays (id) on delete set null,
+  pool_through timestamptz,
+  judged_at timestamptz not null default now(),
+  primary key (user_id, source, text_key)
+);
+
+-- cora_user_weeks: the review hold (R32) for a verified Level 7 or 8
+-- newcomer's first list. waiting at pick time, approved by an admin, or
+-- sent_unreviewed once deliverWeek has delivered a list still waiting. It
+-- never stops a send. review_hold_reserve holds the next-best eligible
+-- candidates at pick time (at most 5: pool play id, slot, item, reason) for
+-- "Drop this pick". The two alert stamps are retried by the hourly pass
+-- until set.
+alter table cora_user_weeks add column if not exists review_hold text check (review_hold in ('waiting', 'approved', 'sent_unreviewed'));
+alter table cora_user_weeks add column if not exists review_hold_level int check (review_hold_level between 0 and 9);
+alter table cora_user_weeks add column if not exists review_hold_by text;
+alter table cora_user_weeks add column if not exists review_hold_at timestamptz;
+alter table cora_user_weeks add column if not exists review_hold_alerted_at timestamptz;
+alter table cora_user_weeks add column if not exists review_hold_sent_alerted_at timestamptz;
+alter table cora_user_weeks add column if not exists review_hold_reserve jsonb check (review_hold_reserve is null or case when jsonb_typeof(review_hold_reserve) = 'array' then jsonb_array_length(review_hold_reserve) <= 5 else false end);
+
+-- picks: the slot a pick filled with levels live (gap, next or fit) and the
+-- item it moves. Null with the switch off, so B1's picks are unchanged.
+alter table picks add column if not exists slot text check (slot in ('gap', 'next', 'fit'));
+alter table picks add column if not exists moves_item text check (moves_item ~ '^[1-9][.]([0-9]{2}|D[0-9])$');
+
+-- zack_profiles.has_level_block: a roger-level block was cut out of this
+-- profile at receipt, whatever its validity (the submission says which). A
+-- constant default, so adding it rewrites nothing.
+alter table zack_profiles add column if not exists has_level_block boolean not null default false;

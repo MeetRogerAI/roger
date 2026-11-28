@@ -153,6 +153,11 @@ export const v3Defaults = {
   reviewBotOn: false,
   feedbackOn: false,
   coraUpgradesOn: false,
+  // B4 switches (plan 2026-11-28-001, Unit 3). levelsLive goes through featureOn for member surfaces
+  // and is read raw by the level engine and Cora; levelTagsOn (seed tagging) is read raw
+  // (see src/lib/v3-features.ts).
+  levelsLive: false,
+  levelTagsOn: false,
   sessionDay: "",
   sessionTime: "",
   sessionLink: "",

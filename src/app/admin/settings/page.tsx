@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { SettingsEditor } from "@/components/admin-ui";
-import { B3SwitchesForm } from "@/components/app/admin-v3";
+import { B3SwitchesForm, B4SwitchesForm } from "@/components/app/admin-v3";
 import { isAdmin } from "@/lib/admin-auth";
 import { getSettings } from "@/lib/settings";
 import { readV3Settings } from "@/lib/v3-settings";
@@ -17,7 +17,10 @@ export default async function AdminSettings() {
       <p className="mt-2 mb-8 text-small text-ink-2">Changes go live on the site within a minute. Keys and passwords stay in Vercel, not here.</p>
       <div className="mb-6">
         {v3 ? (
-          <B3SwitchesForm values={{ reviewBotOn: v3.reviewBotOn, feedbackOn: v3.feedbackOn, coraUpgradesOn: v3.coraUpgradesOn }} />
+          <div className="space-y-6">
+            <B3SwitchesForm values={{ reviewBotOn: v3.reviewBotOn, feedbackOn: v3.feedbackOn, coraUpgradesOn: v3.coraUpgradesOn }} />
+            <B4SwitchesForm values={{ levelsLive: v3.levelsLive, levelTagsOn: v3.levelTagsOn }} />
+          </div>
         ) : (
           <p role="alert" className="text-small text-error">The v3 settings could not be read, so the switches are not shown.</p>
         )}

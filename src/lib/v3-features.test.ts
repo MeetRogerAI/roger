@@ -21,6 +21,15 @@ describe("featureOn", () => {
     expect(featureOn({ ...on, cycleLive: false }, "feedbackOn")).toBe(false);
   });
 
+  it("gates the B4 member surfaces (levelsLive) like the B2 surfaces (B4 plan Unit 3)", () => {
+    const on = { ...live, levelsLive: true };
+    expect(featureOn(on, "levelsLive")).toBe(true);
+    expect(featureOn({ ...on, levelsLive: false }, "levelsLive")).toBe(false);
+    expect(featureOn({ ...on, signupOpen: false }, "levelsLive")).toBe(false);
+    expect(featureOn({ ...on, cycleLive: false }, "levelsLive")).toBe(false);
+    expect(featureOn(mergeV3([]), "levelsLive")).toBe(false);
+  });
+
   it("reads each feature's own switch", () => {
     expect(featureOn(live, "leaderboardOn")).toBe(false);
     expect(featureOn({ ...live, leaderboardOn: true }, "leaderboardOn")).toBe(true);

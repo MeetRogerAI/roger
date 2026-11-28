@@ -61,6 +61,31 @@ describe("schema.sql", () => {
     for (const t of ["zack_instruction_fetches", "member_feedback", "review_runs", "measure_snapshots", "review_proposals"]) expect(tables).toContain(t);
   });
 
+  it("creates every B4 table and column (B4 plan Unit 3)", () => {
+    const tables = statements.map((s) => /^create table if not exists (\w+)/i.exec(s)?.[1]).filter(Boolean);
+    for (const t of ["level_submissions", "level_items", "user_levels", "pool_play_level_tags", "cora_job_matches"]) expect(tables).toContain(t);
+    const added = statements.map((s) => /^alter table (\w+) add column if not exists (\w+)/i.exec(s)).filter(Boolean).map((m) => `${m![1]}.${m![2]}`);
+    for (const c of [
+      "cora_user_weeks.review_hold", "cora_user_weeks.review_hold_level", "cora_user_weeks.review_hold_by", "cora_user_weeks.review_hold_at",
+      "cora_user_weeks.review_hold_alerted_at", "cora_user_weeks.review_hold_sent_alerted_at", "cora_user_weeks.review_hold_reserve",
+      "picks.slot", "picks.moves_item", "zack_profiles.has_level_block",
+    ]) expect(added).toContain(c);
+  });
+
+  it("adds B4's columns to existing tables nullable, or with a constant default, so B1 to B3 inserts keep working", () => {
+    const b4 = schema.slice(schema.indexOf("-- 2026-11-28, B4 (levels), Unit 3"));
+    expect(b4.length).toBeLessThan(schema.length);
+    for (const s of splitSchema(b4).filter((x: string) => /^alter table \w+ add column/i.test(x))) {
+      expect(s, s).not.toMatch(/not null(?! default (false|true|'[^']*'|\d+))/i);
+    }
+  });
+
+  it("has the never-lower trigger as one statement each for its function and trigger, with no drop", () => {
+    expect(statements.filter((s) => /^create or replace (function|trigger) user_levels_never_lower/i.test(s))).toHaveLength(2);
+    const trigger = statements.find((s) => /^create or replace trigger user_levels_never_lower/i.test(s));
+    expect(trigger).toMatch(/before update on user_levels for each row/i);
+  });
+
   it("never writes referrals.generation (B3 derives generation instead)", () => {
     expect(statements.some((s) => /^update referrals\b[^;]*\bgeneration\b/i.test(s))).toBe(false);
   });
