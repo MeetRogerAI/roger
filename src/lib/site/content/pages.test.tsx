@@ -28,7 +28,7 @@ vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),
   usePathname: () => at.path,
   useSearchParams: () => new URLSearchParams(),
-  useRouter: () => ({ replace: () => {}, push: () => {} }),
+  useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
 }));
 vi.mock("next/headers", () => nextHeaders);
 vi.mock("next/cache", async (orig) => ({ ...(await orig<typeof import("next/cache")>()), cacheLife: () => {}, cacheTag: () => {} }));

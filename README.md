@@ -11,7 +11,8 @@ A library of real things people's AI agents do, collected from public posts ever
 | `/companies` | AI and automation for family-owned companies |
 | `/for/[slug]` | Unlisted pitch pages for one company (noindex) |
 | `/watch/confirm`, `/watch/stop` | Links from watch emails |
-| `/admin` | Peter's admin: library, sign-ups, watches, connections, settings (password) |
+| `/admin` | Peter's admin: library, sign-ups, watches, connections, settings, and the website's words (Pages). Email link for `ADMIN_EMAILS`, or the password |
+| `/api/site-content/published` | Public, read-only: the site's published content, read by the release snapshot |
 | `/api/push` | Webhook: Peter's own agent sends post links here (token in Admin → Connections) |
 | `/api/cron/ingest`, `/api/cron/watches` | Daily jobs (Vercel Cron, see `vercel.json`) |
 | `/terms`, `/privacy`, `/refunds`, `/workshops` | Supporting pages |
@@ -52,6 +53,20 @@ Without `DATABASE_URL` the site still builds and shows the starting library buil
 - **Daily intake** (`src/lib/ingest`): X (with a key), Grok's X search (with an xAI key) and Hacker News. A model keeps only real use cases and rewrites them in our words.
 - **Peter's own agent**: Admin → Connections has a prompt for Grok Bot (or any agent) and a token. It sends X links to `/api/push`; the site opens each link itself, so made-up links never get in.
 - **By hand**: Admin → Use cases → Add.
+
+## The website's words: Pages, and the release snapshot
+
+Peter edits the words, sections and lists of the homepage, How it works, Use cases, FAQ, About, the header and the footer in Admin → Website → Pages, as drafts he previews and then publishes (how to use it: `docs/site/pages.md`). Each site has its own Pages; nothing is copied between preview and production.
+
+At each release, what preview has published becomes the built-in wording production shows:
+
+```bash
+npm run snapshot-content    # reads https://preview.meetroger.ai/api/site-content/published into src/data/site/released.json
+```
+
+Then read `git diff src/data/site/released.json`, run the gates and commit it with the release. The full checklist, what the snapshot carries and what it refuses, is `docs/site/content-release.md`. No environment variable or secret is needed for either.
+
+There is no CI workflow and Vercel runs only `next build`, so run these by hand before every release: `npm run lint`, `npx next typegen && npx tsc --noEmit`, `npm test`, `npm run test:scenarios`, `npm run build`.
 
 ## Where things live
 

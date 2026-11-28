@@ -52,7 +52,7 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
   const mode = stripeMode();
 
   const chip = (href: string, text: string, on: boolean) => (
-    <Link href={href} aria-current={on ? "page" : undefined} className={`chip inline-flex min-h-10 items-center rounded-full border px-4 text-small ${on ? "border-ink bg-ink text-ground" : "border-rule-strong text-ink-2 hover:text-ink"}`}>
+    <Link key={href} href={href} aria-current={on ? "page" : undefined} className={`chip inline-flex min-h-10 items-center rounded-full border px-4 text-small ${on ? "border-ink bg-ink text-ground" : "border-rule-strong text-ink-2 hover:text-ink"}`}>
       {text}
     </Link>
   );
@@ -158,3 +158,6 @@ export default async function OpsPage({ searchParams }: PageProps<"/admin/ops">)
     </section>
   );
 }
+
+/** Behind a login and read per request (await connection()): a navigation into it waits for the server, as the layout says. */
+export const instant = false;

@@ -124,6 +124,13 @@ describe("the registry and the copy cannot disagree", () => {
     expect([...listed].sort()).toEqual(fields.map((f) => f.id).sort());
   });
 
+  // The line under the price heading was removed from the page on November 27, 2026 and stayed editable, printed
+  // nowhere (U10 review). Its words live on as `closingSub` and in "What does it cost?".
+  it("has no field for the removed line under the price heading", () => {
+    expect(siteRegistry.fields.has("priceBlock.sub")).toBe(false);
+    expect(Object.keys(v1.priceBlock).sort()).toEqual(["monthly", "title"]);
+  });
+
   it("refuses a string added to the copy until someone decides whether Pages may edit it", () => {
     expect(() => build(withCopy((copy) => void ((copy.home.hero as Record<string, unknown>).kicker = "New here")))).toThrow(/the copy has "home\.hero\.kicker" and the registry has no decision for it/);
     expect(() => build(withCopy((copy) => void ((copy.control.points[0] as Record<string, unknown>).aside = "More")))).toThrow(/"control\.points\.read\.aside"/);

@@ -2,6 +2,16 @@
  * Every word on site version 1 (plan R7, R14a, KTD5, KTD8). A wording change
  * is one edit here.
  *
+ * Not always the words a visitor reads. Since the Pages editor (plan
+ * docs/plans/2026-11-27-0941-feat-admin-cms-plan.md, KTD1), a covered page
+ * prints this copy with two layers on top: src/data/site/released.json, what
+ * preview had published when the last release was taken, and the edits
+ * published in that site's Admin, Website, Pages. An entry in released.json
+ * wins over a line here: when you rewrite a line that the release file also
+ * holds, change or delete that entry in the same commit, or the change will
+ * not show (docs/site/content-release.md). Never rename an id in this file:
+ * a stored edit is keyed by it and is lost.
+ *
  * The wording is the draft copy in artifacts/v3-marketing-website-spec.md
  * ("Messaging and copy direction") and A.14 of artifacts/Roger v3 - design
  * spec.md, as changed by Peter's decisions. Every line that is not the spec's
@@ -284,7 +294,6 @@ export const v1 = {
   // --- Shared blocks ---
   priceBlock: {
     title: "Price",
-    sub: valueLine,
     monthly: { name: "Monthly", note: `A new Cora Curation every Monday: ${curationIs}.` },
   },
   control: {

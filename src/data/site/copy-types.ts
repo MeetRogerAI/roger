@@ -78,8 +78,6 @@ export type SharedCopy = {
 /** The price block: the shared price words, the block's own, the trial line and the button. */
 export type PriceBlockCopy = PriceWords & {
   title: string;
-  /** The line under the title. Names amounts. */
-  sub: string;
   /** The one plan the marketing pages show. */
   monthly: { name: string; note: string };
   trialLine: string;

@@ -11,7 +11,7 @@ symptoms:
   - Before its scripts run, a not-found page can show the header of another kind of page (no navigation and no start button, or the admin's links)
   - The page looks right in the end, because React throws the server markup away and renders again in the browser
 root_cause: wrong_assumption
-resolution_type: known_issue
+resolution_type: code_fix
 severity: medium
 tags: [next16, cache-components, not-found, hydration, usePathname, revalidate, site-header]
 ---
@@ -48,20 +48,35 @@ at different minutes.
 - Next's docs name the mechanism for rewrites (`use-pathname.md`, "Avoid hydration mismatch
   with rewrites"): the first value comes from the stored render and may not be the browser's path.
 
-## What to do
+## What was done (November 27, 2026, admin-cms plan U11)
 
-Not fixed as of November 27, 2026. It is older than the admin sidebar, it is in the public
-header, and the repo has no test environment with a DOM to hold a change to how that header
-hydrates. The fix, when it is made:
+The not-found page has no path-dependent header any more. `useShownPath()` in
+`src/components/site-header.tsx` gives the header, and the footer switch, the path to draw for:
+the browser's path on every page, except when the root layout's selected segment
+(`useSelectedLayoutSegment()`) is the not-found route (`/_not-found`), where it is that route.
+The segment comes from the stored render's own tree, so the server that drew the shell and the
+browser hydrating it under any address agree, and the shell always carries the site's ordinary
+navigation, whichever unknown address regenerated it.
 
-- The header must hydrate with what the shell was rendered for, and only then follow the
-  browser's path: write the rendered path into the markup, read it back as the server snapshot
-  of a `useSyncExternalStore`, and the mismatch becomes an ordinary re-render. Reading the path
-  in an effect on every page would flash the header on every page.
-- Better still, a not-found page should not have a path-dependent header at all: the shell
-  cannot know the address, so it should always carry the site's ordinary navigation.
+- `useSelectedLayoutSegment()` costs nothing extra: like `usePathname()`, which the header
+  already called, it makes the component a dynamic hole only in a prerender with unknown params.
+  The 13 public routes, US and Canada, had the same markup before and after.
+- Measured on production builds, the last commit against the fix, in headless Chrome: before,
+  a fresh shell already failed with #418 on `/start/zzz` and `/admin/zzz` (the header was
+  redrawn as the sign-up or the admin header); after, no #418 on any of them, before or after
+  `/start/zzz` regenerated a stale shell, and `/nothing-here` keeps the ordinary header.
+- Test: `src/components/site-header.not-found.test.tsx` draws the header and footer under eight
+  unknown addresses with the not-found segment and requires one identical markup.
+
+The rejected alternative: writing the rendered path into the header's markup and reading it
+back as a `useSyncExternalStore` server snapshot would have changed every page's markup, and the
+not-found page would still arrive with someone else's header before its scripts ran.
+
+## Prevention
+
 - Do not branch a root-layout client component on `usePathname()` for a new path prefix without
   opening an unknown address under that prefix, and one outside it, and reading the console.
+  Use `useShownPath()` for anything the root layout draws by path.
 
 ## Testing
 

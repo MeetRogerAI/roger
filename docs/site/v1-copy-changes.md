@@ -4,6 +4,8 @@ Site version 1 uses the spec's draft copy word for word (plan R14a). This file l
 
 **Read sections 9 and 7 first.** Section 9 is Peter's third homepage review, of November 27, 2026: "How it works" merged into the hero, the two example plays, the shorter note under the price, the closing button, and `/pricing` and `/agents` deleted. It has what is waiting for his approval. Section 7 is his review of November 26, 2026, which changed the audience, the price shown, the name of what arrives each Monday and every start button. Sections 1 to 6 are the record before that, and several lines they quote ("Monday lists", "one list at a time", "for real estate", the sample play "Client email in two tones", anything on `/pricing` or `/agents`) are no longer on the site.
 
+**Since the Pages editor (November 27, 2026), the wording on the site is not only in this file's sources.** A covered page prints three layers: the copy files below, then `src/data/site/released.json` (what preview had published when the last release was taken), then the edits published in that site's own Admin, Website, Pages. So a line quoted here may read differently on preview or on meetroger.ai. To see where a line comes from: open Pages on that site (an edited field is marked, with the original wording on request, and "Differs from the release" lists every edit made there since the release), and look in `released.json` for its field id. How the layers and a release work is in `docs/site/content-release.md`; how to use Pages is in `docs/site/pages.md`. Pages does not reach `/privacy`, `/terms`, `/zack`, sign-up, the app, the emails, or page titles and search descriptions: those are still only in the copy files.
+
 Sources compared:
 
 - **Marketing spec**: `artifacts/v3-marketing-website-spec.md`, "Messaging and copy direction".
@@ -1012,7 +1014,7 @@ On November 27, 2026 Peter asked for the full play to be made up from best guess
 ### 9.5 The play this replaces, and `/admin/sample`
 
 - **"Client email in two tones"** (section 2.2) is retired. Its file, `src/data/site/sample-play.ts`, is deleted, and it is on no page.
-- **The examples are bundled with the site.** The play chosen at `/admin/sample` no longer reaches any public page: not the homepage, not `/how-it-works`. The admin page still works and still stores the choice; it now opens with a note saying the public site does not use it.
+- **The examples are bundled with the site.** The play chosen at `/admin/sample` no longer reaches any public page: not the homepage, not `/how-it-works`. The admin page still works and still stores the choice; it now opens with a note saying the public site does not use it. (Later on November 27, 2026 the Sample idea screen was deleted with the admin sidebar, plan U2; a play still flagged as the sample is treated by the Cora job like any other, plan U11. The examples are now edited in Pages, Home, Cora Curation Examples.)
 - **`/how-it-works`**, "The anatomy of an idea", takes apart one idea. It is now the first example, "Phone camera roll to styled Reels", under its short title.
 
 ### 9.6 `/pricing` and `/agents` deleted

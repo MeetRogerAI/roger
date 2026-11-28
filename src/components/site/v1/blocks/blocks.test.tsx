@@ -337,17 +337,17 @@ describe("the price block", () => {
     expect(markup).toContain('data-plan="monthly"');
     const seen = text(markup);
     expect(seen).not.toMatch(/one list|one at a time|\/ list\b|most people/i);
-    expect(Object.keys(copy.priceBlock).sort()).toEqual(["monthly", "sub", "title"]);
+    expect(Object.keys(copy.priceBlock).sort()).toEqual(["monthly", "title"]);
     expect(Object.keys(copy.price).sort()).toEqual(["perMonth", "switchLabel", "tax"]);
   });
 
   it("has nothing between its heading and the currency switch (the line under the heading was removed on November 27, 2026)", async () => {
-    expect(copy.priceBlock.sub).toBe("Get two Cora Curations for free and pay only after you have tried the product for two full weeks.");
+    expect(copy.closingSub).toBe("Get two Cora Curations for free and pay only after you have tried the product for two full weeks.");
     // Both counts are the number of free Cora Curations, from the settings: one arrives each Monday.
-    expect(v1.priceBlock.sub).toBe("Get {freeLists} Cora Curations for free and pay only after you have tried the product for {freeLists} full weeks.");
+    expect(v1.closingSub).toBe("Get {freeLists} Cora Curations for free and pay only after you have tried the product for {freeLists} full weeks.");
     const markup = await render("USD");
     expect(markup).not.toContain("data-price-sub");
-    expect(text(markup)).not.toContain(copy.priceBlock.sub);
+    expect(text(markup)).not.toContain(copy.closingSub);
     expect(markup.indexOf("data-price-sub")).toBeLessThan(markup.indexOf('role="group"'));
   });
 
@@ -596,9 +596,9 @@ describe("the other blocks", () => {
 
   it("closing band on /library: one line, the line under the price, the start button, then the trial line", async () => {
     const band = closingBandCopy(copy, copy.library.band);
-    expect(band).toEqual({ line: copy.library.band, sub: copy.priceBlock.sub, start: "Get two free Cora Curations", trialLine: copy.trialLine });
+    expect(band).toEqual({ line: copy.library.band, sub: copy.closingSub, start: "Get two free Cora Curations", trialLine: copy.trialLine });
     const markup = await pageMarkup(<ClosingBand copy={band} />);
-    expect(text(markup)).toBe(`${copy.library.band} ${copy.priceBlock.sub} Get two free Cora Curations Your first two Cora Curations are free. Payment starts in week 3.`);
+    expect(text(markup)).toBe(`${copy.library.band} ${copy.closingSub} Get two free Cora Curations Your first two Cora Curations are free. Payment starts in week 3.`);
     expect(markup).toContain("data-closing-sub");
     expect(markup).toContain("data-closing-trial");
   });
@@ -695,7 +695,7 @@ describe("v1 copy", () => {
 
   it("answers “What does it cost?” as the price block does: monthly only, both prices and Peter's line, and no higher rate (his cut of November 26, 2026)", () => {
     const items = copy.questions.flatMap((g) => g.items);
-    expect(items.find((i) => i.q === "What does it cost?")?.a).toBe(`US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. ${copy.priceBlock.sub}`);
+    expect(items.find((i) => i.q === "What does it cost?")?.a).toBe(`US$200 a month, plus tax where it applies. In Canada it is CA$280 a month, plus HST. ${copy.closingSub}`);
     // His second cut: the answer starts at the first charge. The card line under a reading page's start button still says a card is asked for.
     expect(items.find((i) => i.q === "When is my card charged?")?.a).toBe(
       "The first charge comes with your third Cora Curation, and the charge repeats once a month after that. Your first two Cora Curations are free, and we email you after the second one with what happens next.",

@@ -1,8 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { isHeroSketch, isUnlisted } from "./site-header";
+import { isHeroSketch, isUnlisted, useShownPath } from "./site-header";
 
 /**
  * A page prepared for one company or group gets a quiet footer: nothing to sell around it.
@@ -14,8 +13,9 @@ export function footerFor(path: string, sketches = false): "full" | "minimal" | 
   return isUnlisted(path) ? "minimal" : "full";
 }
 
+/** Drawn for the same path as the header (useShownPath): on the not-found page, the not-found route, never the address. */
 export function FooterSwitch({ full, minimal, sketches = false }: { full: ReactNode; minimal: ReactNode; sketches?: boolean }) {
-  const path = usePathname() || "/";
+  const path = useShownPath();
   const footer = footerFor(path, sketches);
   if (footer === "none") return null;
   return <>{footer === "minimal" ? minimal : full}</>;

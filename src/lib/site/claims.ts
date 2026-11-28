@@ -235,18 +235,8 @@ export const allowed: readonly Allowed[] = [
   },
   {
     rule: "time-saved",
-    why: "The two example plays’ own instructions, where “save” means store: “Save this as a skill called …”, “Save each email as an unsent draft”, “save nothing and report the error”, “how many drafts were saved”. Those words only, inside an example.",
-    words: ({ segment }) => (inZone(segment, "sample") ? /Save this as a skill called|Save each email as an unsent draft|save nothing and report the error|how many drafts were saved/g : null),
-  },
-  {
-    rule: "time-saved",
     why: "The prospects example’s own setup question gives “a 20-minute call” as an example of what an email asks for. It is the length of a meeting, not time saved. Those words only, inside an example.",
     words: ({ segment }) => (inZone(segment, "sample") ? /a 20-minute call/g : null),
-  },
-  {
-    rule: "time-saved",
-    why: "The free Zack run stores the pasted report: the button, its pending label and the messages about storing it. “Save” means store.",
-    words: ({ path }) => (onZack(path) ? /Save my report|Saving…|could not save this report|Your report is saved|It is saved all the same|Saving is not switched on/g : null),
   },
   {
     rule: "time-saved",
@@ -374,7 +364,15 @@ const unread: Record<RuleId, readonly Zone[]> = {
 const NUMBER_WORD = "(?:half an?|an?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety|a few|few|several|many|a couple of)";
 const FIGURE = `(?:\\d[\\d.,]*\\+?|\\b${NUMBER_WORD}\\b)`;
 const SAVING = "(?:sav(?:e|es|ed|ing|ings)|faster|quicker|reclaim\\w*|free[sd]? up|gets? back|gives? (?:you )?back)";
-const COUNT_WORD = "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|fifty|a hundred|a thousand)";
+/**
+ * What a time-saved claim says is saved: time, a part of a day or a week, or a vague amount ("a ton"). "work" is left
+ * out: "save your work" means store it.
+ */
+const SAVED_THING =
+  "(?:time|hours?|hrs?|minutes?|mins?|days?|weeks?|months?|years?|mornings?|afternoons?|evenings?|nights?|weekends?|lunch(?:es|times?)?|(?:mon|tues|wednes|thurs|fri|satur|sun)days?|effort|hassle|trouble|headaches?|busywork|back[- ]and[- ]forth|energy|money|a ton|tons|a lot|lots|loads|heaps)";
+/** Who a time-saved claim says it saves something for: "saves you", "save us". */
+const SAVED_FOR = "(?:you|yourself|me|us|them)";
+const COUNT_WORD ="(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|fifty|a hundred|a thousand)";
 const PEOPLE = "(?:users|customers|members|subscribers|professionals|realtors|brokers|teams|companies|people|agents)";
 
 /**
@@ -428,8 +426,14 @@ function patterns(rule: RuleId, page: PageText, context: ClaimsContext): RegExp[
         /\b(?:hours?|minutes?|days?)\s+(?:a|per|each|every)\s+(?:day|week|month|year)\b/gi,
         // Days, weeks or months said to be saved, either way round, inside one sentence.
         new RegExp(`${FIGURE}\\s+(?:days?|weeks?|months?)\\b[^.?!]{0,60}\\b${SAVING}\\b|\\b${SAVING}\\b[^.?!]{0,60}${FIGURE}\\s+(?:days?|weeks?|months?)\\b`, "gi"),
-        // "save", "saves", "saved", "saving", "savings": a claim unless the wording is on the allow-list.
-        /\bsav(?:e|es|ed|ing|ings)\b/gi,
+        // "save", "saves", "saved" and "saving" as a claim: followed within three words by what is saved ("save time",
+        // "saves you", "save up to 5 hours", "saves, on average, a morning"), or after it within two words ("time
+        // saved", "time-saving", "hours are saved"). "Save" meaning store ("Saved in another tab.", "Save this as a
+        // skill.") is not a claim and needs no allowance.
+        new RegExp(`\\bsav(?:e|es|ed|ing)\\b(?=(?:,?\\s+[\\p{L}\\p{N}'’-]+){0,3}?,?\\s+${SAVED_THING}\\b|\\s+${SAVED_FOR}\\b)`, "giu"),
+        new RegExp(`(?<=\\b${SAVED_THING}(?:,?\\s+|-)(?:[\\p{L}'’]+\\s+){0,2})sav(?:e|es|ed|ing|ings)\\b`, "giu"),
+        // "savings", "a time saver" and "timesaving" are claims on their own.
+        /\bsavings\b|\btime[-\s]?savers?\b|\btimesav\w*/gi,
         // Productivity, and how much more or faster: "10x", "40% faster", "twice as fast".
         /\bproductiv\w*/gi,
         /\b\d+(?:\.\d+)?\s?[x×](?![\p{L}\p{N}])/giu,

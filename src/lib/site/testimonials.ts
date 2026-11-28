@@ -14,16 +14,17 @@ import type { SiteAudience } from "./start-link";
 
 export type { Testimonial };
 
+/**
+ * Throws when the database does not answer: a call that throws stores nothing, so the next render asks again. The
+ * empty list for a failure is given by `getTestimonials`, outside the cached scope
+ * (docs/solutions/runtime-errors/catch-inside-use-cache-stores-the-fallback-2026-11-27.md).
+ */
 async function clearedTestimonials(): Promise<Testimonial[]> {
   "use cache";
   cacheLife({ stale: 300, revalidate: 3600, expire: 86400 });
   cacheTag(TESTIMONIALS_TAG);
   if (!hasDb()) return [];
-  try {
-    return await publicTestimonials(query);
-  } catch {
-    return [];
-  }
+  return publicTestimonials(query);
 }
 
 /** A row marked for both audiences shows on either page. */
@@ -32,5 +33,11 @@ export function forAudience(rows: Testimonial[], audience: SiteAudience): Testim
 }
 
 export async function getTestimonials(audience: SiteAudience): Promise<Testimonial[]> {
-  return forAudience(await clearedTestimonials(), audience);
+  let rows: Testimonial[];
+  try {
+    rows = await clearedTestimonials();
+  } catch {
+    rows = [];
+  }
+  return forAudience(rows, audience);
 }

@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { refresh, updateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin-auth";
-import { logAdminAction } from "@/lib/admin/log";
+import { NOT_LOGGED } from "@/lib/admin/log";
 import { query } from "@/lib/db-query";
 import { getAmounts } from "@/lib/site/amounts";
 import { shortened } from "@/lib/site/content/caption";
@@ -40,7 +40,10 @@ import { publish, readStored, resetToRelease, sameOverlay, saveDraft, saveList, 
  * The three that change what is live expire the public pages' cached copy with
  * updateTag(CONTENT_TAG): after every call that got as far as the write,
  * whatever it reports, and also when the call throws, because the statement
- * may have landed before what failed (its log row is written after it).
+ * may have landed before what failed.
+ *
+ * Their admin log rows are written after the change lands (logLanded): when that fails twice, the change stays
+ * live and the message says the log is missing it (NOT_LOGGED), rather than an error page saying nothing happened.
  */
 
 export type SaveState = {
@@ -268,6 +271,7 @@ export async function listAction(fd: FormData): Promise<ListState> {
 const MOVED = "The drafts, the site or the warnings have changed since this list was made, so nothing was published. The list on this screen is the new one: read it, then publish.";
 const NOTHING = "Nothing was waiting to be published. Everything you have saved is on the site.";
 const PUBLISH_BUSY = "Someone else changed the site’s words at the same moment, so nothing was published. Press the button again.";
+const unlogged = (done: { logged: boolean }) => (done.logged ? "" : NOT_LOGGED);
 
 /**
  * Makes every draft on the site live. `review` is the fingerprint of the list the owner was shown: the draft, what
@@ -294,21 +298,19 @@ export async function publishAction(fd: FormData): Promise<PublishState> {
     return failed(MOVED);
   }
 
+  // One row for each warning the owner published over (plan R16): the rule, the field and the words. Never the whole
+  // text. Written with the publish's own row, in one statement, and only if the publish lands.
+  const places = placesIn(applyOverlay(baseline, stored.draft));
+  const overrides = warnings.map((warning) => {
+    const place = fieldPlace(warning.field);
+    return {
+      action: "site_content_wording_override",
+      detail: { field: warning.field.id, where: `${place.page}, ${place.section}: ${fieldLabel(warning.field, siteRegistry, places).full}`, rule: warning.rule, says: warning.says, words: warning.found.map((found) => found.words) },
+    };
+  });
   let done: Awaited<ReturnType<typeof publish>>;
   try {
-    done = await publish(query, by, stored.draft, { over: stored.published, note: { from: "pages", ...(warnings.length > 0 ? { publishedOverWarnings: warnings.length } : {}) } });
-    if (done.ok && done.changed) {
-      // One row for each warning the owner published over (plan R16): the rule, the field and the words. Never the whole text.
-      const places = placesIn(applyOverlay(baseline, stored.draft));
-      for (const warning of warnings) {
-        const place = fieldPlace(warning.field);
-        await logAdminAction(query, {
-          by,
-          action: "site_content_wording_override",
-          detail: { field: warning.field.id, where: `${place.page}, ${place.section}: ${fieldLabel(warning.field, siteRegistry, places).full}`, rule: warning.rule, says: warning.says, words: warning.found.map((found) => found.words) },
-        });
-      }
-    }
+    done = await publish(query, by, stored.draft, { over: stored.published, note: { from: "pages", ...(warnings.length > 0 ? { publishedOverWarnings: warnings.length } : {}) }, log: overrides });
   } catch (failure) {
     updateTag(CONTENT_TAG);
     throw failure;
@@ -319,7 +321,7 @@ export async function publishAction(fd: FormData): Promise<PublishState> {
   }
   updateTag(CONTENT_TAG);
   refresh();
-  return { status: "ok", message: done.changed ? "Published. Visitors see the changes from their next page view." : NOTHING, at: Date.now() };
+  return { status: "ok", message: done.changed ? `Published. Visitors see the changes from their next page view.${unlogged(done)}` : NOTHING, at: Date.now() };
 }
 
 const RESET_MOVED = "The site’s words have changed since this list was made, so nothing was reset. The list on this screen is the new one: read it, then reset.";
@@ -352,7 +354,7 @@ export async function resetToReleaseAction(fd: FormData): Promise<PublishState> 
   return {
     status: "ok",
     message: done.changed
-      ? "Reset. The site shows the release as it is, for every visitor from their next page view. Undo last publish brings back this site’s edits until the next publish, and the drafts that were thrown away as long as nothing is saved first."
+      ? `Reset. The site shows the release as it is, for every visitor from their next page view. Undo last publish brings back this site’s edits until the next publish, and the drafts that were thrown away as long as nothing is saved first.${unlogged(done)}`
       : "Nothing to reset: this site already shows the release as it is.",
     at: Date.now(),
   };
@@ -373,7 +375,7 @@ export async function undoPublishAction(): Promise<PublishState> {
   refresh();
   return {
     status: "ok",
-    message: done.changed ? "Undone. The site shows what it showed before the last publish. Your drafts are still here, to fix and publish again." : "There is no publish to undo.",
+    message: done.changed ? `Undone. The site shows what it showed before the last publish. Your drafts are still here, to fix and publish again.${unlogged(done)}` : "There is no publish to undo.",
     at: Date.now(),
   };
 }
