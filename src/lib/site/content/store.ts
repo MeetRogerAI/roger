@@ -9,6 +9,8 @@
  *   published  an overlay on the baseline: what the public pages show.
  *   previous   what was published before the last publish, so that it can be
  *              undone (plan R15). null when there is nothing to go back to.
+ *   previousDraft  only after "Reset all to the release" (plan U10): the
+ *              draft that reset threw away, which an undo brings back.
  *
  * Each of the three is the overlay of ./format.ts, and each is COMPLETE: the
  * draft is not a list of changes to what is published, it is the whole of
@@ -53,7 +55,7 @@
  */
 import { logAdminAction } from "@/lib/admin/log";
 import type { Query } from "@/lib/db-query";
-import { OVERLAY_FORMAT, newOverlay, type Overlay } from "./format";
+import { OVERLAY_FORMAT, isEmptyOverlay, lenientLosses, newOverlay, parseOverlay, type Overlay } from "./format";
 import { applyOverlay, baseline, codeModel, diffListEdit, diffSectionEdit, layoutOn, listItems, normaliseOverlay, sectionLayout, shownOverlay, textAt, type Layout } from "./model";
 import { fieldsOfItem, isAddedId, resolveField, siteRegistry, usableValue } from "./registry";
 
@@ -61,7 +63,12 @@ export const CONTENT_KEY = "site.content";
 /** The row the Edit Questions screen wrote before "site.content" existed. Read to seed that row, never written. */
 export const LEGACY_QUESTIONS_KEY = "site.questions";
 
-export type StoredContent = { draft: Overlay; published: Overlay; previous: Overlay | null };
+/**
+ * `previousDraft` is written by "Reset all to the release" alone (plan U10, R21): the draft that reset threw away,
+ * so that Undo last publish can bring it back with the edits it puts back on the site. Absent everywhere else, and
+ * dropped by the next publish or undo.
+ */
+export type StoredContent = { draft: Overlay; published: Overlay; previous: Overlay | null; previousDraft?: Overlay };
 
 /** How often a write reads again when someone else wrote first. Admins are few: two tries would do. */
 const TRIES = 6;
@@ -131,24 +138,36 @@ export function legacyQuestionOverlay(value: unknown): Overlay {
 export function parseStored(value: unknown, base: unknown = baseline): StoredContent {
   if (!isRecord(value)) return { draft: newOverlay(), published: newOverlay(), previous: null };
   const previous = isRecord(value.previous) && value.previous.format === OVERLAY_FORMAT ? normaliseOverlay(base, value.previous) : null;
-  return { draft: normaliseOverlay(base, value.draft), published: normaliseOverlay(base, value.published), previous };
+  const out: StoredContent = { draft: normaliseOverlay(base, value.draft), published: normaliseOverlay(base, value.published), previous };
+  if (isRecord(value.previousDraft) && value.previousDraft.format === OVERLAY_FORMAT) out.previousDraft = normaliseOverlay(base, value.previousDraft);
+  return out;
 }
 
 type Row = {
   content: StoredContent;
   /** The row's value exactly as the database holds it, for the statement that replaces it. null when there is no row. */
   raw: string | null;
+  /**
+   * The draft and what is published as they are WRITTEN, read leniently but not held against the baseline. A new
+   * release can make a stored entry mean nothing (an item it pushed out of a full list): `content` no longer has it,
+   * and the next write deletes it. Only the Pages screen reads this, to say so before that happens.
+   */
+  written: { draft: Overlay; published: Overlay };
 };
 
 /** One statement: the content row, and the old questions row for when there is none. Throws when the database does. */
 async function readRow(q: Query, base: unknown): Promise<Row> {
   const rows = await q<{ key: string; raw: string }>(`select key, value::text as raw from settings where key in ($1, $2)`, [CONTENT_KEY, LEGACY_QUESTIONS_KEY]);
   const own = rows.find((row) => row.key === CONTENT_KEY);
-  if (own) return { content: parseStored(JSON.parse(own.raw), base), raw: own.raw };
+  if (own) {
+    const value: unknown = JSON.parse(own.raw);
+    const part = (name: "draft" | "published") => parseOverlay(isRecord(value) ? value[name] : undefined);
+    return { content: parseStored(value, base), raw: own.raw, written: { draft: part("draft"), published: part("published") } };
+  }
   const legacy = rows.find((row) => row.key === LEGACY_QUESTIONS_KEY);
   // Two objects, so that nothing written to one of them shows in the other.
   const seed = () => normaliseOverlay(base, legacy ? legacyQuestionOverlay(JSON.parse(legacy.raw)) : newOverlay());
-  return { content: { draft: seed(), published: seed(), previous: null }, raw: null };
+  return { content: { draft: seed(), published: seed(), previous: null }, raw: null, written: { draft: seed(), published: seed() } };
 }
 
 /**
@@ -158,6 +177,32 @@ async function readRow(q: Query, base: unknown): Promise<Row> {
 export async function readStored(q: Query, base: unknown = baseline): Promise<StoredContent & { stored: boolean }> {
   const row = await readRow(q, base);
   return { ...row.content, stored: row.raw !== null };
+}
+
+/** readStored, and the draft and what is published as they are written (Row.written), from the same read. For the Pages screen. */
+export async function readStoredAsWritten(q: Query, base: unknown = baseline): Promise<StoredContent & { stored: boolean; written: Row["written"] }> {
+  const row = await readRow(q, base);
+  return { ...row.content, stored: row.raw !== null, written: row.written };
+}
+
+/**
+ * For the release export (plan KTD9): what the site has published, as an overlay on the baseline, read straight from
+ * the database in one statement, and `lost`: each entry of the stored published content that the lenient reading
+ * leaves out (lenientLosses), which a release would lose for good. Throws when the database cannot be read, and when
+ * the row holds something that is not stored content at all (no object, or what is published is no overlay of this
+ * format): that is no answer either, and reading it as "nothing published" would release the baseline over every
+ * edit. With no row, it is the old questions row's edits, as everywhere.
+ */
+export async function readPublishedForRelease(q: Query, base: unknown = baseline): Promise<{ published: Overlay; lost: string[] }> {
+  const rows = await q<{ key: string; raw: string }>(`select key, value::text as raw from settings where key in ($1, $2)`, [CONTENT_KEY, LEGACY_QUESTIONS_KEY]);
+  const own = rows.find((row) => row.key === CONTENT_KEY);
+  if (!own) {
+    const legacy = rows.find((row) => row.key === LEGACY_QUESTIONS_KEY);
+    return { published: normaliseOverlay(base, legacy ? legacyQuestionOverlay(JSON.parse(legacy.raw)) : newOverlay()), lost: [] };
+  }
+  const value: unknown = JSON.parse(own.raw);
+  if (!isRecord(value) || !isRecord(value.published) || value.published.format !== OVERLAY_FORMAT) throw new Error(`The stored site content is not content this code can read: ${isRecord(value) ? "what is published is no overlay of format " + OVERLAY_FORMAT : "the row is no object"}.`);
+  return { published: parseStored(value, base).published, lost: lenientLosses(value.published) };
 }
 
 /** What the site has published, as an overlay on the baseline. Throws when the database cannot be read: the caller decides what a failure shows. */
@@ -176,7 +221,7 @@ async function transition(q: Query, base: unknown, change: (now: StoredContent) 
     const row = await readRow(q, base);
     const next = change(row.content);
     if (!next) return { written: false, before: row.content, after: row.content };
-    const value = JSON.stringify({ draft: next.draft, published: next.published, previous: next.previous });
+    const value = JSON.stringify({ draft: next.draft, published: next.published, previous: next.previous, ...(next.previousDraft ? { previousDraft: next.previousDraft } : {}) });
     const done =
       row.raw === null
         ? await q<{ key: string }>(`insert into settings (key, value, updated_at) values ($1, $2::jsonb, now()) on conflict (key) do nothing returning key`, [CONTENT_KEY, value])
@@ -455,10 +500,40 @@ export async function publish(q: Query, by: string, checked: Overlay, o: { base?
 /**
  * Undoes the last publish (plan R15): `published` becomes what it was before, `previous` is cleared, and the
  * draft stays as it is, to be fixed and published again. With nothing to go back to, nothing changes.
+ *
+ * After "Reset all to the release" (resetToRelease), the draft that reset threw away comes back too, as long as
+ * nothing has been saved since: otherwise the drafts would be the reset itself, waiting to be published again
+ * by the next publish of anything.
  */
 export async function undoPublish(q: Query, by: string, base: unknown = baseline): Promise<{ ok: true; changed: boolean; content: StoredContent } | { ok: false; reason: "busy" }> {
-  const done = await transition(q, base, (now) => (now.previous ? { draft: now.draft, published: now.previous, previous: null } : null));
+  const done = await transition(q, base, (now) => (now.previous ? { draft: now.previousDraft && isEmptyOverlay(now.draft) ? now.previousDraft : now.draft, published: now.previous, previous: null } : null));
   if (done === "busy") return { ok: false, reason: "busy" };
   if (done.written) await logAdminAction(q, { by, action: "site_content_publish_undone", detail: logged(changedBetween(done.before.published, done.after.published)) });
+  return { ok: true, changed: done.written, content: done.after };
+}
+
+export type ResetResult = { ok: true; changed: boolean; content: StoredContent } | { ok: false; reason: "changed" | "busy" };
+
+/**
+ * "Reset all to the release" (plan R21, AE10): the site shows the release as it is, with none of its own edits. In
+ * one statement `previous` becomes what is published, and `published` and `draft` are emptied, so the unpublished
+ * drafts go too (plan, Assumptions). Undo last publish puts the edits back on the site, and the drafts with them
+ * (undoPublish), until the next publish.
+ *
+ * `seen` is the stored content the owner read the list of differences from. When something has been saved,
+ * published or undone since, nothing changes and the answer is "changed": the list on the screen is not what this
+ * reset would throw away. A site with nothing of its own, published or drafted, changes nothing.
+ */
+export async function resetToRelease(q: Query, by: string, seen: { draft: Overlay; published: Overlay }, base: unknown = baseline): Promise<ResetResult> {
+  const want = { draft: normaliseOverlay(base, seen.draft), published: normaliseOverlay(base, seen.published) };
+  let moved = false;
+  const done = await transition(q, base, (now) => {
+    moved = !sameOverlay(now.draft, want.draft) || !sameOverlay(now.published, want.published);
+    if (moved || (isEmptyOverlay(now.published) && isEmptyOverlay(now.draft))) return null;
+    return { draft: newOverlay(), published: newOverlay(), previous: now.published, previousDraft: now.draft };
+  });
+  if (done === "busy") return { ok: false, reason: "busy" };
+  if (moved) return { ok: false, reason: "changed" };
+  if (done.written) await logAdminAction(q, { by, action: "site_content_reset_to_release", detail: logged(changedBetween(done.before.published, done.after.published)) });
   return { ok: true, changed: done.written, content: done.after };
 }

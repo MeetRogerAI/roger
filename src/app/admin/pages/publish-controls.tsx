@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { publishAction, undoPublishAction, type PublishState } from "./actions";
+import { publishAction, resetToReleaseAction, undoPublishAction, type PublishState } from "./actions";
 
 /**
  * The two buttons that change what visitors see (plan U5): Publish, on the
@@ -53,6 +53,64 @@ export function PublishButton({ review, count, warnings }: { review: string; cou
         <button type="button" data-publish disabled={pending} onClick={run} className="btn btn-m btn-ink">
           {pending ? "Publishing…" : warnings > 0 ? `Publish anyway: ${all}` : `Publish ${all}`}
         </button>
+      )}
+      <Message state={state} />
+    </div>
+  );
+}
+
+/**
+ * "Reset all to the release" (plan U10, AE10). It asks once before it changes the site, and the question says what
+ * goes: `differences` rows of the list above, and `drafts` changes saved and not published. `seen` is the
+ * fingerprint of what the list was made from.
+ */
+export function ResetToRelease({ seen, differences, drafts }: { seen: string; differences: number; drafts: number }) {
+  const { state, pending, run } = useCall(() => {
+    const fd = new FormData();
+    fd.set("seen", seen);
+    return resetToReleaseAction(fd);
+  });
+  const [step, setStep] = useState<"button" | "asking" | "back">("button");
+  const asking = step === "asking";
+  const rows = differences === 1 ? "the 1 difference above" : `all ${differences} differences above`;
+  return (
+    <div className="space-y-3">
+      {differences > 0 && !asking && (
+        <button type="button" data-reset-all autoFocus={step === "back"} onClick={() => setStep("asking")} disabled={pending} className="min-h-10 rounded-full border border-rule-strong px-4 text-small text-ink hover:bg-ground-2">
+          {pending ? "Resetting…" : "Reset all to the release"}
+        </button>
+      )}
+      {differences > 0 && asking && (
+        <div data-reset-ask className="rounded-[8px] border border-rule-strong bg-surface p-4">
+          <p className="text-small">
+            Make this site show the release exactly, for every visitor? This takes away {rows}.{" "}
+            {drafts > 0 ? (
+              <strong data-reset-drafts className="font-[620]">
+                It also throws away {drafts === 1 ? "the 1 change" : `the ${drafts} changes`} saved as a draft and not published.
+              </strong>
+            ) : (
+              "No unpublished drafts are waiting."
+            )}{" "}
+            Undo last publish brings back this site’s edits until the next publish{drafts > 0 ? ", and those drafts as long as nothing is saved first" : ""}.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              type="button"
+              data-reset-yes
+              autoFocus
+              onClick={() => {
+                setStep("button");
+                run();
+              }}
+              className="btn btn-m btn-ink"
+            >
+              Yes, reset all to the release
+            </button>
+            <button type="button" data-reset-no onClick={() => setStep("back")} className="min-h-10 rounded-full border border-rule-strong px-4 text-small text-ink-2 hover:text-ink">
+              No, keep this site’s edits
+            </button>
+          </div>
+        </div>
       )}
       <Message state={state} />
     </div>
